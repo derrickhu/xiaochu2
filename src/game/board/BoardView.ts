@@ -7,6 +7,7 @@
  * - 8 秒限时由 update(dt) 驱动，超时强制松手
  */
 import * as PIXI from 'pixi.js';
+import { Game } from '@/core/Game';
 import { ObjectPool } from '@/core/ObjectPool';
 import { TextureCache } from '@/core/TextureCache';
 import { TweenManager, Ease } from '@/core/TweenManager';
@@ -44,6 +45,13 @@ export class BoardView {
   private _dragTimer = 0;
   private _didMove = false;
   private _floatOrb: PIXI.Sprite | null = null;
+  /** 交换动画期间禁止再次换格，避免格缝处 pointermove 来回 oscillate 卡死 */
+  private _swapLocked = false;
+  private _swapUnlockTimer = 0;
+
+  /** 注册在 canvas 上的原生监听器（destroy 时移除） */
+  private _rawMove: ((e: any) => void) | null = null;
+  private _rawUp: ((e: any) => void) | null = null;
 
   constructor(board: BoardModel, cb: BoardViewCallbacks) {
     this._board = board;
@@ -73,8 +81,10 @@ export class BoardView {
 
     this._buildBackground();
     this.container.addChild(this._orbsLayer);
-    this.container.addChild(this._floatLayer);
     this._buildHitArea();
+    // 浮珠层置顶（仅展示，不拦截触摸；触摸由 hit 层接收）
+    this._floatLayer.eventMode = 'none';
+    this.container.addChild(this._floatLayer);
     this.rebuild();
   }
 
@@ -96,8 +106,15 @@ export class BoardView {
     return Math.max(0, 1 - this._dragTimer / COMBAT.dragTimeLimit);
   }
 
-  /** 每帧驱动：8 秒限时 */
+  /** 每帧驱动：8 秒限时 + 交换锁计时 */
   update(dt: number): void {
+    if (this._swapUnlockTimer > 0) {
+      this._swapUnlockTimer -= dt;
+      if (this._swapUnlockTimer <= 0) {
+        this._swapUnlockTimer = 0;
+        this._swapLocked = false;
+      }
+    }
     if (!this._dragging) return;
     this._dragTimer += dt;
     if (this._dragTimer >= COMBAT.dragTimeLimit) {
@@ -203,6 +220,16 @@ export class BoardView {
   }
 
   destroy(): void {
+    const canvas = Game.app?.view as any;
+    if (canvas) {
+      if (this._rawMove) canvas.removeEventListener('pointermove', this._rawMove);
+      if (this._rawUp) {
+        canvas.removeEventListener('pointerup', this._rawUp);
+        canvas.removeEventListener('pointercancel', this._rawUp);
+      }
+    }
+    this._rawMove = null;
+    this._rawUp = null;
     this._releaseAll();
     this._pool.clear();
     this.container.destroy({ children: true });
@@ -222,6 +249,12 @@ export class BoardView {
     this.container.addChild(bg);
   }
 
+  // 交互策略（沿用 game2D_huahua 验证过的方案）：
+  // pointerdown 用 PixiJS 容器事件（可靠：PixiJS 注册在 canvas 上）；
+  // pointermove / pointerup 直接注册在 canvas 元素上，完全绕过 PixiJS 事件系统。
+  // 原因：PixiJS 7 将 pointermove/pointerup 注册在 globalThis（window）上，
+  // 而小游戏 adapter 通过 canvas.addEventListener 分发触摸事件，
+  // 两个系统天然隔离，导致拖拽中 move/up 事件丢失、拖珠卡死。
   private _buildHitArea(): void {
     const hit = new PIXI.Graphics();
     hit.beginFill(0xffffff, 0.001);
@@ -229,11 +262,39 @@ export class BoardView {
     hit.endFill();
     hit.eventMode = 'static';
     hit.on('pointerdown', (e: PIXI.FederatedPointerEvent) => this._onDown(e));
-    // globalpointermove：手指移出棋盘区域仍持续接收（federated events v7）
-    hit.on('globalpointermove', (e: PIXI.FederatedPointerEvent) => this._onMove(e));
-    hit.on('pointerup', () => this._onUp());
-    hit.on('pointerupoutside', () => this._onUp());
     this.container.addChild(hit);
+
+    const canvas = Game.app.view as any;
+    this._rawMove = (e: any) => {
+      if (!this._dragging) return;
+      const p = this._rawToLocal(e);
+      this._onMove(p.x, p.y);
+    };
+    this._rawUp = () => this._onUp();
+    canvas.addEventListener('pointermove', this._rawMove);
+    canvas.addEventListener('pointerup', this._rawUp);
+    canvas.addEventListener('pointercancel', this._rawUp);
+  }
+
+  /**
+   * 原生 pointer 事件 clientX/Y（逻辑像素）→ 棋盘本地设计坐标。
+   * 不依赖 toLocal/worldTransform：clientX * designWidth / screenWidth 得到
+   * 设计坐标，再减去容器在场景树中的累计偏移（父链均无缩放）。
+   */
+  private _rawToLocal(e: any): { x: number; y: number } {
+    const t0 = e.touches?.[0] ?? e.changedTouches?.[0];
+    const cx = e.clientX ?? t0?.clientX ?? e.x ?? 0;
+    const cy = e.clientY ?? t0?.clientY ?? e.y ?? 0;
+    const k = Game.designWidth / Game.screenWidth;
+    let ox = 0;
+    let oy = 0;
+    let node: PIXI.Container | null = this.container;
+    while (node && node !== Game.app.stage) {
+      ox += node.x;
+      oy += node.y;
+      node = node.parent;
+    }
+    return { x: cx * k - ox, y: cy * k - oy };
   }
 
   private _onDown(e: PIXI.FederatedPointerEvent): void {
@@ -266,13 +327,15 @@ export class BoardView {
     this._cb.onDragStart?.();
   }
 
-  private _onMove(e: PIXI.FederatedPointerEvent): void {
+  private _onMove(x: number, y: number): void {
     if (!this._dragging) return;
-    const p = this.container.toLocal(e.global);
     // 钳制到棋盘范围
-    const px = Math.max(0, Math.min(this.boardWidth, p.x));
-    const py = Math.max(0, Math.min(this.boardHeight, p.y));
+    const px = Math.max(0, Math.min(this.boardWidth, x));
+    const py = Math.max(0, Math.min(this.boardHeight, y));
     if (this._floatOrb) this._floatOrb.position.set(px, py);
+
+    // 交换动画锁定期内只跟手，不再判格（对齐 xiao_chu swapLogicLocked）
+    if (this._swapLocked) return;
 
     // 目标格：当前格 + 四正交邻格中选最近中心
     const dr = this._dragR;
@@ -291,12 +354,15 @@ export class BoardView {
       }
     }
 
-    const orthoAdjacent = Math.abs(r - dr) + Math.abs(c - dc) === 1;
-    if (!orthoAdjacent) return;
+    // 必须换到正交邻格，且目标格与当前拖珠格不同
+    if (r === dr && c === dc) return;
+    if (Math.abs(r - dr) + Math.abs(c - dc) !== 1) return;
 
     // 数据交换
     this._board.swap(dr, dc, r, c);
     this._didMove = true;
+    this._swapLocked = true;
+    this._swapUnlockTimer = UI.anim.orbSwap;
 
     // Sprite 交换：被换走的珠 tween 到旧格，拖动珠瞬移到新格（保持半透明）
     const dragSp = this._sprites[dr][dc];
@@ -326,6 +392,8 @@ export class BoardView {
   private _endDrag(): void {
     this._dragging = false;
     this._dragTimer = 0;
+    this._swapLocked = false;
+    this._swapUnlockTimer = 0;
     const sp = this._sprites[this._dragR][this._dragC];
     if (sp) sp.alpha = 1;
     if (this._floatOrb) {
