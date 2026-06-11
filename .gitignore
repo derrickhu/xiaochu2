@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+npm-debug.log*
+
+# 构建产物
+minigame/game-bundle.js
+minigame/index.html
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
+
+# 平台私有配置
+project.private.config.json
+
+# Misc
+*.log
+*.tmp

@@ -1,0 +1,21 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`comboMultiplier（递减分段） > 曲线快照（改 comboTiers 后此快照 diff 即全局影响） 1`] = `
+[
+  1,
+  1.2,
+  1.4,
+  1.6,
+  1.8,
+  2,
+  2.15,
+  2.3,
+  2.45,
+  2.6,
+  2.68,
+  2.76,
+  2.84,
+  2.92,
+  3,
+]
+`;
