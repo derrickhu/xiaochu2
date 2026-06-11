@@ -9,7 +9,7 @@ import { OverlayManager } from './OverlayManager';
 export interface Scene {
   readonly name: string;
   readonly container: PIXI.Container;
-  onEnter?(): void;
+  onEnter?(data?: unknown): void;
   onExit?(): void;
   update?(dt: number): void;
 }
@@ -22,7 +22,7 @@ class SceneManagerClass {
     this._scenes.set(scene.name, scene);
   }
 
-  switchTo(name: string): void {
+  switchTo(name: string, data?: unknown): void {
     console.log(`[SceneManager] switchTo("${name}") Game.uid=${(Game as any)._uid}, stage=${!!Game.stage}`);
 
     const nextScene = this._scenes.get(name);
@@ -58,7 +58,7 @@ class SceneManagerClass {
     // 进入新场景
     this._currentScene = nextScene;
     Game.stage.addChild(nextScene.container);
-    nextScene.onEnter?.();
+    nextScene.onEnter?.(data);
 
     // 确保全局覆盖层（弹窗面板）始终在场景之上
     this._bringOverlayToFront();

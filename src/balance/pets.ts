@@ -78,3 +78,7 @@ export const PETS: readonly PetDef[] = [
 ];
 
 export const PET_MAP: ReadonlyMap<string, PetDef> = new Map(PETS.map((p) => [p.id, p]));
+
+/** 可玩 Demo：固定队伍的等级/星级（招募养成上线后由 PlayerData 接管） */
+export const DEMO_TEAM_LEVEL = 5;
+export const DEMO_TEAM_STAR = 1;
