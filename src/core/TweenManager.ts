@@ -21,6 +21,9 @@ export const Ease = {
     if (t < 2.5 / 2.75) return 7.5625 * (t -= 2.25 / 2.75) * t + 0.9375;
     return 7.5625 * (t -= 2.625 / 2.75) * t + 0.984375;
   },
+  easeInCubic: (t: number) => t * t * t,
+  easeOutCubic: (t: number) => 1 - Math.pow(1 - t, 3),
+  easeOutExpo: (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t)),
 };
 
 export interface TweenConfig {

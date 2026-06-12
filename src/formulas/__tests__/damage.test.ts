@@ -118,11 +118,26 @@ describe('calcDamage（完整管线）', () => {
       attackerElement: 'fire', defenderElement: 'water', defenderDef: 9999,
     })).toBe(1);
   });
+
+  it('增伤 buff 乘区生效', () => {
+    // 100 × 1.5(buff) = 150
+    expect(calcDamage({
+      atk: 100, matchCount: 3, combo: 1,
+      attackerElement: 'metal', defenderElement: 'water', defenderDef: 0,
+      buffMult: 1.5,
+    })).toBe(150);
+  });
 });
 
-describe('calcHeal', () => {
-  it('每颗心珠回复最大生命 5%', () => {
-    expect(calcHeal(1000, 1)).toBe(50);
-    expect(calcHeal(1000, 3)).toBe(150);
+describe('calcHeal（RCV 模型）', () => {
+  it('回复 = 总RCV × 心珠数 × Combo 倍率', () => {
+    // rcv 100 × 1 颗 × ×1.0(1combo) = 100
+    expect(calcHeal(100, 1, 1)).toBe(100);
+    // rcv 100 × 3 颗 × ×1.4(3combo) = 420
+    expect(calcHeal(100, 3, 3)).toBe(420);
+  });
+
+  it('无心珠不回复', () => {
+    expect(calcHeal(100, 0, 5)).toBe(0);
   });
 });

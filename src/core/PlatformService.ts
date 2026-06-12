@@ -103,10 +103,17 @@ class PlatformServiceClass {
 
   // ═══════════════ 交互反馈 ═══════════════
 
-  /** 短振动（消除/点击反馈） */
-  vibrateShort(): void {
+  /** 短振动（消除/点击反馈），type 控制强度 */
+  vibrateShort(type: 'light' | 'medium' | 'heavy' = 'light'): void {
     try {
-      this._api?.vibrateShort?.({ type: 'light' });
+      this._api?.vibrateShort?.({ type });
+    } catch (_) {}
+  }
+
+  /** 长振动（重击/Boss 登场等强反馈） */
+  vibrateLong(): void {
+    try {
+      this._api?.vibrateLong?.();
     } catch (_) {}
   }
 

@@ -49,6 +49,8 @@ export interface DamageInput {
   defenderDef: number;
   /** 是否暴击（由逻辑层掷骰后传入，保证公式纯函数） */
   isCrit?: boolean;
+  /** 增伤 buff 乘区（技能 dmgBoost 等，默认 1.0） */
+  buffMult?: number;
 }
 
 /** 最终伤害（向下取整，至少 1 点） */
@@ -56,7 +58,8 @@ export function calcDamage(input: DamageInput): number {
   let dmg = input.atk
     * matchCountMultiplier(input.matchCount)
     * comboMultiplier(input.combo)
-    * elementMultiplier(input.attackerElement, input.defenderElement);
+    * elementMultiplier(input.attackerElement, input.defenderElement)
+    * (input.buffMult ?? 1.0);
 
   dmg *= 1 - defenseReduction(input.defenderDef);
 
@@ -65,7 +68,9 @@ export function calcDamage(input: DamageInput): number {
   return Math.max(1, Math.floor(dmg));
 }
 
-/** 心珠回复量 */
-export function calcHeal(maxHp: number, heartCount: number): number {
-  return Math.floor(maxHp * COMBAT.heartHealRatio * heartCount);
+/** 心珠回复量 = 队伍总 RCV × 心珠系数 × 心珠数 × Combo 倍率 */
+export function calcHeal(teamRcvTotal: number, heartCount: number, combo: number): number {
+  return Math.floor(
+    teamRcvTotal * COMBAT.rcvPerHeartOrb * heartCount * comboMultiplier(combo),
+  );
 }

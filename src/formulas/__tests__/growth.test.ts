@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { petAtk, petExpToNext, enemyStats } from '../growth';
+import { petAtk, petHp, petRcv, petExpToNext, enemyStats } from '../growth';
 import { PETS } from '@/balance/pets';
 import { ENEMIES } from '@/balance/enemies';
 
@@ -29,6 +29,39 @@ describe('petAtk', () => {
       lv10: petAtk(p, 10, 1),
       lv30: petAtk(p, 30, 1),
       lv50max: petAtk(p, 50, 5),
+    }));
+    expect(table).toMatchSnapshot();
+  });
+});
+
+describe('petHp / petRcv（三维模型）', () => {
+  it('1 级 1 星 = 基础值', () => {
+    expect(petHp(samplePet, 1, 1)).toBe(samplePet.baseHp);
+    expect(petRcv(samplePet, 1, 1)).toBe(samplePet.baseRcv);
+  });
+
+  it('等级提升单调递增', () => {
+    expect(petHp(samplePet, 20, 1)).toBeGreaterThan(petHp(samplePet, 10, 1));
+    expect(petRcv(samplePet, 20, 1)).toBeGreaterThan(petRcv(samplePet, 10, 1));
+  });
+
+  it('角色定位体现在三维分布上：坦克 hp 最高 / 治疗 rcv 最高', () => {
+    const tank = PETS.find((p) => p.id === 'pet_earth_001')!;
+    const healer = PETS.find((p) => p.id === 'pet_wood_001')!;
+    const attacker = PETS.find((p) => p.id === 'pet_fire_001')!;
+    expect(tank.baseHp).toBeGreaterThan(attacker.baseHp);
+    expect(healer.baseRcv).toBeGreaterThan(attacker.baseRcv);
+    expect(attacker.baseAtk).toBeGreaterThan(healer.baseAtk);
+  });
+
+  it('三维快照（全宠物 Lv1 三围一览）', () => {
+    const table = PETS.map((p) => ({
+      id: p.id,
+      role: p.role,
+      atk: petAtk(p, 1, 1),
+      hp: petHp(p, 1, 1),
+      rcv: petRcv(p, 1, 1),
+      skill: p.skill.type,
     }));
     expect(table).toMatchSnapshot();
   });

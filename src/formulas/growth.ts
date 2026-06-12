@@ -11,6 +11,18 @@ export function petAtk(pet: PetDef, level: number, star: number): number {
   return Math.floor(pet.baseAtk * Math.pow(1 + pet.atkGrowth, level - 1) * starMult);
 }
 
+/** 宠物当前生命（曲线同攻击，使用 hp 维度参数） */
+export function petHp(pet: PetDef, level: number, star: number): number {
+  const starMult = GROWTH.pet.starMultiplier[star] ?? 1.0;
+  return Math.floor(pet.baseHp * Math.pow(1 + pet.hpGrowth, level - 1) * starMult);
+}
+
+/** 宠物当前回复（曲线同攻击，使用 rcv 维度参数） */
+export function petRcv(pet: PetDef, level: number, star: number): number {
+  const starMult = GROWTH.pet.starMultiplier[star] ?? 1.0;
+  return Math.floor(pet.baseRcv * Math.pow(1 + pet.rcvGrowth, level - 1) * starMult);
+}
+
 /** 宠物升到 level+1 所需经验 */
 export function petExpToNext(level: number): number {
   return Math.floor(GROWTH.pet.expBase * Math.pow(GROWTH.pet.expGrowth, level - 1));

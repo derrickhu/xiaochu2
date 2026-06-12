@@ -66,7 +66,40 @@ export const UI = {
     attackGap: 0.12,
     /** 波次切换敌人入场 */
     waveEnter: 0.35,
+    /** ── 阶段二：手感强化 ── */
+    /** 逐组消除之间的节奏间隔 */
+    groupClearGap: 0.14,
+    /** 消除粒子寿命 */
+    orbBurst: 0.45,
+    /** Combo 大字弹跳 */
+    comboPop: 0.18,
+    /** Combo 淡出（延迟 + 时长） */
+    comboFadeDelay: 0.5,
+    comboFade: 0.4,
+    /** 属性弹道飞行 */
+    projectile: 0.22,
+    /** 受击闪白 */
+    enemyWhiteFlash: 0.1,
+    /** 血条主条补间 */
+    hpTween: 0.18,
+    /** 损血白条：延迟后收缩 */
+    hpWhiteDelay: 0.3,
+    hpWhiteTween: 0.3,
+    /** 敌人死亡（闪白 + 碎裂） */
+    enemyDeath: 0.45,
+    /** 技能横幅展示 */
+    skillBanner: 0.9,
+    /** 敌人蓄力预警脉冲 */
+    chargeWarn: 0.5,
   },
+
+  /** ── Combo 反馈分级（次数下限 → 字号/颜色） ── */
+  comboTiers: [
+    { from: 10, fontSize: 64, color: 0xff5252 },
+    { from: 7, fontSize: 58, color: 0xff9142 },
+    { from: 4, fontSize: 52, color: 0xffd75e },
+    { from: 1, fontSize: 44, color: 0xffe082 },
+  ] as ReadonlyArray<{ from: number; fontSize: number; color: number }>,
 
   /** ── 帧率 ── */
   fps: {

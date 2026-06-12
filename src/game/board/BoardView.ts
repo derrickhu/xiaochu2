@@ -15,7 +15,7 @@ import { Platform } from '@/core/PlatformService';
 import { UI } from '@/balance/ui';
 import { COMBAT, type OrbType } from '@/balance/combat';
 import { ORB_IMAGES } from '@/config/Assets';
-import { BoardModel, type MatchGroup, type FallMove } from './BoardModel';
+import { BoardModel, type MatchGroup, type FallMove, type Cell } from './BoardModel';
 
 export interface BoardViewCallbacks {
   /** 是否允许开始拖珠（战斗状态机控制） */
@@ -23,7 +23,15 @@ export interface BoardViewCallbacks {
   onDragStart?: () => void;
   /** 松手或超时（didMove = 拖动期间发生过交换） */
   onDragEnd: (didMove: boolean) => void;
+  /**
+   * 有效珠判定（队伍属性覆盖）：返回 false 的珠子降饱和显示，
+   * 提示玩家消除它不产生伤害。不传 = 全部有效。
+   */
+  isOrbActive?: (orb: OrbType) => boolean;
 }
+
+/** 无效珠的暗淡 tint（降饱和近灰） */
+const DIM_TINT = 0x6f6f6f;
 
 export class BoardView {
   readonly container = new PIXI.Container();
@@ -209,6 +217,45 @@ export class BoardView {
           target: sp, props: { y: targetY },
           duration: dur, ease: Ease.easeOutBounce,
           onComplete: done,
+        });
+      }
+    });
+  }
+
+  /** 播放转珠动画：目标格珠子弹跳缩放并切换为新珠贴图 */
+  playConvert(cells: Cell[], to: OrbType): Promise<void> {
+    return new Promise((resolve) => {
+      if (cells.length === 0) {
+        resolve();
+        return;
+      }
+      let remain = cells.length;
+      const done = (): void => {
+        remain--;
+        if (remain <= 0) resolve();
+      };
+      const size = this._cell * UI.board.orbScale;
+      for (const { r, c } of cells) {
+        const sp = this._sprites[r][c];
+        if (!sp) {
+          done();
+          continue;
+        }
+        TweenManager.cancelTarget(sp.scale);
+        // 缩没 → 换贴图 → 弹回
+        TweenManager.to({
+          target: sp, props: { width: size * 0.1, height: size * 0.1 },
+          duration: UI.anim.orbSwap * 1.5, ease: Ease.easeInQuad,
+          onComplete: () => {
+            this._applyOrbTexture(sp, to);
+            sp.width = size * 0.1;
+            sp.height = size * 0.1;
+            TweenManager.to({
+              target: sp, props: { width: size, height: size },
+              duration: UI.anim.orbSwap * 2.5, ease: Ease.easeOutBack,
+              onComplete: done,
+            });
+          },
         });
       }
     });
@@ -420,6 +467,8 @@ export class BoardView {
     const size = this._cell * UI.board.orbScale;
     sp.width = size;
     sp.height = size;
+    const active = this._cb.isOrbActive ? this._cb.isOrbActive(orb) : true;
+    sp.tint = active ? 0xffffff : DIM_TINT;
   }
 
   private _cellCenterX(c: number): number {

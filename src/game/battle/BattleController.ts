@@ -8,11 +8,15 @@
  * 所有数值只走 formulas + balance，本层禁止 magic number。
  */
 import { COMBAT, ELEMENT_COUNTERS, type Element, type OrbType } from '@/balance/combat';
-import { PETS, DEMO_TEAM_LEVEL, DEMO_TEAM_STAR, type PetDef } from '@/balance/pets';
-import { ENEMY_MAP, type EnemyDef } from '@/balance/enemies';
+import {
+  PET_MAP, DEFAULT_TEAM, DEMO_TEAM_LEVEL, DEMO_TEAM_STAR,
+  type PetDef, type PetSkillDef,
+} from '@/balance/pets';
+import { ENEMY_MAP, type EnemyDef, type EnemySkillDef } from '@/balance/enemies';
 import { STAGE_MAP, type StageDef } from '@/balance/stages';
-import { calcDamage, calcHeal, comboMultiplier } from '@/formulas/damage';
+import { calcDamage, calcHeal, comboMultiplier, defenseReduction } from '@/formulas/damage';
 import { petAtk, enemyStats } from '@/formulas/growth';
+import { teamMaxHp, teamRcv, teamElements, type TeamMember } from '@/formulas/team';
 import { stageCoinReward } from '@/formulas/economyOutput';
 import type { MatchGroup } from '@/game/board/BoardModel';
 
@@ -27,7 +31,18 @@ export type BattleState =
 export interface TeamPet {
   def: PetDef;
   atk: number;
+  /** 主动技剩余冷却（0 = 就绪） */
+  skillCdLeft: number;
 }
+
+/** 技能释放结果（场景据此播放演出） */
+export type SkillCastResult =
+  | { type: 'instantDmg'; skill: PetSkillDef; element: Element; damage: number; enemyDead: boolean }
+  | { type: 'healPct'; skill: PetSkillDef; healed: number }
+  | { type: 'dmgBoost'; skill: PetSkillDef; mult: number; turns: number }
+  | { type: 'shield'; skill: PetSkillDef; value: number }
+  | { type: 'convertOrbs'; skill: PetSkillDef; to: OrbType; count: number }
+  | { type: 'teamAttack'; skill: PetSkillDef; damage: number; enemyDead: boolean };
 
 export interface EnemyUnit {
   def: EnemyDef;
@@ -37,6 +52,22 @@ export interface EnemyUnit {
   def_: number;
   /** 距离下次攻击的剩余回合 */
   attackCountdown: number;
+  /** 各技能剩余冷却（与 def.skills 一一对应） */
+  skillCds: number[];
+  /** 蓄力中（下个敌人回合打出 atk × mult 重击） */
+  charging: { mult: number } | null;
+  /** 减伤状态：受到伤害 ×(1-reduction) */
+  dmgReduction: { reduction: number; turnsLeft: number } | null;
+}
+
+/** 敌人回合行动结果（场景据此播放演出） */
+export interface EnemyActResult {
+  action: 'idle' | 'attack' | 'charge' | 'chargedAttack' | 'heal' | 'shield';
+  damage: number;
+  absorbed: number;
+  heroDead: boolean;
+  /** healSelf 的回复量 */
+  healed: number;
 }
 
 /** 一次宠物出手（已含本回合 Combo/克制/暴击） */
@@ -68,11 +99,15 @@ export interface BattleResult {
 export class BattleController {
   readonly stage: StageDef;
   readonly team: TeamPet[];
+  /** 队伍总回复（心珠回血基数） */
+  readonly teamRcvTotal: number;
+  /** 队伍属性覆盖（不在集合内的属性珠 = 无效珠，消除无伤害） */
+  readonly teamElementSet: ReadonlySet<Element>;
 
   state: BattleState = 'playerTurn';
 
-  heroMaxHp: number = COMBAT.heroBaseHp;
-  heroHp: number = COMBAT.heroBaseHp;
+  heroMaxHp: number;
+  heroHp: number;
 
   /** 当前波次（0 起） */
   waveIndex = 0;
@@ -83,18 +118,34 @@ export class BattleController {
   /** 英雄是否受过伤（无伤星判定） */
   tookDamage = false;
 
+  /** 当前护盾值（吸收敌人伤害，先于 HP 扣减） */
+  shield = 0;
+  /** 全队增伤 buff（dmgBoost 技能），null = 无 */
+  dmgBuff: { mult: number; turnsLeft: number } | null = null;
+
   private _rng: () => number;
 
-  constructor(stageId: string, rng: () => number = Math.random) {
+  constructor(stageId: string, teamIds?: readonly string[], rng: () => number = Math.random) {
     const stage = STAGE_MAP.get(stageId);
     if (!stage) throw new Error(`未知关卡: ${stageId}`);
     this.stage = stage;
     this._rng = rng;
 
-    this.team = PETS.map((def) => ({
-      def,
-      atk: petAtk(def, DEMO_TEAM_LEVEL, DEMO_TEAM_STAR),
+    const ids = teamIds && teamIds.length > 0 ? teamIds : DEFAULT_TEAM;
+    const members: TeamMember[] = ids
+      .map((id) => PET_MAP.get(id))
+      .filter((def): def is PetDef => !!def)
+      .map((def) => ({ def, level: DEMO_TEAM_LEVEL, star: DEMO_TEAM_STAR }));
+
+    this.team = members.map((m) => ({
+      def: m.def,
+      atk: petAtk(m.def, m.level, m.star),
+      skillCdLeft: m.def.skill.cd,
     }));
+    this.heroMaxHp = teamMaxHp(members);
+    this.heroHp = this.heroMaxHp;
+    this.teamRcvTotal = teamRcv(members);
+    this.teamElementSet = teamElements(members);
 
     this.enemy = this._spawnEnemy(0);
   }
@@ -141,7 +192,7 @@ export class BattleController {
       const pet = this.team[petIndex];
 
       const isCrit = this._rng() < COMBAT.critChance;
-      const damage = calcDamage({
+      const raw = calcDamage({
         atk: pet.atk,
         matchCount: group.cells.length,
         combo,
@@ -149,7 +200,13 @@ export class BattleController {
         defenderElement: this.enemy.def.element,
         defenderDef: this.enemy.def_,
         isCrit,
+        buffMult: this.dmgBuff?.mult ?? 1.0,
       });
+      // 敌人减伤状态（shieldSelf）独立乘区
+      const damage = Math.max(
+        1,
+        Math.floor(raw * (1 - (this.enemy.dmgReduction?.reduction ?? 0))),
+      );
       attacks.push({
         petIndex,
         element,
@@ -159,7 +216,7 @@ export class BattleController {
       });
     }
 
-    const heal = healOrbs > 0 ? calcHeal(this.heroMaxHp, healOrbs) : 0;
+    const heal = healOrbs > 0 ? calcHeal(this.teamRcvTotal, healOrbs, combo) : 0;
     this.state = 'petAttack';
     return { combo, comboMul, attacks, heal };
   }
@@ -198,25 +255,167 @@ export class BattleController {
   }
 
   /**
-   * 敌人回合：攻击倒计时 -1，归零则反击。
-   * 返回本回合敌人造成的伤害（0 = 蓄力未出手）
+   * 敌人回合：技能优先（蓄力释放 > 蓄力起手 > 自疗 > 减伤），否则普攻倒计时。
+   * 伤害先被护盾吸收，溢出部分才扣 HP。
    */
-  enemyAct(): { damage: number; heroDead: boolean } {
-    if (this.enemy.hp <= 0) return { damage: 0, heroDead: false };
-    this.enemy.attackCountdown--;
-    if (this.enemy.attackCountdown > 0) {
-      return { damage: 0, heroDead: false };
+  enemyAct(): EnemyActResult {
+    const result = this._enemyTurnAction();
+    // 敌人回合结束 = 一个完整回合过去：双方持续状态衰减
+    if (this.dmgBuff) {
+      this.dmgBuff.turnsLeft--;
+      if (this.dmgBuff.turnsLeft <= 0) this.dmgBuff = null;
     }
-    this.enemy.attackCountdown = this.enemy.def.attackInterval;
-    const damage = this.enemy.atk;
+    const er = this.enemy.dmgReduction;
+    if (er) {
+      er.turnsLeft--;
+      if (er.turnsLeft <= 0) this.enemy.dmgReduction = null;
+    }
+    return result;
+  }
+
+  private _enemyTurnAction(): EnemyActResult {
+    const none: EnemyActResult = { action: 'idle', damage: 0, absorbed: 0, heroDead: false, healed: 0 };
+    const enemy = this.enemy;
+    if (enemy.hp <= 0) return none;
+
+    // 1) 蓄力完成：打出重击（覆盖普攻）
+    if (enemy.charging) {
+      const mult = enemy.charging.mult;
+      enemy.charging = null;
+      enemy.attackCountdown = enemy.def.attackInterval;
+      const hit = this.applyEnemyDamage(Math.floor(enemy.atk * mult));
+      return { action: 'chargedAttack', ...hit, healed: 0 };
+    }
+
+    // 2) 技能 CD 推进，按声明顺序找一个可释放的
+    const skills = enemy.def.skills ?? [];
+    for (let i = 0; i < skills.length; i++) {
+      if (enemy.skillCds[i] > 0) enemy.skillCds[i]--;
+    }
+    for (let i = 0; i < skills.length; i++) {
+      if (enemy.skillCds[i] > 0) continue;
+      const skill = skills[i];
+      const fired = this._tryCastEnemySkill(skill);
+      if (fired) {
+        enemy.skillCds[i] = skill.cd;
+        return fired;
+      }
+    }
+
+    // 3) 普攻倒计时
+    enemy.attackCountdown--;
+    if (enemy.attackCountdown > 0) return none;
+    enemy.attackCountdown = enemy.def.attackInterval;
+    const hit = this.applyEnemyDamage(enemy.atk);
+    return { action: 'attack', ...hit, healed: 0 };
+  }
+
+  /** 条件不满足返回 null（CD 保持就绪，下回合再判） */
+  private _tryCastEnemySkill(skill: EnemySkillDef): EnemyActResult | null {
+    const enemy = this.enemy;
+    switch (skill.type) {
+      case 'chargeAttack': {
+        enemy.charging = { mult: skill.mult };
+        return { action: 'charge', damage: 0, absorbed: 0, heroDead: false, healed: 0 };
+      }
+      case 'healSelf': {
+        if (enemy.hp >= enemy.maxHp) return null; // 满血不浪费
+        const healed = Math.min(
+          enemy.maxHp - enemy.hp,
+          Math.floor(enemy.maxHp * skill.pct),
+        );
+        enemy.hp += healed;
+        return { action: 'heal', damage: 0, absorbed: 0, heroDead: false, healed };
+      }
+      case 'shieldSelf': {
+        if (enemy.dmgReduction) return null; // 已有减伤不叠加
+        enemy.dmgReduction = { reduction: skill.reduction, turnsLeft: skill.turns };
+        return { action: 'shield', damage: 0, absorbed: 0, heroDead: false, healed: 0 };
+      }
+    }
+  }
+
+  /** 对英雄结算一次伤害（护盾先吸收） */
+  applyEnemyDamage(raw: number): { damage: number; absorbed: number; heroDead: boolean } {
+    const absorbed = Math.min(this.shield, raw);
+    this.shield -= absorbed;
+    const damage = raw - absorbed;
     this.heroHp = Math.max(0, this.heroHp - damage);
     if (damage > 0) this.tookDamage = true;
-    return { damage, heroDead: this.heroHp <= 0 };
+    return { damage, absorbed, heroDead: this.heroHp <= 0 };
   }
 
   /** ── enemyTurn → playerTurn ── */
   beginPlayerTurn(): void {
     this.state = 'playerTurn';
+    // 新回合开始：全队技能 CD -1
+    for (const pet of this.team) {
+      if (pet.skillCdLeft > 0) pet.skillCdLeft--;
+    }
+  }
+
+  // ════════════ 宠物主动技 ════════════
+
+  /** 技能是否可释放（玩家回合 + CD 就绪） */
+  canCastSkill(petIndex: number): boolean {
+    const pet = this.team[petIndex];
+    return !!pet && this.state === 'playerTurn' && pet.skillCdLeft <= 0;
+  }
+
+  /**
+   * 释放主动技（不消耗回合）。
+   * convertOrbs 只返回请求，由场景操作 BoardModel/BoardView 落地。
+   */
+  castSkill(petIndex: number): SkillCastResult {
+    if (!this.canCastSkill(petIndex)) {
+      throw new Error(`技能未就绪: petIndex=${petIndex}`);
+    }
+    const pet = this.team[petIndex];
+    const skill = pet.def.skill;
+    pet.skillCdLeft = skill.cd;
+
+    switch (skill.type) {
+      case 'instantDmg': {
+        const damage = this._applySkillDamage(pet.atk * skill.multiplier);
+        return {
+          type: 'instantDmg', skill, element: pet.def.element,
+          damage, enemyDead: this.enemy.hp <= 0,
+        };
+      }
+      case 'healPct': {
+        const healed = this.applyHeal(Math.floor(this.heroMaxHp * skill.pct));
+        return { type: 'healPct', skill, healed };
+      }
+      case 'dmgBoost': {
+        this.dmgBuff = { mult: skill.mult, turnsLeft: skill.turns };
+        return { type: 'dmgBoost', skill, mult: skill.mult, turns: skill.turns };
+      }
+      case 'shield': {
+        const value = Math.floor(this.heroMaxHp * skill.pct);
+        // 不叠加，取较大值（防无限堆盾）
+        this.shield = Math.max(this.shield, value);
+        return { type: 'shield', skill, value: this.shield };
+      }
+      case 'convertOrbs': {
+        return { type: 'convertOrbs', skill, to: skill.to, count: skill.count };
+      }
+      case 'teamAttack': {
+        const totalAtk = this.team.reduce((s, p) => s + p.atk, 0);
+        const damage = this._applySkillDamage(totalAtk * skill.multiplier);
+        return { type: 'teamAttack', skill, damage, enemyDead: this.enemy.hp <= 0 };
+      }
+    }
+  }
+
+  /** 技能直伤：吃防御减伤、增伤 buff 与敌人减伤状态，无视克制/Combo */
+  private _applySkillDamage(raw: number): number {
+    const reduced = raw
+      * (this.dmgBuff?.mult ?? 1.0)
+      * (1 - defenseReduction(this.enemy.def_))
+      * (1 - (this.enemy.dmgReduction?.reduction ?? 0));
+    const damage = Math.max(1, Math.floor(reduced));
+    this.enemy.hp = Math.max(0, this.enemy.hp - damage);
+    return damage;
   }
 
   /** 战斗结束，生成结果（胜利时计算星数与灵宠币） */
@@ -250,6 +449,9 @@ export class BattleController {
       atk: stats.atk,
       def_: stats.def,
       attackCountdown: def.attackInterval,
+      skillCds: (def.skills ?? []).map((s) => s.cd),
+      charging: null,
+      dmgReduction: null,
     };
   }
 

@@ -54,20 +54,39 @@ export class TitleScene implements Scene {
     coinText.position.set(w / 2, Game.safeTop + 150);
     this.container.addChild(coinText);
 
+    // 编队入口
+    const teamBtn = new PIXI.Container();
+    const teamBg = new PIXI.Graphics();
+    teamBg.beginFill(0x4a3a72);
+    teamBg.lineStyle(3, 0xffe082);
+    teamBg.drawRoundedRect(-80, -32, 160, 64, 32);
+    teamBg.endFill();
+    teamBtn.addChild(teamBg);
+    const teamLabel = new PIXI.Text('编队', { fontSize: 30, fill: 0xffffff, fontWeight: 'bold' });
+    teamLabel.anchor.set(0.5);
+    teamBtn.addChild(teamLabel);
+    teamBtn.position.set(w - 120, Game.safeTop + 120);
+    teamBtn.eventMode = 'static';
+    teamBtn.cursor = 'pointer';
+    teamBtn.on('pointertap', () => {
+      SceneManager.switchTo('team');
+    });
+    this.container.addChild(teamBtn);
+
     // 章节标题
     const chapterText = new PIXI.Text('— 第一章 · 灵兽森林 —', {
       fontSize: 32,
       fill: 0x9b8cc4,
     });
     chapterText.anchor.set(0.5);
-    chapterText.position.set(w / 2, Game.safeTop + 230);
+    chapterText.position.set(w / 2, Game.safeTop + 215);
     this.container.addChild(chapterText);
 
-    // 关卡列表
-    const itemW = 600;
-    const itemH = 110;
-    const gap = 24;
-    const startY = Game.safeTop + 310;
+    // 关卡列表（8 关压缩行高）
+    const itemW = 620;
+    const itemH = 92;
+    const gap = 14;
+    const startY = Game.safeTop + 270;
 
     STAGES.forEach((stage, i) => {
       const unlocked = PlayerData.isUnlocked(stage);
@@ -86,23 +105,23 @@ export class TitleScene implements Scene {
       const nameText = new PIXI.Text(
         `${stage.chapter}-${stage.index}  ${stage.name}${stage.isBoss ? ' · BOSS' : ''}`,
         {
-          fontSize: 32,
+          fontSize: 28,
           fill: unlocked ? 0xffffff : 0x6a5d8a,
           fontWeight: 'bold',
         },
       );
       nameText.anchor.set(0, 0.5);
-      nameText.position.set(-itemW / 2 + 30, -16);
+      nameText.position.set(-itemW / 2 + 30, -15);
       item.addChild(nameText);
 
       const subText = new PIXI.Text(
         unlocked
           ? `${ELEMENT_NAME[stage.element]}属性关卡 · ${stage.enemies.length} 波敌人`
           : '通关上一关解锁',
-        { fontSize: 22, fill: unlocked ? 0x9b8cc4 : 0x5a4d78 },
+        { fontSize: 20, fill: unlocked ? 0x9b8cc4 : 0x5a4d78 },
       );
       subText.anchor.set(0, 0.5);
-      subText.position.set(-itemW / 2 + 30, 24);
+      subText.position.set(-itemW / 2 + 30, 20);
       item.addChild(subText);
 
       // 右侧：星数 / 锁

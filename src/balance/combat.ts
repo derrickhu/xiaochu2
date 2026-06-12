@@ -58,9 +58,9 @@ export const COMBAT = {
   /** 防御减伤系数：减伤比 = def / (def + defScale) */
   defenseScale: 300,
 
-  /** 英雄基础生命 */
-  heroBaseHp: 1000,
+  /** 英雄基础生命（队伍总生命 = 此值 + Σ宠物 hp） */
+  heroBaseHp: 600,
 
-  /** 心珠每颗回复（占最大生命比例） */
-  heartHealRatio: 0.05,
+  /** 心珠每颗回复 = 队伍总 RCV × 此系数（再乘 Combo 倍率） */
+  rcvPerHeartOrb: 1.0,
 } as const;

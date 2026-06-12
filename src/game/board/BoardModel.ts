@@ -171,6 +171,31 @@ export class BoardModel {
     return moves;
   }
 
+  /**
+   * 转珠技能：随机把 count 颗非目标色珠转为 to。
+   * 返回实际转换的格子（可能少于 count，盘面同色不足时）。
+   */
+  convertRandom(to: OrbType, count: number): Cell[] {
+    const candidates: Cell[] = [];
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        const orb = this.grid[r][c];
+        if (orb && orb !== to) candidates.push({ r, c });
+      }
+    }
+    // Fisher-Yates 局部洗牌取前 count 个
+    const n = Math.min(count, candidates.length);
+    for (let i = 0; i < n; i++) {
+      const j = i + Math.floor(this._rng() * (candidates.length - i));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    const picked = candidates.slice(0, n);
+    for (const { r, c } of picked) {
+      this.grid[r][c] = to;
+    }
+    return picked;
+  }
+
   private _randomOrb(): OrbType {
     return ORB_TYPES[Math.floor(this._rng() * ORB_TYPES.length)];
   }

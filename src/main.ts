@@ -9,6 +9,7 @@ import { TextureCache } from '@/core/TextureCache';
 import { PRELOAD_IMAGES } from '@/config/Assets';
 import { TitleScene } from '@/scenes/TitleScene';
 import { BattleScene } from '@/scenes/BattleScene';
+import { TeamScene } from '@/scenes/TeamScene';
 
 declare const GameGlobal: any;
 
@@ -38,6 +39,7 @@ async function main(): Promise<void> {
 
   SceneManager.register(new TitleScene());
   SceneManager.register(new BattleScene());
+  SceneManager.register(new TeamScene());
   SceneManager.switchTo('title');
 }
 
