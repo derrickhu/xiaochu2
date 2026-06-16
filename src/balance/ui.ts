@@ -45,12 +45,18 @@ export const UI = {
     /** 队伍栏头像尺寸与间距 */
     petSize: 110,
     petGap: 16,
+    /** 五行相框相对头像缩放（对齐 xiao_chu frameScale=1.12） */
+    petFrameScale: 1.12,
     /** 队伍栏距棋盘顶部距离 */
     teamBarOffset: 130,
     /** 拖珠倒计时条 */
     dragBarHeight: 10,
     /** 英雄血条 */
     heroHpBarHeight: 18,
+    /** 宠物上滑放技能阈值（设计像素，向上位移） */
+    skillSwipeThreshold: 40,
+    /** 上滑预览最大位移 */
+    skillSwipeLiftMax: 48,
   },
 
   /** ── 动效时长（秒） ── */
@@ -76,8 +82,13 @@ export const UI = {
     /** Combo 淡出（延迟 + 时长） */
     comboFadeDelay: 0.5,
     comboFade: 0.4,
-    /** 属性弹道飞行 */
+    /** 属性弹道飞行（宠物 → 敌人） */
     projectile: 0.22,
+    /** 敌人弹道飞行（略慢，便于看清来向） */
+    enemyProjectile: 0.26,
+    enemyProjectileHeavy: 0.34,
+    /** 英雄受击：队伍栏后撤复位 */
+    heroHitRecoil: 0.22,
     /** 受击闪白 */
     enemyWhiteFlash: 0.1,
     /** 血条主条补间 */

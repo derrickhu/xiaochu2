@@ -16,6 +16,7 @@ import {
   PET_ROLE_NAME, type PetDef,
 } from '@/balance/pets';
 import { teamMaxHp, teamRcv, teamElements, type TeamMember } from '@/formulas/team';
+import { skillForPet } from '@/game/battle/SkillEngine';
 import { petImage } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 
@@ -136,7 +137,7 @@ export class TeamScene implements Scene {
       roleText.position.set(-itemW / 2 + 132, 0);
       item.addChild(roleText);
 
-      const skillText = new PIXI.Text(`技 ${pet.skill.name}`, {
+      const skillText = new PIXI.Text(`技 ${skillForPet(pet).name}`, {
         fontSize: 20, fill: 0x9b8cc4,
       });
       skillText.anchor.set(0, 0.5);

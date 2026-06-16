@@ -8,7 +8,8 @@
  */
 import { COMBAT, type Element } from '@/balance/combat';
 import type { PetDef } from '@/balance/pets';
-import { petHp, petRcv } from './growth';
+import type { StatBlock } from '@/balance/petRoles';
+import { petAtk, petHp, petRcv } from './growth';
 
 export interface TeamMember {
   def: PetDef;
@@ -16,11 +17,50 @@ export interface TeamMember {
   star: number;
 }
 
+type StatKey = keyof StatBlock;
+
+function teamTraitMultiplier(members: readonly TeamMember[], target: TeamMember, stat: StatKey): number {
+  let mult = 1;
+  for (const source of members) {
+    for (const trait of source.def.traits ?? []) {
+      if (trait.type === 'statBonus') {
+        if (trait.scope !== 'team') continue;
+        if (trait.stat !== stat) continue;
+        if (trait.element && trait.element !== target.def.element) continue;
+        if (trait.role && trait.role !== target.def.role) continue;
+        mult *= 1 + trait.pct;
+      }
+      if (trait.type === 'teamAura') {
+        if (trait.stat !== stat) continue;
+        const count = members.filter((m) => {
+          if (trait.requireRole && m.def.role !== trait.requireRole) return false;
+          if (trait.requireElement && m.def.element !== trait.requireElement) return false;
+          return true;
+        }).length;
+        if (count >= trait.count) mult *= 1 + trait.pct;
+      }
+    }
+  }
+  return mult;
+}
+
+export function petAtkInTeam(members: readonly TeamMember[], target: TeamMember): number {
+  return Math.floor(petAtk(target.def, target.level, target.star) * teamTraitMultiplier(members, target, 'atk'));
+}
+
+export function petHpInTeam(members: readonly TeamMember[], target: TeamMember): number {
+  return Math.floor(petHp(target.def, target.level, target.star) * teamTraitMultiplier(members, target, 'hp'));
+}
+
+export function petRcvInTeam(members: readonly TeamMember[], target: TeamMember): number {
+  return Math.floor(petRcv(target.def, target.level, target.star) * teamTraitMultiplier(members, target, 'rcv'));
+}
+
 /** 队伍总生命 = 英雄基础生命 + Σ宠物 hp */
 export function teamMaxHp(members: readonly TeamMember[]): number {
   let sum = COMBAT.heroBaseHp;
   for (const m of members) {
-    sum += petHp(m.def, m.level, m.star);
+    sum += petHpInTeam(members, m);
   }
   return sum;
 }
@@ -29,7 +69,7 @@ export function teamMaxHp(members: readonly TeamMember[]): number {
 export function teamRcv(members: readonly TeamMember[]): number {
   let sum = 0;
   for (const m of members) {
-    sum += petRcv(m.def, m.level, m.star);
+    sum += petRcvInTeam(members, m);
   }
   return sum;
 }

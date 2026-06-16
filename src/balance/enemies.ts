@@ -5,17 +5,7 @@
  * 调难度只改曲线参数，不逐行改表。
  */
 import type { Element } from './combat';
-
-/**
- * 怪物技能（回合 CD 制）：
- * - chargeAttack：就绪后先蓄力一回合（头顶预告），下一回合打出 atk × mult 重击
- * - healSelf：回复自身最大生命 × pct（仅在掉血后才会释放）
- * - shieldSelf：获得减伤状态，受到伤害 ×(1-reduction)，持续 turns 回合
- */
-export type EnemySkillDef =
-  | { type: 'chargeAttack'; cd: number; mult: number }
-  | { type: 'healSelf'; cd: number; pct: number }
-  | { type: 'shieldSelf'; cd: number; reduction: number; turns: number };
+import { ENEMY_SKILL_IDS } from './skills';
 
 export interface EnemyDef {
   id: string;
@@ -29,8 +19,8 @@ export interface EnemyDef {
   baseDef: number;
   /** 攻击间隔（回合） */
   attackInterval: number;
-  /** 主动技能（无 = 纯普攻怪） */
-  skills?: readonly EnemySkillDef[];
+  /** 主动技能引用（无 = 纯普攻怪），具体效果在 balance/skills.ts */
+  skillIds?: readonly string[];
 }
 
 /**
@@ -47,19 +37,19 @@ export const ENEMIES: readonly EnemyDef[] = [
   {
     id: 'enemy_golem_earth', name: '碎岩傀儡', element: 'earth',
     baseHp: 1500, baseAtk: 120, baseDef: 70, attackInterval: 3,
-    skills: [{ type: 'shieldSelf', cd: 3, reduction: 0.5, turns: 2 }],
+    skillIds: [ENEMY_SKILL_IDS.golemGuard],
   },
   /** 自疗：dps 不够就被回血拖死，需要输出宠/增伤集中爆发 */
   {
     id: 'enemy_serpent_water', name: '寒潭幼蛟', element: 'water',
     baseHp: 1080, baseAtk: 165, baseDef: 22, attackInterval: 2,
-    skills: [{ type: 'healSelf', cd: 3, pct: 0.16 }],
+    skillIds: [ENEMY_SKILL_IDS.serpentHeal],
   },
   /** 蓄力重击：一击 ×2.6，需要护盾/治疗位扛住 */
   {
     id: 'enemy_blade_metal', name: '锈刃魔', element: 'metal',
     baseHp: 900, baseAtk: 150, baseDef: 28, attackInterval: 3,
-    skills: [{ type: 'chargeAttack', cd: 4, mult: 2.6 }],
+    skillIds: [ENEMY_SKILL_IDS.bladeCharge],
   },
   // ── 第一章扩展怪 ──
   /** 高攻速攻怪：没有治疗/护盾会被持续磨死 */
@@ -68,16 +58,13 @@ export const ENEMIES: readonly EnemyDef[] = [
   {
     id: 'enemy_lion_fire', name: '烈焰狂狮', element: 'fire',
     baseHp: 1320, baseAtk: 185, baseDef: 16, attackInterval: 2,
-    skills: [{ type: 'chargeAttack', cd: 3, mult: 2.3 }],
+    skillIds: [ENEMY_SKILL_IDS.lionCharge],
   },
   /** 章末 Boss：减伤 + 自疗双技能，必须克制(金) + 爆发 + 续航全到位 */
   {
     id: 'enemy_panda_boss_wood', name: '蛮竹熊猫王', element: 'wood',
     baseHp: 3600, baseAtk: 170, baseDef: 30, attackInterval: 2,
-    skills: [
-      { type: 'shieldSelf', cd: 4, reduction: 0.45, turns: 2 },
-      { type: 'healSelf', cd: 3, pct: 0.10 },
-    ],
+    skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal],
   },
 ];
 

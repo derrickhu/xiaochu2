@@ -2,24 +2,28 @@ import { describe, it, expect } from 'vitest';
 import { petAtk, petHp, petRcv, petExpToNext, enemyStats } from '../growth';
 import { PETS } from '@/balance/pets';
 import { ENEMIES } from '@/balance/enemies';
+import { skillForPet } from '@/game/battle/SkillEngine';
 
 const samplePet = PETS[0];
 const sampleEnemy = ENEMIES[0];
 
 describe('petAtk', () => {
-  it('1 级 1 星 = 基础攻击', () => {
-    expect(petAtk(samplePet, 1, 1)).toBe(samplePet.baseAtk);
+  it('1 级 1 星 = role 模板 × 个体修正后的攻击', () => {
+    expect(petAtk(samplePet, 1, 1)).toBeGreaterThan(0);
   });
 
   it('等级提升攻击单调递增', () => {
     const a10 = petAtk(samplePet, 10, 1);
     const a20 = petAtk(samplePet, 20, 1);
     expect(a20).toBeGreaterThan(a10);
-    expect(a10).toBeGreaterThan(samplePet.baseAtk);
+    expect(a10).toBeGreaterThan(petAtk(samplePet, 1, 1));
   });
 
   it('星级倍率生效', () => {
-    expect(petAtk(samplePet, 1, 5)).toBe(Math.floor(samplePet.baseAtk * 2.8));
+    const star1 = petAtk(samplePet, 1, 1);
+    const star5 = petAtk(samplePet, 1, 5);
+    expect(star5).toBeGreaterThan(star1 * 2.7);
+    expect(star5).toBeLessThan(star1 * 2.9);
   });
 
   it('成长曲线快照（全宠物 Lv1/10/30/50 攻击一览）', () => {
@@ -35,9 +39,9 @@ describe('petAtk', () => {
 });
 
 describe('petHp / petRcv（三维模型）', () => {
-  it('1 级 1 星 = 基础值', () => {
-    expect(petHp(samplePet, 1, 1)).toBe(samplePet.baseHp);
-    expect(petRcv(samplePet, 1, 1)).toBe(samplePet.baseRcv);
+  it('1 级 1 星三维值有效', () => {
+    expect(petHp(samplePet, 1, 1)).toBeGreaterThan(0);
+    expect(petRcv(samplePet, 1, 1)).toBeGreaterThan(0);
   });
 
   it('等级提升单调递增', () => {
@@ -45,13 +49,28 @@ describe('petHp / petRcv（三维模型）', () => {
     expect(petRcv(samplePet, 20, 1)).toBeGreaterThan(petRcv(samplePet, 10, 1));
   });
 
+  it('同 role 同星级基础三维完全一致', () => {
+    const star = 1;
+    const lv = 1;
+    for (const role of ['attacker', 'healer', 'tank', 'support'] as const) {
+      const group = PETS.filter((p) => p.role === role);
+      if (group.length < 2) continue;
+      const ref = group[0];
+      for (const p of group.slice(1)) {
+        expect(petAtk(p, lv, star)).toBe(petAtk(ref, lv, star));
+        expect(petHp(p, lv, star)).toBe(petHp(ref, lv, star));
+        expect(petRcv(p, lv, star)).toBe(petRcv(ref, lv, star));
+      }
+    }
+  });
+
   it('角色定位体现在三维分布上：坦克 hp 最高 / 治疗 rcv 最高', () => {
     const tank = PETS.find((p) => p.id === 'pet_earth_001')!;
     const healer = PETS.find((p) => p.id === 'pet_wood_001')!;
     const attacker = PETS.find((p) => p.id === 'pet_fire_001')!;
-    expect(tank.baseHp).toBeGreaterThan(attacker.baseHp);
-    expect(healer.baseRcv).toBeGreaterThan(attacker.baseRcv);
-    expect(attacker.baseAtk).toBeGreaterThan(healer.baseAtk);
+    expect(petHp(tank, 1, 1)).toBeGreaterThan(petHp(attacker, 1, 1));
+    expect(petRcv(healer, 1, 1)).toBeGreaterThan(petRcv(attacker, 1, 1));
+    expect(petAtk(attacker, 1, 1)).toBeGreaterThan(petAtk(healer, 1, 1));
   });
 
   it('三维快照（全宠物 Lv1 三围一览）', () => {
@@ -61,7 +80,7 @@ describe('petHp / petRcv（三维模型）', () => {
       atk: petAtk(p, 1, 1),
       hp: petHp(p, 1, 1),
       rcv: petRcv(p, 1, 1),
-      skill: p.skill.type,
+      skill: skillForPet(p).id,
     }));
     expect(table).toMatchSnapshot();
   });

@@ -3,7 +3,7 @@
  *
  * 演出序列（async/await 驱动）：
  *   拖珠松手 → 逐组消除(Combo 跳动) → 下落连锁 → 宠物依次冲刺攻击
- *   → 敌人受击闪烁/抖动 + 伤害飘字 → 敌人回合 → 回到玩家回合
+ *   → 敌人受击闪烁/抖动 + 伤害飘字 → 敌人回合(属性弹道→英雄受击反馈) → 回到玩家回合
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -17,11 +17,18 @@ import { FlashOverlay } from '@/core/FlashOverlay';
 import { Platform } from '@/core/PlatformService';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { COMBAT, type Element } from '@/balance/combat';
+import { SKILL_VFX_MAP } from '@/balance/skillVfx';
 import { STAGES } from '@/balance/stages';
 import { comboMultiplier } from '@/formulas/damage';
-import { enemyImage, petImage, ORB_IMAGES } from '@/config/Assets';
+import { enemyImage, petFrameImage, petImage, ORB_IMAGES } from '@/config/Assets';
 import { BoardModel, type MatchGroup } from '@/game/board/BoardModel';
 import { BoardView } from '@/game/board/BoardView';
+import {
+  createPetSkillReadyFx,
+  triggerPetSkillReadyFlash,
+  updatePetSkillReadyFx,
+  type PetSkillReadyFxView,
+} from '@/game/battle/PetSkillReadyFx';
 import {
   BattleController,
   type PetAttack,
@@ -56,7 +63,12 @@ export class BattleScene implements Scene {
   private _petSlots: PIXI.Container[] = [];
   private _slotCdMask: PIXI.Graphics[] = [];
   private _slotCdText: PIXI.Text[] = [];
-  private _slotGlow: PIXI.Graphics[] = [];
+  private _slotReadyFx: PetSkillReadyFxView[] = [];
+  private _slotWasReady: boolean[] = [];
+  private _slotBaseY: number[] = [];
+  private _petSwipe: { index: number; startY: number; triggered: boolean } | null = null;
+  private _petSwipeMove: ((e: unknown) => void) | null = null;
+  private _petSwipeUp: ((e: unknown) => void) | null = null;
   private _statusText!: PIXI.Text;
   private _floatLayer!: PIXI.Container;
   private _overlayLayer!: PIXI.Container;
@@ -104,6 +116,7 @@ export class BattleScene implements Scene {
     this._boardView?.cancelDrag();
     this._boardView?.destroy();
     this._boardView = null;
+    this._teardownPetSwipeInput();
     this._floatPool?.clear();
     this._fx?.destroy();
     this._flash?.destroy();
@@ -259,33 +272,50 @@ export class BattleScene implements Scene {
   }
 
   private _buildTeamBar(): void {
-    const { petSize, petGap } = UI.battle;
+    const { petSize, petGap, petFrameScale } = UI.battle;
     const total = this._ctrl.team.length * petSize + (this._ctrl.team.length - 1) * petGap;
     const startX = (Game.logicWidth - total) / 2 + petSize / 2;
     const y = this._boardY - UI.battle.teamBarOffset + petSize / 2;
+    const frameSize = petSize * petFrameScale;
 
     this._slotCdMask = [];
     this._slotCdText = [];
-    this._slotGlow = [];
+    this._slotReadyFx = [];
+    this._slotWasReady = [];
+    this._slotBaseY = [];
     this._petSlots = this._ctrl.team.map((pet, i) => {
       const slot = new PIXI.Container();
       slot.position.set(startX + i * (petSize + petGap), y);
+      this._slotBaseY.push(y);
+      const color = ORB_COLOR[pet.def.element];
 
-      // 属性色底框
-      const frame = new PIXI.Graphics();
-      frame.beginFill(0x1a1126);
-      frame.lineStyle(4, ORB_COLOR[pet.def.element]);
-      frame.drawRoundedRect(-petSize / 2, -petSize / 2, petSize, petSize, 16);
-      frame.endFill();
-      slot.addChild(frame);
+      // 属性色底（对齐 xiao_chu 头像底色）
+      const bg = new PIXI.Graphics();
+      bg.beginFill(0x1a1126);
+      bg.drawRoundedRect(-petSize / 2 + 1, -petSize / 2 + 1, petSize - 2, petSize - 2, 14);
+      bg.endFill();
+      slot.addChild(bg);
 
       const tex = TextureCache.get(petImage(pet.def.id));
       if (tex) {
         const avatar = new PIXI.Sprite(tex);
-        avatar.anchor.set(0.5);
-        const scale = (petSize - 12) / Math.max(avatar.width, avatar.height);
-        avatar.scale.set(scale);
+        avatar.anchor.set(0.5, 1);
+        const drawW = petSize - 2;
+        const drawH = drawW * (tex.height / tex.width);
+        avatar.width = drawW;
+        avatar.height = drawH;
+        avatar.position.set(0, petSize / 2 - 1);
         slot.addChild(avatar);
+      }
+
+      // 五行相框贴图（xiao_chu frame_pet_*.png）
+      const frameTex = TextureCache.get(petFrameImage(pet.def.element));
+      if (frameTex) {
+        const frame = new PIXI.Sprite(frameTex);
+        frame.anchor.set(0.5);
+        frame.width = frameSize;
+        frame.height = frameSize;
+        slot.addChild(frame);
       }
 
       // 属性字角标
@@ -313,23 +343,20 @@ export class BattleScene implements Scene {
       slot.addChild(cdText);
       this._slotCdText.push(cdText);
 
-      // 就绪发光框
-      const glow = new PIXI.Graphics();
-      glow.lineStyle(5, 0xffe082);
-      glow.drawRoundedRect(-petSize / 2 - 5, -petSize / 2 - 5, petSize + 10, petSize + 10, 19);
-      glow.visible = false;
-      slot.addChild(glow);
-      this._slotGlow.push(glow);
+      const readyFx = createPetSkillReadyFx(petSize, color);
+      slot.addChild(readyFx.root);
+      this._slotReadyFx.push(readyFx);
+      this._slotWasReady.push(pet.skillCdLeft <= 0);
 
       slot.eventMode = 'static';
       slot.cursor = 'pointer';
-      slot.on('pointertap', () => {
-        void this._onSkillTap(i);
-      });
+      slot.on('pointerdown', (e: PIXI.FederatedPointerEvent) => this._onPetSlotDown(i, e));
 
       this.container.addChild(slot);
       return slot;
     });
+
+    this._installPetSwipeInput();
 
     // 护盾 / 增伤 buff 状态行（英雄血条上方右侧）
     this._statusText = new PIXI.Text('', { fontSize: 22, fill: 0x8fd4ff, fontWeight: 'bold' });
@@ -340,14 +367,17 @@ export class BattleScene implements Scene {
     this._refreshSkillUi();
   }
 
-  /** 刷新宠物槽技能状态（CD 数字 / 就绪发光）与 buff 状态行 */
+  /** 刷新宠物槽技能状态（CD 数字 / 就绪动效）与 buff 状态行 */
   private _refreshSkillUi(): void {
     this._ctrl.team.forEach((pet, i) => {
       const ready = pet.skillCdLeft <= 0;
       this._slotCdMask[i].visible = !ready;
       this._slotCdText[i].visible = !ready;
       this._slotCdText[i].text = String(pet.skillCdLeft);
-      this._slotGlow[i].visible = ready;
+      if (ready && !this._slotWasReady[i]) {
+        triggerPetSkillReadyFlash(this._slotReadyFx[i]);
+      }
+      this._slotWasReady[i] = ready;
     });
     const parts: string[] = [];
     if (this._ctrl.shield > 0) parts.push(`护盾 ${this._ctrl.shield}`);
@@ -364,8 +394,136 @@ export class BattleScene implements Scene {
     this._boardView?.update(dt);
     this._fx?.update(dt);
     this._shake?.update(dt);
+    this._updateSkillReadyFx(dt);
     this._redrawDragBar();
     this._redrawHpBars();
+  }
+
+  /** 技能就绪槽：旋转光弧 + 上升粒子 + 双箭头（对齐 xiao_chu，无每帧 Graphics 重绘） */
+  private _updateSkillReadyFx(dt: number): void {
+    const { petSize } = UI.battle;
+
+    this._ctrl.team.forEach((pet, i) => {
+      const fx = this._slotReadyFx[i];
+      if (pet.skillCdLeft > 0) {
+        fx.root.visible = false;
+        return;
+      }
+      if (this._petSwipe?.index === i) {
+        fx.root.visible = false;
+        return;
+      }
+
+      const canAct = !this._busy && this._ctrl.state === 'playerTurn';
+      updatePetSkillReadyFx(
+        fx,
+        dt,
+        petSize,
+        canAct,
+        true,
+        canAct ? this._petSlots[i].scale : undefined,
+      );
+    });
+  }
+
+  /** 原生 pointer 坐标 → 设计坐标（与 BoardView 一致，兼容小游戏） */
+  private _rawToDesign(e: unknown): { x: number; y: number } {
+    const ev = e as {
+      clientX?: number; clientY?: number; x?: number; y?: number;
+      touches?: Array<{ clientX?: number; clientY?: number }>;
+      changedTouches?: Array<{ clientX?: number; clientY?: number }>;
+    };
+    const t0 = ev.touches?.[0] ?? ev.changedTouches?.[0];
+    const cx = ev.clientX ?? t0?.clientX ?? ev.x ?? 0;
+    const cy = ev.clientY ?? t0?.clientY ?? ev.y ?? 0;
+    const k = Game.designWidth / Game.screenWidth;
+    return { x: cx * k, y: cy * k };
+  }
+
+  private _installPetSwipeInput(): void {
+    this._teardownPetSwipeInput();
+    const canvas = Game.app.view as HTMLElement;
+    this._petSwipeMove = (e) => this._onPetSwipeMove(e);
+    this._petSwipeUp = () => this._cancelPetSwipe(true);
+    canvas.addEventListener('pointermove', this._petSwipeMove);
+    canvas.addEventListener('pointerup', this._petSwipeUp);
+    canvas.addEventListener('pointercancel', this._petSwipeUp);
+  }
+
+  private _teardownPetSwipeInput(): void {
+    const canvas = Game.app.view as HTMLElement;
+    if (this._petSwipeMove) canvas.removeEventListener('pointermove', this._petSwipeMove);
+    if (this._petSwipeUp) {
+      canvas.removeEventListener('pointerup', this._petSwipeUp);
+      canvas.removeEventListener('pointercancel', this._petSwipeUp);
+    }
+    this._petSwipeMove = null;
+    this._petSwipeUp = null;
+    this._petSwipe = null;
+  }
+
+  private _onPetSlotDown(petIndex: number, e: PIXI.FederatedPointerEvent): void {
+    if (this._busy || !this._ctrl.canCastSkill(petIndex)) return;
+    const native = (e.nativeEvent ?? e) as unknown;
+    const p = this._rawToDesign(native);
+    this._petSwipe = { index: petIndex, startY: p.y, triggered: false };
+    TweenManager.cancelTarget(this._petSlots[petIndex]);
+  }
+
+  private _onPetSwipeMove(e: unknown): void {
+    const swipe = this._petSwipe;
+    if (!swipe || swipe.triggered) return;
+
+    const p = this._rawToDesign(e);
+    const dy = swipe.startY - p.y;
+    const slot = this._petSlots[swipe.index];
+    const baseY = this._slotBaseY[swipe.index];
+    const { skillSwipeThreshold, skillSwipeLiftMax } = UI.battle;
+    const lift = Math.min(Math.max(0, dy) * 0.55, skillSwipeLiftMax);
+
+    slot.y = baseY - lift;
+    slot.scale.set(1 + Math.min(dy / skillSwipeThreshold, 1) * 0.1);
+    this._slotReadyFx[swipe.index].root.visible = false;
+
+    if (dy >= skillSwipeThreshold) {
+      swipe.triggered = true;
+      slot.y = baseY;
+      slot.scale.set(1);
+      this._petSwipe = null;
+      void this._onSkillCast(swipe.index);
+    }
+  }
+
+  private _cancelPetSwipe(animateBack: boolean): void {
+    const swipe = this._petSwipe;
+    if (!swipe || swipe.triggered) {
+      this._petSwipe = null;
+      return;
+    }
+
+    const slot = this._petSlots[swipe.index];
+    const baseY = this._slotBaseY[swipe.index];
+    this._petSwipe = null;
+
+    if (!animateBack) {
+      slot.y = baseY;
+      slot.scale.set(1);
+      return;
+    }
+
+    TweenManager.cancelTarget(slot);
+    TweenManager.to({
+      target: slot,
+      props: { y: baseY },
+      duration: 0.12,
+      ease: Ease.easeOutQuad,
+    });
+    TweenManager.to({
+      target: slot.scale,
+      props: { x: 1, y: 1 },
+      duration: 0.12,
+      ease: Ease.easeOutQuad,
+    });
   }
 
   /** 每帧重绘双方血条（主条 + 损血白条均为补间值） */
@@ -545,7 +703,7 @@ export class BattleScene implements Scene {
 
   // ════════════ 宠物主动技 ════════════
 
-  private async _onSkillTap(petIndex: number): Promise<void> {
+  private async _onSkillCast(petIndex: number): Promise<void> {
     if (this._busy || !this._ctrl.canCastSkill(petIndex)) return;
     this._busy = true;
     const pet = this._ctrl.team[petIndex];
@@ -555,16 +713,20 @@ export class BattleScene implements Scene {
     Platform.vibrateShort('medium');
 
     // 通用演出：属性色全屏闪 + 技能名横幅
-    this._flash.flash(color, 0.25, 0.4);
-    await this._showSkillBanner(pet.def.skill.name, color);
+    const vfx = SKILL_VFX_MAP.get(result.vfxEvents[0] ?? pet.skill.vfx);
+    this._flash.flash(color, vfx?.flashDuration ?? 0.25, vfx?.flashAlpha ?? 0.4);
+    await this._showSkillBanner(pet.skill.name, color);
 
-    switch (result.type) {
-      case 'instantDmg': {
+    switch (vfx?.kind) {
+      case 'projectile': {
         const slot = this._petSlots[petIndex];
-        await this._fireProjectile(slot.x, slot.y - 60, result.element);
-        this._playEnemyHit(result.element, result.damage, true);
+        const damage = result.damage ?? 0;
+        await this._fireProjectileBetween(
+          slot.x, slot.y - 60, this._enemyCenterX, this._enemyCenterY, result.element ?? pet.def.element,
+        );
+        this._playEnemyHit(result.element ?? pet.def.element, damage, true);
         this._spawnFloat(
-          `${result.damage}`,
+          `${damage}`,
           this._enemyCenterX + (Math.random() - 0.5) * 100,
           this._enemyCenterY - 40,
           color, 1.4,
@@ -573,55 +735,61 @@ export class BattleScene implements Scene {
         if (result.enemyDead && await this._handleEnemyDefeat()) return;
         break;
       }
-      case 'teamAttack': {
+      case 'teamVolley': {
+        const damage = result.damage ?? 0;
         // 全队齐射：所有槽位同时发弹道，命中弹一次总伤害
         await Promise.all(this._petSlots.map((slot, i) =>
-          this._fireProjectile(slot.x, slot.y - 60, this._ctrl.team[i].def.element),
+          this._fireProjectileBetween(
+            slot.x, slot.y - 60, this._enemyCenterX, this._enemyCenterY, this._ctrl.team[i].def.element,
+          ),
         ));
-        this._playEnemyHit(pet.def.element, result.damage, true);
-        this._spawnFloat(`${result.damage}`, this._enemyCenterX, this._enemyCenterY - 40, color, 1.5);
+        this._playEnemyHit(pet.def.element, damage, true);
+        this._spawnFloat(`${damage}`, this._enemyCenterX, this._enemyCenterY - 40, color, 1.5);
         this._refreshEnemyHp();
         if (result.enemyDead && await this._handleEnemyDefeat()) return;
         break;
       }
-      case 'healPct': {
+      case 'healBurst': {
         this._refreshHeroHp();
-        this._spawnFloat(`+${result.healed}`, Game.logicWidth / 2, this._heroBarY - 24, 0x6fd86a, 1.2);
+        this._spawnFloat(`+${result.healed ?? 0}`, Game.logicWidth / 2, this._heroBarY - 24, 0x6fd86a, 1.2);
         this._fx.burst({
           x: Game.logicWidth / 2, y: this._heroBarY,
           color: 0x8be78b, count: 12, speed: 280, gravity: -200, size: 14, life: 0.6,
         });
         break;
       }
-      case 'shield': {
-        this._spawnFloat(`护盾 ${result.value}`, Game.logicWidth / 2, this._heroBarY - 24, 0x8fd4ff, 1.2);
+      case 'shieldBurst': {
+        this._spawnFloat(`护盾 ${result.value ?? 0}`, Game.logicWidth / 2, this._heroBarY - 24, 0x8fd4ff, 1.2);
         this._fx.burst({
           x: Game.logicWidth / 2, y: this._heroBarY,
           color: 0x8fd4ff, count: 12, speed: 280, gravity: -200, size: 14, life: 0.6,
         });
         break;
       }
-      case 'dmgBoost': {
+      case 'buffFloat': {
         this._spawnFloat(
-          `全队伤害 ×${result.mult}（${result.turns} 回合）`,
+          `全队伤害 ×${result.mult ?? 1}（${result.turns ?? 0} 回合）`,
           Game.logicWidth / 2, this._heroBarY - 24, 0xffb74d, 1.1,
         );
         break;
       }
-      case 'convertOrbs': {
-        const cells = this._board.convertRandom(result.to, result.count);
+      case 'orbConvert': {
+        const to = result.to ?? 'heart';
+        const cells = this._board.convertRandom(to, result.count ?? 0);
         for (const { r, c } of cells) {
           const cell = UI.board.cellSize;
           this._fx.burst({
             x: this._boardX + c * cell + cell / 2,
             y: this._boardY + r * cell + cell / 2,
-            color: ORB_COLOR[result.to],
+            color: ORB_COLOR[to],
             count: 5, speed: 240, size: 12, life: 0.35,
           });
         }
-        await this._boardView!.playConvert(cells, result.to);
+        await this._boardView!.playConvert(cells, to);
         break;
       }
+      default:
+        break;
     }
 
     this._refreshSkillUi();
@@ -714,7 +882,9 @@ export class BattleScene implements Scene {
             target: slot, props: { y: baseY },
             duration: UI.anim.petReturn, ease: Ease.easeInQuad,
           });
-          void this._fireProjectile(slot.x, slot.y - 60, attack.element).then(() => {
+          void this._fireProjectileBetween(
+            slot.x, slot.y - 60, this._enemyCenterX, this._enemyCenterY, attack.element,
+          ).then(() => {
             this._playEnemyHit(attack.element, attack.damage, attack.isCrit);
             this._spawnDamageFloat(attack);
             resolve();
@@ -724,33 +894,55 @@ export class BattleScene implements Scene {
     });
   }
 
-  /** 属性色弹道：珠子贴图缩小版 + 拖尾粒子，从宠物槽飞向敌人 */
-  private _fireProjectile(fromX: number, fromY: number, element: Element): Promise<void> {
+  /** 属性色弹道：珠子贴图 + 拖尾粒子，从起点飞向终点（宠物/敌人共用） */
+  private _fireProjectileBetween(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    element: Element,
+    opts?: { size?: number; duration?: number; heavy?: boolean },
+  ): Promise<void> {
     return new Promise((resolve) => {
+      const heavy = opts?.heavy ?? false;
       const color = ORB_COLOR[element];
+      const size = opts?.size ?? (heavy ? 56 : 48);
+      const duration = opts?.duration ?? UI.anim.projectile;
       const tex = TextureCache.get(ORB_IMAGES[element]);
       const p = new PIXI.Sprite(tex ?? PIXI.Texture.WHITE);
       p.anchor.set(0.5);
-      p.width = 48;
-      p.height = 48;
+      p.width = size;
+      p.height = size;
       if (!tex) p.tint = color;
       p.position.set(fromX, fromY);
       this._fx.container.addChild(p);
 
       let frame = 0;
       TweenManager.to({
-        target: p, props: { x: this._enemyCenterX, y: this._enemyCenterY },
-        duration: UI.anim.projectile, ease: Ease.easeInQuad,
+        target: p, props: { x: toX, y: toY },
+        duration, ease: Ease.easeInQuad,
         onUpdate: () => {
           if (++frame % 2 === 0) {
             this._fx.burst({
               x: p.x, y: p.y, color,
-              count: 1, speed: 40, gravity: 0,
-              size: 12, life: 0.22, alpha: 0.8,
+              count: heavy ? 2 : 1,
+              speed: heavy ? 55 : 40,
+              gravity: 0,
+              size: heavy ? 16 : 12,
+              life: 0.22,
+              alpha: 0.85,
             });
           }
         },
         onComplete: () => {
+          // 命中点小爆
+          this._fx.burst({
+            x: toX, y: toY, color,
+            count: heavy ? 10 : 6,
+            speed: heavy ? 320 : 240,
+            size: heavy ? 16 : 12,
+            life: 0.35,
+          });
           p.destroy();
           resolve();
         },
@@ -870,50 +1062,143 @@ export class BattleScene implements Scene {
     this._refreshSkillUi();
   }
 
-  /** 敌人前冲攻击：蓄力重击时演出全面加重 */
+  /** 敌人攻击：蓄力缩放 → 属性弹道飞向英雄血条 → 命中反馈 */
   private _playEnemyAttack(damage: number, absorbed: number, heavy: boolean): Promise<void> {
+    const element = this._ctrl.enemy.def.element;
+    const toX = Game.logicWidth / 2;
+    const toY = this._heroBarY;
+    const baseScale = this._enemySprite.scale.x;
+
     return new Promise((resolve) => {
-      const baseY = this._enemyContainer.y;
+      TweenManager.cancelTarget(this._enemySprite.scale);
       TweenManager.to({
-        target: this._enemyContainer, props: { y: baseY + (heavy ? 60 : 36) },
-        duration: UI.anim.petDash, ease: Ease.easeOutQuad,
+        target: this._enemySprite.scale,
+        props: {
+          x: baseScale * (heavy ? 1.14 : 1.08),
+          y: baseScale * (heavy ? 1.14 : 1.08),
+        },
+        duration: heavy ? 0.14 : 0.1,
+        ease: Ease.easeOutQuad,
         onComplete: () => {
-          this._refreshHeroHp();
-          if (absorbed > 0) {
-            this._spawnFloat(
-              `盾挡 -${absorbed}`,
-              Game.logicWidth / 2 - 90, this._heroBarY - 24, 0x8fd4ff,
-            );
-          }
-          if (damage > 0) {
-            this._spawnFloat(
-              `-${damage}`,
-              Game.logicWidth / 2 + (absorbed > 0 ? 90 : 0),
-              this._heroBarY - 24, 0xff5252,
-              heavy ? 1.4 : 1,
-            );
-            // 英雄受击：红屏闪 + 震屏 + 振动（重击全部升档）
-            this._flash.flash(0xff2d2d, heavy ? 0.3 : 0.18, heavy ? 0.45 : 0.35);
-            if (heavy) {
-              this._shake.heavy();
-              Platform.vibrateLong();
-            } else {
-              this._shake.medium();
-              Platform.vibrateShort('medium');
-            }
-          } else {
-            // 完全被护盾挡下：蓝色轻闪
-            this._flash.flash(0x8fd4ff, 0.12, 0.25);
-            Platform.vibrateShort('light');
-          }
-          TweenManager.to({
-            target: this._enemyContainer, props: { y: baseY },
-            duration: UI.anim.petReturn, ease: Ease.easeInQuad,
-            onComplete: resolve,
+          void this._fireProjectileBetween(
+            this._enemyCenterX, this._enemyCenterY, toX, toY, element,
+            {
+              heavy,
+              size: heavy ? 58 : 46,
+              duration: heavy ? UI.anim.enemyProjectileHeavy : UI.anim.enemyProjectile,
+            },
+          ).then(() => {
+            TweenManager.to({
+              target: this._enemySprite.scale,
+              props: { x: baseScale, y: baseScale },
+              duration: 0.12,
+              ease: Ease.easeOutQuad,
+            });
+            this._playHeroHit(element, damage, absorbed, heavy);
+            resolve();
           });
         },
       });
     });
+  }
+
+  /**
+   * 英雄受击反馈：飘字 + 属性/红色粒子 + 红屏闪 + 震屏 + 血条字跳动 + 队伍栏后撤
+   * （护盾全挡时改为蓝色轻反馈）
+   */
+  private _playHeroHit(
+    element: Element,
+    damage: number,
+    absorbed: number,
+    heavy: boolean,
+  ): void {
+    this._refreshHeroHp();
+    const hitX = Game.logicWidth / 2;
+    const hitY = this._heroBarY;
+
+    if (absorbed > 0) {
+      this._spawnFloat(`盾挡 -${absorbed}`, hitX - 90, hitY - 28, 0x8fd4ff);
+    }
+
+    if (damage > 0) {
+      this._spawnFloat(
+        `-${damage}`,
+        hitX + (absorbed > 0 ? 90 : 0),
+        hitY - 28,
+        0xff5252,
+        heavy ? 1.45 : 1.15,
+      );
+      this._fx.burst({
+        x: hitX, y: hitY,
+        color: ORB_COLOR[element],
+        count: heavy ? 14 : 9,
+        speed: heavy ? 400 : 300,
+        size: heavy ? 18 : 14,
+        life: 0.45,
+      });
+      this._fx.burst({
+        x: hitX, y: hitY,
+        color: 0xff5252,
+        count: heavy ? 8 : 5,
+        speed: 240,
+        size: 12,
+        life: 0.35,
+      });
+      this._flash.flash(0xff2d2d, heavy ? 0.32 : 0.22, heavy ? 0.45 : 0.35);
+      if (heavy) {
+        this._shake.heavy();
+        Platform.vibrateLong();
+      } else {
+        this._shake.medium();
+        Platform.vibrateShort('medium');
+      }
+      this._pulseHeroHpText(heavy);
+      this._recoilTeamBar(heavy);
+    } else if (absorbed > 0) {
+      this._flash.flash(0x8fd4ff, 0.14, 0.28);
+      this._fx.burst({
+        x: hitX, y: hitY,
+        color: 0x8fd4ff,
+        count: 7, speed: 200, size: 14, life: 0.32,
+      });
+      Platform.vibrateShort('light');
+    }
+  }
+
+  /** 英雄血条数字受击跳动 */
+  private _pulseHeroHpText(heavy: boolean): void {
+    TweenManager.cancelTarget(this._heroHpText.scale);
+    const s = heavy ? 1.38 : 1.22;
+    this._heroHpText.scale.set(s);
+    TweenManager.to({
+      target: this._heroHpText.scale,
+      props: { x: 1, y: 1 },
+      duration: 0.28,
+      ease: Ease.easeOutBack,
+    });
+  }
+
+  /** 队伍栏整体后撤再弹回（受击方向感） */
+  private _recoilTeamBar(heavy: boolean): void {
+    const offset = heavy ? 16 : 10;
+    for (const slot of this._petSlots) {
+      const baseX = slot.x;
+      TweenManager.cancelTarget(slot);
+      TweenManager.to({
+        target: slot,
+        props: { x: baseX + offset },
+        duration: UI.anim.heroHitRecoil * 0.35,
+        ease: Ease.easeOutQuad,
+        onComplete: () => {
+          TweenManager.to({
+            target: slot,
+            props: { x: baseX },
+            duration: UI.anim.heroHitRecoil * 0.65,
+            ease: Ease.easeOutBack,
+          });
+        },
+      });
+    }
   }
 
   /** 蓄力起手：红色凝聚粒子 + 立绘膨胀脉冲 + 预告（文字由 _refreshEnemyCd 常驻） */

@@ -9,16 +9,32 @@
  *   - 仅队伍覆盖到的元素珠造成伤害；心珠回血；未覆盖元素珠浪费
  *   - 不计暴击（期望影响极小，且保持确定性）
  */
-import { COMBAT, ELEMENT_COUNTERS, type Element } from '@/balance/combat';
+import { COMBAT, type Element } from '@/balance/combat';
 import type { PetDef } from '@/balance/pets';
 import { PET_MAP } from '@/balance/pets';
 import type { EnemyDef } from '@/balance/enemies';
 import { ENEMY_MAP } from '@/balance/enemies';
 import type { StageDef } from '@/balance/stages';
 import { STAGE_MAP } from '@/balance/stages';
-import { calcDamage, calcHeal, comboMultiplier, defenseReduction } from './damage';
-import { petAtk, enemyStats } from './growth';
-import { teamMaxHp, teamRcv, teamElements, type TeamMember } from './team';
+import type { SkillDef, SkillVfxId } from '@/balance/skills';
+import { calcDamage, calcHeal } from './damage';
+import { enemyStats } from './growth';
+import {
+  petAtkInTeam,
+  teamMaxHp,
+  teamRcv,
+  teamElements,
+  type TeamMember,
+} from './team';
+import {
+  runChargedAttack,
+  runSkill,
+  skillCdForPet,
+  skillForEnemy,
+  skillForPet,
+  type SkillResult,
+  type SkillRuntimeContext,
+} from '@/game/battle/SkillEngine';
 
 /** 玩家操作熟练度模型 */
 export interface ComboModel {
@@ -54,6 +70,7 @@ export interface SimResult {
 
 interface SimPet {
   def: PetDef;
+  skill: SkillDef;
   atk: number;
   skillCdLeft: number;
 }
@@ -66,11 +83,12 @@ interface SimEnemy {
   def_: number;
   attackCountdown: number;
   skillCds: number[];
-  charging: { mult: number } | null;
+  charging: { mult: number; skillId: string; releaseVfx: SkillVfxId } | null;
   dmgReduction: { reduction: number; turnsLeft: number } | null;
 }
 
-const TURN_CAP = 60;
+/** 超过该回合仍未通关，按卡关处理；避免弱队无限磨死自疗怪 */
+const TURN_CAP = 55;
 
 function spawnEnemy(stage: StageDef, waveIndex: number): SimEnemy {
   const def = ENEMY_MAP.get(stage.enemies[waveIndex]);
@@ -83,16 +101,10 @@ function spawnEnemy(stage: StageDef, waveIndex: number): SimEnemy {
     atk: stats.atk,
     def_: stats.def,
     attackCountdown: def.attackInterval,
-    skillCds: (def.skills ?? []).map((s) => s.cd),
+    skillCds: (def.skillIds ?? []).map((id) => skillForEnemy(id).cd),
     charging: null,
     dmgReduction: null,
   };
-}
-
-function counterRelation(attacker: Element, defender: Element): 1 | 0 | -1 {
-  if (ELEMENT_COUNTERS[attacker] === defender) return 1;
-  if (ELEMENT_COUNTERS[defender] === attacker) return -1;
-  return 0;
 }
 
 /**
@@ -110,8 +122,9 @@ export function simulateBattle(
 
   const team: SimPet[] = members.map((m) => ({
     def: m.def,
-    atk: petAtk(m.def, m.level, m.star),
-    skillCdLeft: m.def.skill.cd,
+    skill: skillForPet(m.def),
+    atk: petAtkInTeam(members, m),
+    skillCdLeft: skillCdForPet(m.def),
   }));
   const heroMaxHp = teamMaxHp(members);
   const rcvTotal = teamRcv(members);
@@ -127,6 +140,10 @@ export function simulateBattle(
   let tookDamage = false;
   let maxEnemyHit = 0;
   let turnsUsed = 0;
+  let enemyReduction = 0;
+  let buffMult = 1;
+  let dmgToEnemy = 0;
+  let healThisTurn = 0;
 
   let waveIndex = 0;
   let enemy = spawnEnemy(stage, waveIndex);
@@ -141,53 +158,26 @@ export function simulateBattle(
       for (const p of team) if (p.skillCdLeft > 0) p.skillCdLeft--;
     }
 
-    const enemyReduction = enemy.dmgReduction?.reduction ?? 0;
-    const buffMult = dmgBuff?.mult ?? 1.0;
-    let dmgToEnemy = 0;
-    let healThisTurn = 0;
+    enemyReduction = enemy.dmgReduction?.reduction ?? 0;
+    buffMult = dmgBuff?.mult ?? 1.0;
+    dmgToEnemy = 0;
+    healThisTurn = 0;
 
     // ── 主动技（中/高手）──
     if (model.useSkills) {
       for (const p of team) {
         if (p.skillCdLeft > 0) continue;
-        const sk = p.def.skill;
-        let fired = true;
-        switch (sk.type) {
-          case 'instantDmg':
-            dmgToEnemy += skillDamage(p.atk * sk.multiplier, buffMult, enemy.def_, enemyReduction);
-            break;
-          case 'teamAttack': {
-            const totalAtk = team.reduce((s, q) => s + q.atk, 0);
-            dmgToEnemy += skillDamage(totalAtk * sk.multiplier, buffMult, enemy.def_, enemyReduction);
-            break;
-          }
-          case 'healPct':
-            // 只在掉血较多时放，避免浪费
-            if (heroHp < heroMaxHp * 0.85) healThisTurn += Math.floor(heroMaxHp * sk.pct);
-            else fired = false;
-            break;
-          case 'shield':
-            shield = Math.max(shield, Math.floor(heroMaxHp * sk.pct));
-            break;
-          case 'dmgBoost':
-            dmgBuff = { mult: sk.mult, turnsLeft: sk.turns };
-            break;
-          case 'convertOrbs':
-            // 近似：转出的珠当回合即转化为伤害/回血
-            if (sk.to === 'heart') {
-              healThisTurn += calcHeal(rcvTotal, sk.count, model.combo);
-            } else if (covered.has(sk.to as Element)) {
-              const pet = firstPetOf(sk.to as Element);
-              if (pet) {
-                const extraGroups = sk.count / model.matchCount;
-                dmgToEnemy += extraGroups * orbGroupDamage(
-                  pet.atk, sk.to as Element, enemy, model, buffMult, enemyReduction,
-                );
-              }
-            }
-            break;
+        if (p.skill.effects.some((e) => e.kind === 'heal' && e.source !== 'enemyMaxHp') && heroHp >= heroMaxHp * 0.85) {
+          continue;
         }
-        if (fired) p.skillCdLeft = sk.cd;
+        const skillResult = runSkill(
+          p.skill,
+          { kind: 'pet', atk: p.atk, element: p.def.element, petDef: p.def },
+          runtimeContext(),
+        );
+        if (!skillResult) continue;
+        applySkillResult(skillResult);
+        p.skillCdLeft = p.skill.cd;
       }
     }
 
@@ -244,39 +234,107 @@ export function simulateBattle(
     }
   }
 
+  function runtimeContext(): SkillRuntimeContext {
+    return {
+      enemy: {
+        hp: enemy.hp,
+        maxHp: enemy.maxHp,
+        atk: enemy.atk,
+        def_: enemy.def_,
+        element: enemy.def.element,
+      },
+      heroHp,
+      heroMaxHp,
+      teamRcvTotal: rcvTotal,
+      teamAtkTotal: team.reduce((sum, p) => sum + p.atk, 0),
+      teamDamageBuffMult: dmgBuff?.mult ?? 1,
+      enemyDamageReduction: enemy.dmgReduction?.reduction ?? 0,
+    };
+  }
+
+  function applySkillResult(result: SkillResult): void {
+    for (const event of result.damageEvents) {
+      if (event.target === 'enemy') {
+        dmgToEnemy += event.amount;
+      } else {
+        const absorbed = Math.min(shield, event.amount);
+        shield -= absorbed;
+        const dmg = event.amount - absorbed;
+        heroHp = Math.max(0, heroHp - dmg);
+        if (dmg > 0) tookDamage = true;
+        maxEnemyHit = Math.max(maxEnemyHit, event.amount);
+      }
+    }
+
+    for (const event of result.healEvents) {
+      if (event.target === 'team') {
+        healThisTurn += event.amount;
+      } else {
+        enemy.hp = Math.min(enemy.maxHp, enemy.hp + event.amount);
+      }
+    }
+
+    for (const event of result.statusEvents) {
+      if (event.status === 'shield') {
+        shield = Math.max(shield, event.value);
+      } else if (event.status === 'teamDamageBuff') {
+        dmgBuff = { mult: event.value, turnsLeft: event.turns ?? 0 };
+      } else if (event.status === 'enemyDamageReduction') {
+        if (!enemy.dmgReduction) enemy.dmgReduction = { reduction: event.value, turnsLeft: event.turns ?? 0 };
+      } else if (event.status === 'charge') {
+        enemy.charging = { mult: event.value, skillId: result.skill.id, releaseVfx: event.vfx };
+      }
+    }
+
+    for (const req of result.boardRequests) {
+      // 近似：转出的珠当回合即转化为伤害/回血
+      if (req.to === 'heart') {
+        healThisTurn += calcHeal(rcvTotal, req.count, model.combo);
+      } else if (covered.has(req.to as Element)) {
+        const pet = firstPetOf(req.to as Element);
+        if (pet) {
+          const extraGroups = req.count / model.matchCount;
+          dmgToEnemy += extraGroups * orbGroupDamage(
+            pet.atk, req.to as Element, enemy, model, dmgBuff?.mult ?? buffMult, enemy.dmgReduction?.reduction ?? enemyReduction,
+          );
+        }
+      }
+    }
+  }
+
   /** 返回本回合对英雄的原始伤害（0 = 未攻击） */
   function enemyAct(): number {
     if (enemy.hp <= 0) return 0;
 
     if (enemy.charging) {
-      const mult = enemy.charging.mult;
+      const charging = enemy.charging;
       enemy.charging = null;
       enemy.attackCountdown = enemy.def.attackInterval;
-      return Math.floor(enemy.atk * mult);
+      const skill = skillForEnemy(charging.skillId);
+      const result = runChargedAttack(
+        skill,
+        { kind: 'enemy', atk: enemy.atk, element: enemy.def.element },
+        runtimeContext(),
+        charging.mult,
+        charging.releaseVfx,
+      );
+      return result.damageEvents[0]?.amount ?? 0;
     }
 
-    const skills = enemy.def.skills ?? [];
-    for (let i = 0; i < skills.length; i++) {
+    const skillIds = enemy.def.skillIds ?? [];
+    for (let i = 0; i < skillIds.length; i++) {
       if (enemy.skillCds[i] > 0) enemy.skillCds[i]--;
     }
-    for (let i = 0; i < skills.length; i++) {
+    for (let i = 0; i < skillIds.length; i++) {
       if (enemy.skillCds[i] > 0) continue;
-      const sk = skills[i];
-      if (sk.type === 'chargeAttack') {
-        enemy.charging = { mult: sk.mult };
-        enemy.skillCds[i] = sk.cd;
-        return 0;
+      const skill = skillForEnemy(skillIds[i]);
+      if (enemy.dmgReduction && skill.effects.some((e) => e.kind === 'status' && e.status === 'enemyDamageReduction')) {
+        continue;
       }
-      if (sk.type === 'healSelf') {
-        if (enemy.hp >= enemy.maxHp) continue;
-        enemy.hp = Math.min(enemy.maxHp, enemy.hp + Math.floor(enemy.maxHp * sk.pct));
-        enemy.skillCds[i] = sk.cd;
-        return 0;
-      }
-      if (sk.type === 'shieldSelf') {
-        if (enemy.dmgReduction) continue;
-        enemy.dmgReduction = { reduction: sk.reduction, turnsLeft: sk.turns };
-        enemy.skillCds[i] = sk.cd;
+      const result = runSkill(skill, { kind: 'enemy', atk: enemy.atk, element: enemy.def.element }, runtimeContext());
+      if (result) {
+        applySkillResult(result);
+        enemy.skillCds[i] = skill.cd;
         return 0;
       }
     }
@@ -325,14 +383,6 @@ function orbGroupDamage(
     buffMult,
   });
   return raw * (1 - enemyReduction);
-}
-
-/** 技能直伤：无视克制/Combo，吃防御、增伤、敌减伤（对齐 _applySkillDamage） */
-function skillDamage(raw: number, buffMult: number, def: number, enemyReduction: number): number {
-  return Math.max(
-    1,
-    Math.floor(raw * buffMult * (1 - defenseReduction(def)) * (1 - enemyReduction)),
-  );
 }
 
 // ════════════ 报告辅助（调参 / 测试共用） ════════════
