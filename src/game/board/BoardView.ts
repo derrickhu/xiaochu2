@@ -14,7 +14,7 @@ import { TweenManager, Ease } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
 import { UI } from '@/balance/ui';
 import { COMBAT, type OrbType } from '@/balance/combat';
-import { ORB_IMAGES } from '@/config/Assets';
+import { BOARD_IMAGES, ORB_IMAGES } from '@/config/Assets';
 import { BoardModel, type MatchGroup, type FallMove, type Cell } from './BoardModel';
 
 export interface BoardViewCallbacks {
@@ -285,15 +285,44 @@ export class BoardView {
   // ════════════ 内部 ════════════
 
   private _buildBackground(): void {
-    const bg = new PIXI.Graphics();
+    const pad = 3;
+    const w = this.boardWidth + pad * 2;
+    const h = this.boardHeight + pad * 2;
+
+    const frame = new PIXI.Graphics();
+    frame.beginFill(0x080812, 0.85);
+    frame.drawRoundedRect(-pad, -pad, w, h, 6);
+    frame.endFill();
+    frame.lineStyle(1.5, 0x505078, 0.5);
+    frame.drawRoundedRect(-pad, -pad, w, h, 6);
+    this.container.addChild(frame);
+
+    const tileDark = TextureCache.get(BOARD_IMAGES.dark);
+    const tileLight = TextureCache.get(BOARD_IMAGES.light);
+    const tiles = new PIXI.Container();
+
     for (let r = 0; r < this._board.rows; r++) {
       for (let c = 0; c < this._board.cols; c++) {
-        bg.beginFill((r + c) % 2 === 0 ? 0x342752 : 0x2c2147);
-        bg.drawRect(c * this._cell, r * this._cell, this._cell, this._cell);
-        bg.endFill();
+        const x = c * this._cell;
+        const y = r * this._cell;
+        const isDark = (r + c) % 2 === 0;
+        const tex = isDark ? tileDark : tileLight;
+        if (tex) {
+          const sp = new PIXI.Sprite(tex);
+          sp.width = this._cell;
+          sp.height = this._cell;
+          sp.position.set(x, y);
+          tiles.addChild(sp);
+        } else {
+          const cell = new PIXI.Graphics();
+          cell.beginFill(isDark ? 0x1c1c30 : 0x121223, 0.9);
+          cell.drawRect(x, y, this._cell, this._cell);
+          cell.endFill();
+          tiles.addChild(cell);
+        }
       }
     }
-    this.container.addChild(bg);
+    this.container.addChild(tiles);
   }
 
   // 交互策略（沿用 game2D_huahua 验证过的方案）：

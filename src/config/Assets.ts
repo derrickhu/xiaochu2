@@ -9,6 +9,12 @@ import { ENEMIES } from '@/balance/enemies';
 
 const IMG_ROOT = 'images';
 
+/** 棋盘格贴图（复用 xiao_chu 资源，深浅交替铺格） */
+export const BOARD_IMAGES = {
+  dark: `${IMG_ROOT}/board/board_bg_dark1.jpg`,
+  light: `${IMG_ROOT}/board/board_bg_light1.jpg`,
+} as const;
+
 /** 珠子贴图（复用 xiao_chu 资源） */
 export const ORB_IMAGES: Readonly<Record<OrbType, string>> = {
   metal: `${IMG_ROOT}/orbs/orb_metal.png`,
@@ -31,6 +37,8 @@ export function petImage(petId: string): string {
 
 /** 启动时需要预加载的资源 */
 export const PRELOAD_IMAGES: readonly string[] = [
+  BOARD_IMAGES.dark,
+  BOARD_IMAGES.light,
   ...Object.values(ORB_IMAGES),
   ...ENEMIES.map((e) => enemyImage(e.id)),
   ...PETS.map((p) => petImage(p.id)),
