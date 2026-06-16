@@ -48,8 +48,8 @@ export const COMBAT = {
 
   /** 克制伤害倍率 */
   counterMultiplier: 1.6,
-  /** 被克伤害倍率 */
-  counteredMultiplier: 0.5,
+  /** 被克伤害倍率（v0.3 加重错属性惩罚 0.5→0.4） */
+  counteredMultiplier: 0.4,
 
   /** 暴击 */
   critChance: 0.05,
@@ -61,6 +61,7 @@ export const COMBAT = {
   /** 英雄基础生命（队伍总生命 = 此值 + Σ宠物 hp） */
   heroBaseHp: 600,
 
-  /** 心珠每颗回复 = 队伍总 RCV × 此系数（再乘 Combo 倍率） */
-  rcvPerHeartOrb: 1.0,
+  /** 心珠每颗回复 = 队伍总 RCV × 此系数（再乘 Combo 倍率）
+   *  v0.3 压制续航 1.0→0.6：治疗位价值体现，而非无脑回满 */
+  rcvPerHeartOrb: 0.6,
 } as const;

@@ -76,7 +76,7 @@ export const PETS: readonly PetDef[] = [
     baseHp: 170, hpGrowth: 0.05,
     baseRcv: 10, rcvGrowth: 0.05,
     skill: {
-      type: 'instantDmg', name: '银光斩', cd: 5, multiplier: 6,
+      type: 'instantDmg', name: '银光斩', cd: 4, multiplier: 6,
       desc: '挥出银光利爪，对敌人造成自身攻击 600% 的金属性伤害',
     },
   },
@@ -90,7 +90,7 @@ export const PETS: readonly PetDef[] = [
     baseHp: 210, hpGrowth: 0.05,
     baseRcv: 22, rcvGrowth: 0.05,
     skill: {
-      type: 'convertOrbs', name: '点金术', cd: 8, to: 'metal', count: 6,
+      type: 'convertOrbs', name: '点金术', cd: 7, to: 'metal', count: 6,
       desc: '将盘面随机 6 颗珠子点化为金珠',
     },
   },
@@ -105,7 +105,7 @@ export const PETS: readonly PetDef[] = [
     baseHp: 190, hpGrowth: 0.05,
     baseRcv: 45, rcvGrowth: 0.06,
     skill: {
-      type: 'healPct', name: '青藤抚愈', cd: 6, pct: 0.3,
+      type: 'healPct', name: '青藤抚愈', cd: 5, pct: 0.3,
       desc: '青藤缠绕治愈，回复队伍最大生命的 30%',
     },
   },
@@ -119,8 +119,8 @@ export const PETS: readonly PetDef[] = [
     baseHp: 230, hpGrowth: 0.055,
     baseRcv: 12, rcvGrowth: 0.045,
     skill: {
-      type: 'teamAttack', name: '万藤齐发', cd: 9, multiplier: 1.2,
-      desc: '号令全队齐射，造成队伍总攻击 120% 的伤害',
+      type: 'teamAttack', name: '万藤齐发', cd: 7, multiplier: 1.4,
+      desc: '号令全队齐射，造成队伍总攻击 140% 的伤害',
     },
   },
   // ── 水 ──
@@ -134,7 +134,7 @@ export const PETS: readonly PetDef[] = [
     baseHp: 280, hpGrowth: 0.06,
     baseRcv: 20, rcvGrowth: 0.05,
     skill: {
-      type: 'shield', name: '水幕屏障', cd: 7, pct: 0.25,
+      type: 'shield', name: '水幕屏障', cd: 6, pct: 0.25,
       desc: '展开水幕，获得队伍最大生命 25% 的护盾',
     },
   },
@@ -148,7 +148,7 @@ export const PETS: readonly PetDef[] = [
     baseHp: 180, hpGrowth: 0.05,
     baseRcv: 10, rcvGrowth: 0.045,
     skill: {
-      type: 'instantDmg', name: '玄水突刺', cd: 5, multiplier: 6,
+      type: 'instantDmg', name: '玄水突刺', cd: 4, multiplier: 6,
       desc: '化作水龙突刺，对敌人造成自身攻击 600% 的水属性伤害',
     },
   },
@@ -163,7 +163,7 @@ export const PETS: readonly PetDef[] = [
     baseHp: 160, hpGrowth: 0.045,
     baseRcv: 10, rcvGrowth: 0.045,
     skill: {
-      type: 'instantDmg', name: '燎原爆', cd: 6, multiplier: 7,
+      type: 'instantDmg', name: '燎原爆', cd: 5, multiplier: 7,
       desc: '引燃燎原之火，对敌人造成自身攻击 700% 的火属性伤害',
     },
   },
@@ -177,7 +177,7 @@ export const PETS: readonly PetDef[] = [
     baseHp: 200, hpGrowth: 0.05,
     baseRcv: 24, rcvGrowth: 0.05,
     skill: {
-      type: 'dmgBoost', name: '战意鼓舞', cd: 8, mult: 1.5, turns: 2,
+      type: 'dmgBoost', name: '战意鼓舞', cd: 6, mult: 1.5, turns: 2,
       desc: '战凰长鸣鼓舞全队，2 回合内全队伤害 ×1.5',
     },
   },
@@ -192,7 +192,7 @@ export const PETS: readonly PetDef[] = [
     baseHp: 300, hpGrowth: 0.065,
     baseRcv: 18, rcvGrowth: 0.05,
     skill: {
-      type: 'shield', name: '岩甲庇护', cd: 8, pct: 0.3,
+      type: 'shield', name: '岩甲庇护', cd: 7, pct: 0.3,
       desc: '岩甲护体，获得队伍最大生命 30% 的护盾',
     },
   },
@@ -206,7 +206,7 @@ export const PETS: readonly PetDef[] = [
     baseHp: 220, hpGrowth: 0.055,
     baseRcv: 30, rcvGrowth: 0.055,
     skill: {
-      type: 'convertOrbs', name: '大地恩泽', cd: 7, to: 'heart', count: 5,
+      type: 'convertOrbs', name: '大地恩泽', cd: 6, to: 'heart', count: 5,
       desc: '大地赐福，将盘面随机 5 颗珠子化为心珠',
     },
   },
@@ -214,13 +214,17 @@ export const PETS: readonly PetDef[] = [
 
 export const PET_MAP: ReadonlyMap<string, PetDef> = new Map(PETS.map((p) => [p.id, p]));
 
-/** 默认编队（玩家未自定义时，每属性 1 只首发宠） */
+/**
+ * 默认编队（v0.3 挑战版）：刻意只覆盖 金/木/水/火 四色（缺土），且含火系双宠。
+ * - 土珠对默认队 = 无效珠，玩家进编队界面即看到"未覆盖：土"提示
+ * - 逼玩家针对关卡（尤其 1-6 水怪需土克制）做编队取舍，而非一队通关
+ */
 export const DEFAULT_TEAM: readonly string[] = [
-  'pet_metal_001',
-  'pet_wood_001',
-  'pet_water_001',
   'pet_fire_001',
-  'pet_earth_001',
+  'pet_fire_002',
+  'pet_water_001',
+  'pet_wood_001',
+  'pet_metal_001',
 ];
 
 /** 编队槽位数 */

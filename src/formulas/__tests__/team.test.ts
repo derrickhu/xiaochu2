@@ -42,9 +42,10 @@ describe('teamRcv', () => {
 });
 
 describe('teamElements', () => {
-  it('默认队伍覆盖全部五行', () => {
+  it('默认队伍(v0.3 挑战版)刻意只覆盖四行(缺土)，逼玩家编队', () => {
     const set = teamElements(makeTeam(DEFAULT_TEAM));
-    expect(set.size).toBe(5);
+    expect(set.size).toBe(4);
+    expect(set.has('earth')).toBe(false);
   });
 
   it('缺属性队伍：覆盖集合反映实际属性', () => {

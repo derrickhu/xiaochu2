@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { COMBAT } from '@/balance/combat';
 import {
   comboMultiplier,
   matchCountMultiplier,
@@ -50,8 +51,8 @@ describe('elementMultiplier（五行克制）', () => {
     expect(elementMultiplier('water', 'fire')).toBe(1.6);
   });
 
-  it('被克 ×0.5：火打水', () => {
-    expect(elementMultiplier('fire', 'water')).toBe(0.5);
+  it('被克 = counteredMultiplier：火打水', () => {
+    expect(elementMultiplier('fire', 'water')).toBe(COMBAT.counteredMultiplier);
   });
 
   it('无克制 ×1.0：金对水', () => {
@@ -130,11 +131,12 @@ describe('calcDamage（完整管线）', () => {
 });
 
 describe('calcHeal（RCV 模型）', () => {
-  it('回复 = 总RCV × 心珠数 × Combo 倍率', () => {
-    // rcv 100 × 1 颗 × ×1.0(1combo) = 100
-    expect(calcHeal(100, 1, 1)).toBe(100);
-    // rcv 100 × 3 颗 × ×1.4(3combo) = 420
-    expect(calcHeal(100, 3, 3)).toBe(420);
+  it('回复 = 总RCV × 心珠系数 × 心珠数 × Combo 倍率', () => {
+    const k = COMBAT.rcvPerHeartOrb;
+    // rcv 100 × k × 1 颗 × ×1.0(1combo)
+    expect(calcHeal(100, 1, 1)).toBe(Math.floor(100 * k * 1 * 1.0));
+    // rcv 100 × k × 3 颗 × ×1.4(3combo)
+    expect(calcHeal(100, 3, 3)).toBe(Math.floor(100 * k * 3 * 1.4));
   });
 
   it('无心珠不回复', () => {

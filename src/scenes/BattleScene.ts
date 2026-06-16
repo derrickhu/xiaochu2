@@ -94,6 +94,7 @@ export class BattleScene implements Scene {
     this._build();
     this._refreshEnemy(false);
     this._refreshHeroHp();
+    this._showStageHint();
 
     Game.ticker.add(this._tickerCb);
   }
@@ -628,6 +629,44 @@ export class BattleScene implements Scene {
   }
 
   /** 技能名横幅：放大弹入 → 短暂停留 → 淡出 */
+  /** 开场推荐解法提示：顶栏下方淡入展示数秒后自动淡出（无 hint 则跳过） */
+  private _showStageHint(): void {
+    const stage = this._ctrl.stage;
+    const tip = stage.hintText ?? (stage.hintTags ? stage.hintTags.join(' · ') : '');
+    if (!tip) return;
+
+    const banner = new PIXI.Container();
+    banner.position.set(Game.logicWidth / 2, Game.safeTop + 78);
+
+    const label = new PIXI.Text(`推荐解法：${tip}`, {
+      fontSize: 22, fill: 0xffe9a6, fontWeight: 'bold',
+      stroke: 0x1a1126, strokeThickness: 4,
+      align: 'center', wordWrap: true, wordWrapWidth: Game.logicWidth - 80,
+    });
+    label.anchor.set(0.5);
+
+    const pad = 18;
+    const bg = new PIXI.Graphics();
+    bg.beginFill(0x2e2148, 0.92);
+    bg.lineStyle(2, 0xffd75e, 0.6);
+    bg.drawRoundedRect(
+      -label.width / 2 - pad, -label.height / 2 - 10,
+      label.width + pad * 2, label.height + 20, 14,
+    );
+    bg.endFill();
+    banner.addChild(bg);
+    banner.addChild(label);
+
+    banner.alpha = 0;
+    this._floatLayer.addChild(banner);
+    TweenManager.to({ target: banner, props: { alpha: 1 }, duration: 0.25 });
+    TweenManager.to({
+      target: banner, props: { alpha: 0 },
+      duration: 0.5, delay: 3.2, ease: Ease.easeOutQuad,
+      onComplete: () => banner.destroy({ children: true }),
+    });
+  }
+
   private _showSkillBanner(name: string, color: number): Promise<void> {
     return new Promise((resolve) => {
       const t = new PIXI.Text(name, {

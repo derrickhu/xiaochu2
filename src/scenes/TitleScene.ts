@@ -114,9 +114,12 @@ export class TitleScene implements Scene {
       nameText.position.set(-itemW / 2 + 30, -15);
       item.addChild(nameText);
 
+      const tagSuffix = stage.hintTags && stage.hintTags.length > 0
+        ? ` · ${stage.hintTags.join('·')}`
+        : '';
       const subText = new PIXI.Text(
         unlocked
-          ? `${ELEMENT_NAME[stage.element]}属性关卡 · ${stage.enemies.length} 波敌人`
+          ? `${ELEMENT_NAME[stage.element]}属性 · ${stage.enemies.length}波${tagSuffix}`
           : '通关上一关解锁',
         { fontSize: 20, fill: unlocked ? 0x9b8cc4 : 0x5a4d78 },
       );
