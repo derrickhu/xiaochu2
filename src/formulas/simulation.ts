@@ -122,9 +122,9 @@ export function simulateBattle(
 
   const team: SimPet[] = members.map((m) => ({
     def: m.def,
-    skill: skillForPet(m.def),
+    skill: skillForPet(m.def, m.star),
     atk: petAtkInTeam(members, m),
-    skillCdLeft: skillCdForPet(m.def),
+    skillCdLeft: skillCdForPet(m.def, m.star),
   }));
   const heroMaxHp = teamMaxHp(members);
   const rcvTotal = teamRcv(members);

@@ -6,7 +6,8 @@
 import type { Element, OrbType } from '@/balance/combat';
 import type { PetDef } from '@/balance/pets';
 import type { SkillDef, SkillEffectDef, SkillVfxId } from '@/balance/skills';
-import { getSkill } from '@/balance/skills';
+import { getSkill, resolveSkillVfx, getSkillTierBonus } from '@/balance/skills';
+import { getStarProfile } from '@/balance/growth';
 import type { StatusStackPolicy } from './BattleStatus';
 import { defenseReduction } from '@/formulas/damage';
 
@@ -86,21 +87,23 @@ export interface SkillResult {
   boardRequests: BoardRequest[];
 }
 
-export function skillForPet(pet: PetDef): SkillDef {
-  return applyPetSkillModifiers(getSkill(pet.skillId), pet);
+export function skillForPet(pet: PetDef, star = 1): SkillDef {
+  const tier = getStarProfile(star).skillTier;
+  return applyPetSkillModifiers(getSkill(pet.skillId), pet, tier);
 }
 
-export function skillCdForPet(pet: PetDef): number {
-  return skillForPet(pet).cd;
+export function skillCdForPet(pet: PetDef, star = 1): number {
+  return skillForPet(pet, star).cd;
 }
 
 export function skillForEnemy(skillId: string): SkillDef {
   return getSkill(skillId);
 }
 
-export function applyPetSkillModifiers(skill: SkillDef, pet: PetDef): SkillDef {
-  let cd = skill.cd;
-  let effectPctBonus = 0;
+export function applyPetSkillModifiers(skill: SkillDef, pet: PetDef, skillTier = 1): SkillDef {
+  const tierBonus = getSkillTierBonus(skillTier);
+  let cd = skill.cd + tierBonus.cdDelta;
+  let effectPctBonus = tierBonus.effectPct;
   let convertCountBonus = 0;
   for (const trait of pet.traits ?? []) {
     if (trait.type !== 'skillModifier') continue;
@@ -129,11 +132,12 @@ export function applyPetSkillModifiers(skill: SkillDef, pet: PetDef): SkillDef {
 }
 
 export function runSkill(skill: SkillDef, caster: SkillCaster, ctx: SkillRuntimeContext): SkillResult | null {
+  const vfx = resolveSkillVfx(skill);
   const result: SkillResult = {
     skill,
     caster,
     action: inferAction(skill),
-    vfxEvents: [skill.vfx],
+    vfxEvents: [vfx],
     damageEvents: [],
     healEvents: [],
     statusEvents: [],
@@ -141,7 +145,7 @@ export function runSkill(skill: SkillDef, caster: SkillCaster, ctx: SkillRuntime
   };
 
   for (const effect of skill.effects) {
-    const fired = runEffect(effect, skill, caster, ctx, result);
+    const fired = runEffect(effect, skill, vfx, caster, ctx, result);
     if (!fired) return null;
   }
 
@@ -190,6 +194,7 @@ function inferAction(skill: SkillDef): SkillResult['action'] {
 function runEffect(
   effect: SkillEffectDef,
   skill: SkillDef,
+  vfx: SkillVfxId,
   caster: SkillCaster,
   ctx: SkillRuntimeContext,
   result: SkillResult,
@@ -206,7 +211,7 @@ function runEffect(
         target: caster.kind === 'enemy' ? 'hero' : 'enemy',
         amount,
         element: effect.element ?? caster.element,
-        vfx: skill.vfx,
+        vfx,
       });
       return true;
     }
@@ -221,7 +226,7 @@ function runEffect(
       result.healEvents.push({
         target: effect.source === 'enemyMaxHp' ? 'enemy' : 'team',
         amount,
-        vfx: skill.vfx,
+        vfx,
       });
       return true;
     }
@@ -231,7 +236,7 @@ function runEffect(
         status: 'shield',
         value: Math.floor(ctx.heroMaxHp * effect.pct),
         stack: effect.stack,
-        vfx: skill.vfx,
+        vfx,
       });
       return true;
     }
@@ -243,7 +248,7 @@ function runEffect(
           value: effect.mult ?? 1,
           turns: effect.turns,
           stack: effect.stack,
-          vfx: skill.vfx,
+          vfx,
         });
         return true;
       }
@@ -253,12 +258,12 @@ function runEffect(
         value: effect.reduction ?? 0,
         turns: effect.turns,
         stack: effect.stack,
-        vfx: skill.vfx,
+        vfx,
       });
       return true;
     }
     case 'convertOrbs':
-      result.boardRequests.push({ type: 'convertOrbs', to: effect.to, count: effect.count, vfx: skill.vfx });
+      result.boardRequests.push({ type: 'convertOrbs', to: effect.to, count: effect.count, vfx });
       return true;
     case 'charge':
       result.statusEvents.push({

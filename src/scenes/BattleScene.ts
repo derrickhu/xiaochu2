@@ -713,7 +713,7 @@ export class BattleScene implements Scene {
     Platform.vibrateShort('medium');
 
     // 通用演出：属性色全屏闪 + 技能名横幅
-    const vfx = SKILL_VFX_MAP.get(result.vfxEvents[0] ?? pet.skill.vfx);
+    const vfx = SKILL_VFX_MAP.get(result.vfxEvents[0]);
     this._flash.flash(color, vfx?.flashDuration ?? 0.25, vfx?.flashAlpha ?? 0.4);
     await this._showSkillBanner(pet.skill.name, color);
 

@@ -65,6 +65,17 @@ export function teamMaxHp(members: readonly TeamMember[]): number {
   return sum;
 }
 
+/**
+ * 队伍总攻击 = Σ宠物 atk（纸面聚合参考；实战伤害按属性逐组结算，非此单值）
+ */
+export function teamAtk(members: readonly TeamMember[]): number {
+  let sum = 0;
+  for (const m of members) {
+    sum += petAtkInTeam(members, m);
+  }
+  return sum;
+}
+
 /** 队伍总回复 = Σ宠物 rcv */
 export function teamRcv(members: readonly TeamMember[]): number {
   let sum = 0;

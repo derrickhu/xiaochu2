@@ -1,10 +1,11 @@
 /**
  * 成长曲线公式（纯函数，零状态）
  */
-import { GROWTH } from '@/balance/growth';
+import { GROWTH, getStarProfile } from '@/balance/growth';
 import type { PetDef } from '@/balance/pets';
 import type { EnemyDef } from '@/balance/enemies';
 import { PET_ROLE_PROFILES, type StatBlock } from '@/balance/petRoles';
+import { getRarity } from '@/balance/rarity';
 
 type StatKey = keyof StatBlock;
 
@@ -32,37 +33,38 @@ function selfStatTraitMultiplier(pet: PetDef, stat: StatKey): number {
   return mult;
 }
 
-/** 宠物当前攻击 = 基础攻击 × (1+成长率)^(Lv-1) × 星级倍率 */
+/**
+ * 三维统一成长公式：
+ *   role 基础 × 稀有度面板倍率 × 星级初始倍率 × (1 + role 成长率 × 星级成长倍率)^(有效等级-1) × 自身 trait 倍率
+ * - 同 role + 同 rarity + 同星 + 同等级数值一致（R = 模板基准）
+ * - 稀有度决定初始三维档位（明显递增）；星级同时影响初始值与成长率，并通过 maxLevel 限制等级上限
+ */
+function petStat(pet: PetDef, stat: StatKey, level: number, star: number): number {
+  const sp = getStarProfile(star);
+  const rarityMult = getRarity(pet.rarity).statMult;
+  const effLevel = Math.min(Math.max(level, 1), sp.maxLevel);
+  const base = petBaseStat(pet, stat) * rarityMult * sp.baseMult[stat];
+  const growth = petGrowth(pet, stat) * sp.growthMult[stat];
+  return Math.floor(
+    base
+    * Math.pow(1 + growth, effLevel - 1)
+    * selfStatTraitMultiplier(pet, stat),
+  );
+}
+
+/** 宠物当前攻击 */
 export function petAtk(pet: PetDef, level: number, star: number): number {
-  const starMult = GROWTH.pet.starMultiplier[star] ?? 1.0;
-  return Math.floor(
-    petBaseStat(pet, 'atk')
-    * Math.pow(1 + petGrowth(pet, 'atk'), level - 1)
-    * starMult
-    * selfStatTraitMultiplier(pet, 'atk'),
-  );
+  return petStat(pet, 'atk', level, star);
 }
 
-/** 宠物当前生命（曲线同攻击，使用 hp 维度参数） */
+/** 宠物当前生命 */
 export function petHp(pet: PetDef, level: number, star: number): number {
-  const starMult = GROWTH.pet.starMultiplier[star] ?? 1.0;
-  return Math.floor(
-    petBaseStat(pet, 'hp')
-    * Math.pow(1 + petGrowth(pet, 'hp'), level - 1)
-    * starMult
-    * selfStatTraitMultiplier(pet, 'hp'),
-  );
+  return petStat(pet, 'hp', level, star);
 }
 
-/** 宠物当前回复（曲线同攻击，使用 rcv 维度参数） */
+/** 宠物当前回复 */
 export function petRcv(pet: PetDef, level: number, star: number): number {
-  const starMult = GROWTH.pet.starMultiplier[star] ?? 1.0;
-  return Math.floor(
-    petBaseStat(pet, 'rcv')
-    * Math.pow(1 + petGrowth(pet, 'rcv'), level - 1)
-    * starMult
-    * selfStatTraitMultiplier(pet, 'rcv'),
-  );
+  return petStat(pet, 'rcv', level, star);
 }
 
 /** 宠物升到 level+1 所需经验 */

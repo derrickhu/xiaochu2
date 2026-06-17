@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { petAtk, petHp, petRcv, petExpToNext, enemyStats } from '../growth';
-import { PETS } from '@/balance/pets';
+import { PETS, type PetDef } from '@/balance/pets';
 import { ENEMIES } from '@/balance/enemies';
 import { skillForPet } from '@/game/battle/SkillEngine';
 
@@ -49,25 +49,42 @@ describe('petHp / petRcv（三维模型）', () => {
     expect(petRcv(samplePet, 20, 1)).toBeGreaterThan(petRcv(samplePet, 10, 1));
   });
 
-  it('同 role 同星级基础三维完全一致', () => {
+  it('同 role + 同 rarity + 同星级基础三维完全一致', () => {
     const star = 1;
     const lv = 1;
-    for (const role of ['attacker', 'healer', 'tank', 'support'] as const) {
-      const group = PETS.filter((p) => p.role === role);
-      if (group.length < 2) continue;
-      const ref = group[0];
-      for (const p of group.slice(1)) {
-        expect(petAtk(p, lv, star)).toBe(petAtk(ref, lv, star));
-        expect(petHp(p, lv, star)).toBe(petHp(ref, lv, star));
-        expect(petRcv(p, lv, star)).toBe(petRcv(ref, lv, star));
-      }
+    const seen = new Map<string, PetDef>();
+    for (const p of PETS) {
+      const key = `${p.role}_${p.rarity}`;
+      const ref = seen.get(key);
+      if (!ref) { seen.set(key, p); continue; }
+      expect(petAtk(p, lv, star)).toBe(petAtk(ref, lv, star));
+      expect(petHp(p, lv, star)).toBe(petHp(ref, lv, star));
+      expect(petRcv(p, lv, star)).toBe(petRcv(ref, lv, star));
     }
   });
 
-  it('角色定位体现在三维分布上：坦克 hp 最高 / 治疗 rcv 最高', () => {
-    const tank = PETS.find((p) => p.id === 'pet_earth_001')!;
-    const healer = PETS.find((p) => p.id === 'pet_wood_001')!;
-    const attacker = PETS.find((p) => p.id === 'pet_fire_001')!;
+  it('R 稀有度宠 = role 模板基准（statMult = 1）', () => {
+    const r1Attacker = PETS.find((p) => p.role === 'attacker' && p.rarity === 1)!;
+    // attacker 模板 atk 53 / hp 185 / rcv 11
+    expect(petAtk(r1Attacker, 1, 1)).toBe(53);
+    expect(petHp(r1Attacker, 1, 1)).toBe(185);
+    expect(petRcv(r1Attacker, 1, 1)).toBe(11);
+  });
+
+  it('同 role 下高稀有初始三维明显更高', () => {
+    // attacker：R(metal_001) < SR? 取实际存在的多档对比
+    const rAtk = PETS.find((p) => p.role === 'attacker' && p.rarity === 1)!;
+    const ssrAtk = PETS.find((p) => p.role === 'attacker' && p.rarity === 3)!;
+    const urAtk = PETS.find((p) => p.role === 'attacker' && p.rarity === 4)!;
+    expect(petAtk(ssrAtk, 1, 1)).toBeGreaterThan(petAtk(rAtk, 1, 1));
+    expect(petAtk(urAtk, 1, 1)).toBeGreaterThan(petAtk(ssrAtk, 1, 1));
+  });
+
+  it('角色定位体现在三维分布上：同稀有下坦克 hp 最高 / 治疗 rcv 最高', () => {
+    // 统一取 1★ 1级，并按各自稀有度计算（定位差异在权重，不被稀有度抹平时成立）
+    const tank = PETS.find((p) => p.id === 'pet_water_001')!;   // R 坦克
+    const healer = PETS.find((p) => p.id === 'pet_wood_001')!;  // R 治疗
+    const attacker = PETS.find((p) => p.id === 'pet_metal_001')!; // R 输出
     expect(petHp(tank, 1, 1)).toBeGreaterThan(petHp(attacker, 1, 1));
     expect(petRcv(healer, 1, 1)).toBeGreaterThan(petRcv(attacker, 1, 1));
     expect(petAtk(attacker, 1, 1)).toBeGreaterThan(petAtk(healer, 1, 1));
@@ -83,6 +100,35 @@ describe('petHp / petRcv（三维模型）', () => {
       skill: skillForPet(p).id,
     }));
     expect(table).toMatchSnapshot();
+  });
+});
+
+describe('星级成长档案', () => {
+  const pet = PETS.find((p) => p.id === 'pet_metal_001')!;
+
+  it('1★ 为恒等档：与不带星级倍率的基线一致（hp 不变）', () => {
+    // 1★ baseMult/growthMult = 1，Lv1 = role 模板基础
+    expect(petHp(pet, 1, 1)).toBe(185);
+    expect(petAtk(pet, 1, 1)).toBe(53);
+  });
+
+  it('星级提升同时影响三维（不只攻击）', () => {
+    expect(petAtk(pet, 1, 2)).toBeGreaterThan(petAtk(pet, 1, 1));
+    expect(petHp(pet, 1, 2)).toBeGreaterThan(petHp(pet, 1, 1));
+    expect(petRcv(pet, 1, 2)).toBeGreaterThan(petRcv(pet, 1, 1));
+  });
+
+  it('等级上限：超过星级 maxLevel 按上限计算（1★ 封顶 50）', () => {
+    expect(petAtk(pet, 999, 1)).toBe(petAtk(pet, 50, 1));
+    // 5★ 上限更高（99），故 999 级等于 99 级而非 50 级
+    expect(petAtk(pet, 999, 5)).toBe(petAtk(pet, 99, 5));
+    expect(petAtk(pet, 99, 5)).toBeGreaterThan(petAtk(pet, 50, 5));
+  });
+
+  it('高星成长更快：5★ 的等级增益倍数高于 1★', () => {
+    const star1Scale = petAtk(pet, 50, 1) / petAtk(pet, 1, 1);
+    const star5Scale = petAtk(pet, 50, 5) / petAtk(pet, 1, 5);
+    expect(star5Scale).toBeGreaterThan(star1Scale);
   });
 });
 

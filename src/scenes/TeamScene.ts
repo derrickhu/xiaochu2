@@ -15,7 +15,9 @@ import {
   PETS, PET_MAP, TEAM_SIZE, DEMO_TEAM_LEVEL, DEMO_TEAM_STAR,
   PET_ROLE_NAME, type PetDef,
 } from '@/balance/pets';
-import { teamMaxHp, teamRcv, teamElements, type TeamMember } from '@/formulas/team';
+import { getRarity } from '@/balance/rarity';
+import { teamMaxHp, teamAtk, teamRcv, teamElements, type TeamMember } from '@/formulas/team';
+import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { skillForPet } from '@/game/battle/SkillEngine';
 import { petImage } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
@@ -121,12 +123,21 @@ export class TeamScene implements Scene {
         item.addChild(avatar);
       }
 
-      // 名字 + 属性/角色 + 技能名
+      // 稀有度标 + 名字 + 属性/角色 + 三维 + 技能名
+      const textX = -itemW / 2 + 132;
+      const rarityDef = getRarity(pet.rarity);
+      const rarityText = new PIXI.Text(rarityDef.code, {
+        fontSize: 20, fill: rarityDef.color, fontWeight: 'bold',
+      });
+      rarityText.anchor.set(0, 0.5);
+      rarityText.position.set(textX, -44);
+      item.addChild(rarityText);
+
       const nameText = new PIXI.Text(pet.name, {
         fontSize: 26, fill: 0xffffff, fontWeight: 'bold',
       });
       nameText.anchor.set(0, 0.5);
-      nameText.position.set(-itemW / 2 + 132, -34);
+      nameText.position.set(textX + rarityText.width + 10, -44);
       item.addChild(nameText);
 
       const roleText = new PIXI.Text(
@@ -134,14 +145,24 @@ export class TeamScene implements Scene {
         { fontSize: 20, fill: ORB_COLOR[pet.element] },
       );
       roleText.anchor.set(0, 0.5);
-      roleText.position.set(-itemW / 2 + 132, 0);
+      roleText.position.set(textX, -16);
       item.addChild(roleText);
 
-      const skillText = new PIXI.Text(`技 ${skillForPet(pet).name}`, {
-        fontSize: 20, fill: 0x9b8cc4,
+      const lv = DEMO_TEAM_LEVEL;
+      const star = DEMO_TEAM_STAR;
+      const statsText = new PIXI.Text(
+        `攻${petAtk(pet, lv, star)} 血${petHp(pet, lv, star)} 复${petRcv(pet, lv, star)}`,
+        { fontSize: 19, fill: 0xc7b8ee, fontWeight: 'bold' },
+      );
+      statsText.anchor.set(0, 0.5);
+      statsText.position.set(textX, 12);
+      item.addChild(statsText);
+
+      const skillText = new PIXI.Text(`技 ${skillForPet(pet, DEMO_TEAM_STAR).name}`, {
+        fontSize: 19, fill: 0x9b8cc4,
       });
       skillText.anchor.set(0, 0.5);
-      skillText.position.set(-itemW / 2 + 132, 32);
+      skillText.position.set(textX, 40);
       item.addChild(skillText);
 
       // 上阵勾标记
@@ -232,7 +253,7 @@ export class TeamScene implements Scene {
       .filter((def): def is PetDef => !!def)
       .map((def) => ({ def, level: DEMO_TEAM_LEVEL, star: DEMO_TEAM_STAR }));
     this._statsText.text =
-      `队伍生命 ${teamMaxHp(members)}    回复 ${teamRcv(members)}`;
+      `生命 ${teamMaxHp(members)}   攻击 ${teamAtk(members)}   回复 ${teamRcv(members)}`;
 
     // 属性覆盖提示
     const covered = teamElements(members);

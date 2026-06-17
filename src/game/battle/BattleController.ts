@@ -153,9 +153,9 @@ export class BattleController {
 
     this.team = members.map((m) => ({
       def: m.def,
-      skill: skillForPet(m.def),
+      skill: skillForPet(m.def, m.star),
       atk: petAtkInTeam(members, m),
-      skillCdLeft: skillCdForPet(m.def),
+      skillCdLeft: skillCdForPet(m.def, m.star),
     }));
     this.heroMaxHp = teamMaxHp(members);
     this.heroHp = this.heroMaxHp;
