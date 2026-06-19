@@ -36,16 +36,22 @@ export class BoardModel {
   /** grid[row][col]，消除后短暂存在 null，collapse 后无空洞 */
   readonly grid: (OrbType | null)[][] = [];
 
+  /** 封印状态叠加层：locked[r][c] = true 表示该珠被封印（不可拖/不可消） */
+  private readonly _locked: boolean[][] = [];
+
   private readonly _rng: () => number;
 
   constructor(rng: () => number = Math.random) {
     this._rng = rng;
     for (let r = 0; r < this.rows; r++) {
       const row: (OrbType | null)[] = [];
+      const lockRow: boolean[] = [];
       for (let c = 0; c < this.cols; c++) {
         row.push(this._randomOrb());
+        lockRow.push(false);
       }
       this.grid.push(row);
+      this._locked.push(lockRow);
     }
     this._removeInitialMatches();
   }
@@ -66,6 +72,60 @@ export class BoardModel {
     const tmp = this.grid[r1][c1];
     this.grid[r1][c1] = this.grid[r2][c2];
     this.grid[r2][c2] = tmp;
+    const lt = this._locked[r1][c1];
+    this._locked[r1][c1] = this._locked[r2][c2];
+    this._locked[r2][c2] = lt;
+  }
+
+  // ── 封印珠（机制轴 · 棋盘） ──
+
+  /** 该格是否被封印（锁定不可拖/不可消） */
+  isLocked(row: number, col: number): boolean {
+    return this._locked[row]?.[col] ?? false;
+  }
+
+  /** 是否存在任意封印珠 */
+  hasLocked(): boolean {
+    return this._locked.some((row) => row.some(Boolean));
+  }
+
+  /** 当前所有封印珠格（渲染用） */
+  lockedCells(): Cell[] {
+    const cells: Cell[] = [];
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this._locked[r][c]) cells.push({ r, c });
+      }
+    }
+    return cells;
+  }
+
+  /** 封印指定格（仅对彩色珠生效） */
+  seal(row: number, col: number): void {
+    if (this.grid[row]?.[col]) this._locked[row][col] = true;
+  }
+
+  /** 随机封印 count 颗未封印的彩色珠，返回实际封印格 */
+  sealRandom(count: number): Cell[] {
+    const candidates: Cell[] = [];
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.grid[r][c] && !this._locked[r][c]) candidates.push({ r, c });
+      }
+    }
+    const n = Math.min(count, candidates.length);
+    for (let i = 0; i < n; i++) {
+      const j = i + Math.floor(this._rng() * (candidates.length - i));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    const picked = candidates.slice(0, n);
+    for (const { r, c } of picked) this._locked[r][c] = true;
+    return picked;
+  }
+
+  /** 取该格用于消除判定的颜色：封印珠视为 null（不参与连消） */
+  private _matchColor(row: number, col: number): OrbType | null {
+    return this._locked[row][col] ? null : this.grid[row][col];
   }
 
   /**
@@ -75,14 +135,16 @@ export class BoardModel {
   findMatches(): MatchGroup[] {
     const { rows, cols, grid } = this;
     const marked: boolean[][] = Array.from({ length: rows }, () => new Array(cols).fill(false));
+    // 封印珠视为 null，不参与连消判定
+    const cl = (r: number, c: number): OrbType | null => this._matchColor(r, c);
 
     // 横向 3+ 连
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c <= cols - 3; c++) {
-        const a = grid[r][c];
-        if (a && a === grid[r][c + 1] && a === grid[r][c + 2]) {
+        const a = cl(r, c);
+        if (a && a === cl(r, c + 1) && a === cl(r, c + 2)) {
           let end = c + 2;
-          while (end + 1 < cols && grid[r][end + 1] === a) end++;
+          while (end + 1 < cols && cl(r, end + 1) === a) end++;
           for (let cc = c; cc <= end; cc++) marked[r][cc] = true;
           c = end;
         }
@@ -91,10 +153,10 @@ export class BoardModel {
     // 纵向 3+ 连
     for (let c = 0; c < cols; c++) {
       for (let r = 0; r <= rows - 3; r++) {
-        const a = grid[r][c];
-        if (a && a === grid[r + 1][c] && a === grid[r + 2][c]) {
+        const a = cl(r, c);
+        if (a && a === cl(r + 1, c) && a === cl(r + 2, c)) {
           let end = r + 2;
-          while (end + 1 < rows && grid[end + 1][c] === a) end++;
+          while (end + 1 < rows && cl(end + 1, c) === a) end++;
           for (let rr = r; rr <= end; rr++) marked[rr][c] = true;
           r = end;
         }
@@ -133,10 +195,21 @@ export class BoardModel {
     return groups;
   }
 
-  /** 清除指定格（置 null，等待 collapse） */
+  /**
+   * 清除指定格（置 null，等待 collapse）。
+   * 副作用：被消除格正交相邻的封印珠解封（「消周围解锁」）。
+   */
   clearCells(cells: Cell[]): void {
     for (const { r, c } of cells) {
       this.grid[r][c] = null;
+      this._locked[r][c] = false;
+    }
+    for (const { r, c } of cells) {
+      for (const [dr, dc] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (this.inBounds(nr, nc) && this._locked[nr][nc]) this._locked[nr][nc] = false;
+      }
     }
   }
 
@@ -148,22 +221,25 @@ export class BoardModel {
     const moves: FallMove[] = [];
     for (let c = 0; c < this.cols; c++) {
       let writeRow = this.rows - 1;
-      // 自底向上：非空珠下沉
+      // 自底向上：非空珠下沉（封印状态随珠一起移动）
       for (let r = this.rows - 1; r >= 0; r--) {
         const orb = this.grid[r][c];
         if (orb === null) continue;
         if (r !== writeRow) {
           this.grid[writeRow][c] = orb;
+          this._locked[writeRow][c] = this._locked[r][c];
           this.grid[r][c] = null;
+          this._locked[r][c] = false;
           moves.push({ col: c, toRow: writeRow, orb, fromRow: r, spawnAbove: 0 });
         }
         writeRow--;
       }
-      // 顶部补新珠：writeRow 及以上都是空洞
+      // 顶部补新珠：writeRow 及以上都是空洞（新珠永远未封印）
       let spawnAbove = 1;
       for (let r = writeRow; r >= 0; r--) {
         const orb = this._randomOrb();
         this.grid[r][c] = orb;
+        this._locked[r][c] = false;
         moves.push({ col: c, toRow: r, orb, fromRow: null, spawnAbove });
         spawnAbove++;
       }
@@ -180,7 +256,7 @@ export class BoardModel {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         const orb = this.grid[r][c];
-        if (orb && orb !== to) candidates.push({ r, c });
+        if (orb && orb !== to && !this._locked[r][c]) candidates.push({ r, c });
       }
     }
     // Fisher-Yates 局部洗牌取前 count 个

@@ -146,6 +146,6 @@ export const DEFAULT_TEAM: readonly string[] = [
 /** 编队槽位数 */
 export const TEAM_SIZE = 5;
 
-/** 可玩 Demo：固定队伍的等级/星级（招募养成上线后由 PlayerData 接管） */
-export const DEMO_TEAM_LEVEL = 5;
-export const DEMO_TEAM_STAR = 1;
+/** 新拥有灵宠的初始等级/星级（招募与初始阵容入手时的基线，养成由此向上推进） */
+export const INITIAL_PET_LEVEL = 5;
+export const INITIAL_PET_STAR = 1;

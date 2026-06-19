@@ -1,8 +1,8 @@
 /**
- * 编队场景：上阵 5 槽 + 宠物列表（Demo 全解锁）+ 队伍三维预览 + 属性覆盖提示
+ * 编队场景：上阵 5 槽 + 已拥有宠物列表 + 队伍三维预览 + 属性覆盖提示
  *
- * 点击列表宠物 = 上阵/下阵切换，改动即时存档。
- * 每次 onEnter 全量重建，保证与 PlayerData 一致。
+ * 点击列表宠物 = 上阵/下阵切换；点「养成」= 进入灵宠详情（升级/升星）。
+ * 列表与数值均读 PlayerData 真实 level/star。每次 onEnter 全量重建。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -12,15 +12,15 @@ import { Platform } from '@/core/PlatformService';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { ELEMENTS } from '@/balance/combat';
 import {
-  PETS, PET_MAP, TEAM_SIZE, DEMO_TEAM_LEVEL, DEMO_TEAM_STAR,
+  PET_MAP, TEAM_SIZE,
   PET_ROLE_NAME, type PetDef,
 } from '@/balance/pets';
 import { getRarity } from '@/balance/rarity';
 import { teamMaxHp, teamAtk, teamRcv, teamElements, type TeamMember } from '@/formulas/team';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
-import { skillForPet } from '@/game/battle/SkillEngine';
 import { petImage } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
+import type { PetDetailEnterData } from './PetDetailScene';
 
 export class TeamScene implements Scene {
   readonly name = 'team';
@@ -69,6 +69,13 @@ export class TeamScene implements Scene {
     title.position.set(w / 2, Game.safeTop + 30);
     this.container.addChild(title);
 
+    const expText = new PIXI.Text(`经验池 ${PlayerData.exp}（点灵宠或「养成」升级升星）`, {
+      fontSize: 20, fill: 0x9fe6b0,
+    });
+    expText.anchor.set(0.5);
+    expText.position.set(w / 2, Game.safeTop + 72);
+    this.container.addChild(expText);
+
     // 上阵槽区
     this._slotArea = new PIXI.Container();
     this.container.addChild(this._slotArea);
@@ -76,19 +83,19 @@ export class TeamScene implements Scene {
     // 队伍三维预览 + 属性覆盖提示
     this._statsText = new PIXI.Text('', { fontSize: 26, fill: 0xd9cdf5, fontWeight: 'bold' });
     this._statsText.anchor.set(0.5);
-    this._statsText.position.set(w / 2, Game.safeTop + 250);
+    this._statsText.position.set(w / 2, Game.safeTop + 268);
     this.container.addChild(this._statsText);
 
     this._coverageText = new PIXI.Text('', { fontSize: 22, fill: 0xff9142 });
     this._coverageText.anchor.set(0.5);
-    this._coverageText.position.set(w / 2, Game.safeTop + 290);
+    this._coverageText.position.set(w / 2, Game.safeTop + 308);
     this.container.addChild(this._coverageText);
 
-    this._buildPetList(Game.safeTop + 340);
+    this._buildPetList(Game.safeTop + 358);
     this._refreshTeamUi();
   }
 
-  /** 宠物列表：2 列网格，每项 = 头像 + 名字/角色/技能名 + 上阵勾 */
+  /** 宠物列表：2 列网格，每项 = 头像 + 名字/角色/三维 + 等级星级 + 上阵勾 + 养成入口 */
   private _buildPetList(startY: number): void {
     const w = Game.logicWidth;
     const cols = 2;
@@ -99,7 +106,12 @@ export class TeamScene implements Scene {
     const gridW = cols * itemW + (cols - 1) * gapX;
     const startX = (w - gridW) / 2 + itemW / 2;
 
-    PETS.forEach((pet, i) => {
+    PlayerData.ownedPets.forEach((petId, i) => {
+      const pet = PET_MAP.get(petId);
+      if (!pet) return;
+      const lv = PlayerData.petLevel(petId);
+      const star = PlayerData.petStar(petId);
+
       const col = i % cols;
       const row = Math.floor(i / cols);
       const item = new PIXI.Container();
@@ -123,7 +135,7 @@ export class TeamScene implements Scene {
         item.addChild(avatar);
       }
 
-      // 稀有度标 + 名字 + 属性/角色 + 三维 + 技能名
+      // 稀有度标 + 名字 + 属性/角色 + 三维 + 等级/星级
       const textX = -itemW / 2 + 132;
       const rarityDef = getRarity(pet.rarity);
       const rarityText = new PIXI.Text(rarityDef.code, {
@@ -141,29 +153,40 @@ export class TeamScene implements Scene {
       item.addChild(nameText);
 
       const roleText = new PIXI.Text(
-        `${ELEMENT_NAME[pet.element]} · ${PET_ROLE_NAME[pet.role]}`,
-        { fontSize: 20, fill: ORB_COLOR[pet.element] },
+        `${ELEMENT_NAME[pet.element]} · ${PET_ROLE_NAME[pet.role]}  Lv.${lv} ${'★'.repeat(star)}`,
+        { fontSize: 18, fill: ORB_COLOR[pet.element] },
       );
       roleText.anchor.set(0, 0.5);
       roleText.position.set(textX, -16);
       item.addChild(roleText);
 
-      const lv = DEMO_TEAM_LEVEL;
-      const star = DEMO_TEAM_STAR;
       const statsText = new PIXI.Text(
-        `攻${petAtk(pet, lv, star)} 血${petHp(pet, lv, star)} 复${petRcv(pet, lv, star)}`,
-        { fontSize: 19, fill: 0xc7b8ee, fontWeight: 'bold' },
+        `攻${petAtk(pet, lv, star)} 血${petHp(pet, lv, star)} 复${petRcv(pet, lv, star)}  碎${PlayerData.petShards(petId)}`,
+        { fontSize: 18, fill: 0xc7b8ee, fontWeight: 'bold' },
       );
       statsText.anchor.set(0, 0.5);
       statsText.position.set(textX, 12);
       item.addChild(statsText);
 
-      const skillText = new PIXI.Text(`技 ${skillForPet(pet, DEMO_TEAM_STAR).name}`, {
-        fontSize: 19, fill: 0x9b8cc4,
+      // 养成入口（独立按钮，停止冒泡避免触发上阵切换）
+      const growBtn = new PIXI.Container();
+      const growBg = new PIXI.Graphics();
+      growBg.beginFill(0x3a7a4a);
+      growBg.lineStyle(2, 0x6fd86a);
+      growBg.drawRoundedRect(-52, -18, 104, 36, 18);
+      growBg.endFill();
+      growBtn.addChild(growBg);
+      const growLabel = new PIXI.Text('养成', { fontSize: 20, fill: 0xffffff, fontWeight: 'bold' });
+      growLabel.anchor.set(0.5);
+      growBtn.addChild(growLabel);
+      growBtn.position.set(textX + 52, 42);
+      growBtn.eventMode = 'static';
+      growBtn.cursor = 'pointer';
+      growBtn.on('pointertap', (e: PIXI.FederatedPointerEvent) => {
+        e.stopPropagation();
+        SceneManager.switchTo('petDetail', { petId } satisfies PetDetailEnterData);
       });
-      skillText.anchor.set(0, 0.5);
-      skillText.position.set(textX, 40);
-      item.addChild(skillText);
+      item.addChild(growBtn);
 
       // 上阵勾标记
       const check = new PIXI.Container();
@@ -212,7 +235,7 @@ export class TeamScene implements Scene {
     const gap = 14;
     const totalW = TEAM_SIZE * slotSize + (TEAM_SIZE - 1) * gap;
     const startX = (w - totalW) / 2 + slotSize / 2;
-    const y = Game.safeTop + 150;
+    const y = Game.safeTop + 168;
 
     const team = PlayerData.team;
     for (let i = 0; i < TEAM_SIZE; i++) {
@@ -238,7 +261,9 @@ export class TeamScene implements Scene {
         }
         slot.eventMode = 'static';
         slot.cursor = 'pointer';
-        slot.on('pointertap', () => this._togglePet(pet.id));
+        slot.on('pointertap', () => {
+          SceneManager.switchTo('petDetail', { petId: pet.id } satisfies PetDetailEnterData);
+        });
       } else {
         const plus = new PIXI.Text('+', { fontSize: 48, fill: 0x5a4a82 });
         plus.anchor.set(0.5);
@@ -247,11 +272,11 @@ export class TeamScene implements Scene {
       this._slotArea.addChild(slot);
     }
 
-    // 三维预览
+    // 三维预览（真实养成数值）
     const members: TeamMember[] = team
       .map((id) => PET_MAP.get(id))
       .filter((def): def is PetDef => !!def)
-      .map((def) => ({ def, level: DEMO_TEAM_LEVEL, star: DEMO_TEAM_STAR }));
+      .map((def) => ({ def, level: PlayerData.petLevel(def.id), star: PlayerData.petStar(def.id) }));
     this._statsText.text =
       `生命 ${teamMaxHp(members)}   攻击 ${teamAtk(members)}   回复 ${teamRcv(members)}`;
 

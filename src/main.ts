@@ -10,6 +10,8 @@ import { PRELOAD_IMAGES } from '@/config/Assets';
 import { TitleScene } from '@/scenes/TitleScene';
 import { BattleScene } from '@/scenes/BattleScene';
 import { TeamScene } from '@/scenes/TeamScene';
+import { PetDetailScene } from '@/scenes/PetDetailScene';
+import { CodexScene } from '@/scenes/CodexScene';
 
 declare const GameGlobal: any;
 
@@ -40,6 +42,8 @@ async function main(): Promise<void> {
   SceneManager.register(new TitleScene());
   SceneManager.register(new BattleScene());
   SceneManager.register(new TeamScene());
+  SceneManager.register(new PetDetailScene());
+  SceneManager.register(new CodexScene());
   SceneManager.switchTo('title');
 }
 

@@ -13,6 +13,14 @@ export type OrbType = Element | 'heart';
 export const ELEMENTS: readonly Element[] = ['metal', 'wood', 'water', 'fire', 'earth'];
 export const ORB_TYPES: readonly OrbType[] = [...ELEMENTS, 'heart'];
 
+/**
+ * 珠子状态（机制轴之「棋盘/珠子」）：在颜色之上叠加的特殊状态，单一真源。
+ * - normal：普通珠（默认）。
+ * - sealed：封印珠，锁定不可拖/不可消，相邻发生消除后解封为普通珠。
+ *   （顽石/毒珠等更多状态为后续扩展点，先落地封印珠这一最高价值机制。）
+ */
+export type OrbState = 'normal' | 'sealed';
+
 /** 五行相克：克制方 → 被克方（金克木、木克土、土克水、水克火、火克金） */
 export const ELEMENT_COUNTERS: Readonly<Record<Element, Element>> = {
   metal: 'wood',

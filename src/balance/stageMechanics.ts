@@ -1,0 +1,131 @@
+/**
+ * 机制节奏表（纯数据，零逻辑）——「打关不枯燥」的单一真源
+ *
+ * 三轴机制来源：
+ * - board：棋盘/珠子机制（保鲜价值最高）。当前落地「封印珠」，其余为扩展点。
+ * - enemy：敌人机制（复用 enemies.ts 的技能组合，标签用于 UI 提示与节奏统计）。
+ * - rule：关卡规则机制（最轻，数据驱动：禁心、禁属性珠、多波等）。
+ *
+ * 节奏原则：每关 StageDef.mechanics 标注「首次引入/复用」的机制 id；
+ * 设计上每 3~5 关至少一个「首现」机制，且首现时尽量单独出现（先教会，再组合）。
+ */
+import type { Element } from './combat';
+
+export type MechanicAxis = 'board' | 'enemy' | 'rule';
+
+export interface MechanicDef {
+  id: string;
+  axis: MechanicAxis;
+  name: string;
+  /** 设计说明 */
+  desc: string;
+  /** 战前一句话提示（UI 展示用） */
+  uiHint: string;
+  // ── board 轴参数 ──
+  /** 开局封印珠数量（board 轴） */
+  sealOrbs?: number;
+  // ── rule 轴参数 ──
+  /** 心珠不回血（禁心） */
+  noHeartHeal?: boolean;
+  /** 禁用某属性珠（消除无伤害，等同未覆盖） */
+  banElement?: Element;
+}
+
+export const MECHANICS: Readonly<Record<string, MechanicDef>> = {
+  // ── board 轴 ──
+  orb_sealed: {
+    id: 'orb_sealed', axis: 'board', name: '封印珠',
+    desc: '开局随机封印若干珠子，锁定不可拖动/消除；在其相邻处发生消除即可解封。',
+    uiHint: '盘面有封印珠：消除其相邻珠子来解封',
+    sealOrbs: 4,
+  },
+  orb_rock: {
+    id: 'orb_rock', axis: 'board', name: '顽石封印',
+    desc: '更高密度的封印珠（顽石变体），需要更主动地清理周边解封。',
+    uiHint: '盘面顽石封印较多：优先清理周边解封',
+    sealOrbs: 6,
+  },
+
+  // ── enemy 轴（映射到 enemies.ts 既有技能组合，标签用于节奏与提示） ──
+  enemy_fast_attack: {
+    id: 'enemy_fast_attack', axis: 'enemy', name: '高攻速',
+    desc: '敌人攻击间隔短，缺乏治疗/护盾会被持续磨血。',
+    uiHint: '敌人攻速快：备好治疗或护盾',
+  },
+  enemy_damage_reduce: {
+    id: 'enemy_damage_reduce', axis: 'enemy', name: '减伤',
+    desc: '敌人周期性获得减伤，低倍率输出收益骤降。',
+    uiHint: '敌人会减伤：用克制或爆发破防',
+  },
+  enemy_self_heal: {
+    id: 'enemy_self_heal', axis: 'enemy', name: '自疗',
+    desc: '敌人会自我回复，DPS 不足会被拖死。',
+    uiHint: '敌人会自疗：集中爆发抢血线',
+  },
+  enemy_charge: {
+    id: 'enemy_charge', axis: 'enemy', name: '蓄力重击',
+    desc: '敌人蓄力后打出重击，需要护盾/治疗扛住。',
+    uiHint: '敌人会蓄力重击：护盾/治疗扛住',
+  },
+  enemy_double_charge: {
+    id: 'enemy_double_charge', axis: 'enemy', name: '连续蓄力',
+    desc: '高频蓄力重击，对续航与减伤要求更高。',
+    uiHint: '敌人连续蓄力：续航与护盾要足',
+  },
+  enemy_guard_heal: {
+    id: 'enemy_guard_heal', axis: 'enemy', name: '减伤+自疗',
+    desc: '减伤与自疗双技能，必须克制+爆发+续航三者兼备。',
+    uiHint: '敌人减伤又自疗：克制+爆发+续航缺一不可',
+  },
+
+  // ── rule 轴 ──
+  rule_multi_wave: {
+    id: 'rule_multi_wave', axis: 'rule', name: '多波',
+    desc: '多波敌人，需保留血量与技能节奏。',
+    uiHint: '多波敌人：注意保留血量',
+  },
+  rule_no_heal: {
+    id: 'rule_no_heal', axis: 'rule', name: '禁心',
+    desc: '本关心珠不回血，考验无伤运营与护盾。',
+    uiHint: '本关禁心：心珠不回血，靠护盾与走位',
+    noHeartHeal: true,
+  },
+  rule_ban_water: {
+    id: 'rule_ban_water', axis: 'rule', name: '封水',
+    desc: '本关水珠失效（消除无伤害），逼迫调整队伍属性。',
+    uiHint: '本关水珠失效：换属性输出',
+    banElement: 'water',
+  },
+  rule_ban_fire: {
+    id: 'rule_ban_fire', axis: 'rule', name: '封火',
+    desc: '本关火珠失效（消除无伤害），逼迫调整队伍属性。',
+    uiHint: '本关火珠失效：换属性输出',
+    banElement: 'fire',
+  },
+};
+
+export function getMechanic(id: string): MechanicDef | undefined {
+  return MECHANICS[id];
+}
+
+/** 汇总一组机制 id 的运行期效果（供战斗/模拟读取） */
+export interface MechanicEffects {
+  sealOrbs: number;
+  noHeartHeal: boolean;
+  bannedElements: Element[];
+  hints: string[];
+}
+
+export function resolveMechanics(ids: readonly string[] | undefined): MechanicEffects {
+  const eff: MechanicEffects = { sealOrbs: 0, noHeartHeal: false, bannedElements: [], hints: [] };
+  if (!ids) return eff;
+  for (const id of ids) {
+    const m = MECHANICS[id];
+    if (!m) continue;
+    if (m.sealOrbs) eff.sealOrbs = Math.max(eff.sealOrbs, m.sealOrbs);
+    if (m.noHeartHeal) eff.noHeartHeal = true;
+    if (m.banElement && !eff.bannedElements.includes(m.banElement)) eff.bannedElements.push(m.banElement);
+    eff.hints.push(m.uiHint);
+  }
+  return eff;
+}

@@ -30,8 +30,12 @@ export interface BoardViewCallbacks {
   isOrbActive?: (orb: OrbType) => boolean;
 }
 
-/** 无效珠的暗淡 tint（降饱和近灰） */
-const DIM_TINT = 0x6f6f6f;
+/** 无效珠：降饱和 + 半透明（仍可拖消，仅无伤害） */
+const INACTIVE_TINT = 0x8a8a8a;
+const INACTIVE_ALPHA = 0.58;
+/** 封印珠：冷色覆层，与无效珠明显区分 */
+const SEAL_TINT = 0xc8d4ff;
+const SEAL_ALPHA = 0.72;
 
 export class BoardView {
   readonly container = new PIXI.Container();
@@ -41,6 +45,8 @@ export class BoardView {
   private readonly _cell = UI.board.cellSize;
 
   private _orbsLayer = new PIXI.Container();
+  /** 珠子状态标记层：封印「封」/ 无效「无」，与珠面分离便于辨认 */
+  private _overlayLayer = new PIXI.Container();
   private _floatLayer = new PIXI.Container();
   private _pool: ObjectPool<PIXI.Sprite>;
   /** sprites[r][c]，与 grid 对应 */
@@ -89,6 +95,9 @@ export class BoardView {
 
     this._buildBackground();
     this.container.addChild(this._orbsLayer);
+    // 状态标记层（封印 / 无效），置于珠子之上
+    this._overlayLayer.eventMode = 'none';
+    this.container.addChild(this._overlayLayer);
     this._buildHitArea();
     // 浮珠层置顶（仅展示，不拦截触摸；触摸由 hit 层接收）
     this._floatLayer.eventMode = 'none';
@@ -142,6 +151,110 @@ export class BoardView {
       }
       this._sprites.push(row);
     }
+    this.refreshOrbStates();
+  }
+
+  /** 重绘全部珠子视觉状态（解封/下落/重建后调用） */
+  refreshOrbStates(): void {
+    this._overlayLayer.removeChildren().forEach((c) => c.destroy({ children: true }));
+    const size = this._cell * UI.board.orbScale;
+    for (let r = 0; r < this._board.rows; r++) {
+      for (let c = 0; c < this._board.cols; c++) {
+        const orb = this._board.get(r, c);
+        const sp = this._sprites[r]?.[c];
+        if (!orb || !sp) continue;
+
+        const locked = this._board.isLocked(r, c);
+        const active = this._cb.isOrbActive ? this._cb.isOrbActive(orb) : true;
+
+        if (locked) {
+          sp.tint = SEAL_TINT;
+          sp.alpha = SEAL_ALPHA;
+          this._drawSealMark(this._cellCenterX(c), this._cellCenterY(r), size);
+        } else if (!active && orb !== 'heart') {
+          sp.tint = INACTIVE_TINT;
+          sp.alpha = INACTIVE_ALPHA;
+          this._drawInactiveMark(this._cellCenterX(c), this._cellCenterY(r), size);
+        } else {
+          sp.tint = 0xffffff;
+          sp.alpha = 1;
+        }
+      }
+    }
+  }
+
+  /** @deprecated 兼容旧调用，等同 refreshOrbStates */
+  refreshLocks(): void {
+    this.refreshOrbStates();
+  }
+
+  /** 封印珠：蓝紫冰层 + 金边 + 「封」字（不可拖/不可消，消邻格解封） */
+  private _drawSealMark(cx: number, cy: number, size: number): void {
+    const mark = new PIXI.Container();
+    const half = size / 2;
+
+    const frost = new PIXI.Graphics();
+    frost.beginFill(0x3d52cc, 0.55);
+    frost.lineStyle(3, 0xffd75e, 1);
+    frost.drawRoundedRect(-half, -half, size, size, 10);
+    frost.endFill();
+    mark.addChild(frost);
+
+    // 简易锁头：弧 + 锁体（不用横线，避免被看成「减号」）
+    const shackle = new PIXI.Graphics();
+    shackle.lineStyle(3, 0xffffff, 1);
+    shackle.arc(0, -half * 0.14, half * 0.2, Math.PI, 0);
+    mark.addChild(shackle);
+    const body = new PIXI.Graphics();
+    body.beginFill(0xffffff, 0.9);
+    body.drawRoundedRect(-half * 0.2, -half * 0.06, half * 0.4, half * 0.32, 4);
+    body.endFill();
+    mark.addChild(body);
+
+    const label = new PIXI.Text('封', {
+      fontSize: Math.floor(size * 0.34),
+      fill: 0xffffff,
+      fontWeight: 'bold',
+      stroke: 0x1a2266,
+      strokeThickness: 4,
+    });
+    label.anchor.set(0.5);
+    label.position.set(0, half * 0.22);
+    mark.addChild(label);
+
+    mark.position.set(cx, cy);
+    this._overlayLayer.addChild(mark);
+  }
+
+  /** 无效珠：灰化 + 红色斜杠 + 「无」字（可消无伤害） */
+  private _drawInactiveMark(cx: number, cy: number, size: number): void {
+    const mark = new PIXI.Container();
+    const half = size / 2;
+
+    const slash = new PIXI.Graphics();
+    slash.lineStyle(4, 0xff5252, 0.95);
+    slash.moveTo(-half * 0.62, half * 0.62);
+    slash.lineTo(half * 0.62, -half * 0.62);
+    mark.addChild(slash);
+
+    const badge = new PIXI.Graphics();
+    badge.beginFill(0x2a1a1a, 0.88);
+    badge.lineStyle(2, 0xff9142, 1);
+    badge.drawRoundedRect(-half * 0.55, -half * 0.72, half * 1.1, half * 0.42, 6);
+    badge.endFill();
+    mark.addChild(badge);
+
+    const label = new PIXI.Text('无', {
+      fontSize: Math.floor(size * 0.28),
+      fill: 0xff9142,
+      fontWeight: 'bold',
+    });
+    label.anchor.set(0.5);
+    label.position.set(0, -half * 0.51);
+    mark.addChild(label);
+
+    mark.position.set(cx, cy);
+    this._overlayLayer.addChild(mark);
   }
 
   /** 播放一组消除动画（缩放消失），结束后从池回收 */
@@ -216,7 +329,10 @@ export class BoardView {
         TweenManager.to({
           target: sp, props: { y: targetY },
           duration: dur, ease: Ease.easeOutBounce,
-          onComplete: done,
+          onComplete: () => {
+            done();
+            if (remain <= 0) this.refreshOrbStates();
+          },
         });
       }
     });
@@ -253,7 +369,10 @@ export class BoardView {
             TweenManager.to({
               target: sp, props: { width: size, height: size },
               duration: UI.anim.orbSwap * 2.5, ease: Ease.easeOutBack,
-              onComplete: done,
+              onComplete: () => {
+                done();
+                if (remain <= 0) this.refreshOrbStates();
+              },
             });
           },
         });
@@ -381,6 +500,11 @@ export class BoardView {
     if (!this._board.inBounds(r, c)) return;
     const orb = this._board.get(r, c);
     if (!orb) return;
+    // 封印珠不可拖动
+    if (this._board.isLocked(r, c)) {
+      Platform.vibrateShort('light');
+      return;
+    }
 
     this._dragging = true;
     this._didMove = false;
@@ -422,6 +546,8 @@ export class BoardView {
     const neigh = [[dr - 1, dc], [dr + 1, dc], [dr, dc - 1], [dr, dc + 1]];
     for (const [nr, nc] of neigh) {
       if (!this._board.inBounds(nr, nc)) continue;
+      // 封印珠不可被换入
+      if (this._board.isLocked(nr, nc)) continue;
       const d = (px - this._cellCenterX(nc)) ** 2 + (py - this._cellCenterY(nr)) ** 2;
       if (d < bestD) {
         bestD = d;
@@ -496,8 +622,9 @@ export class BoardView {
     const size = this._cell * UI.board.orbScale;
     sp.width = size;
     sp.height = size;
-    const active = this._cb.isOrbActive ? this._cb.isOrbActive(orb) : true;
-    sp.tint = active ? 0xffffff : DIM_TINT;
+    // tint/alpha 由 refreshOrbStates 统一处理
+    sp.tint = 0xffffff;
+    sp.alpha = 1;
   }
 
   private _cellCenterX(c: number): number {

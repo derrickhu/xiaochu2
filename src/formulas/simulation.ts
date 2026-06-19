@@ -16,6 +16,7 @@ import type { EnemyDef } from '@/balance/enemies';
 import { ENEMY_MAP } from '@/balance/enemies';
 import type { StageDef } from '@/balance/stages';
 import { STAGE_MAP } from '@/balance/stages';
+import { resolveMechanics } from '@/balance/stageMechanics';
 import type { SkillDef, SkillVfxId } from '@/balance/skills';
 import { calcDamage, calcHeal } from './damage';
 import { enemyStats } from './growth';
@@ -148,6 +149,10 @@ export function simulateBattle(
   let waveIndex = 0;
   let enemy = spawnEnemy(stage, waveIndex);
 
+  // 关卡规则机制：禁心（心珠不回血）、禁用属性珠（消除无伤害）
+  const mech = resolveMechanics(stage.mechanics);
+  const bannedSet = new Set<Element>(mech.bannedElements);
+
   const groupsPerType = model.combo / 6;
 
   for (let turn = 1; turn <= TURN_CAP; turn++) {
@@ -183,11 +188,12 @@ export function simulateBattle(
 
     // ── 转珠消除：覆盖元素造伤，心珠回血 ──
     for (const el of covered) {
+      if (bannedSet.has(el)) continue; // 禁用属性珠：消除无伤害
       const pet = firstPetOf(el);
       if (!pet) continue;
       dmgToEnemy += groupsPerType * orbGroupDamage(pet.atk, el, enemy, model, buffMult, enemyReduction);
     }
-    const heartOrbs = groupsPerType * model.matchCount;
+    const heartOrbs = mech.noHeartHeal ? 0 : groupsPerType * model.matchCount;
     healThisTurn += calcHeal(rcvTotal, heartOrbs, model.combo);
 
     heroHp = Math.min(heroMaxHp, heroHp + healThisTurn);

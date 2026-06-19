@@ -19,6 +19,7 @@ import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { COMBAT, type Element } from '@/balance/combat';
 import { SKILL_VFX_MAP } from '@/balance/skillVfx';
 import { STAGES } from '@/balance/stages';
+import { PET_MAP } from '@/balance/pets';
 import { comboMultiplier } from '@/formulas/damage';
 import { enemyImage, petFrameImage, petImage, ORB_IMAGES } from '@/config/Assets';
 import { BoardModel, type MatchGroup } from '@/game/board/BoardModel';
@@ -98,8 +99,13 @@ export class BattleScene implements Scene {
     PlayerData.load();
 
     const stageId = (data as BattleEnterData | undefined)?.stageId ?? STAGES[0].id;
-    this._ctrl = new BattleController(stageId, PlayerData.team);
+    this._ctrl = new BattleController(stageId, PlayerData.team, Math.random,
+      (id) => ({ level: PlayerData.petLevel(id), star: PlayerData.petStar(id) }));
     this._board = new BoardModel();
+    // 棋盘机制：开局封印珠
+    if (this._ctrl.sealOrbCount > 0) {
+      this._board.sealRandom(this._ctrl.sealOrbCount);
+    }
     this._busy = false;
 
     this._computeLayout();
@@ -214,7 +220,7 @@ export class BattleScene implements Scene {
       onDragEnd: (didMove) => {
         void this._onDragEnd(didMove);
       },
-      // 队伍未覆盖的属性珠 = 无效珠（消除无伤害），暗淡显示
+      // 队伍未覆盖的属性珠 = 无效珠（可消无伤害）；表现见 BoardView.refreshOrbStates
       isOrbActive: (orb) => orb === 'heart' || this._ctrl.teamElementSet.has(orb as Element),
     });
     this._boardView.container.position.set(this._boardX, this._boardY);
@@ -635,6 +641,7 @@ export class BattleScene implements Scene {
       }
       const moves = this._board.collapse();
       await this._boardView!.playFall(moves);
+      this._boardView!.refreshOrbStates();
       chainDepth++;
     }
 
@@ -1252,6 +1259,8 @@ export class BattleScene implements Scene {
     const result = this._ctrl.finish(win);
     if (win) {
       PlayerData.recordClear(this._ctrl.stage.id, result.stars, result.coins);
+      PlayerData.addExp(result.exp);
+      for (const s of result.shards) PlayerData.addShards(s.petId, s.count);
     }
 
     const w = Game.logicWidth;
@@ -1301,8 +1310,21 @@ export class BattleScene implements Scene {
         fontSize: 32, fill: 0xffe082, fontWeight: 'bold',
       });
       coinText.anchor.set(0.5);
-      coinText.position.set(0, 30);
+      coinText.position.set(0, 24);
       panel.addChild(coinText);
+
+      // 掉落：经验 + 碎片（仅展示已拥有宠的碎片入账）
+      const ownedShards = result.shards.filter((s) => PlayerData.isOwned(s.petId));
+      const shardSummary = ownedShards
+        .map((s) => `${PET_MAP.get(s.petId)?.name ?? s.petId}碎片×${s.count}`)
+        .join('  ');
+      const rewardText = new PIXI.Text(
+        `经验 +${result.exp}${shardSummary ? `\n${shardSummary}` : ''}`,
+        { fontSize: 24, fill: 0x9fe6b0, align: 'center' },
+      );
+      rewardText.anchor.set(0.5);
+      rewardText.position.set(0, 78);
+      panel.addChild(rewardText);
     } else {
       const tip = new PIXI.Text('提示：消除克制敌人属性的珠子\n伤害 ×1.6，心珠可以回血', {
         fontSize: 28, fill: 0x9b8cc4, align: 'center',

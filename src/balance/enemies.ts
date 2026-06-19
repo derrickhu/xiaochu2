@@ -66,6 +66,46 @@ export const ENEMIES: readonly EnemyDef[] = [
     baseHp: 3600, baseAtk: 170, baseDef: 30, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal],
   },
+
+  // ── 第二章 · 幽晶溶洞（复用技能组合，章节成长自动放大基值）──
+  /** 晶甲蝎：高防 + 蓄力 */
+  {
+    id: 'enemy_scorpion_metal', name: '晶甲蝎', element: 'metal',
+    baseHp: 1200, baseAtk: 150, baseDef: 55, attackInterval: 3,
+    skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.bladeCharge],
+  },
+  /** 溶洞蟾：自疗 + 高攻速 */
+  {
+    id: 'enemy_toad_water', name: '溶洞毒蟾', element: 'water',
+    baseHp: 1100, baseAtk: 170, baseDef: 20, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.serpentHeal],
+  },
+  /** 章末 Boss：减伤 + 蓄力，封印珠盘面 */
+  {
+    id: 'enemy_crystal_boss_earth', name: '幽晶巨像', element: 'earth',
+    baseHp: 4200, baseAtk: 180, baseDef: 60, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.bladeCharge],
+  },
+
+  // ── 第三章 · 风雷绝巅 ──
+  /** 雷羽鹰：连续蓄力高攻 */
+  {
+    id: 'enemy_eagle_fire', name: '雷羽鹰', element: 'fire',
+    baseHp: 1600, baseAtk: 200, baseDef: 22, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.lionCharge],
+  },
+  /** 绝巅守卫：减伤 + 自疗 */
+  {
+    id: 'enemy_warden_metal', name: '绝巅守卫', element: 'metal',
+    baseHp: 2200, baseAtk: 185, baseDef: 50, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.serpentHeal],
+  },
+  /** 章末 Boss：减伤 + 自疗 + 蓄力三技能，禁心关压力拉满 */
+  {
+    id: 'enemy_thunderlord_boss_wood', name: '风雷天尊', element: 'wood',
+    baseHp: 5200, baseAtk: 200, baseDef: 45, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal, ENEMY_SKILL_IDS.lionCharge],
+  },
 ];
 
 export const ENEMY_MAP: ReadonlyMap<string, EnemyDef> = new Map(ENEMIES.map((e) => [e.id, e]));

@@ -11,15 +11,20 @@
  *  - 操作熟练度(低/中/高手)与队伍质量都应显著影响结果
  */
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_TEAM, DEMO_TEAM_LEVEL, DEMO_TEAM_STAR } from '@/balance/pets';
+import { DEFAULT_TEAM, INITIAL_PET_LEVEL, INITIAL_PET_STAR } from '@/balance/pets';
 import { STAGES } from '@/balance/stages';
 import {
   COMBO_MODELS, buildTeam, simulateBattle, simulateMatrix, type SimResult,
 } from '../simulation';
 
-const L = DEMO_TEAM_LEVEL;
-const S = DEMO_TEAM_STAR;
+const L = INITIAL_PET_LEVEL;
+const S = INITIAL_PET_STAR;
 const ALL_STAGES = STAGES.map((s) => s.id);
+/**
+ * 第一章关卡：这些「挑战版 v0.3」契约针对入门期（初始 L5/1★）队伍设计。
+ * 第二、三章为后期内容，按更高养成水平（升级/升星后）调优，不纳入入门期可达性断言。
+ */
+const CH1_STAGES = STAGES.filter((s) => s.chapter === 1).map((s) => s.id);
 
 /** 典型队伍原型（用于验证"搭配"差异） */
 const TEAMS = {
@@ -46,8 +51,8 @@ describe('模拟器自洽性', () => {
     }
   });
 
-  it('操作越熟练击杀越快：默认队 high 用时 <= low', () => {
-    for (const stageId of ALL_STAGES) {
+  it('操作越熟练击杀越快：默认队 high 用时 <= low（第一章）', () => {
+    for (const stageId of CH1_STAGES) {
       const low = sim(TEAMS.default, stageId, COMBO_MODELS.low);
       const high = sim(TEAMS.default, stageId, COMBO_MODELS.high);
       expect(high.turnsUsed).toBeLessThanOrEqual(low.turnsUsed);
@@ -81,8 +86,8 @@ describe('1-5+ 技能怪段：弱队受罚 / 强队顺畅', () => {
     expect(sim(TEAMS.default, 'stage_1_8', COMBO_MODELS.low).win).toBe(false);
   });
 
-  it('爆发队中手可零失误清完整章', () => {
-    for (const id of ALL_STAGES) {
+  it('爆发队中手可零失误清完第一章', () => {
+    for (const id of CH1_STAGES) {
       expect(sim(TEAMS.burst, id).win).toBe(true);
     }
   });

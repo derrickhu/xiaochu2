@@ -9,12 +9,14 @@
  */
 import { COMBAT, ELEMENT_COUNTERS, type Element, type OrbType } from '@/balance/combat';
 import {
-  PET_MAP, DEFAULT_TEAM, DEMO_TEAM_LEVEL, DEMO_TEAM_STAR,
+  PET_MAP, DEFAULT_TEAM, INITIAL_PET_LEVEL, INITIAL_PET_STAR,
   type PetDef,
 } from '@/balance/pets';
 import { ENEMY_MAP, type EnemyDef } from '@/balance/enemies';
 import type { SkillDef, SkillVfxId } from '@/balance/skills';
 import { STAGE_MAP, type StageDef } from '@/balance/stages';
+import { resolveMechanics } from '@/balance/stageMechanics';
+import { stageDrops } from '@/formulas/economyOutput';
 import { calcDamage, calcHeal, comboMultiplier } from '@/formulas/damage';
 import { enemyStats } from '@/formulas/growth';
 import { teamMaxHp, teamRcv, teamElements, petAtkInTeam, type TeamMember } from '@/formulas/team';
@@ -109,6 +111,10 @@ export interface BattleResult {
   win: boolean;
   stars: number;
   coins: number;
+  /** 掉落经验（升级燃料） */
+  exp: number;
+  /** 掉落碎片（升星材料） */
+  shards: { petId: string; count: number }[];
   turnsUsed: number;
   noDamage: boolean;
 }
@@ -120,6 +126,16 @@ export class BattleController {
   readonly teamRcvTotal: number;
   /** 队伍属性覆盖（不在集合内的属性珠 = 无效珠，消除无伤害） */
   readonly teamElementSet: ReadonlySet<Element>;
+
+  // ── 关卡机制（机制节奏表 stageMechanics.ts 解析） ──
+  /** 开局封印珠数量（0 = 无） */
+  readonly sealOrbCount: number;
+  /** 心珠是否不回血（禁心） */
+  readonly noHeartHeal: boolean;
+  /** 被禁用的属性珠（消除无伤害） */
+  readonly bannedElements: ReadonlySet<Element>;
+  /** 机制战前提示（UI 展示） */
+  readonly mechanicHints: readonly string[];
 
   state: BattleState = 'playerTurn';
 
@@ -139,7 +155,16 @@ export class BattleController {
 
   private _rng: () => number;
 
-  constructor(stageId: string, teamIds?: readonly string[], rng: () => number = Math.random) {
+  /**
+   * @param levelStarOf 按宠物 id 取真实养成进度；默认用初始等级/星级（测试与脱离存档场景）
+   */
+  constructor(
+    stageId: string,
+    teamIds?: readonly string[],
+    rng: () => number = Math.random,
+    levelStarOf: (petId: string) => { level: number; star: number } =
+      () => ({ level: INITIAL_PET_LEVEL, star: INITIAL_PET_STAR }),
+  ) {
     const stage = STAGE_MAP.get(stageId);
     if (!stage) throw new Error(`未知关卡: ${stageId}`);
     this.stage = stage;
@@ -149,7 +174,7 @@ export class BattleController {
     const members: TeamMember[] = ids
       .map((id) => PET_MAP.get(id))
       .filter((def): def is PetDef => !!def)
-      .map((def) => ({ def, level: DEMO_TEAM_LEVEL, star: DEMO_TEAM_STAR }));
+      .map((def) => ({ def, ...levelStarOf(def.id) }));
 
     this.team = members.map((m) => ({
       def: m.def,
@@ -161,6 +186,12 @@ export class BattleController {
     this.heroHp = this.heroMaxHp;
     this.teamRcvTotal = teamRcv(members);
     this.teamElementSet = teamElements(members);
+
+    const mech = resolveMechanics(stage.mechanics);
+    this.sealOrbCount = mech.sealOrbs;
+    this.noHeartHeal = mech.noHeartHeal;
+    this.bannedElements = new Set(mech.bannedElements);
+    this.mechanicHints = mech.hints;
 
     this.enemy = this._spawnEnemy(0);
   }
@@ -214,6 +245,8 @@ export class BattleController {
         continue;
       }
       const element = group.orb as Element;
+      // 禁用属性珠：计入 Combo，但不产生伤害
+      if (this.bannedElements.has(element)) continue;
       const petIndex = this.team.findIndex((p) => p.def.element === element);
       if (petIndex < 0) continue;
       const pet = this.team[petIndex];
@@ -243,7 +276,8 @@ export class BattleController {
       });
     }
 
-    const heal = healOrbs > 0 ? calcHeal(this.teamRcvTotal, healOrbs, combo) : 0;
+    // 禁心关：心珠不回血
+    const heal = (healOrbs > 0 && !this.noHeartHeal) ? calcHeal(this.teamRcvTotal, healOrbs, combo) : 0;
     this.state = 'petAttack';
     return { combo, comboMul, attacks, heal };
   }
@@ -525,17 +559,21 @@ export class BattleController {
       : null;
   }
 
-  /** 战斗结束，生成结果（胜利时计算星数与灵宠币） */
+  /** 战斗结束，生成结果（胜利时计算星数、灵宠币与掉落经验/碎片） */
   finish(win: boolean): BattleResult {
     this.state = win ? 'victory' : 'defeat';
     if (!win) {
-      return { win, stars: 0, coins: 0, turnsUsed: this.turnsUsed, noDamage: !this.tookDamage };
+      return { win, stars: 0, coins: 0, exp: 0, shards: [], turnsUsed: this.turnsUsed, noDamage: !this.tookDamage };
     }
     let stars = 1; // 通关
     if (this.turnsUsed <= this.stage.starTurnLimit) stars++;
     if (!this.tookDamage) stars++;
     const coins = stageCoinReward(this.stage.chapter, stars, this.stage.isBoss);
-    return { win, stars, coins, turnsUsed: this.turnsUsed, noDamage: !this.tookDamage };
+    const drops = stageDrops(this.stage.dropTableId, this.stage.chapter, stars, this.stage.type);
+    return {
+      win, stars, coins, exp: drops.exp, shards: drops.shards,
+      turnsUsed: this.turnsUsed, noDamage: !this.tookDamage,
+    };
   }
 
   /** 指定属性对当前敌人的克制关系（UI 提示用） */
