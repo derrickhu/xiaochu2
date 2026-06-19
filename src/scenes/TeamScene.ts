@@ -201,6 +201,7 @@ export class TeamScene implements Scene {
         hp: petHp(pet, lv, star),
         rcv: petRcv(pet, lv, star),
         size: FONT_SIZE.xxs,
+        variant: 'panel',
       });
       line4.position.set(textX, 40);
       item.addChild(line4);

@@ -1,9 +1,5 @@
 /**
- * 标题场景：水墨主视觉 + 灵宠币/经验 + 章节关卡列表 + 底部导航（图鉴/招募/编队）
- *
- * 阶段七重制：复用 xiao_chu「明亮国风水墨」美术（home_bg / title_logo / nav_bar / 图标），
- * 全部控件走 @/ui 组件库与 theme token（单点改全局）；文字主色翻为深墨以适配亮底。
- * 每次 onEnter 重建，保证通关后星数与解锁状态即时刷新。
+ * 标题场景：水墨主视觉 + 灵宠币/经验 + 章节关卡列表 + 底部导航（灵宠/招募/编队）
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -90,16 +86,14 @@ export class TitleScene implements Scene {
   private _buildResourceBar(w: number, y: number): void {
     const padX = 48;
     const coin = makeIconLabel({
-      iconPath: UI_IMAGES.iconCoin, iconSize: 36,
-      caption: '灵宠币', layout: 'stacked', valueGap: 12,
+      iconPath: UI_IMAGES.iconCoin, iconSize: 38,
       text: `${PlayerData.coins}`, size: FONT_SIZE.md, fill: COLORS.textMain,
     });
     const exp = makeIconLabel({
-      iconPath: UI_IMAGES.iconExp, iconSize: 36,
-      caption: '经验', layout: 'stacked', valueGap: 12,
+      iconPath: UI_IMAGES.iconExp, iconSize: 38,
       text: `${PlayerData.exp}`, size: FONT_SIZE.md, fill: COLORS.textMain,
     });
-    const gap = 40;
+    const gap = 48;
     coin.position.set(padX, y);
     exp.position.set(padX + coin.width + gap, y);
     this.container.addChild(coin, exp);

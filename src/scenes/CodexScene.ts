@@ -9,7 +9,7 @@ import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
 import { UI } from '@/balance/ui';
 import { PET_MAP, type PetDef } from '@/balance/pets';
-import { petAtk } from '@/formulas/growth';
+import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import {
   BACKGROUND_IMAGES, CODEX_PRELOAD_IMAGES, ORB_IMAGES, petImage, UI_IMAGES,
 } from '@/config/Assets';
@@ -17,7 +17,7 @@ import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS, FONT_SIZE,
   makeButton, makeCoverBackground, makeIconLabel, makePanel, makeText,
-  makeRarityBadge, makeRoleBadge, makeStarRow, makeLevelStatLine,
+  makeRarityBadge, makeRoleBadge, makeStarRow, makeLevelLabel, makePetStatsLine,
 } from '@/ui';
 import type { PetDetailEnterData } from './PetDetailScene';
 
@@ -150,7 +150,6 @@ export class CodexScene implements Scene {
     const petId = pet.id;
     const lv = PlayerData.petLevel(petId);
     const star = PlayerData.petStar(petId);
-    const atk = petAtk(pet, lv, star);
 
     if (cardBgTex) {
       const bg = new PIXI.Sprite(cardBgTex);
@@ -204,12 +203,21 @@ export class CodexScene implements Scene {
     stars.position.set(cardW / 2, starY);
     item.addChild(stars);
 
-    const infoY = starY + 14 * S;
-    const infoLine = makeLevelStatLine({
-      level: lv, statValue: atk, scale: S, variant: 'card',
+    const lvY = starY + 12 * S;
+    const lvLine = makeLevelLabel({ level: lv, scale: S, variant: 'card' });
+    lvLine.position.set(cardW / 2 - lvLine.width / 2, lvY);
+    item.addChild(lvLine);
+
+    const statsY = lvY + 12 * S;
+    const statsLine = makePetStatsLine({
+      atk: petAtk(pet, lv, star),
+      hp: petHp(pet, lv, star),
+      rcv: petRcv(pet, lv, star),
+      scale: S,
+      variant: 'card',
     });
-    infoLine.position.set(cardW / 2 - infoLine.width / 2, infoY);
-    item.addChild(infoLine);
+    statsLine.position.set(cardW / 2 - statsLine.width / 2, statsY);
+    item.addChild(statsLine);
 
     const roleBadge = makeRoleBadge({ role: pet.role, scale: S, maxWidth: cardW - 10 * S });
     roleBadge.position.set((cardW - roleBadge.width) / 2, cardH - 21 * S);

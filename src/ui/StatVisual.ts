@@ -5,6 +5,7 @@
  * 场景禁止再写 0x... 或裸字符串区分攻击/生命/回复。
  */
 import * as PIXI from 'pixi.js';
+import { getGrowthUi, type GrowthUiVariant } from '@/balance/growth';
 import { getStatUi, type StatKey } from '@/balance/petRoles';
 import { makePanel } from './Panel';
 import { makeText } from './text';
@@ -51,17 +52,26 @@ export interface PetStatsLineOpts {
   hp: number;
   rcv: number;
   size?: number;
+  /** xiao_chu 设计缩放 S = logicWidth / 375 */
+  scale?: number;
+  variant?: GrowthUiVariant;
   labelStyle?: StatLabelStyle;
   valueFill?: number;
   /** 项间分隔（默认单空格） */
   separator?: string;
 }
 
+function resolveStatSize(opts: { size?: number; scale?: number }): number {
+  if (opts.size !== undefined) return opts.size;
+  if (opts.scale !== undefined) return Math.round(8 * opts.scale);
+  return FONT_SIZE.xxs;
+}
+
 /** 紧凑三维行：「攻53 血290 复11」（不含碎片，碎片用 makeShardBadge 单独展示） */
 export function makePetStatsLine(opts: PetStatsLineOpts): PIXI.Container {
-  const size = opts.size ?? FONT_SIZE.xxs;
+  const size = resolveStatSize(opts);
   const labelStyle = opts.labelStyle ?? 'short';
-  const valueFill = opts.valueFill ?? COLORS.textMain;
+  const valueFill = opts.valueFill ?? getGrowthUi(opts.variant ?? 'panel').levelColor;
   const sep = opts.separator ?? ' ';
   const cont = new PIXI.Container();
   let x = 0;
