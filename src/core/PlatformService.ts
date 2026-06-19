@@ -101,6 +101,15 @@ class PlatformServiceClass {
     return null;
   }
 
+  /** 创建 InnerAudioContext（BGM / 音效） */
+  createInnerAudioContext(): WechatMinigame.InnerAudioContext | null {
+    try {
+      return this._api?.createInnerAudioContext?.() ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   // ═══════════════ 交互反馈 ═══════════════
 
   /** 短振动（消除/点击反馈），type 控制强度 */

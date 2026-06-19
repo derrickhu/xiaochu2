@@ -72,13 +72,3 @@ describe('升级 / 升星', () => {
     expect(PlayerData.starUp(other)).toBe(false);
   });
 });
-
-describe('图鉴里程碑', () => {
-  it('达成可领且仅能领一次', () => {
-    expect(PlayerData.codexCount).toBeGreaterThanOrEqual(3);
-    const coinsBefore = PlayerData.coins;
-    expect(PlayerData.claimCodexMilestone(3, 100)).toBe(true);
-    expect(PlayerData.coins).toBe(coinsBefore + 100);
-    expect(PlayerData.claimCodexMilestone(3, 100)).toBe(false);
-  });
-});

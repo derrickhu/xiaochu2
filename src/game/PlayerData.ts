@@ -39,8 +39,6 @@ interface SaveData {
   ownedPets: Record<string, OwnedPet>;
   /** 已招募新宠次数（招募定价用，含碎片溢出招募） */
   recruitedCount: number;
-  /** 已领取的图鉴收录里程碑（收录数阈值列表） */
-  codexClaims: number[];
 }
 
 /** 招募结果 */
@@ -64,7 +62,6 @@ class PlayerDataClass {
       team: [...DEFAULT_TEAM],
       ownedPets: this._initialOwned(),
       recruitedCount: 0,
-      codexClaims: [],
     };
   }
 
@@ -111,9 +108,6 @@ class PlayerDataClass {
       recruitedCount: typeof parsed.recruitedCount === 'number'
         ? parsed.recruitedCount
         : this._countNonInitial(owned),
-      codexClaims: Array.isArray(parsed.codexClaims)
-        ? parsed.codexClaims.filter((n): n is number => typeof n === 'number')
-        : [],
     };
   }
 
@@ -135,7 +129,6 @@ class PlayerDataClass {
       ownedPets: owned,
       team: this._sanitizeTeam(legacy.team, owned),
       recruitedCount: this._countNonInitial(owned),
-      codexClaims: [],
     };
   }
 
@@ -330,20 +323,6 @@ class PlayerDataClass {
   /** 已收录数量（= 拥有过的灵宠数） */
   get codexCount(): number {
     return this.ownedPets.length;
-  }
-
-  /** 里程碑是否已领取 */
-  isCodexClaimed(threshold: number): boolean {
-    return this._data.codexClaims.includes(threshold);
-  }
-
-  /** 领取收录里程碑奖励（达成且未领取时返回 true 并发币） */
-  claimCodexMilestone(threshold: number, coinReward: number): boolean {
-    if (this.codexCount < threshold || this.isCodexClaimed(threshold)) return false;
-    this._data.codexClaims.push(threshold);
-    this._data.coins += coinReward;
-    this._save();
-    return true;
   }
 
   // ═══════════ 编队 ═══════════

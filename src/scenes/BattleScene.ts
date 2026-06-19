@@ -1282,10 +1282,19 @@ export class BattleScene implements Scene {
 
     const title = new PIXI.Text(win ? '战斗胜利！' : '战斗失败…', {
       fontSize: 56, fill: win ? 0xffe082 : 0xb0a5cc, fontWeight: 'bold',
+      stroke: win ? 0x9a5a00 : 0x2a2342, strokeThickness: 6,
     });
     title.anchor.set(0.5);
     title.position.set(0, -180);
     panel.addChild(title);
+    // 胜利标题二段弹跳：面板弹入后标题再爆一下，强化仪式感
+    if (win) {
+      title.scale.set(0.2);
+      TweenManager.to({
+        target: title.scale, props: { x: 1, y: 1 },
+        duration: 0.4, delay: 0.25, ease: Ease.easeOutBack,
+      });
+    }
 
     if (win) {
       // 星数
@@ -1306,12 +1315,21 @@ export class BattleScene implements Scene {
       detail.position.set(0, -28);
       panel.addChild(detail);
 
-      const coinText = new PIXI.Text(`灵宠币 +${result.coins}（持有 ${PlayerData.coins}）`, {
+      const coinText = new PIXI.Text(`灵宠币 +0（持有 ${PlayerData.coins}）`, {
         fontSize: 32, fill: 0xffe082, fontWeight: 'bold',
       });
       coinText.anchor.set(0.5);
       coinText.position.set(0, 24);
       panel.addChild(coinText);
+      // 灵宠币滚动 count-up（爽感）
+      const coinCounter = { v: 0 };
+      TweenManager.to({
+        target: coinCounter, props: { v: result.coins },
+        duration: 0.5, delay: 0.3, ease: Ease.easeOutCubic,
+        onUpdate: () => {
+          coinText.text = `灵宠币 +${Math.round(coinCounter.v)}（持有 ${PlayerData.coins}）`;
+        },
+      });
 
       // 掉落：经验 + 碎片（仅展示已拥有宠的碎片入账）
       const ownedShards = result.shards.filter((s) => PlayerData.isOwned(s.petId));
@@ -1319,12 +1337,21 @@ export class BattleScene implements Scene {
         .map((s) => `${PET_MAP.get(s.petId)?.name ?? s.petId}碎片×${s.count}`)
         .join('  ');
       const rewardText = new PIXI.Text(
-        `经验 +${result.exp}${shardSummary ? `\n${shardSummary}` : ''}`,
+        `经验 +0${shardSummary ? `\n${shardSummary}` : ''}`,
         { fontSize: 24, fill: 0x9fe6b0, align: 'center' },
       );
       rewardText.anchor.set(0.5);
       rewardText.position.set(0, 78);
       panel.addChild(rewardText);
+      // 经验滚动 count-up
+      const expCounter = { v: 0 };
+      TweenManager.to({
+        target: expCounter, props: { v: result.exp },
+        duration: 0.5, delay: 0.3, ease: Ease.easeOutCubic,
+        onUpdate: () => {
+          rewardText.text = `经验 +${Math.round(expCounter.v)}${shardSummary ? `\n${shardSummary}` : ''}`;
+        },
+      });
     } else {
       const tip = new PIXI.Text('提示：消除克制敌人属性的珠子\n伤害 ×1.6，心珠可以回血', {
         fontSize: 28, fill: 0x9b8cc4, align: 'center',

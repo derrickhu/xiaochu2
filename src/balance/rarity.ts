@@ -6,7 +6,8 @@
  * 未来扩展 = 加字段 + 加读取方，不动既有判断。
  *
  * 已落地作用：
- * - 显示（code/name/color）：主题色 R→绿、SR→蓝、SSR→紫、UR→金、LR→红，逐档递进
+ * - 显示（code/name/color + ui.badge*）：R→绿、SR→蓝、SSR→紫、UR→金、LR→红
+ * - 卡边框 / 稀有度码 / 印章均读 RARITY_PROFILES，场景用 @/ui/RarityVisual 组件
  * - 抽卡概率（gachaWeight）
  * - 初始三维面板倍率（statMult）：R = 1.0 基准模板，SR/SSR/UR/LR 逐档明显递增。
  *   数值层口径：同 role + 同 rarity + 同星 + 同等级 → 三维一致；差异来自档位倍率而非手填。
@@ -16,14 +17,26 @@
 
 export type Rarity = 1 | 2 | 3 | 4 | 5;
 
+/** 稀有度在 UI 上的配色（卡边框读 accent/color，印章读 badge*） */
+export interface RarityUi {
+  /** 品质印章底色 */
+  badgeBg: number;
+  /** 品质印章文字 */
+  badgeText: number;
+  /** 品质印章描边 */
+  badgeBorder: number;
+}
+
 export interface RarityDef {
   tier: Rarity;
   /** 简码：R / SR / SSR / UR / LR */
   code: string;
   /** 中文显示名 */
   name: string;
-  /** UI 主题色（边框 / 名牌）；全项目只读此字段，禁止散落硬编码 */
+  /** UI 主强调色（边框 / 稀有度码文字）；全项目只读此字段，禁止散落硬编码 */
   color: number;
+  /** 卡面印章等次级配色 */
+  ui: RarityUi;
   /** 抽卡相对权重；某档概率 = 本档权重 / 池内出现档位的总权重 */
   gachaWeight: number;
   /** 初始三维面板倍率：乘在 role 模板基础值上。R = 1.0，越高稀有越强 */
@@ -41,11 +54,26 @@ export interface RarityDef {
 }
 
 export const RARITY_PROFILES: Readonly<Record<Rarity, RarityDef>> = {
-  1: { tier: 1, code: 'R', name: '普通', color: 0x6fd86a, gachaWeight: 60, statMult: 1.0 },
-  2: { tier: 2, code: 'SR', name: '精良', color: 0x4aa3ff, gachaWeight: 25, statMult: 1.2 },
-  3: { tier: 3, code: 'SSR', name: '稀有', color: 0xb06bff, gachaWeight: 10, statMult: 1.45 },
-  4: { tier: 4, code: 'UR', name: '史诗', color: 0xffb43d, gachaWeight: 4, statMult: 1.75 },
-  5: { tier: 5, code: 'LR', name: '传说', color: 0xff5252, gachaWeight: 1, statMult: 2.1 },
+  1: {
+    tier: 1, code: 'R', name: '普通', color: 0x6fd86a, gachaWeight: 60, statMult: 1.0,
+    ui: { badgeBg: 0x234a22, badgeText: 0x9ef098, badgeBorder: 0x6fd86a },
+  },
+  2: {
+    tier: 2, code: 'SR', name: '精良', color: 0x4aa3ff, gachaWeight: 25, statMult: 1.2,
+    ui: { badgeBg: 0x1a3560, badgeText: 0x8ec5ff, badgeBorder: 0x4aa3ff },
+  },
+  3: {
+    tier: 3, code: 'SSR', name: '稀有', color: 0xb06bff, gachaWeight: 10, statMult: 1.45,
+    ui: { badgeBg: 0x3c1860, badgeText: 0xd4a8ff, badgeBorder: 0xb06bff },
+  },
+  4: {
+    tier: 4, code: 'UR', name: '史诗', color: 0xffb43d, gachaWeight: 4, statMult: 1.75,
+    ui: { badgeBg: 0x5a4010, badgeText: 0xffe68c, badgeBorder: 0xffb43d },
+  },
+  5: {
+    tier: 5, code: 'LR', name: '传说', color: 0xff5252, gachaWeight: 1, statMult: 2.1,
+    ui: { badgeBg: 0x5a1818, badgeText: 0xffaaaa, badgeBorder: 0xff5252 },
+  },
 };
 
 export const RARITIES: readonly Rarity[] = [1, 2, 3, 4, 5];

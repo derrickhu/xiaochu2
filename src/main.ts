@@ -6,6 +6,8 @@ import '@/core/pixiUnsafeEvalPatch';
 import { Game } from '@/core/Game';
 import { SceneManager } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
+import { BgmManager } from '@/core/BgmManager';
+import { Platform } from '@/core/PlatformService';
 import { PRELOAD_IMAGES } from '@/config/Assets';
 import { TitleScene } from '@/scenes/TitleScene';
 import { BattleScene } from '@/scenes/BattleScene';
@@ -45,6 +47,10 @@ async function main(): Promise<void> {
   SceneManager.register(new PetDetailScene());
   SceneManager.register(new CodexScene());
   SceneManager.switchTo('title');
+
+  BgmManager.playMain();
+  Platform.onHide(() => BgmManager.pause());
+  Platform.onShow(() => BgmManager.resume());
 }
 
 main().catch((e) => {

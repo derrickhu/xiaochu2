@@ -5,14 +5,22 @@ import {
 import { PETS } from '../pets';
 
 describe('稀有度抽象', () => {
-  it('每档都有 code/name/color/gachaWeight', () => {
+  it('每档都有 code/name/color/ui/gachaWeight', () => {
     for (const tier of RARITIES) {
       const def = RARITY_PROFILES[tier];
       expect(def.tier).toBe(tier);
       expect(def.code.length).toBeGreaterThan(0);
       expect(def.name.length).toBeGreaterThan(0);
       expect(def.gachaWeight).toBeGreaterThan(0);
+      expect(def.ui.badgeBg).toBeDefined();
+      expect(def.ui.badgeText).toBeDefined();
+      expect(def.ui.badgeBorder).toBe(def.color);
     }
+  });
+
+  it('各档 accent 色互不相同', () => {
+    const colors = RARITIES.map((t) => getRarity(t).color);
+    expect(new Set(colors).size).toBe(colors.length);
   });
 
   it('越高稀有度抽卡权重越低', () => {

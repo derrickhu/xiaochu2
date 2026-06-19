@@ -21,7 +21,7 @@ const L = INITIAL_PET_LEVEL;
 const S = INITIAL_PET_STAR;
 const ALL_STAGES = STAGES.map((s) => s.id);
 /**
- * 第一章关卡：这些「挑战版 v0.3」契约针对入门期（初始 L5/1★）队伍设计。
+ * 第一章关卡：这些「挑战版 v0.3」契约针对入门期（初始 L1/1★）队伍设计。
  * 第二、三章为后期内容，按更高养成水平（升级/升星后）调优，不纳入入门期可达性断言。
  */
 const CH1_STAGES = STAGES.filter((s) => s.chapter === 1).map((s) => s.id);

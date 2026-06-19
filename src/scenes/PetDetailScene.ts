@@ -8,14 +8,14 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
-import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
-import { PET_MAP, PET_ROLE_NAME, type PetDef } from '@/balance/pets';
+import { UI } from '@/balance/ui';
+import { PET_MAP, type PetDef } from '@/balance/pets';
 import { getStarProfile } from '@/balance/growth';
-import { getRarity } from '@/balance/rarity';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { skillForPet } from '@/game/battle/SkillEngine';
 import { petImage } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
+import { makeRarityElementRoleLine, makeLevelStarLine, makeTeamStatsLine } from '@/ui';
 
 export interface PetDetailEnterData {
   petId: string;
@@ -51,20 +51,19 @@ export class PetDetailScene implements Scene {
 
     const pet = PET_MAP.get(this._petId);
     if (!pet) {
-      const back = this._makeButton('返回编队', 220, 60, 0x4a3a72, () => SceneManager.switchTo('team'));
+      const back = this._makeButton('返回灵宠', 220, 60, 0x4a3a72, () => SceneManager.switchTo('codex'));
       back.position.set(w / 2, h / 2);
       this.container.addChild(back);
       return;
     }
 
     // 顶栏
-    const backBtn = this._makeButton('返回', 130, 56, 0x4a3a72, () => SceneManager.switchTo('team'));
+    const backBtn = this._makeButton('返回', 130, 56, 0x4a3a72, () => SceneManager.switchTo('codex'));
     backBtn.position.set(85, Game.safeTop + 30);
     this.container.addChild(backBtn);
 
     const lv = PlayerData.petLevel(this._petId);
     const star = PlayerData.petStar(this._petId);
-    const rarityDef = getRarity(pet.rarity);
 
     // 标题：名字 + 稀有度
     const title = new PIXI.Text(`${pet.name}`, { fontSize: 40, fill: 0xffe9a6, fontWeight: 'bold' });
@@ -84,29 +83,26 @@ export class PetDetailScene implements Scene {
     }
 
     // 稀有度 / 属性 / 角色 / 等级星级
-    const meta = new PIXI.Text(
-      `${rarityDef.code} · ${ELEMENT_NAME[pet.element]} · ${PET_ROLE_NAME[pet.role]}`,
-      { fontSize: 24, fill: rarityDef.color, fontWeight: 'bold' },
-    );
-    meta.anchor.set(0.5);
-    meta.position.set(w / 2, avatarY + 140);
+    const meta = makeRarityElementRoleLine(pet.rarity, pet.element, pet.role, { size: 24 });
+    meta.position.set(w / 2 - meta.width / 2, avatarY + 140);
     this.container.addChild(meta);
 
     const maxLv = getStarProfile(star).maxLevel;
-    const lvStar = new PIXI.Text(`Lv.${lv}/${maxLv}   ${'★'.repeat(star)}${'☆'.repeat(5 - star)}`, {
-      fontSize: 28, fill: 0xffd75e, fontWeight: 'bold',
+    const lvStar = makeLevelStarLine({
+      level: lv, star, maxLevel: maxLv, size: 28, variant: 'inverse', emptyStyle: 'hollow',
     });
-    lvStar.anchor.set(0.5);
-    lvStar.position.set(w / 2, avatarY + 180);
+    lvStar.position.set(w / 2 - lvStar.width / 2, avatarY + 180);
     this.container.addChild(lvStar);
 
     // 三维
-    const stats = new PIXI.Text(
-      `攻击 ${petAtk(pet, lv, star)}    生命 ${petHp(pet, lv, star)}    回复 ${petRcv(pet, lv, star)}`,
-      { fontSize: 26, fill: 0xd9cdf5, fontWeight: 'bold' },
-    );
-    stats.anchor.set(0.5);
-    stats.position.set(w / 2, avatarY + 226);
+    const stats = makeTeamStatsLine({
+      hp: petHp(pet, lv, star),
+      atk: petAtk(pet, lv, star),
+      rcv: petRcv(pet, lv, star),
+      size: 26,
+      valueFill: 0xd9cdf5,
+    });
+    stats.position.set(w / 2 - stats.width / 2, avatarY + 226);
     this.container.addChild(stats);
 
     const skillText = new PIXI.Text(`技能：${skillForPet(pet, star).name}`, {

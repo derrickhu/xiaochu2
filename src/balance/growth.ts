@@ -40,6 +40,50 @@ export function getStarProfile(star: number): StarProfile {
   return STAR_PROFILES[star] ?? STAR_PROFILES[1];
 }
 
+/** 宠物星级上限（UI 展示用） */
+export const MAX_PET_STAR = 5;
+
+/**
+ * 等级 / 星级 UI 配色（单一真源）
+ *
+ * - card：灵宠竖卡（纸札底 + 墨字描边）
+ * - panel：编队卷轴列表等浅底面板
+ * - inverse：详情页等深底场景
+ */
+export type GrowthUiVariant = 'card' | 'panel' | 'inverse';
+
+export interface GrowthUiTokens {
+  levelColor: number;
+  levelStroke: number;
+  starFilled: number;
+  starEmpty: number;
+}
+
+export const GROWTH_UI: Readonly<Record<GrowthUiVariant, GrowthUiTokens>> = {
+  card: {
+    levelColor: 0x4a2f1a,
+    levelStroke: 0xfff0cd,
+    starFilled: 0xb5701f,
+    starEmpty: 0x787878,
+  },
+  panel: {
+    levelColor: 0x5a4632,
+    levelStroke: 0,
+    starFilled: 0xb5701f,
+    starEmpty: 0x9c8c70,
+  },
+  inverse: {
+    levelColor: 0xffd75e,
+    levelStroke: 0,
+    starFilled: 0xffd75e,
+    starEmpty: 0x6a5a40,
+  },
+};
+
+export function getGrowthUi(variant: GrowthUiVariant = 'panel'): GrowthUiTokens {
+  return GROWTH_UI[variant] ?? GROWTH_UI.panel;
+}
+
 export const GROWTH = {
   /** ── 宠物等级 ── */
   pet: {

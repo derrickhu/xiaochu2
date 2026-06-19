@@ -1,26 +1,33 @@
 /**
- * 标题场景：游戏名 + 灵宠币 + 章节关卡列表 + 底部导航（图鉴 / 招募 / 编队）
+ * 标题场景：水墨主视觉 + 灵宠币/经验 + 章节关卡列表 + 底部导航（图鉴/招募/编队）
  *
+ * 阶段七重制：复用 xiao_chu「明亮国风水墨」美术（home_bg / title_logo / nav_bar / 图标），
+ * 全部控件走 @/ui 组件库与 theme token（单点改全局）；文字主色翻为深墨以适配亮底。
  * 每次 onEnter 重建，保证通关后星数与解锁状态即时刷新。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
+import { TextureCache } from '@/core/TextureCache';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { CHAPTERS, CHAPTER_NAME, stagesOfChapter } from '@/balance/stages';
 import { getStageType } from '@/balance/stageTypes';
 import { PET_MAP } from '@/balance/pets';
-import { getRarity } from '@/balance/rarity';
 import { PlayerData } from '@/game/PlayerData';
+import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
+import {
+  COLORS, FONT_SIZE, RADIUS,
+  makeText, makePanel, makeIconButton, makeIconLabel, makeCoverBackground,
+} from '@/ui';
 import type { BattleEnterData } from './BattleScene';
 
 export class TitleScene implements Scene {
   readonly name = 'title';
   readonly container = new PIXI.Container();
 
-  /** 底部导航区高度（含招募提示一行） */
-  private static readonly BOTTOM_RESERVE = 138;
+  /** 底部导航区高度（紫祥云底栏 + 三图标 + 文字标签） */
+  private static readonly BOTTOM_RESERVE = 128;
 
   /** 当前选中章节（进入时定位到最新已解锁章节） */
   private _chapter = 1;
@@ -48,58 +55,75 @@ export class TitleScene implements Scene {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
 
-    const bg = new PIXI.Graphics();
-    bg.beginFill(0x1a1126);
-    bg.drawRect(0, 0, w, h);
-    bg.endFill();
-    this.container.addChild(bg);
+    this._buildBackground(w, h);
 
-    const title = new PIXI.Text('灵宠消消塔 2', {
-      fontSize: 64,
-      fill: 0xffe9a6,
-      fontWeight: 'bold',
-    });
-    title.anchor.set(0.5);
-    title.position.set(w / 2, Game.safeTop + 72);
-    this.container.addChild(title);
+    // 顶栏：灵宠币 + 经验（资源图标置顶，更符合手游习惯）
+    this._buildResourceBar(w, Game.safeTop + 36);
 
-    // 资源：灵宠币 + 经验池（升级材料，通关掉落）
-    const resText = new PIXI.Text(
-      `灵宠币 ${PlayerData.coins}    经验 ${PlayerData.exp}`,
-      { fontSize: 26, fill: 0xffd75e, fontWeight: 'bold' },
-    );
-    resText.anchor.set(0.5);
-    resText.position.set(w / 2, Game.safeTop + 124);
-    this.container.addChild(resText);
+    // 标题 logo（水墨书法「灵宠消消塔」，置于资源条下方，留足间距防重叠）
+    const logoTex = TextureCache.get(UI_IMAGES.titleLogo);
+    const logoY = Game.safeTop + 168;
+    if (logoTex) {
+      const logo = new PIXI.Sprite(logoTex);
+      logo.anchor.set(0.5);
+      const logoW = 340;
+      logo.scale.set(logoW / logoTex.width);
+      logo.position.set(w / 2, logoY);
+      this.container.addChild(logo);
+    } else {
+      const title = makeText('灵宠消消塔', { size: FONT_SIZE.xl, fill: COLORS.textTitle, bold: true, anchor: 0.5 });
+      title.position.set(w / 2, logoY);
+      this.container.addChild(title);
+    }
 
-    const resHint = new PIXI.Text('通关获经验/碎片 · 「编队」点灵宠升级升星', {
-      fontSize: 18, fill: 0x9b8cc4,
-    });
-    resHint.anchor.set(0.5);
-    resHint.position.set(w / 2, Game.safeTop + 152);
-    this.container.addChild(resHint);
-
-    // 中部：章节 + 关卡（底部留给导航，不再被按钮遮挡）
-    this._buildChapterNav(w, Game.safeTop + 188);
-    this._buildStageList(w, Game.safeTop + 240);
+    this._buildChapterNav(w, Game.safeTop + 268);
+    this._buildStageList(w, Game.safeTop + 320);
     this._buildBottomNav(w, h);
   }
 
-  /** 章节切换：◀ 章节名 ▶（未解锁章节灰显不可切） */
+  /** 主背景：home_bg cover 铺满，缺图回退暖米白 */
+  private _buildBackground(w: number, h: number): void {
+    this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.home, w, h));
+  }
+
+  /** 灵宠币 + 经验，左对齐并排 */
+  private _buildResourceBar(w: number, y: number): void {
+    const padX = 48;
+    const coin = makeIconLabel({
+      iconPath: UI_IMAGES.iconCoin, iconSize: 36,
+      caption: '灵宠币', layout: 'stacked', valueGap: 12,
+      text: `${PlayerData.coins}`, size: FONT_SIZE.md, fill: COLORS.textMain,
+    });
+    const exp = makeIconLabel({
+      iconPath: UI_IMAGES.iconExp, iconSize: 36,
+      caption: '经验', layout: 'stacked', valueGap: 12,
+      text: `${PlayerData.exp}`, size: FONT_SIZE.md, fill: COLORS.textMain,
+    });
+    const gap = 40;
+    coin.position.set(padX, y);
+    exp.position.set(padX + coin.width + gap, y);
+    this.container.addChild(coin, exp);
+  }
+
+  /** 章节切换：◀ 章节名 ▶ */
   private _buildChapterNav(w: number, y: number): void {
     const chapterUnlocked = PlayerData.isChapterUnlocked(this._chapter);
     const name = CHAPTER_NAME[this._chapter] ?? `第${this._chapter}章`;
     const idx = CHAPTERS.indexOf(this._chapter);
 
-    const label = new PIXI.Text(`— ${name} —`, { fontSize: 30, fill: chapterUnlocked ? 0xffe9a6 : 0x6a5d8a });
-    label.anchor.set(0.5);
+    const label = makeText(`— ${name} —`, {
+      size: FONT_SIZE.md, fill: chapterUnlocked ? COLORS.textTitle : COLORS.textDisabled,
+      bold: true, anchor: 0.5,
+    });
     label.position.set(w / 2, y);
     this.container.addChild(label);
 
     const mkArrow = (text: string, x: number, targetChapter: number | null): void => {
       const enabled = targetChapter !== null && PlayerData.isChapterUnlocked(targetChapter);
-      const arrow = new PIXI.Text(text, { fontSize: 40, fill: enabled ? 0xffd75e : 0x4a3a72, fontWeight: 'bold' });
-      arrow.anchor.set(0.5);
+      const arrow = makeText(text, {
+        size: FONT_SIZE.lg, fill: enabled ? COLORS.accent : COLORS.panelBorderSoft,
+        bold: true, anchor: 0.5,
+      });
       arrow.position.set(x, y);
       if (enabled) {
         arrow.eventMode = 'static';
@@ -126,27 +150,27 @@ export class TitleScene implements Scene {
       const item = new PIXI.Container();
       item.position.set(w / 2, startY + i * (itemH + gap) + itemH / 2);
 
-      const itemBg = new PIXI.Graphics();
-      itemBg.beginFill(unlocked ? 0x2e2148 : 0x221a33);
-      itemBg.lineStyle(3, unlocked ? ORB_COLOR[stage.element] : 0x3a2d58, unlocked ? 1 : 0.5);
-      itemBg.drawRoundedRect(-itemW / 2, -itemH / 2, itemW, itemH, 18);
-      itemBg.endFill();
+      const itemBg = makePanel({
+        width: itemW, height: itemH, radius: RADIUS.card,
+        bg: unlocked ? COLORS.panelBg : COLORS.panelBgAlt,
+        bgAlpha: unlocked ? 0.96 : 0.82,
+        border: unlocked ? ORB_COLOR[stage.element] : COLORS.panelBorderSoft,
+        borderAlpha: unlocked ? 1 : 0.6,
+      });
       item.addChild(itemBg);
 
-      const nameText = new PIXI.Text(
-        `${stage.chapter}-${stage.index}  ${stage.name}`,
-        { fontSize: 27, fill: unlocked ? 0xffffff : 0x6a5d8a, fontWeight: 'bold' },
-      );
-      nameText.anchor.set(0, 0.5);
+      const nameText = makeText(`${stage.chapter}-${stage.index}  ${stage.name}`, {
+        size: FONT_SIZE.md, fill: unlocked ? COLORS.textMain : COLORS.textDisabled,
+        bold: true, anchor: [0, 0.5],
+      });
       nameText.position.set(-itemW / 2 + 28, -14);
       item.addChild(nameText);
 
       // 关卡类型徽标（颜色取自 stageTypes 单一真源）
       if (stage.type !== 'normal') {
-        const badge = new PIXI.Text(typeDef.name, {
-          fontSize: 18, fill: unlocked ? typeDef.color : 0x5a4d78, fontWeight: 'bold',
+        const badge = makeText(typeDef.name, {
+          size: FONT_SIZE.xs, fill: unlocked ? typeDef.color : COLORS.textDisabled, bold: true, anchor: [0, 0.5],
         });
-        badge.anchor.set(0, 0.5);
         badge.position.set(-itemW / 2 + 28 + nameText.width + 14, -14);
         item.addChild(badge);
       }
@@ -154,21 +178,21 @@ export class TitleScene implements Scene {
       const tagSuffix = stage.hintTags && stage.hintTags.length > 0
         ? ` · ${stage.hintTags.join('·')}`
         : '';
-      const subText = new PIXI.Text(
+      const subText = makeText(
         unlocked
           ? `${ELEMENT_NAME[stage.element]} · ${stage.enemies.length}波${tagSuffix}`
           : (stage.index === 1 ? '通关上一章 Boss 解锁' : '通关上一关解锁'),
-        { fontSize: 19, fill: unlocked ? 0x9b8cc4 : 0x5a4d78 },
+        { size: FONT_SIZE.xs, fill: unlocked ? COLORS.textSub : COLORS.textDisabled, anchor: [0, 0.5] },
       );
-      subText.anchor.set(0, 0.5);
       subText.position.set(-itemW / 2 + 28, 18);
       item.addChild(subText);
 
-      const rightText = new PIXI.Text(
+      const rightText = makeText(
         unlocked ? '★'.repeat(stars) + '☆'.repeat(3 - stars) : '未解锁',
-        unlocked ? { fontSize: 32, fill: 0xffd75e } : { fontSize: 24, fill: 0x5a4d78 },
+        unlocked
+          ? { size: FONT_SIZE.lg, fill: COLORS.accent, anchor: [1, 0.5] }
+          : { size: FONT_SIZE.sm, fill: COLORS.textDisabled, anchor: [1, 0.5] },
       );
-      rightText.anchor.set(1, 0.5);
       rightText.position.set(itemW / 2 - 24, 0);
       item.addChild(rightText);
 
@@ -184,62 +208,37 @@ export class TitleScene implements Scene {
     });
   }
 
-  /** 底部导航：招募进度 + 图鉴 / 招募 / 编队 */
+  /** 底部导航：灵宠 / 招募 / 编队 */
   private _buildBottomNav(w: number, h: number): void {
     const reserve = TitleScene.BOTTOM_RESERVE;
     const navTop = h - reserve;
-    const next = PlayerData.nextRecruit();
     const price = PlayerData.nextRecruitPrice();
-    const coins = PlayerData.coins;
-    const ratio = Math.min(1, coins / price);
-    const canRecruit = coins >= price;
+    const canRecruit = PlayerData.coins >= price;
 
-    // 底栏背景
-    const barBg = new PIXI.Graphics();
-    barBg.beginFill(0x120e1c, 0.96);
-    barBg.lineStyle(2, 0x3a2d58, 0.8);
-    barBg.drawRect(0, navTop, w, reserve);
-    barBg.endFill();
-    this.container.addChild(barBg);
-
-    // 招募进度（单行 + 细进度条，不占中部空间）
-    let hint: string;
-    if (next) {
-      const pet = PET_MAP.get(next);
-      const rd = pet ? getRarity(pet.rarity) : null;
-      const who = pet ? `${rd?.code} ${pet.name}` : '神秘灵宠';
-      hint = coins >= price ? `可招募 ${who}（${price} 币）` : `${who} 还差 ${price - coins} 币`;
+    // 底栏背景：紫祥云贴图（缺图回退纯色条）
+    const navTex = TextureCache.get(UI_IMAGES.navBar);
+    if (navTex) {
+      const navBg = new PIXI.Sprite(navTex);
+      navBg.anchor.set(0.5, 1);
+      const scale = w / navTex.width;
+      navBg.scale.set(scale);
+      navBg.position.set(w / 2, h);
+      this.container.addChild(navBg);
     } else {
-      hint = coins >= price
-        ? `已全收集 · 招募转碎片（${price} 币）`
-        : `已全收集 · 转碎片还差 ${price - coins} 币`;
+      const barBg = new PIXI.Graphics();
+      barBg.beginFill(COLORS.navBarFallback, 0.96);
+      barBg.drawRect(0, navTop, w, reserve);
+      barBg.endFill();
+      this.container.addChild(barBg);
     }
-    const hintText = new PIXI.Text(hint, { fontSize: 18, fill: 0x9b8cc4 });
-    hintText.anchor.set(0.5);
-    hintText.position.set(w / 2, navTop + 22);
-    this.container.addChild(hintText);
 
-    const barW = 480;
-    const barH = 8;
-    const barX = w / 2 - barW / 2;
-    const barY = navTop + 42;
-    const track = new PIXI.Graphics();
-    track.beginFill(0x2e2148);
-    track.drawRoundedRect(barX, barY, barW, barH, barH / 2);
-    track.endFill();
-    this.container.addChild(track);
-    const fill = new PIXI.Graphics();
-    fill.beginFill(ratio >= 1 ? 0x6fd86a : 0xffd75e);
-    fill.drawRoundedRect(barX, barY, Math.max(barH, barW * ratio), barH, barH / 2);
-    fill.endFill();
-    this.container.addChild(fill);
-
-    // 三按钮均分底栏
-    const btnY = navTop + 92;
-    const slots = [
-      { label: '图鉴', color: 0x3a5a8c, x: w * 0.2, onTap: () => SceneManager.switchTo('codex') },
+    // 三按钮均分底栏（贴图图标 + 文字标签，略上移、略放大）
+    const navIconSize = 68;
+    const btnY = navTop + 56;
+    const slots: { label: string; icon: string; x: number; onTap: () => void; active?: boolean }[] = [
+      { label: '灵宠', icon: UI_IMAGES.navPet, x: w * 0.2, onTap: () => SceneManager.switchTo('codex') },
       {
-        label: '招募', color: canRecruit ? 0x8c5ad6 : 0x35303f, x: w * 0.5, onTap: () => {
+        label: '招募', icon: UI_IMAGES.iconRecruit, x: w * 0.5, active: canRecruit, onTap: () => {
           const result = PlayerData.recruit();
           if (!result) {
             Platform.showToast(`灵宠币不足（需 ${price}）`);
@@ -256,10 +255,15 @@ export class TitleScene implements Scene {
           this._refresh();
         },
       },
-      { label: '编队', color: 0x4a3a72, x: w * 0.8, onTap: () => SceneManager.switchTo('team') },
+      { label: '编队', icon: UI_IMAGES.navTeam, x: w * 0.8, onTap: () => SceneManager.switchTo('team') },
     ];
     for (const s of slots) {
-      const btn = this._makeNavButton(s.label, s.color, s.onTap);
+      const btn = makeIconButton({
+        iconPath: s.icon, iconSize: navIconSize,
+        label: s.label, labelSize: 23,
+        labelColor: s.active ? COLORS.navTextActive : COLORS.navText,
+        onTap: s.onTap,
+      });
       btn.position.set(s.x, btnY);
       this.container.addChild(btn);
     }
@@ -268,24 +272,5 @@ export class TitleScene implements Scene {
   private _refresh(): void {
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
     this._build();
-  }
-
-  private _makeNavButton(label: string, color: number, onTap: () => void): PIXI.Container {
-    const btnW = 128;
-    const btnH = 50;
-    const btn = new PIXI.Container();
-    const bg = new PIXI.Graphics();
-    bg.beginFill(color);
-    bg.lineStyle(2, 0xffe082);
-    bg.drawRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, btnH / 2);
-    bg.endFill();
-    btn.addChild(bg);
-    const text = new PIXI.Text(label, { fontSize: 26, fill: 0xffffff, fontWeight: 'bold' });
-    text.anchor.set(0.5);
-    btn.addChild(text);
-    btn.eventMode = 'static';
-    btn.cursor = 'pointer';
-    btn.on('pointertap', onTap);
-    return btn;
   }
 }

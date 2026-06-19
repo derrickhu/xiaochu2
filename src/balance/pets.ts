@@ -13,7 +13,7 @@ import type { Element } from './combat';
 import { PET_SKILL_IDS } from './skills';
 import type { PetRole, PetTraitDef, StatBlock, GrowthBlock } from './petRoles';
 import type { Rarity } from './rarity';
-export { PET_ROLE_NAME, type PetRole, type PetTraitDef } from './petRoles';
+export { PET_ROLE_NAME, getPetRole, getStatUi, STAT_UI, type PetRole, type PetTraitDef, type StatKey, type StatUiDef } from './petRoles';
 export type { Rarity } from './rarity';
 
 export interface PetDef {
@@ -147,5 +147,5 @@ export const DEFAULT_TEAM: readonly string[] = [
 export const TEAM_SIZE = 5;
 
 /** 新拥有灵宠的初始等级/星级（招募与初始阵容入手时的基线，养成由此向上推进） */
-export const INITIAL_PET_LEVEL = 5;
+export const INITIAL_PET_LEVEL = 1;
 export const INITIAL_PET_STAR = 1;
