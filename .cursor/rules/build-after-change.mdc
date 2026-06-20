@@ -1,0 +1,16 @@
+---
+description: xiaochu2 代码改动后必须重新构建，确保 minigame/game-bundle.js 与源码同步
+alwaysApply: true
+---
+
+# xiaochu2 改动后重新构建
+
+在 `xiaochu2/` 内完成任何源码、资源或配置改动后，**必须**在当次任务结束前执行：
+
+```bash
+cd xiaochu2 && npm run build
+```
+
+- 微信/抖音小游戏运行的是 `minigame/game-bundle.js`，不构建则开发者工具里看不到最新改动。
+- 若改动涉及公式/存档逻辑，额外跑 `npm test -- --run`。
+- 构建失败须先修复再继续，不得留 broken bundle。
