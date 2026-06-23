@@ -4,16 +4,21 @@ import { DROP_TABLES, getDropTable } from '../drops';
 import { STAGE_TYPE_PROFILES, getStageType } from '../stageTypes';
 import { MECHANICS, resolveMechanics } from '../stageMechanics';
 import { ENEMY_MAP } from '../enemies';
+import { CREATURE_MAP } from '../creatures';
 import { PET_MAP } from '../pets';
 import { stageDrops } from '@/formulas/economyOutput';
 
 describe('关卡数据完整性（单一真源约束）', () => {
-  it('每关引用的掉落表 / 敌人 / 类型 / 机制均存在', () => {
+  it('每关引用的掉落表 / 遭遇 / 类型 / 机制均存在', () => {
     for (const s of STAGES) {
       expect(getDropTable(s.dropTableId), `掉落表 ${s.dropTableId} @ ${s.id}`).toBeDefined();
       expect(STAGE_TYPE_PROFILES[s.type], `类型 ${s.type} @ ${s.id}`).toBeDefined();
-      for (const e of s.enemies) {
-        expect(ENEMY_MAP.has(e), `敌人 ${e} @ ${s.id}`).toBe(true);
+      for (const e of s.encounters) {
+        if (e.kind === 'mob') {
+          expect(ENEMY_MAP.has(e.id), `杂怪 ${e.id} @ ${s.id}`).toBe(true);
+        } else {
+          expect(CREATURE_MAP.has(e.id), `生物 ${e.id} @ ${s.id}`).toBe(true);
+        }
       }
       for (const m of s.mechanics ?? []) {
         expect(MECHANICS[m], `机制 ${m} @ ${s.id}`).toBeDefined();

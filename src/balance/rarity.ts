@@ -37,8 +37,13 @@ export interface RarityDef {
   color: number;
   /** 卡面印章等次级配色 */
   ui: RarityUi;
-  /** 抽卡相对权重；某档概率 = 本档权重 / 池内出现档位的总权重 */
+  /** 抽卡相对权重；某档概率 = 本档权重 / 池内出现档位的总权重（两段式抽卡用） */
   gachaWeight: number;
+  /**
+   * 标准卡池单抽出该档的绝对概率（与 statMult 解耦，五档之和 = 1）。
+   * 抽卡系统按此出货；gachaWeight 仅用于「池内动态档位」归一化。
+   */
+  gachaRate: number;
   /** 初始三维面板倍率：乘在 role 模板基础值上。R = 1.0，越高稀有越强 */
   statMult: number;
 
@@ -55,23 +60,23 @@ export interface RarityDef {
 
 export const RARITY_PROFILES: Readonly<Record<Rarity, RarityDef>> = {
   1: {
-    tier: 1, code: 'R', name: '普通', color: 0x6fd86a, gachaWeight: 60, statMult: 1.0,
+    tier: 1, code: 'R', name: '普通', color: 0x6fd86a, gachaWeight: 60, gachaRate: 0.60, statMult: 1.0,
     ui: { badgeBg: 0x234a22, badgeText: 0x9ef098, badgeBorder: 0x6fd86a },
   },
   2: {
-    tier: 2, code: 'SR', name: '精良', color: 0x4aa3ff, gachaWeight: 25, statMult: 1.2,
+    tier: 2, code: 'SR', name: '精良', color: 0x4aa3ff, gachaWeight: 25, gachaRate: 0.265, statMult: 1.2,
     ui: { badgeBg: 0x1a3560, badgeText: 0x8ec5ff, badgeBorder: 0x4aa3ff },
   },
   3: {
-    tier: 3, code: 'SSR', name: '稀有', color: 0xb06bff, gachaWeight: 10, statMult: 1.45,
+    tier: 3, code: 'SSR', name: '稀有', color: 0xb06bff, gachaWeight: 10, gachaRate: 0.10, statMult: 1.45,
     ui: { badgeBg: 0x3c1860, badgeText: 0xd4a8ff, badgeBorder: 0xb06bff },
   },
   4: {
-    tier: 4, code: 'UR', name: '史诗', color: 0xffb43d, gachaWeight: 4, statMult: 1.75,
+    tier: 4, code: 'UR', name: '史诗', color: 0xffb43d, gachaWeight: 4, gachaRate: 0.03, statMult: 1.75,
     ui: { badgeBg: 0x5a4010, badgeText: 0xffe68c, badgeBorder: 0xffb43d },
   },
   5: {
-    tier: 5, code: 'LR', name: '传说', color: 0xff5252, gachaWeight: 1, statMult: 2.1,
+    tier: 5, code: 'LR', name: '传说', color: 0xff5252, gachaWeight: 1, gachaRate: 0.005, statMult: 2.1,
     ui: { badgeBg: 0x5a1818, badgeText: 0xffaaaa, badgeBorder: 0xff5252 },
   },
 };
@@ -81,6 +86,11 @@ export const RARITIES: readonly Rarity[] = [1, 2, 3, 4, 5];
 /** 取稀有度档案，越界回退到最低档 */
 export function getRarity(tier: Rarity): RarityDef {
   return RARITY_PROFILES[tier] ?? RARITY_PROFILES[1];
+}
+
+/** 标准卡池单抽各档绝对概率（gachaRate，和为 1） */
+export function standardGachaRates(): Map<Rarity, number> {
+  return new Map(RARITIES.map((t) => [t, getRarity(t).gachaRate]));
 }
 
 /**

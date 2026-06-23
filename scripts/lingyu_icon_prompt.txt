@@ -1,0 +1,19 @@
+Mobile game UI currency icon — Spirit Jade / 灵玉 (premium gacha currency).
+
+STYLE (match existing game currency icons):
+- 2D Chinese fantasy cultivation mobile game, soft cel-shaded illustration
+- Polished glossy highlights, inner mystical glow, tiny white sparkles
+- Single centered object, fills 85% of square frame
+- Plain solid light gray #E0E0E0 background (for rembg cutout)
+
+SUBJECT (distinct from灵宠币 egg gem & 经验 purple orb):
+- Sacred floating jade bi disc: circular milky jade with square center hole
+- Semi-translucent white-cyan jade, subtle green veins, cloud patterns inside
+- Ornate gold filigree ring + four gold cloud/ruyi motifs around the bi
+- Upright ice-blue spirit crystal shard rising from top (not egg, not sphere)
+- Soft cyan-white aura, premium elegant mystical artifact
+
+COLOR: milky jade white, pale cyan, ice blue, gold accents only
+AVOID: teal-green egg, purple orb, paw prints, characters, animals
+
+NO TEXT, no letters, no numbers, no watermark, no UI frame.

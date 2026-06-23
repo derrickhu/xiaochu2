@@ -8,12 +8,14 @@ import { Platform } from '@/core/PlatformService';
 import { STAGES, type StageDef } from '@/balance/stages';
 import {
   PETS, PET_MAP, DEFAULT_TEAM, TEAM_SIZE,
-  INITIAL_PET_LEVEL, INITIAL_PET_STAR,
+  INITIAL_PET_LEVEL, INITIAL_PET_STAR, type PetDef,
 } from '@/balance/pets';
+import type { Element } from '@/balance/combat';
 import { getStarProfile } from '@/balance/growth';
 import { ECONOMY } from '@/balance/economy';
 import { recruitPrice, starUpShardCost } from '@/formulas/economyOutput';
 import { petExpToNext } from '@/formulas/growth';
+import { pullOne, pullTen, type GachaState, type PullOutcome } from '@/game/gacha/Gacha';
 
 const SAVE_KEY = 'xiaochu2_save_v2';
 const LEGACY_SAVE_KEY = 'xiaochu2_save_v1';
@@ -29,6 +31,12 @@ export interface OwnedPet {
 interface SaveData {
   version: number;
   coins: number;
+  /** 抽卡货币：灵玉 */
+  lingyu: number;
+  /** 招募券（十连券等，预留） */
+  tickets: number;
+  /** 抽卡硬保底计数（连续未出 SSR+ 抽数） */
+  gachaSinceHigh: number;
   /** 升级经验池（关卡掉落，跨宠共享，升级时按需消耗） */
   exp: number;
   /** stageId → 最佳星数（1~3） */
@@ -37,8 +45,15 @@ interface SaveData {
   team: string[];
   /** 已拥有灵宠 → 养成进度 */
   ownedPets: Record<string, OwnedPet>;
+  /** 未拥有灵宠的碎片暂存（解锁该宠时并入 OwnedPet.shards，修复碎片丢弃） */
+  pendingShards: Record<string, number>;
   /** 已招募新宠次数（招募定价用，含碎片溢出招募） */
   recruitedCount: number;
+  /**
+   * 已收录生物 id（阶段九）：击败其高级形态即收录，进入「可获取池」。
+   * 初始 5 只赠送宠开局即同时进入 ownedPets / discovered / team，避免状态割裂。
+   */
+  discovered: string[];
 }
 
 /** 招募结果 */
@@ -57,11 +72,16 @@ class PlayerDataClass {
     return {
       version: SAVE_VERSION,
       coins: 0,
+      lingyu: ECONOMY.gacha.starterLingyu,
+      tickets: 0,
+      gachaSinceHigh: 0,
       exp: 0,
       stars: {},
       team: [...DEFAULT_TEAM],
       ownedPets: this._initialOwned(),
+      pendingShards: {},
       recruitedCount: 0,
+      discovered: [...DEFAULT_TEAM],
     };
   }
 
@@ -101,14 +121,50 @@ class PlayerDataClass {
     return {
       version: SAVE_VERSION,
       coins: typeof parsed.coins === 'number' ? parsed.coins : 0,
+      lingyu: typeof parsed.lingyu === 'number' ? parsed.lingyu : ECONOMY.gacha.starterLingyu,
+      tickets: typeof parsed.tickets === 'number' ? parsed.tickets : 0,
+      gachaSinceHigh: typeof parsed.gachaSinceHigh === 'number' ? parsed.gachaSinceHigh : 0,
       exp: typeof parsed.exp === 'number' ? parsed.exp : 0,
       stars: parsed.stars && typeof parsed.stars === 'object' ? parsed.stars : {},
       ownedPets: owned,
+      pendingShards: this._sanitizeShardLedger(parsed.pendingShards, owned),
       team: this._sanitizeTeam(parsed.team, owned),
       recruitedCount: typeof parsed.recruitedCount === 'number'
         ? parsed.recruitedCount
         : this._countNonInitial(owned),
+      discovered: this._sanitizeDiscovered(parsed.discovered, owned),
     };
+  }
+
+  /** 收录列表清洗：仅保留合法生物 id；并入初始赠送 + 已拥有，保证可获取池一致 */
+  private _sanitizeDiscovered(
+    discovered: unknown,
+    owned: Record<string, OwnedPet>,
+  ): string[] {
+    const set = new Set<string>(DEFAULT_TEAM);
+    for (const id of Object.keys(owned)) set.add(id);
+    if (Array.isArray(discovered)) {
+      for (const id of discovered) {
+        if (typeof id === 'string' && PET_MAP.has(id)) set.add(id);
+      }
+    }
+    return [...set];
+  }
+
+  /** 暂存碎片清洗：仅保留合法宠 id、非负整数，且必须是「未拥有」的宠 */
+  private _sanitizeShardLedger(
+    ledger: unknown,
+    owned: Record<string, OwnedPet>,
+  ): Record<string, number> {
+    const out: Record<string, number> = {};
+    if (ledger && typeof ledger === 'object') {
+      for (const [id, v] of Object.entries(ledger as Record<string, unknown>)) {
+        if (!PET_MAP.has(id) || owned[id]) continue;
+        const n = typeof v === 'number' ? Math.floor(v) : 0;
+        if (n > 0) out[id] = n;
+      }
+    }
+    return out;
   }
 
   /** v1 → v2：保留 coins/stars/team，拥有列表 = 默认队 ∪ 原队伍 */
@@ -124,11 +180,16 @@ class PlayerDataClass {
     return {
       version: SAVE_VERSION,
       coins: typeof legacy.coins === 'number' ? legacy.coins : 0,
+      lingyu: ECONOMY.gacha.starterLingyu,
+      tickets: 0,
+      gachaSinceHigh: 0,
       exp: 0,
       stars: legacy.stars && typeof legacy.stars === 'object' ? (legacy.stars as Record<string, number>) : {},
       ownedPets: owned,
+      pendingShards: {},
       team: this._sanitizeTeam(legacy.team, owned),
       recruitedCount: this._countNonInitial(owned),
+      discovered: this._sanitizeDiscovered(undefined, owned),
     };
   }
 
@@ -191,7 +252,9 @@ class PlayerDataClass {
   }
 
   petShards(petId: string): number {
-    return this._data.ownedPets[petId]?.shards ?? 0;
+    const o = this._data.ownedPets[petId];
+    if (o) return o.shards;
+    return this._data.pendingShards[petId] ?? 0;
   }
 
   get exp(): number {
@@ -249,9 +312,15 @@ class PlayerDataClass {
   }
 
   addShards(petId: string, amount: number): void {
+    if (amount <= 0 || !PET_MAP.has(petId)) return;
     const o = this._data.ownedPets[petId];
-    if (!o || amount <= 0) return;
-    o.shards += Math.floor(amount);
+    if (o) {
+      o.shards += Math.floor(amount);
+    } else {
+      // 未拥有宠：碎片进暂存账本，解锁时并入（修复碎片丢弃）
+      this._data.pendingShards[petId] =
+        (this._data.pendingShards[petId] ?? 0) + Math.floor(amount);
+    }
     this._save();
   }
 
@@ -280,6 +349,15 @@ class PlayerDataClass {
     return this._data.coins;
   }
 
+  /** 扣灵宠币（不足返回 false） */
+  spendCoins(amount: number): boolean {
+    if (amount <= 0) return true;
+    if (this._data.coins < amount) return false;
+    this._data.coins -= Math.floor(amount);
+    this._save();
+    return true;
+  }
+
   get recruitedCount(): number {
     return this._data.recruitedCount;
   }
@@ -296,6 +374,7 @@ class PlayerDataClass {
         level: INITIAL_PET_LEVEL, star: INITIAL_PET_STAR, shards: 0,
       };
       this._data.recruitedCount++;
+      if (!this._data.discovered.includes(target)) this._data.discovered.push(target);
       this._save();
       return { petId: target, duplicate: false };
     }
@@ -316,6 +395,118 @@ class PlayerDataClass {
     const owned = this.ownedPets;
     if (owned.length === 0) return null;
     return [...owned].sort((a, b) => (PET_MAP.get(b)!.rarity - PET_MAP.get(a)!.rarity))[0];
+  }
+
+  // ═══════════ 抽卡（灵玉） ═══════════
+
+  get lingyu(): number {
+    return this._data.lingyu;
+  }
+
+  get tickets(): number {
+    return this._data.tickets;
+  }
+
+  /** 抽卡硬保底计数（已连续未出 SSR+ 抽数） */
+  get gachaSinceHigh(): number {
+    return this._data.gachaSinceHigh;
+  }
+
+  addLingyu(amount: number): void {
+    if (amount === 0) return;
+    this._data.lingyu = Math.max(0, this._data.lingyu + Math.floor(amount));
+    this._save();
+  }
+
+  /** 解锁一只宠（抽卡/赠送）：并入暂存碎片，初始等级/星级 */
+  private _unlockPet(petId: string): void {
+    if (this.isOwned(petId)) return;
+    const pending = this._data.pendingShards[petId] ?? 0;
+    this._data.ownedPets[petId] = {
+      level: INITIAL_PET_LEVEL,
+      star: INITIAL_PET_STAR,
+      shards: pending,
+    };
+    delete this._data.pendingShards[petId];
+    this._data.recruitedCount++;
+    // 拥有即视为已收录（保证可获取池/图鉴一致）
+    if (!this._data.discovered.includes(petId)) this._data.discovered.push(petId);
+  }
+
+  /** 出货池 = 可获取池（按属性可拆分），映射为 PetDef 列表 */
+  private _gachaPool(element?: Element): PetDef[] {
+    const ids = new Set(this.availablePool(element));
+    return PETS.filter((p) => ids.has(p.id));
+  }
+
+  /** 单抽：扣灵玉，结算保底/重复转碎片。灵玉不足返回 null。element 限定五行召唤池 */
+  pullGachaSingle(rng: () => number = Math.random, element?: Element): PullOutcome | null {
+    if (this._data.lingyu < ECONOMY.gacha.singleCost) return null;
+    this._data.lingyu -= ECONOMY.gacha.singleCost;
+    const state: GachaState = { sinceHigh: this._data.gachaSinceHigh };
+    const outcome = pullOne(rng, state, (id) => this.isOwned(id), 1, this._gachaPool(element));
+    this._applyPull(outcome);
+    this._data.gachaSinceHigh = state.sinceHigh;
+    this._save();
+    return outcome;
+  }
+
+  /** 十连：扣灵玉，含 SR+ 保底。灵玉不足返回 null。element 限定五行召唤池 */
+  pullGachaTen(rng: () => number = Math.random, element?: Element): PullOutcome[] | null {
+    if (this._data.lingyu < ECONOMY.gacha.tenCost) return null;
+    this._data.lingyu -= ECONOMY.gacha.tenCost;
+    const state: GachaState = { sinceHigh: this._data.gachaSinceHigh };
+    const outcomes = pullTen(rng, state, (id) => this.isOwned(id), this._gachaPool(element));
+    for (const o of outcomes) this._applyPull(o);
+    this._data.gachaSinceHigh = state.sinceHigh;
+    this._save();
+    return outcomes;
+  }
+
+  /** 落库单次抽卡结果：新宠解锁 / 重复转碎片（不触发 _save，批量后统一存） */
+  private _applyPull(o: PullOutcome): void {
+    if (o.duplicate) {
+      const owned = this._data.ownedPets[o.petId];
+      if (owned) owned.shards += o.shards;
+      else this._data.pendingShards[o.petId] =
+        (this._data.pendingShards[o.petId] ?? 0) + o.shards;
+    } else {
+      this._unlockPet(o.petId);
+    }
+  }
+
+  // ═══════════ 收录 / 可获取池（阶段九） ═══════════
+
+  /** 已收录生物 id（按 PETS 表顺序，UI 稳定） */
+  get discovered(): readonly string[] {
+    return PETS.filter((p) => this._data.discovered.includes(p.id)).map((p) => p.id);
+  }
+
+  isDiscovered(id: string): boolean {
+    return this._data.discovered.includes(id);
+  }
+
+  /**
+   * 收录一只生物（战斗击败其高级形态触发）。
+   * @returns true = 本次新收录（用于顶部提示）
+   */
+  discover(id: string): boolean {
+    if (!PET_MAP.has(id)) return false;
+    if (this._data.discovered.includes(id)) return false;
+    this._data.discovered.push(id);
+    this._save();
+    return true;
+  }
+
+  /**
+   * 可获取池 = 已收录 ∪ 初始赠送 ∪ 已拥有；召唤/商店仅在此池内出货。
+   * @param element 仅取该五行属性（按五行拆分宠物池）
+   */
+  availablePool(element?: Element): readonly string[] {
+    return PETS
+      .filter((p) => this._data.discovered.includes(p.id))
+      .filter((p) => !element || p.element === element)
+      .map((p) => p.id);
   }
 
   // ═══════════ 图鉴收录 ═══════════
@@ -387,12 +578,26 @@ class PlayerDataClass {
     return first ? this.isUnlocked(first) : false;
   }
 
-  /** 通关结算：星数取历史最佳，灵宠币直接累加 */
-  recordClear(stageId: string, stars: number, coins: number): void {
+  /**
+   * 通关结算：星数取历史最佳，灵宠币累加；首通额外发灵玉（里程碑产出）。
+   * @returns 本次首通发放的灵玉（非首通为 0）
+   */
+  recordClear(stageId: string, stars: number, coins: number): number {
     const best = this._data.stars[stageId] ?? 0;
+    const firstClear = best === 0 && stars > 0;
     if (stars > best) this._data.stars[stageId] = stars;
     this._data.coins += coins;
+
+    let lingyu = 0;
+    if (firstClear) {
+      const stage = STAGES.find((s) => s.id === stageId);
+      lingyu = stage?.isBoss
+        ? ECONOMY.milestone.bossFirstClearLingyu
+        : ECONOMY.milestone.firstClearLingyu;
+      this._data.lingyu += lingyu;
+    }
     this._save();
+    return lingyu;
   }
 
   private _save(): void {

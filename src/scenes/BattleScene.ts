@@ -16,12 +16,12 @@ import { ScreenShake } from '@/core/ScreenShake';
 import { FlashOverlay } from '@/core/FlashOverlay';
 import { Platform } from '@/core/PlatformService';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
-import { COMBAT, type Element } from '@/balance/combat';
+import { COMBAT, counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
 import { SKILL_VFX_MAP } from '@/balance/skillVfx';
 import { STAGES } from '@/balance/stages';
 import { PET_MAP } from '@/balance/pets';
 import { comboMultiplier } from '@/formulas/damage';
-import { enemyImage, petFrameImage, petImage, ORB_IMAGES } from '@/config/Assets';
+import { enemyImage, petFrameImage, petAvatarPath, battleBgImage, ORB_IMAGES } from '@/config/Assets';
 import { BoardModel, type MatchGroup } from '@/game/board/BoardModel';
 import { BoardView } from '@/game/board/BoardView';
 import {
@@ -37,6 +37,8 @@ import {
 } from '@/game/battle/BattleController';
 import { PlayerData } from '@/game/PlayerData';
 
+import type { TeamEnterData } from './TeamScene';
+
 export interface BattleEnterData {
   stageId: string;
 }
@@ -45,6 +47,9 @@ export class BattleScene implements Scene {
   readonly name = 'battle';
   readonly container = new PIXI.Container();
 
+  /** 各关卡连续失败次数（内存级，胜利清零）：用于卡关引导触发 */
+  private static readonly _failCounts = new Map<string, number>();
+
   private _ctrl!: BattleController;
   private _board!: BoardModel;
   private _boardView: BoardView | null = null;
@@ -52,10 +57,14 @@ export class BattleScene implements Scene {
   // ---- UI 引用 ----
   private _waveText!: PIXI.Text;
   private _enemySprite!: PIXI.Sprite;
+  private _enemyBgSprite!: PIXI.Sprite;
+  private _enemyAreaTop = 0;
+  private _enemyAreaBottom = 0;
   private _enemyContainer!: PIXI.Container;
   private _enemyHpBar!: PIXI.Graphics;
   private _enemyHpText!: PIXI.Text;
   private _enemyNameText!: PIXI.Text;
+  private _enemyElementRow!: PIXI.Container;
   private _enemyCdText!: PIXI.Text;
   private _heroHpBar!: PIXI.Graphics;
   private _heroHpText!: PIXI.Text;
@@ -154,6 +163,9 @@ export class BattleScene implements Scene {
     bg.endFill();
     this.container.addChild(bg);
 
+    // ---- 敌人区属性背景（按敌人五行匹配，参考 xiao_chu）----
+    this._buildEnemyBg();
+
     // ---- 顶栏：返回 + 关卡名 + 波次 ----
     const backBtn = this._makeButton('返回', 130, 56, 0x4a3a72, () => {
       SceneManager.switchTo('title');
@@ -184,8 +196,12 @@ export class BattleScene implements Scene {
 
     this._enemyNameText = new PIXI.Text('', { fontSize: 28, fill: 0xffffff, fontWeight: 'bold' });
     this._enemyNameText.anchor.set(0.5);
-    this._enemyNameText.position.set(w / 2, this._enemyCenterY - UI.battle.enemySize / 2 - 28);
+    this._enemyNameText.position.set(w / 2, this._enemyCenterY - UI.battle.enemySize / 2 - 42);
     this.container.addChild(this._enemyNameText);
+
+    this._enemyElementRow = new PIXI.Container();
+    this._enemyElementRow.position.set(w / 2, this._enemyCenterY - UI.battle.enemySize / 2 - 12);
+    this.container.addChild(this._enemyElementRow);
 
     this._enemyHpBar = new PIXI.Graphics();
     this.container.addChild(this._enemyHpBar);
@@ -277,6 +293,79 @@ export class BattleScene implements Scene {
     });
   }
 
+  /** 敌人区背景：图片裁剪到区域内 + 暗化遮罩 + 上下渐隐，融入顶栏与队伍栏 */
+  private _buildEnemyBg(): void {
+    const w = Game.logicWidth;
+    const areaTop = Game.safeTop + 64;
+    const areaBottom = this._heroBarY - 6;
+    const areaH = areaBottom - areaTop;
+    this._enemyAreaTop = areaTop;
+    this._enemyAreaBottom = areaBottom;
+
+    const layer = new PIXI.Container();
+    const mask = new PIXI.Graphics();
+    mask.beginFill(0xffffff);
+    mask.drawRect(0, areaTop, w, areaH);
+    mask.endFill();
+    layer.mask = mask;
+    layer.addChild(mask);
+
+    this._enemyBgSprite = new PIXI.Sprite();
+    this._enemyBgSprite.anchor.set(0.5, 1);
+    this._enemyBgSprite.position.set(w / 2, areaBottom);
+    layer.addChild(this._enemyBgSprite);
+
+    // 整体轻微暗化，保证立绘/文字清晰
+    const dim = new PIXI.Graphics();
+    dim.beginFill(0x1a1126, 0.22);
+    dim.drawRect(0, areaTop, w, areaH);
+    dim.endFill();
+    layer.addChild(dim);
+
+    // 顶部渐隐：图片上沿融入顶栏
+    layer.addChild(this._makeVerticalFade(
+      0, areaTop, w, areaH * 0.16, 0x241a38, 0.95, 0,
+    ));
+    // 底部渐隐：图片下沿融入队伍栏
+    layer.addChild(this._makeVerticalFade(
+      0, areaBottom - areaH * 0.24, w, areaH * 0.24, 0x241a38, 0, 0.95,
+    ));
+
+    this.container.addChild(layer);
+  }
+
+  /** 切换敌人区背景贴图（按属性），cover 缩放铺满区域并底部对齐 */
+  private _refreshEnemyBg(element: Element): void {
+    const tex = TextureCache.get(battleBgImage(element));
+    if (!tex) {
+      this._enemyBgSprite.visible = false;
+      return;
+    }
+    this._enemyBgSprite.visible = true;
+    this._enemyBgSprite.texture = tex;
+    const w = Game.logicWidth;
+    const areaH = this._enemyAreaBottom - this._enemyAreaTop;
+    const scale = Math.max(w / tex.width, areaH / tex.height);
+    this._enemyBgSprite.scale.set(scale);
+  }
+
+  /** 纯 Graphics 竖向渐隐（避免依赖 canvas 渐变，兼容小游戏端） */
+  private _makeVerticalFade(
+    x: number, y: number, w: number, h: number,
+    color: number, fromAlpha: number, toAlpha: number,
+  ): PIXI.Graphics {
+    const g = new PIXI.Graphics();
+    const steps = 16;
+    for (let i = 0; i < steps; i++) {
+      const t = i / (steps - 1);
+      const a = fromAlpha + (toAlpha - fromAlpha) * t;
+      g.beginFill(color, a);
+      g.drawRect(x, y + (h / steps) * i, w, h / steps + 1);
+      g.endFill();
+    }
+    return g;
+  }
+
   private _buildTeamBar(): void {
     const { petSize, petGap, petFrameScale } = UI.battle;
     const total = this._ctrl.team.length * petSize + (this._ctrl.team.length - 1) * petGap;
@@ -302,7 +391,7 @@ export class BattleScene implements Scene {
       bg.endFill();
       slot.addChild(bg);
 
-      const tex = TextureCache.get(petImage(pet.def.id));
+      const tex = TextureCache.get(petAvatarPath(pet.def.id, pet.star));
       if (tex) {
         const avatar = new PIXI.Sprite(tex);
         avatar.anchor.set(0.5, 1);
@@ -353,6 +442,21 @@ export class BattleScene implements Scene {
       slot.addChild(readyFx.root);
       this._slotReadyFx.push(readyFx);
       this._slotWasReady.push(pet.skillCdLeft <= 0);
+
+      // 被禁属性：灰罩 + 「封」标记（本关该属性珠失效，宠物不出手）
+      if (this._ctrl.bannedElements.has(pet.def.element)) {
+        const banMask = new PIXI.Graphics();
+        banMask.beginFill(0x000000, 0.55);
+        banMask.drawRoundedRect(-petSize / 2, -petSize / 2, petSize, petSize, 16);
+        banMask.endFill();
+        slot.addChild(banMask);
+        const banText = new PIXI.Text('封', {
+          fontSize: 30, fill: 0xff6b6b, fontWeight: 'bold',
+          stroke: 0x000000, strokeThickness: 4,
+        });
+        banText.anchor.set(0.5);
+        slot.addChild(banText);
+      }
 
       slot.eventMode = 'static';
       slot.cursor = 'pointer';
@@ -756,6 +860,76 @@ export class BattleScene implements Scene {
         if (result.enemyDead && await this._handleEnemyDefeat()) return;
         break;
       }
+      case 'multiHit': {
+        // 多段直伤：连续发弹道，逐段弹伤害数字
+        const total = result.damage ?? 0;
+        const hits = result.damageEvents.filter((e) => e.target === 'enemy').length || 1;
+        const slot = this._petSlots[petIndex];
+        const el = result.element ?? pet.def.element;
+        for (let i = 0; i < hits; i++) {
+          await this._fireProjectileBetween(slot.x, slot.y - 60, this._enemyCenterX, this._enemyCenterY, el);
+          this._playEnemyHit(el, Math.round(total / hits), i === hits - 1);
+          this._spawnFloat(
+            `${Math.round(total / hits)}`,
+            this._enemyCenterX + (Math.random() - 0.5) * 110,
+            this._enemyCenterY - 40 - i * 8,
+            color, 1.2,
+          );
+        }
+        this._refreshEnemyHp();
+        if (result.enemyDead && await this._handleEnemyDefeat()) return;
+        break;
+      }
+      case 'dotApply': {
+        const slot = this._petSlots[petIndex];
+        const el = result.element ?? pet.def.element;
+        const initial = result.damage ?? 0;
+        await this._fireProjectileBetween(slot.x, slot.y - 60, this._enemyCenterX, this._enemyCenterY, el);
+        if (initial > 0) {
+          this._playEnemyHit(el, initial, true);
+          this._spawnFloat(`${initial}`, this._enemyCenterX, this._enemyCenterY - 40, color, 1.3);
+        }
+        this._spawnFloat(
+          `灼烧 ${result.value ?? 0}/回合 ×${result.turns ?? 0}`,
+          this._enemyCenterX, this._enemyCenterY - 76, 0xff7043, 1.1,
+        );
+        this._fx.burst({
+          x: this._enemyCenterX, y: this._enemyCenterY,
+          color: 0xff7043, count: 12, speed: 200, gravity: -120, size: 13, life: 0.6,
+        });
+        this._refreshEnemyHp();
+        if (result.enemyDead && await this._handleEnemyDefeat()) return;
+        break;
+      }
+      case 'stun': {
+        const damage = result.damage ?? 0;
+        if (damage > 0) {
+          const slot = this._petSlots[petIndex];
+          const el = result.element ?? pet.def.element;
+          await this._fireProjectileBetween(slot.x, slot.y - 60, this._enemyCenterX, this._enemyCenterY, el);
+          this._playEnemyHit(el, damage, true);
+          this._spawnFloat(`${damage}`, this._enemyCenterX, this._enemyCenterY - 40, color, 1.3);
+        }
+        this._spawnFloat(`眩晕 ${result.turns ?? 0} 回合`, this._enemyCenterX, this._enemyCenterY - 76, 0xfff176, 1.2);
+        this._fx.burst({
+          x: this._enemyCenterX, y: this._enemyCenterY - 50,
+          color: 0xfff176, count: 10, speed: 160, gravity: -60, size: 12, life: 0.7,
+        });
+        this._refreshEnemyHp();
+        if (result.enemyDead && await this._handleEnemyDefeat()) return;
+        break;
+      }
+      case 'defenseBreak': {
+        this._spawnFloat(
+          `破防 -${Math.round((result.value ?? 0) * 100)}% ×${result.turns ?? 0}`,
+          this._enemyCenterX, this._enemyCenterY - 50, 0xff8a65, 1.2,
+        );
+        this._fx.burst({
+          x: this._enemyCenterX, y: this._enemyCenterY,
+          color: 0xff8a65, count: 12, speed: 220, size: 13, life: 0.45,
+        });
+        break;
+      }
       case 'healBurst': {
         this._refreshHeroHp();
         this._spawnFloat(`+${result.healed ?? 0}`, Game.logicWidth / 2, this._heroBarY - 24, 0x6fd86a, 1.2);
@@ -782,7 +956,11 @@ export class BattleScene implements Scene {
       }
       case 'orbConvert': {
         const to = result.to ?? 'heart';
-        const cells = this._board.convertRandom(to, result.count ?? 0);
+        const cells = result.shape === 'row'
+          ? this._board.convertRow(to)
+          : result.shape === 'col'
+            ? this._board.convertCol(to)
+            : this._board.convertRandom(to, result.count ?? 0);
         for (const { r, c } of cells) {
           const cell = UI.board.cellSize;
           this._fx.burst({
@@ -1257,10 +1435,26 @@ export class BattleScene implements Scene {
 
   private _finishBattle(win: boolean): void {
     const result = this._ctrl.finish(win);
+    let milestoneLingyu = 0;
+    let defeatRefund = 0;
+    const newlyDiscovered: string[] = [];
     if (win) {
-      PlayerData.recordClear(this._ctrl.stage.id, result.stars, result.coins);
+      milestoneLingyu = PlayerData.recordClear(this._ctrl.stage.id, result.stars, result.coins);
       PlayerData.addExp(result.exp);
+      // 碎片全量入账（未拥有宠走暂存账本，解锁即并入；不再丢弃）
       for (const s of result.shards) PlayerData.addShards(s.petId, s.count);
+      // 击败高级形态 → 收录进可获取池（仅本次新收录的提示）
+      for (const cid of result.discoveredCreatures) {
+        if (PlayerData.discover(cid)) newlyDiscovered.push(cid);
+      }
+      BattleScene._failCounts.delete(this._ctrl.stage.id);
+    } else {
+      defeatRefund = this._ctrl.defeatExpRefund();
+      if (defeatRefund > 0) PlayerData.addExp(defeatRefund);
+      BattleScene._failCounts.set(
+        this._ctrl.stage.id,
+        (BattleScene._failCounts.get(this._ctrl.stage.id) ?? 0) + 1,
+      );
     }
 
     const w = Game.logicWidth;
@@ -1331,13 +1525,14 @@ export class BattleScene implements Scene {
         },
       });
 
-      // 掉落：经验 + 碎片（仅展示已拥有宠的碎片入账）
-      const ownedShards = result.shards.filter((s) => PlayerData.isOwned(s.petId));
-      const shardSummary = ownedShards
+      // 掉落：经验 + 碎片（全部入账，含未拥有宠暂存碎片）
+      const shardSummary = result.shards
         .map((s) => `${PET_MAP.get(s.petId)?.name ?? s.petId}碎片×${s.count}`)
         .join('  ');
+      const lingyuSuffix = milestoneLingyu > 0 ? `   首通灵玉 +${milestoneLingyu}` : '';
+      const tail = `${shardSummary ? `\n${shardSummary}` : ''}${lingyuSuffix}`;
       const rewardText = new PIXI.Text(
-        `经验 +0${shardSummary ? `\n${shardSummary}` : ''}`,
+        `经验 +0${tail}`,
         { fontSize: 24, fill: 0x9fe6b0, align: 'center' },
       );
       rewardText.anchor.set(0.5);
@@ -1349,16 +1544,65 @@ export class BattleScene implements Scene {
         target: expCounter, props: { v: result.exp },
         duration: 0.5, delay: 0.3, ease: Ease.easeOutCubic,
         onUpdate: () => {
-          rewardText.text = `经验 +${Math.round(expCounter.v)}${shardSummary ? `\n${shardSummary}` : ''}`;
+          rewardText.text = `经验 +${Math.round(expCounter.v)}${tail}`;
         },
       });
+
+      // 收录提示：击败高级形态，生物进入可获取池（召唤/商店）
+      if (newlyDiscovered.length > 0) {
+        const names = newlyDiscovered
+          .map((cid) => PET_MAP.get(cid)?.name ?? cid)
+          .join('、');
+        const discoverText = new PIXI.Text(
+          `已收录入宠物池：${names}\n可在召唤/商店中获取`,
+          { fontSize: 24, fill: 0xffd75e, align: 'center', fontWeight: 'bold' },
+        );
+        discoverText.anchor.set(0.5);
+        discoverText.position.set(0, 140);
+        discoverText.alpha = 0;
+        panel.addChild(discoverText);
+        TweenManager.to({
+          target: discoverText, props: { alpha: 1 },
+          duration: 0.4, delay: 0.6, ease: Ease.easeOutCubic,
+        });
+      }
     } else {
-      const tip = new PIXI.Text('提示：消除克制敌人属性的珠子\n伤害 ×1.6，心珠可以回血', {
-        fontSize: 28, fill: 0x9b8cc4, align: 'center',
-      });
+      const refundLine = defeatRefund > 0 ? `\n保底经验 +${defeatRefund}` : '';
+      const tip = new PIXI.Text(
+        `提示：消除克制敌人属性的珠子伤害 ×1.6${refundLine}`,
+        { fontSize: 26, fill: 0x9b8cc4, align: 'center' },
+      );
       tip.anchor.set(0.5);
-      tip.position.set(0, -60);
+      tip.position.set(0, -110);
       panel.addChild(tip);
+
+      // 卡关引导：连续失败 ≥2 次，给出明确的「变强」入口
+      const fails = BattleScene._failCounts.get(this._ctrl.stage.id) ?? 0;
+      if (fails >= 2) {
+        const guide = new PIXI.Text('卡关了？试试提升战力：', {
+          fontSize: 24, fill: 0xffd75e, align: 'center',
+        });
+        guide.anchor.set(0.5);
+        guide.position.set(0, -54);
+        panel.addChild(guide);
+
+        const entries: { label: string; scene: string }[] = [
+          { label: '召唤', scene: 'gacha' },
+          { label: '商店', scene: 'shop' },
+          { label: '编队', scene: 'team' },
+        ];
+        const gw = 150;
+        const gap = 16;
+        const totalW = entries.length * gw + (entries.length - 1) * gap;
+        entries.forEach((en, i) => {
+          const gx = -totalW / 2 + gw / 2 + i * (gw + gap);
+          const gb = this._makeButton(en.label, gw, 64, 0x8c5ad6, () => {
+            SceneManager.switchTo(en.scene);
+          });
+          gb.position.set(gx, 6);
+          panel.addChild(gb);
+        });
+      }
     }
 
     // 按钮组
@@ -1368,7 +1612,7 @@ export class BattleScene implements Scene {
     let btnY = 110;
     if (win && nextStage) {
       const nextBtn = this._makeButton('下一关', 320, 76, 0xe8554d, () => {
-        SceneManager.switchTo('battle', { stageId: nextStage.id } satisfies BattleEnterData);
+        SceneManager.switchTo('team', { stageId: nextStage.id } satisfies TeamEnterData);
       });
       nextBtn.position.set(0, btnY);
       panel.addChild(nextBtn);
@@ -1402,7 +1646,8 @@ export class BattleScene implements Scene {
   /** 刷新敌人立绘/名字/血条/倒计时（switchWave = 是否波次切换） */
   private _refreshEnemy(switchWave: boolean): void {
     const enemy = this._ctrl.enemy;
-    const tex = TextureCache.get(enemyImage(enemy.def.id));
+    // 生物怪物面用其全身立绘（def.image），杂怪按 id 兜底
+    const tex = TextureCache.get(enemy.def.image ?? enemyImage(enemy.def.id));
     if (tex) {
       this._enemySprite.texture = tex;
       const scale = UI.battle.enemySize / Math.max(tex.width, tex.height);
@@ -1417,9 +1662,73 @@ export class BattleScene implements Scene {
     this._enemyNameText.text =
       `${enemy.def.name} · ${ELEMENT_NAME[enemy.def.element]}属性`;
     this._enemyNameText.style.fill = ORB_COLOR[enemy.def.element];
+    this._refreshEnemyElementTags(enemy.def.element);
+    this._refreshEnemyBg(enemy.def.element);
     this._waveText.text = `第 ${this._ctrl.waveIndex + 1}/${this._ctrl.totalWaves} 波`;
     this._refreshEnemyHp();
     this._refreshEnemyCd();
+  }
+
+  /** 敌人属性克制提示：弱点珠 / 抵抗珠（对齐 xiao_chu） */
+  private _refreshEnemyElementTags(element: Element): void {
+    this._enemyElementRow.removeChildren();
+    const weak = counterElementOf(element);
+    const resist = resistedElementOf(element);
+    const gap = 10;
+    // 弱点属性被本关封印：标签降级为灰色并提示「本关封印」，避免误导玩家去拖无效珠
+    const weakBanned = this._ctrl.bannedElements.has(weak);
+    const weakLabel = weakBanned
+      ? `拖${ELEMENT_NAME[weak]}珠克制·本关封印`
+      : `拖${ELEMENT_NAME[weak]}珠克制`;
+    const weakTag = this._makeElementCounterTag(weakLabel, weak, !weakBanned);
+    const resistTag = this._makeElementCounterTag(
+      `抵抗${ELEMENT_NAME[resist]}珠`, resist, false,
+    );
+    const totalW = weakTag.tagW + gap + resistTag.tagW;
+    weakTag.position.set(-totalW / 2, -weakTag.tagH / 2);
+    resistTag.position.set(-totalW / 2 + weakTag.tagW + gap, -resistTag.tagH / 2);
+    this._enemyElementRow.addChild(weakTag, resistTag);
+  }
+
+  private _makeElementCounterTag(
+    label: string,
+    element: Element,
+    highlight: boolean,
+  ): PIXI.Container & { tagW: number; tagH: number } {
+    const color = ORB_COLOR[element];
+    const fontSize = 20;
+    const orbSize = 14;
+    const padX = 8;
+    const padY = 4;
+    const text = new PIXI.Text(label, {
+      fontSize,
+      fill: highlight ? 0xffffff : 0xaaaaaa,
+      fontWeight: 'bold',
+    });
+    const tagW = text.width + orbSize + padX * 2 + 6;
+    const tagH = Math.max(text.height, orbSize) + padY * 2;
+    const bg = new PIXI.Graphics();
+    if (highlight) {
+      bg.beginFill(color, 0.25);
+      bg.lineStyle(1.5, color, 0.6);
+    } else {
+      bg.beginFill(0x3c3c50, 0.6);
+      bg.lineStyle(1, 0x9696aa, 0.4);
+    }
+    bg.drawRoundedRect(0, 0, tagW, tagH, tagH / 2);
+    bg.endFill();
+    text.position.set(padX, (tagH - text.height) / 2);
+    const orb = new PIXI.Sprite(TextureCache.get(ORB_IMAGES[element]) ?? PIXI.Texture.WHITE);
+    orb.width = orbSize;
+    orb.height = orbSize;
+    orb.anchor.set(0.5);
+    orb.position.set(padX + text.width + 3 + orbSize / 2, tagH / 2);
+    if (!orb.texture || orb.texture === PIXI.Texture.WHITE) orb.tint = color;
+    const tag = new PIXI.Container() as PIXI.Container & { tagW: number; tagH: number };
+    tag.tagW = tagW;
+    tag.tagH = tagH;
+    tag.addChild(bg, text, orb);
+    return tag;
   }
 
   private _refreshEnemyHp(): void {

@@ -14,6 +14,8 @@ import { BattleScene } from '@/scenes/BattleScene';
 import { TeamScene } from '@/scenes/TeamScene';
 import { PetDetailScene } from '@/scenes/PetDetailScene';
 import { CodexScene } from '@/scenes/CodexScene';
+import { GachaScene } from '@/scenes/GachaScene';
+import { ShopScene } from '@/scenes/ShopScene';
 
 declare const GameGlobal: any;
 
@@ -46,6 +48,8 @@ async function main(): Promise<void> {
   SceneManager.register(new TeamScene());
   SceneManager.register(new PetDetailScene());
   SceneManager.register(new CodexScene());
+  SceneManager.register(new GachaScene());
+  SceneManager.register(new ShopScene());
   SceneManager.switchTo('title');
 
   BgmManager.playMain();

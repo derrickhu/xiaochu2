@@ -13,7 +13,7 @@ import { PET_MAP, type PetDef } from '@/balance/pets';
 import { getStarProfile } from '@/balance/growth';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { skillForPet } from '@/game/battle/SkillEngine';
-import { petImage } from '@/config/Assets';
+import { petAvatarPath } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import { makeRarityElementRoleLine, makeLevelStarLine, makeTeamStatsLine } from '@/ui';
 
@@ -72,7 +72,7 @@ export class PetDetailScene implements Scene {
     this.container.addChild(title);
 
     // 头像
-    const tex = TextureCache.get(petImage(pet.id));
+    const tex = TextureCache.get(petAvatarPath(pet.id, star));
     const avatarY = Game.safeTop + 200;
     if (tex) {
       const avatar = new PIXI.Sprite(tex);

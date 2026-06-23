@@ -4,19 +4,18 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
-import { Platform } from '@/core/PlatformService';
 import { TextureCache } from '@/core/TextureCache';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
-import { CHAPTERS, CHAPTER_NAME, stagesOfChapter } from '@/balance/stages';
+import { CHAPTERS, CHAPTER_NAME, stagesOfChapter, stageWaveCount } from '@/balance/stages';
 import { getStageType } from '@/balance/stageTypes';
-import { PET_MAP } from '@/balance/pets';
+import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
 import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
-  makeText, makePanel, makeIconButton, makeIconLabel, makeCoverBackground,
+  makeText, makePanel, makeIconButton, makeCoverBackground, makeCurrencyRow,
 } from '@/ui';
-import type { BattleEnterData } from './BattleScene';
+import type { TeamEnterData } from './TeamScene';
 
 export class TitleScene implements Scene {
   readonly name = 'title';
@@ -82,21 +81,15 @@ export class TitleScene implements Scene {
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.home, w, h));
   }
 
-  /** 灵宠币 + 经验，左对齐并排 */
+  /** 灵宠币 + 经验 + 灵玉，图标并排左对齐 */
   private _buildResourceBar(w: number, y: number): void {
     const padX = 48;
-    const coin = makeIconLabel({
-      iconPath: UI_IMAGES.iconCoin, iconSize: 38,
-      text: `${PlayerData.coins}`, size: FONT_SIZE.md, fill: COLORS.textMain,
-    });
-    const exp = makeIconLabel({
-      iconPath: UI_IMAGES.iconExp, iconSize: 38,
-      text: `${PlayerData.exp}`, size: FONT_SIZE.md, fill: COLORS.textMain,
-    });
-    const gap = 48;
-    coin.position.set(padX, y);
-    exp.position.set(padX + coin.width + gap, y);
-    this.container.addChild(coin, exp);
+    this.container.addChild(makeCurrencyRow({
+      x: padX, y,
+      coins: PlayerData.coins,
+      exp: PlayerData.exp,
+      lingyu: PlayerData.lingyu,
+    }));
   }
 
   /** 章节切换：◀ 章节名 ▶ */
@@ -174,7 +167,7 @@ export class TitleScene implements Scene {
         : '';
       const subText = makeText(
         unlocked
-          ? `${ELEMENT_NAME[stage.element]} · ${stage.enemies.length}波${tagSuffix}`
+          ? `${ELEMENT_NAME[stage.element]} · ${stageWaveCount(stage)}波${tagSuffix}`
           : (stage.index === 1 ? '通关上一章 Boss 解锁' : '通关上一关解锁'),
         { size: FONT_SIZE.xs, fill: unlocked ? COLORS.textSub : COLORS.textDisabled, anchor: [0, 0.5] },
       );
@@ -194,7 +187,7 @@ export class TitleScene implements Scene {
         item.eventMode = 'static';
         item.cursor = 'pointer';
         item.on('pointertap', () => {
-          SceneManager.switchTo('battle', { stageId: stage.id } satisfies BattleEnterData);
+          SceneManager.switchTo('team', { stageId: stage.id } satisfies TeamEnterData);
         });
       }
 
@@ -202,12 +195,10 @@ export class TitleScene implements Scene {
     });
   }
 
-  /** 底部导航：灵宠 / 招募 / 编队 */
+  /** 底部导航：灵宠 / 召唤 / 商店 / 编队 */
   private _buildBottomNav(w: number, h: number): void {
     const reserve = TitleScene.BOTTOM_RESERVE;
     const navTop = h - reserve;
-    const price = PlayerData.nextRecruitPrice();
-    const canRecruit = PlayerData.coins >= price;
 
     // 底栏背景：紫祥云贴图（缺图回退纯色条）
     const navTex = TextureCache.get(UI_IMAGES.navBar);
@@ -226,35 +217,20 @@ export class TitleScene implements Scene {
       this.container.addChild(barBg);
     }
 
-    // 三按钮均分底栏（贴图图标 + 文字标签，略上移、略放大）
-    const navIconSize = 68;
+    // 四按钮均分底栏（贴图图标 + 文字标签）
+    const navIconSize = 64;
     const btnY = navTop + 56;
+    const canGacha = PlayerData.lingyu >= ECONOMY.gacha.singleCost;
     const slots: { label: string; icon: string; x: number; onTap: () => void; active?: boolean }[] = [
-      { label: '灵宠', icon: UI_IMAGES.navPet, x: w * 0.2, onTap: () => SceneManager.switchTo('codex') },
-      {
-        label: '招募', icon: UI_IMAGES.iconRecruit, x: w * 0.5, active: canRecruit, onTap: () => {
-          const result = PlayerData.recruit();
-          if (!result) {
-            Platform.showToast(`灵宠币不足（需 ${price}）`);
-            return;
-          }
-          Platform.vibrateShort('medium');
-          if (result.duplicate) {
-            const pet = PET_MAP.get(result.petId);
-            Platform.showToast(`已全收集，${pet?.name ?? ''} +${result.shards} 碎片`);
-          } else {
-            const pet = PET_MAP.get(result.petId);
-            Platform.showToast(`招募成功：${pet?.name ?? ''}`);
-          }
-          this._refresh();
-        },
-      },
-      { label: '编队', icon: UI_IMAGES.navTeam, x: w * 0.8, onTap: () => SceneManager.switchTo('team') },
+      { label: '灵宠', icon: UI_IMAGES.navPet, x: w * 0.14, onTap: () => SceneManager.switchTo('codex') },
+      { label: '召唤', icon: UI_IMAGES.iconRecruit, x: w * 0.38, active: canGacha, onTap: () => SceneManager.switchTo('gacha') },
+      { label: '商店', icon: UI_IMAGES.iconCoin, x: w * 0.62, onTap: () => SceneManager.switchTo('shop') },
+      { label: '编队', icon: UI_IMAGES.navTeam, x: w * 0.86, onTap: () => SceneManager.switchTo('team') },
     ];
     for (const s of slots) {
       const btn = makeIconButton({
         iconPath: s.icon, iconSize: navIconSize,
-        label: s.label, labelSize: 23,
+        label: s.label, labelSize: 22,
         labelColor: s.active ? COLORS.navTextActive : COLORS.navText,
         onTap: s.onTap,
       });

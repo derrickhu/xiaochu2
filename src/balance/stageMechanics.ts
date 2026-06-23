@@ -102,6 +102,41 @@ export const MECHANICS: Readonly<Record<string, MechanicDef>> = {
     uiHint: '本关火珠失效：换属性输出',
     banElement: 'fire',
   },
+  rule_ban_metal: {
+    id: 'rule_ban_metal', axis: 'rule', name: '封金',
+    desc: '本关金珠失效（消除无伤害），逼迫调整队伍属性。',
+    uiHint: '本关金珠失效：换属性输出',
+    banElement: 'metal',
+  },
+  rule_ban_wood: {
+    id: 'rule_ban_wood', axis: 'rule', name: '封木',
+    desc: '本关木珠失效（消除无伤害），逼迫调整队伍属性。',
+    uiHint: '本关木珠失效：换属性输出',
+    banElement: 'wood',
+  },
+  rule_ban_earth: {
+    id: 'rule_ban_earth', axis: 'rule', name: '封土',
+    desc: '本关土珠失效（消除无伤害），逼迫调整队伍属性。',
+    uiHint: '本关土珠失效：换属性输出',
+    banElement: 'earth',
+  },
+
+  // ── 历练（阶段九收录）轴：标注高级怪收录玩法节奏 ──
+  trial_capture: {
+    id: 'trial_capture', axis: 'enemy', name: '历练收录',
+    desc: '击败生物的高级形态即可收录进宠物池，随后可经召唤/碎片拥有。',
+    uiHint: '击败高级形态可收录该生物',
+  },
+  trial_elite_pair: {
+    id: 'trial_elite_pair', axis: 'enemy', name: '双形态历练',
+    desc: '同一生物初级与高级形态接连登场，逐步施压。',
+    uiHint: '初级铺垫、高级压轴：保留爆发收尾',
+  },
+  trial_void: {
+    id: 'trial_void', axis: 'enemy', name: '虚空侵蚀',
+    desc: '终局历练：高级怪数值与技能压满，养成与编队的总检验。',
+    uiHint: '终局历练：克制+爆发+续航全到位',
+  },
 };
 
 export function getMechanic(id: string): MechanicDef | undefined {

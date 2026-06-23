@@ -275,6 +275,27 @@ class GameClass {
     console.log(`[Game] 初始化完成: ${realWidth}x${realHeight}, scale=${this.scale.toFixed(2)}, dpr=${this.dpr}`);
   }
 
+  /** 原生 touch/pointer → stage 本地设计坐标（与场景布局、EventSystem 一致） */
+  pointerEventToStageLocal(e: unknown): PIXI.Point {
+    const ev = e as {
+      clientX?: number; clientY?: number; x?: number; y?: number;
+      touches?: { clientX?: number; clientY?: number }[];
+      changedTouches?: { clientX?: number; clientY?: number }[];
+    };
+    const t0 = ev.changedTouches?.[0] ?? ev.touches?.[0];
+    const cx = ev.clientX ?? t0?.clientX ?? ev.x ?? 0;
+    const cy = ev.clientY ?? t0?.clientY ?? ev.y ?? 0;
+    const rendererPoint = new PIXI.Point();
+    const evtSys = (this.app.renderer as any)?.events;
+    if (evtSys?.mapPositionToPoint) {
+      evtSys.mapPositionToPoint(rendererPoint, cx, cy);
+    } else {
+      rendererPoint.x = cx * (this.designWidth / this.screenWidth);
+      rendererPoint.y = cy * (this.designWidth / this.screenWidth);
+    }
+    return this.stage.toLocal(rendererPoint);
+  }
+
   /** 设计坐标系下的逻辑宽度 */
   get logicWidth(): number {
     return this.designWidth;

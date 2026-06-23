@@ -5,8 +5,8 @@
  */
 import type { Element, OrbType } from '@/balance/combat';
 import type { PetDef } from '@/balance/pets';
-import type { SkillDef, SkillEffectDef, SkillVfxId } from '@/balance/skills';
-import { getSkill, resolveSkillVfx, getSkillTierBonus } from '@/balance/skills';
+import type { SkillDef, SkillEffectDef, SkillVfxId, ConvertShape } from '@/balance/skills';
+import { getSkill, resolveSkillVfx, getSkillTierBonus, getSkillStarOverride } from '@/balance/skills';
 import { getStarProfile } from '@/balance/growth';
 import type { StatusStackPolicy } from './BattleStatus';
 import { defenseReduction } from '@/formulas/damage';
@@ -52,7 +52,7 @@ export interface HealEvent {
 
 export interface StatusEvent {
   target: 'team' | 'enemy';
-  status: 'shield' | 'teamDamageBuff' | 'enemyDamageReduction' | 'charge';
+  status: 'shield' | 'teamDamageBuff' | 'enemyDamageReduction' | 'charge' | 'dot' | 'stun' | 'enemyDefenseBreak';
   value: number;
   turns?: number;
   stack: StatusStackPolicy;
@@ -63,6 +63,7 @@ export interface BoardRequest {
   type: 'convertOrbs';
   to: OrbType;
   count: number;
+  shape: ConvertShape;
   vfx: SkillVfxId;
 }
 
@@ -72,6 +73,10 @@ export interface SkillResult {
   action:
     | 'instantDmg'
     | 'teamAttack'
+    | 'multiHit'
+    | 'dot'
+    | 'stun'
+    | 'defenseBreak'
     | 'healPct'
     | 'shield'
     | 'dmgBoost'
@@ -102,25 +107,29 @@ export function skillForEnemy(skillId: string): SkillDef {
 
 export function applyPetSkillModifiers(skill: SkillDef, pet: PetDef, skillTier = 1): SkillDef {
   const tierBonus = getSkillTierBonus(skillTier);
-  let cd = skill.cd + tierBonus.cdDelta;
-  let effectPctBonus = tierBonus.effectPct;
+  const override = getSkillStarOverride(skill.id, skillTier);
+
+  let cd = skill.cd + tierBonus.cdDelta + (override?.cdDelta ?? 0);
+  // 质变覆写优先：effectMult 替代平 % 加成
+  let effectMult = override?.effectMult ?? (1 + tierBonus.effectPct);
   let convertCountBonus = 0;
   for (const trait of pet.traits ?? []) {
     if (trait.type !== 'skillModifier') continue;
     if (trait.skillId !== skill.id) continue;
     cd += trait.cdDelta ?? 0;
-    effectPctBonus += trait.effectPctBonus ?? 0;
+    effectMult *= 1 + (trait.effectPctBonus ?? 0);
     convertCountBonus += trait.convertCountBonus ?? 0;
   }
 
-  if (effectPctBonus === 0 && convertCountBonus === 0 && cd === skill.cd) return skill;
+  const noChange = effectMult === 1 && convertCountBonus === 0 && cd === skill.cd && !override?.desc;
+  if (noChange) return skill;
 
   const effects = skill.effects.map((effect): SkillEffectDef => {
-    if (effect.kind === 'damage') {
-      return { ...effect, multiplier: effect.multiplier * (1 + effectPctBonus) };
+    if (effect.kind === 'damage' || effect.kind === 'multiHit' || effect.kind === 'dot') {
+      return { ...effect, multiplier: effect.multiplier * effectMult };
     }
     if (effect.kind === 'heal' || effect.kind === 'shield') {
-      return { ...effect, pct: effect.pct * (1 + effectPctBonus) };
+      return { ...effect, pct: effect.pct * effectMult };
     }
     if (effect.kind === 'convertOrbs') {
       return { ...effect, count: effect.count + convertCountBonus };
@@ -128,7 +137,7 @@ export function applyPetSkillModifiers(skill: SkillDef, pet: PetDef, skillTier =
     return effect;
   });
 
-  return { ...skill, cd: Math.max(1, cd), effects };
+  return { ...skill, cd: Math.max(1, cd), effects, desc: override?.desc ?? skill.desc };
 }
 
 export function runSkill(skill: SkillDef, caster: SkillCaster, ctx: SkillRuntimeContext): SkillResult | null {
@@ -178,6 +187,14 @@ function inferAction(skill: SkillDef): SkillResult['action'] {
   switch (effect.kind) {
     case 'damage':
       return effect.source === 'teamAtk' ? 'teamAttack' : 'instantDmg';
+    case 'multiHit':
+      return 'multiHit';
+    case 'dot':
+      return 'dot';
+    case 'stun':
+      return 'stun';
+    case 'defenseBreak':
+      return 'defenseBreak';
     case 'heal':
       return effect.source === 'enemyMaxHp' ? 'heal' : 'healPct';
     case 'shield':
@@ -191,6 +208,171 @@ function inferAction(skill: SkillDef): SkillResult['action'] {
   }
 }
 
+/**
+ * Effect handler 注册表（策略模式）：每种 effect kind 对应一个纯函数 handler，
+ * 只读 ctx、向 result 推事件，返回 false = 整个技能不触发（如敌人满血自疗）。
+ * 新增 effect 只需：扩 SkillEffectDef 类型 + 在此注册一个 handler。
+ */
+interface EffectContext {
+  skill: SkillDef;
+  vfx: SkillVfxId;
+  caster: SkillCaster;
+  ctx: SkillRuntimeContext;
+  result: SkillResult;
+}
+
+type EffectHandler<K extends SkillEffectDef['kind'] = SkillEffectDef['kind']> = (
+  effect: Extract<SkillEffectDef, { kind: K }>,
+  c: EffectContext,
+) => boolean;
+
+/** 单段直伤结算（damage / multiHit 共用） */
+function resolveHitAmount(
+  source: 'casterAtk' | 'teamAtk' | 'enemyAtk',
+  multiplier: number,
+  caster: SkillCaster,
+  ctx: SkillRuntimeContext,
+  opts: { applyDefense?: boolean; applyDmgBuff?: boolean; applyEnemyReduction?: boolean },
+): number {
+  const raw = damageSourceValue(source, caster, ctx) * multiplier;
+  const reduced = raw
+    * (opts.applyDefense === false ? 1 : (1 - defenseReduction(ctx.enemy.def_)))
+    * (opts.applyDmgBuff === false ? 1 : ctx.teamDamageBuffMult)
+    * (opts.applyEnemyReduction === false ? 1 : (1 - ctx.enemyDamageReduction));
+  return Math.max(1, Math.floor(reduced));
+}
+
+const EFFECT_HANDLERS: { [K in SkillEffectDef['kind']]: EffectHandler<K> } = {
+  damage: (effect, { vfx, caster, ctx, result }) => {
+    const amount = resolveHitAmount(effect.source, effect.multiplier, caster, ctx, effect);
+    result.damageEvents.push({
+      target: caster.kind === 'enemy' ? 'hero' : 'enemy',
+      amount,
+      element: effect.element ?? caster.element,
+      vfx,
+    });
+    return true;
+  },
+
+  multiHit: (effect, { vfx, caster, ctx, result }) => {
+    const target = caster.kind === 'enemy' ? 'hero' : 'enemy';
+    const element = effect.element ?? caster.element;
+    for (let i = 0; i < effect.hits; i++) {
+      const amount = resolveHitAmount(effect.source, effect.multiplier, caster, ctx, effect);
+      result.damageEvents.push({ target, amount, element, vfx });
+    }
+    return true;
+  },
+
+  dot: (effect, { vfx, caster, ctx, result }) => {
+    const perTurn = Math.max(1, Math.floor(damageSourceValue(effect.source, caster, ctx) * effect.multiplier));
+    result.statusEvents.push({
+      target: caster.kind === 'enemy' ? 'team' : 'enemy',
+      status: 'dot',
+      value: perTurn,
+      turns: effect.turns,
+      stack: 'replace',
+      vfx,
+    });
+    return true;
+  },
+
+  stun: (effect, { vfx, result }) => {
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'stun',
+      value: 1,
+      turns: effect.turns,
+      stack: 'replace',
+      vfx,
+    });
+    return true;
+  },
+
+  defenseBreak: (effect, { vfx, result }) => {
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'enemyDefenseBreak',
+      value: effect.pct,
+      turns: effect.turns,
+      stack: 'max',
+      vfx,
+    });
+    return true;
+  },
+
+  heal: (effect, { vfx, ctx, result }) => {
+    if (effect.onlyIfDamaged && ctx.enemy.hp >= ctx.enemy.maxHp) return false;
+    const base = effect.source === 'teamMaxHp'
+      ? ctx.heroMaxHp
+      : effect.source === 'teamRcv'
+        ? ctx.teamRcvTotal
+        : ctx.enemy.maxHp;
+    result.healEvents.push({
+      target: effect.source === 'enemyMaxHp' ? 'enemy' : 'team',
+      amount: Math.floor(base * effect.pct),
+      vfx,
+    });
+    return true;
+  },
+
+  shield: (effect, { vfx, ctx, result }) => {
+    result.statusEvents.push({
+      target: 'team',
+      status: 'shield',
+      value: Math.floor(ctx.heroMaxHp * effect.pct),
+      stack: effect.stack,
+      vfx,
+    });
+    return true;
+  },
+
+  status: (effect, { vfx, result }) => {
+    if (effect.status === 'teamDamageBuff') {
+      result.statusEvents.push({
+        target: 'team',
+        status: 'teamDamageBuff',
+        value: effect.mult ?? 1,
+        turns: effect.turns,
+        stack: effect.stack,
+        vfx,
+      });
+      return true;
+    }
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'enemyDamageReduction',
+      value: effect.reduction ?? 0,
+      turns: effect.turns,
+      stack: effect.stack,
+      vfx,
+    });
+    return true;
+  },
+
+  convertOrbs: (effect, { vfx, result }) => {
+    result.boardRequests.push({
+      type: 'convertOrbs',
+      to: effect.to,
+      count: effect.count,
+      shape: effect.shape ?? 'random',
+      vfx,
+    });
+    return true;
+  },
+
+  charge: (effect, { result }) => {
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'charge',
+      value: effect.multiplier,
+      stack: 'replace',
+      vfx: effect.releaseVfx,
+    });
+    return true;
+  },
+};
+
 function runEffect(
   effect: SkillEffectDef,
   skill: SkillDef,
@@ -199,82 +381,8 @@ function runEffect(
   ctx: SkillRuntimeContext,
   result: SkillResult,
 ): boolean {
-  switch (effect.kind) {
-    case 'damage': {
-      const raw = damageSourceValue(effect.source, caster, ctx) * effect.multiplier;
-      const reduced = raw
-        * (effect.applyDefense === false ? 1 : (1 - defenseReduction(ctx.enemy.def_)))
-        * (effect.applyDmgBuff === false ? 1 : ctx.teamDamageBuffMult)
-        * (effect.applyEnemyReduction === false ? 1 : (1 - ctx.enemyDamageReduction));
-      const amount = Math.max(1, Math.floor(reduced));
-      result.damageEvents.push({
-        target: caster.kind === 'enemy' ? 'hero' : 'enemy',
-        amount,
-        element: effect.element ?? caster.element,
-        vfx,
-      });
-      return true;
-    }
-    case 'heal': {
-      if (effect.onlyIfDamaged && ctx.enemy.hp >= ctx.enemy.maxHp) return false;
-      const base = effect.source === 'teamMaxHp'
-        ? ctx.heroMaxHp
-        : effect.source === 'teamRcv'
-          ? ctx.teamRcvTotal
-          : ctx.enemy.maxHp;
-      const amount = Math.floor(base * effect.pct);
-      result.healEvents.push({
-        target: effect.source === 'enemyMaxHp' ? 'enemy' : 'team',
-        amount,
-        vfx,
-      });
-      return true;
-    }
-    case 'shield': {
-      result.statusEvents.push({
-        target: 'team',
-        status: 'shield',
-        value: Math.floor(ctx.heroMaxHp * effect.pct),
-        stack: effect.stack,
-        vfx,
-      });
-      return true;
-    }
-    case 'status': {
-      if (effect.status === 'teamDamageBuff') {
-        result.statusEvents.push({
-          target: 'team',
-          status: 'teamDamageBuff',
-          value: effect.mult ?? 1,
-          turns: effect.turns,
-          stack: effect.stack,
-          vfx,
-        });
-        return true;
-      }
-      result.statusEvents.push({
-        target: 'enemy',
-        status: 'enemyDamageReduction',
-        value: effect.reduction ?? 0,
-        turns: effect.turns,
-        stack: effect.stack,
-        vfx,
-      });
-      return true;
-    }
-    case 'convertOrbs':
-      result.boardRequests.push({ type: 'convertOrbs', to: effect.to, count: effect.count, vfx });
-      return true;
-    case 'charge':
-      result.statusEvents.push({
-        target: 'enemy',
-        status: 'charge',
-        value: effect.multiplier,
-        stack: 'replace',
-        vfx: effect.releaseVfx,
-      });
-      return true;
-  }
+  const handler = EFFECT_HANDLERS[effect.kind] as EffectHandler;
+  return handler(effect, { skill, vfx, caster, ctx, result });
 }
 
 function damageSourceValue(source: 'casterAtk' | 'teamAtk' | 'enemyAtk', caster: SkillCaster, ctx: SkillRuntimeContext): number {

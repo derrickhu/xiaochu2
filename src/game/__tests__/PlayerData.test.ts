@@ -4,7 +4,8 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { PlayerData } from '../PlayerData';
-import { DEFAULT_TEAM } from '@/balance/pets';
+import { PETS, DEFAULT_TEAM } from '@/balance/pets';
+import { ECONOMY } from '@/balance/economy';
 
 beforeAll(() => {
   PlayerData.load();
@@ -70,5 +71,48 @@ describe('升级 / 升星', () => {
     expect(PlayerData.petShards(other)).toBe(0);
     expect(PlayerData.canStarUp(other)).toBe(false);
     expect(PlayerData.starUp(other)).toBe(false);
+  });
+});
+
+describe('未拥有宠碎片暂存（修复丢弃）', () => {
+  it('给未拥有宠加碎片进暂存，解锁后并入', () => {
+    const unowned = PETS.find((p) => !PlayerData.isOwned(p.id));
+    expect(unowned).toBeTruthy();
+    PlayerData.addShards(unowned!.id, 7);
+    expect(PlayerData.petShards(unowned!.id)).toBe(7);
+    // 用足额灵玉强制抽到它前，至少验证暂存读得到（解锁路径在抽卡测试覆盖）
+  });
+});
+
+describe('抽卡（灵玉）', () => {
+  it('单抽扣除灵玉并返回结果', () => {
+    PlayerData.addLingyu(ECONOMY.gacha.singleCost); // 注资保证可抽
+    const before = PlayerData.lingyu;
+    const o = PlayerData.pullGachaSingle(() => 0);
+    expect(o).not.toBeNull();
+    expect(PlayerData.lingyu).toBe(before - ECONOMY.gacha.singleCost);
+  });
+
+  it('灵玉不足时单抽返回 null', () => {
+    // 把灵玉花到不足
+    while (PlayerData.lingyu >= ECONOMY.gacha.singleCost) {
+      PlayerData.pullGachaSingle(() => 0);
+    }
+    expect(PlayerData.pullGachaSingle(() => 0)).toBeNull();
+  });
+});
+
+describe('里程碑与货币', () => {
+  it('首通关卡发放灵玉，重复通关不再发', () => {
+    const stageId = 'stage_1_3';
+    const before = PlayerData.lingyu;
+    const granted = PlayerData.recordClear(stageId, 1, 0);
+    expect(granted).toBeGreaterThan(0);
+    expect(PlayerData.lingyu).toBe(before + granted);
+    expect(PlayerData.recordClear(stageId, 1, 0)).toBe(0);
+  });
+
+  it('spendCoins 不足返回 false', () => {
+    expect(PlayerData.spendCoins(PlayerData.coins + 1)).toBe(false);
   });
 });

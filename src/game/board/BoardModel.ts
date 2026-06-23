@@ -272,6 +272,46 @@ export class BoardModel {
     return picked;
   }
 
+  /** 转化整行（随机一行内全部非锁定珠）为 to，返回受影响格 */
+  convertRow(to: OrbType): Cell[] {
+    return this._convertLine('row', to);
+  }
+
+  /** 转化整列（随机一列内全部非锁定珠）为 to，返回受影响格 */
+  convertCol(to: OrbType): Cell[] {
+    return this._convertLine('col', to);
+  }
+
+  private _convertLine(kind: 'row' | 'col', to: OrbType): Cell[] {
+    const span = kind === 'row' ? this.rows : this.cols;
+    const cross = kind === 'row' ? this.cols : this.rows;
+    // 选含可转珠最多的一条线，避免整条都被锁定时空转
+    let bestLine = -1;
+    let bestCount = -1;
+    for (let line = 0; line < span; line++) {
+      let cnt = 0;
+      for (let i = 0; i < cross; i++) {
+        const r = kind === 'row' ? line : i;
+        const c = kind === 'row' ? i : line;
+        const orb = this.grid[r][c];
+        if (orb && orb !== to && !this._locked[r][c]) cnt++;
+      }
+      if (cnt > bestCount) { bestCount = cnt; bestLine = line; }
+    }
+    if (bestLine < 0 || bestCount <= 0) return [];
+    const picked: Cell[] = [];
+    for (let i = 0; i < cross; i++) {
+      const r = kind === 'row' ? bestLine : i;
+      const c = kind === 'row' ? i : bestLine;
+      const orb = this.grid[r][c];
+      if (orb && orb !== to && !this._locked[r][c]) {
+        this.grid[r][c] = to;
+        picked.push({ r, c });
+      }
+    }
+    return picked;
+  }
+
   private _randomOrb(): OrbType {
     return ORB_TYPES[Math.floor(this._rng() * ORB_TYPES.length)];
   }

@@ -1,0 +1,288 @@
+/**
+ * 统一生物表（阶段九 · 宠物即怪）——纯数据，零逻辑
+ *
+ * 单一真源：一个「生物 CreatureDef」同时承载
+ * - 宠物面：id / name / element / rarity / role / skillId / traits（与原 PetDef 同构）
+ * - 怪物面：monster.tier1（初级怪）/ monster.tier2（高级怪），各含战斗模板数值与敌人技能
+ * - 四形态美术（约定）：宠物初始头像 / 宠物觉醒头像 / 初级怪全身 / 高级怪全身
+ *
+ * 获取闭环：玩家在关卡里击败某生物的「高级形态（tier2 + captureUnlock）」→ 收录进
+ * PlayerData.discovered → 进入可获取池 → 经召唤/碎片真正拥有。
+ *
+ * pets.ts 仅作为本表「宠物面视图」，enemies.ts 的 MobDef 是不可收服的廉价杂怪，二者不混用。
+ */
+import type { Element } from './combat';
+import { PET_SKILL_IDS, ENEMY_SKILL_IDS } from './skills';
+import type { PetRole, PetTraitDef, StatBlock, GrowthBlock } from './petRoles';
+import type { Rarity } from './rarity';
+
+/** 怪物单形态战斗模板（数值口径同 enemies.ts 的 MobDef，供 enemyStats 缩放） */
+export interface CreatureMonsterTier {
+  /** 该形态独立命名（缺省用生物名 + 形态后缀） */
+  name?: string;
+  baseHp: number;
+  baseAtk: number;
+  baseDef: number;
+  attackInterval: number;
+  /** 敌人技能引用（balance/skills.ts owner:'enemy'），无 = 纯普攻 */
+  skillIds?: readonly string[];
+}
+
+export interface CreatureDef {
+  id: string;
+  name: string;
+  element: Element;
+  /** 天生稀有度（引用键，行为见 balance/rarity.ts）；与养成 star 正交 */
+  rarity: Rarity;
+  role: PetRole;
+  statProfile?: Partial<StatBlock>;
+  growthProfile?: Partial<GrowthBlock>;
+  /** 宠物主动技引用（消珠驱动），效果在 balance/skills.ts */
+  skillId: string;
+  traits?: readonly PetTraitDef[];
+  /** 怪物面：初级怪 / 高级怪 两形态 */
+  monster: {
+    tier1: CreatureMonsterTier;
+    tier2: CreatureMonsterTier;
+  };
+}
+
+/**
+ * 怪物两形态数值生成器：按 power rank 平滑铺出初级/高级基值（第 1 章基准，
+ * 关卡按章节成长 × difficulty 再放大，见 formulas/growth.ts enemyStats）。
+ */
+function monsterPair(
+  rank: number,
+  opts: {
+    t1Skills?: readonly string[];
+    t2Skills?: readonly string[];
+    ai1?: number;
+    ai2?: number;
+  } = {},
+): { tier1: CreatureMonsterTier; tier2: CreatureMonsterTier } {
+  const t1Hp = Math.round(600 + rank * 70);
+  const t1Atk = Math.round(88 + rank * 5);
+  const t1Def = Math.round(8 + rank * 2);
+  return {
+    tier1: {
+      baseHp: t1Hp,
+      baseAtk: t1Atk,
+      baseDef: t1Def,
+      attackInterval: opts.ai1 ?? 2,
+      skillIds: opts.t1Skills,
+    },
+    tier2: {
+      baseHp: Math.round(t1Hp * 1.75),
+      baseAtk: Math.round(t1Atk * 1.28),
+      baseDef: Math.round(t1Def * 1.6) + 12,
+      attackInterval: opts.ai2 ?? 2,
+      skillIds: opts.t2Skills,
+    },
+  };
+}
+
+const E = ENEMY_SKILL_IDS;
+
+export const CREATURES: readonly CreatureDef[] = [
+  // ══════════════════════════════════════════════════════════════
+  // 新 10 只（xiaochu2 原生，四形态齐备）：_003 为五行初始赠送，_004 为进阶收录
+  // ══════════════════════════════════════════════════════════════
+  // ── 金 ──
+  {
+    id: 'pet_metal_003', name: '裂甲铁犀', element: 'metal', rarity: 2, role: 'support',
+    skillId: PET_SKILL_IDS.metalDefBreak,
+    traits: [{ type: 'elementDamageBonus', element: 'metal', vs: 'wood', pct: 0.1 }],
+    monster: monsterPair(6, { t2Skills: [E.golemGuard] }),
+  },
+  {
+    id: 'pet_metal_004', name: '锋芒剑姬', element: 'metal', rarity: 4, role: 'attacker',
+    skillId: PET_SKILL_IDS.metalMultiHit,
+    traits: [{ type: 'skillModifier', skillId: PET_SKILL_IDS.metalMultiHit, effectPctBonus: 0.05 }],
+    monster: monsterPair(9, { t2Skills: [E.bladeCharge] }),
+  },
+  // ── 木 ──
+  {
+    id: 'pet_wood_003', name: '青藤连弩手', element: 'wood', rarity: 2, role: 'attacker',
+    skillId: PET_SKILL_IDS.woodMultiHit,
+    monster: monsterPair(6, { t2Skills: [E.lionCharge] }),
+  },
+  {
+    id: 'pet_wood_004', name: '灵鹿医者', element: 'wood', rarity: 2, role: 'healer',
+    skillId: PET_SKILL_IDS.woodBigHeal,
+    traits: [{ type: 'statBonus', stat: 'rcv', pct: 0.1, scope: 'self' }],
+    monster: monsterPair(8, { t2Skills: [E.serpentHeal] }),
+  },
+  // ── 水 ──
+  {
+    id: 'pet_water_003', name: '冰魄仙鹤', element: 'water', rarity: 3, role: 'support',
+    skillId: PET_SKILL_IDS.waterStun,
+    monster: monsterPair(7, { t2Skills: [E.golemGuard] }),
+  },
+  {
+    id: 'pet_water_004', name: '玄冰龙皇', element: 'water', rarity: 5, role: 'attacker',
+    skillId: PET_SKILL_IDS.waterMultiHit,
+    traits: [{ type: 'elementDamageBonus', element: 'water', vs: 'fire', pct: 0.12 }],
+    monster: monsterPair(10, { t2Skills: [E.bladeCharge, E.serpentHeal] }),
+  },
+  // ── 火 ──
+  {
+    id: 'pet_fire_003', name: '炽羽火狐', element: 'fire', rarity: 3, role: 'attacker',
+    skillId: PET_SKILL_IDS.fireDot,
+    monster: monsterPair(7, { t2Skills: [E.lionCharge] }),
+  },
+  {
+    id: 'pet_fire_004', name: '焚天魔将', element: 'fire', rarity: 4, role: 'attacker',
+    skillId: PET_SKILL_IDS.fireDotUr,
+    traits: [{ type: 'skillModifier', skillId: PET_SKILL_IDS.fireDotUr, effectPctBonus: 0.05 }],
+    monster: monsterPair(9, { t2Skills: [E.lionCharge, E.pandaGuard] }),
+  },
+  // ── 土 ──
+  {
+    id: 'pet_earth_003', name: '磐石守卫', element: 'earth', rarity: 2, role: 'tank',
+    skillId: PET_SKILL_IDS.earthConvertRow,
+    traits: [{ type: 'statBonus', stat: 'hp', pct: 0.1, scope: 'self' }],
+    monster: monsterPair(6, { t2Skills: [E.golemGuard] }),
+  },
+  {
+    id: 'pet_earth_004', name: '厚土娘娘', element: 'earth', rarity: 3, role: 'healer',
+    skillId: PET_SKILL_IDS.earthHeal,
+    monster: monsterPair(8, { t2Skills: [E.pandaGuard, E.pandaHeal] }),
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // xiao_chu 20 只（ch13–16，四文件齐全，复制重命名落地）
+  // ══════════════════════════════════════════════════════════════
+  // ── 金 ──
+  {
+    id: 'cr_golden_crane', name: '金羽仙鹤', element: 'metal', rarity: 3, role: 'attacker',
+    skillId: PET_SKILL_IDS.metalSlash,
+    monster: monsterPair(11, { t2Skills: [E.bladeCharge] }),
+  },
+  {
+    id: 'cr_tide_manta', name: '潮汐魔鳐', element: 'metal', rarity: 2, role: 'support',
+    skillId: PET_SKILL_IDS.transmuteMetal,
+    monster: monsterPair(14, { t2Skills: [E.golemGuard] }),
+  },
+  {
+    id: 'cr_thunder_cicada', name: '雷纹玉蝉', element: 'metal', rarity: 4, role: 'attacker',
+    skillId: PET_SKILL_IDS.metalMultiHit,
+    monster: monsterPair(17, { t2Skills: [E.bladeCharge, E.golemGuard] }),
+  },
+  {
+    id: 'cr_shadow_roc', name: '玄影天鹏', element: 'metal', rarity: 5, role: 'support',
+    skillId: PET_SKILL_IDS.metalDefBreak,
+    monster: monsterPair(21, { t2Skills: [E.bladeCharge, E.pandaGuard] }),
+  },
+  // ── 木 ──
+  {
+    id: 'cr_jadehorn_goat', name: '玉角灵羊', element: 'wood', rarity: 1, role: 'healer',
+    skillId: PET_SKILL_IDS.woodHeal,
+    monster: monsterPair(10, { t2Skills: [E.serpentHeal] }),
+  },
+  {
+    id: 'cr_kunlun_dragon', name: '昆仑玉蛟', element: 'wood', rarity: 3, role: 'attacker',
+    skillId: PET_SKILL_IDS.woodVolley,
+    monster: monsterPair(12, { t2Skills: [E.lionCharge] }),
+  },
+  {
+    id: 'cr_star_deer', name: '星辉灵鹿', element: 'wood', rarity: 2, role: 'attacker',
+    skillId: PET_SKILL_IDS.woodMultiHit,
+    monster: monsterPair(16, { t2Skills: [E.lionCharge] }),
+  },
+  {
+    id: 'cr_chaos_fox', name: '混沌骨狐', element: 'wood', rarity: 5, role: 'healer',
+    skillId: PET_SKILL_IDS.woodBigHeal,
+    monster: monsterPair(20, { t2Skills: [E.pandaGuard, E.pandaHeal] }),
+  },
+  // ── 水 ──
+  {
+    id: 'cr_cloud_fox', name: '云绒灵狐', element: 'water', rarity: 1, role: 'tank',
+    skillId: PET_SKILL_IDS.waterShield,
+    monster: monsterPair(10, { t2Skills: [E.golemGuard] }),
+  },
+  {
+    id: 'cr_abyss_jellyfish', name: '深渊水母', element: 'water', rarity: 3, role: 'support',
+    skillId: PET_SKILL_IDS.waterStun,
+    monster: monsterPair(13, { t2Skills: [E.serpentHeal] }),
+  },
+  {
+    id: 'cr_frost_seal', name: '霜鳍海豹', element: 'water', rarity: 2, role: 'support',
+    skillId: PET_SKILL_IDS.waterShield,
+    monster: monsterPair(13, { t2Skills: [E.serpentHeal] }),
+  },
+  {
+    id: 'cr_guixu_whale', name: '归墟玄鲸', element: 'water', rarity: 5, role: 'attacker',
+    skillId: PET_SKILL_IDS.waterPierce,
+    monster: monsterPair(15, { t2Skills: [E.bladeCharge, E.serpentHeal] }),
+  },
+  {
+    id: 'cr_void_eye', name: '虚空魔眼', element: 'water', rarity: 4, role: 'attacker',
+    skillId: PET_SKILL_IDS.waterMultiHit,
+    monster: monsterPair(19, { t2Skills: [E.golemGuard, E.bladeCharge] }),
+  },
+  // ── 火 ──
+  {
+    id: 'cr_red_crow', name: '赤日金乌', element: 'fire', rarity: 1, role: 'attacker',
+    skillId: PET_SKILL_IDS.fireBurst,
+    traits: [{ type: 'elementDamageBonus', element: 'fire', vs: 'metal', pct: 0.08 }],
+    monster: monsterPair(16, { t2Skills: [E.lionCharge] }),
+  },
+  {
+    id: 'cr_zhulong', name: '星河烛龙', element: 'fire', rarity: 3, role: 'support',
+    skillId: PET_SKILL_IDS.fireBoost,
+    traits: [{ type: 'teamAura', requireElement: 'fire', count: 2, stat: 'atk', pct: 0.05 }],
+    monster: monsterPair(18, { t2Skills: [E.lionCharge, E.pandaGuard] }),
+  },
+  {
+    id: 'cr_outer_demon', name: '天外魔君', element: 'fire', rarity: 5, role: 'attacker',
+    skillId: PET_SKILL_IDS.fireDotUr,
+    monster: monsterPair(22, { t2Skills: [E.lionCharge, E.pandaGuard, E.pandaHeal] }),
+  },
+  // ── 土 ──
+  {
+    id: 'cr_stone_ape', name: '玄岩石猿', element: 'earth', rarity: 1, role: 'tank',
+    skillId: PET_SKILL_IDS.earthShield,
+    monster: monsterPair(11, { t2Skills: [E.golemGuard] }),
+  },
+  {
+    id: 'cr_guixu_turtle', name: '归墟玄龟', element: 'earth', rarity: 3, role: 'tank',
+    skillId: PET_SKILL_IDS.earthShield,
+    monster: monsterPair(14, { t2Skills: [E.golemGuard, E.serpentHeal] }),
+  },
+  {
+    id: 'cr_star_gear', name: '星轮机关兽', element: 'earth', rarity: 3, role: 'support',
+    skillId: PET_SKILL_IDS.earthHeartConvert,
+    traits: [{ type: 'skillModifier', skillId: PET_SKILL_IDS.earthHeartConvert, convertCountBonus: 1 }],
+    monster: monsterPair(17, { t2Skills: [E.golemGuard] }),
+  },
+  {
+    id: 'cr_rift_beetle', name: '裂隙甲虫', element: 'earth', rarity: 4, role: 'tank',
+    skillId: PET_SKILL_IDS.earthConvertRow,
+    monster: monsterPair(20, { t2Skills: [E.golemGuard, E.bladeCharge] }),
+  },
+];
+
+export const CREATURE_MAP: ReadonlyMap<string, CreatureDef> = new Map(
+  CREATURES.map((c) => [c.id, c]),
+);
+
+export const CREATURE_IDS: readonly string[] = CREATURES.map((c) => c.id);
+
+/**
+ * 初始赠送阵容（五行各 1，新 10 只中每属性较低稀有度的一只）。
+ * 建档/迁移时同时写入 ownedPets / discovered / team（开场师门契约登记，直给）。
+ */
+export const STARTER_CREATURE_IDS: readonly string[] = [
+  'pet_metal_003',
+  'pet_wood_003',
+  'pet_water_003',
+  'pet_fire_003',
+  'pet_earth_003',
+];
+
+/** 取生物定义（未知抛错，便于早暴露数据错误） */
+export function getCreature(id: string): CreatureDef {
+  const c = CREATURE_MAP.get(id);
+  if (!c) throw new Error(`未知生物: ${id}`);
+  return c;
+}

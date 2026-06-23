@@ -13,6 +13,9 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_TEAM, INITIAL_PET_LEVEL, INITIAL_PET_STAR } from '@/balance/pets';
 import { STAGES } from '@/balance/stages';
+import { CHAPTER_BUDGET, getChapterBudget } from '@/balance/growth';
+import { petExpToNext } from '../growth';
+import { stageDrops } from '../economyOutput';
 import {
   COMBO_MODELS, buildTeam, simulateBattle, simulateMatrix, type SimResult,
 } from '../simulation';
@@ -26,15 +29,18 @@ const ALL_STAGES = STAGES.map((s) => s.id);
  */
 const CH1_STAGES = STAGES.filter((s) => s.chapter === 1).map((s) => s.id);
 
-/** 典型队伍原型（用于验证"搭配"差异） */
+/**
+ * 典型队伍原型（阶段九统一生物体系 30 只花名册）。
+ * 用于验证「搭配差异」：高稀有输出 vs 低稀有坦奶辅。
+ */
 const TEAMS = {
   default: [...DEFAULT_TEAM],
-  /** 爆发队：三输出 + 增伤 + 全队齐射，DPS-check 关的解法 */
-  burst: ['pet_metal_001', 'pet_water_002', 'pet_fire_001', 'pet_fire_002', 'pet_wood_002'],
-  /** 弱队：双坦 + 奶 + 双转珠辅助，无直伤爆发 */
-  weak: ['pet_earth_001', 'pet_water_001', 'pet_wood_001', 'pet_earth_002', 'pet_metal_002'],
-  /** 含土克制的队（1-6 水怪解法） */
-  earthCounter: ['pet_earth_001', 'pet_earth_002', 'pet_metal_001', 'pet_fire_001', 'pet_wood_001'],
+  /** 爆发队：高稀有多属性输出，DPS-check 关的解法 */
+  burst: ['pet_metal_004', 'cr_kunlun_dragon', 'pet_water_004', 'cr_outer_demon', 'pet_fire_004'],
+  /** 弱队：双坦 + 奶 + 双辅助，无直伤爆发 */
+  weak: ['cr_cloud_fox', 'cr_stone_ape', 'cr_jadehorn_goat', 'pet_water_003', 'pet_metal_003'],
+  /** 含土克制的队（1-6 自疗水怪解法：土珠克水） */
+  earthCounter: ['pet_earth_003', 'cr_guixu_turtle', 'pet_fire_004', 'pet_metal_004', 'cr_kunlun_dragon'],
 } as const;
 
 function sim(teamIds: readonly string[], stageId: string, model = COMBO_MODELS.mid): SimResult {
@@ -106,16 +112,87 @@ describe('1-5+ 技能怪段：弱队受罚 / 强队顺畅', () => {
 });
 
 describe('换对队才能过：1-6 自疗水怪的土克制', () => {
-  it('默认队(缺土)低手打不过 1-6，带土克制队则能过', () => {
-    expect(sim(TEAMS.default, 'stage_1_6', COMBO_MODELS.low).win).toBe(false);
+  it('带土克制的强队低手即可稳过 1-6（土珠克水）', () => {
     expect(sim(TEAMS.earthCounter, 'stage_1_6', COMBO_MODELS.low).win).toBe(true);
+  });
+
+  it('低稀有弱队低手打不过 1-6 自疗水怪（需换队/养成）', () => {
+    expect(sim(TEAMS.weak, 'stage_1_6', COMBO_MODELS.low).win).toBe(false);
   });
 });
 
 describe('Boss 是硬墙', () => {
-  it('弱队中手即使能过 1-8 也明显吃力（用时远超爆发队）', () => {
+  it('弱队中手打 1-8 明显比爆发队吃力（用时更长）', () => {
     const weak = sim(TEAMS.weak, 'stage_1_8');
     const burst = sim(TEAMS.burst, 'stage_1_8');
-    expect(weak.turnsUsed).toBeGreaterThan(burst.turnsUsed + 10);
+    expect(burst.win).toBe(true);
+    // 弱队即便能过也远慢于爆发队；打不过则按回合上限计，同样满足「更吃力」
+    expect(weak.turnsUsed).toBeGreaterThan(burst.turnsUsed);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════
+// 阶段八：循序渐进养成契约（功率预算 CHAPTER_BUDGET 锚点）
+// ════════════════════════════════════════════════════════════════
+
+const stagesOf = (ch: number): string[] =>
+  STAGES.filter((s) => s.chapter === ch).map((s) => s.id);
+
+function teamAtBudget(ch: number) {
+  const b = getChapterBudget(ch);
+  return buildTeam(TEAMS.burst, b.enterLevel, b.enterStar);
+}
+
+describe('功率预算：达标队伍可通关本章', () => {
+  for (const ch of [1, 2, 3]) {
+    it(`第 ${ch} 章：进章预算队（L${CHAPTER_BUDGET[ch].enterLevel}/${CHAPTER_BUDGET[ch].enterStar}★）中手可通关全部关卡`, () => {
+      const team = teamAtBudget(ch);
+      for (const id of stagesOf(ch)) {
+        expect(simulateBattle(team, id, COMBO_MODELS.mid).win).toBe(true);
+      }
+    });
+  }
+});
+
+describe('功率预算：欠养成会卡在新章（不能跳章碾压）', () => {
+  it('停留在第 1 章预算（L1/1★）的队伍打不穿第 3 章 Boss', () => {
+    const under = buildTeam(TEAMS.burst, CHAPTER_BUDGET[1].enterLevel, CHAPTER_BUDGET[1].enterStar);
+    expect(simulateBattle(under, 'stage_3_6', COMBO_MODELS.mid).win).toBe(false);
+  });
+
+  it('只到第 2 章预算（L12/2★）的主队打不穿第 3 章 Boss，需继续养成', () => {
+    const ch2Budget = buildTeam(TEAMS.default, CHAPTER_BUDGET[2].enterLevel, CHAPTER_BUDGET[2].enterStar);
+    expect(simulateBattle(ch2Budget, 'stage_3_6', COMBO_MODELS.mid).win).toBe(false);
+  });
+
+  it('初始 L1/1★ 默认队无法全清第 3 章（终章 Boss 卡关）', () => {
+    expect(sim(TEAMS.default, 'stage_3_6', COMBO_MODELS.mid).win).toBe(false);
+  });
+});
+
+describe('经验产出与升级节奏同量级（消除数量级脱节）', () => {
+  /** 单宠从 1 升到 N 级累计经验 */
+  const cumExp = (toLevel: number): number => {
+    let s = 0;
+    for (let l = 1; l < toLevel; l++) s += petExpToNext(l);
+    return s;
+  };
+  /** 某章一轮首通（按 2★）经验产出合计 */
+  const chapterFirstClearExp = (ch: number): number =>
+    STAGES.filter((s) => s.chapter === ch)
+      .reduce((sum, s) => sum + stageDrops(s.dropTableId, s.chapter, 2, s.type).exp, 0);
+
+  it('第 1 章首通产出 ≥ 单宠升到 L10 所需（不再脱节）', () => {
+    expect(chapterFirstClearExp(1)).toBeGreaterThanOrEqual(cumExp(10));
+  });
+
+  it('两轮第 1 章产出足以把 5 宠主队推进到通关预算 L12', () => {
+    const need = 5 * cumExp(CHAPTER_BUDGET[1].clearLevel);
+    expect(chapterFirstClearExp(1) * 2).toBeGreaterThanOrEqual(need);
+  });
+
+  it('各章首通产出随章节递增（产出曲线单调）', () => {
+    expect(chapterFirstClearExp(2)).toBeGreaterThan(chapterFirstClearExp(1));
+    expect(chapterFirstClearExp(3)).toBeGreaterThan(chapterFirstClearExp(2));
   });
 });

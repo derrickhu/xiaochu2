@@ -13,7 +13,7 @@ import { COMBAT, type Element } from '@/balance/combat';
 import type { PetDef } from '@/balance/pets';
 import { PET_MAP } from '@/balance/pets';
 import type { EnemyDef } from '@/balance/enemies';
-import { ENEMY_MAP } from '@/balance/enemies';
+import { resolveEncounter } from '@/balance/enemies';
 import type { StageDef } from '@/balance/stages';
 import { STAGE_MAP } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
@@ -92,8 +92,9 @@ interface SimEnemy {
 const TURN_CAP = 55;
 
 function spawnEnemy(stage: StageDef, waveIndex: number): SimEnemy {
-  const def = ENEMY_MAP.get(stage.enemies[waveIndex]);
-  if (!def) throw new Error(`未知敌人: ${stage.enemies[waveIndex]}`);
+  const ref = stage.encounters[waveIndex];
+  if (!ref) throw new Error(`未知波次: ${stage.id} #${waveIndex}`);
+  const def = resolveEncounter(ref).def;
   const stats = enemyStats(def, stage.chapter, stage.difficulty);
   return {
     def,
@@ -137,7 +138,6 @@ export function simulateBattle(
 
   let heroHp = heroMaxHp;
   let shield = 0;
-  let dmgBuff: { mult: number; turnsLeft: number } | null = null;
   let tookDamage = false;
   let maxEnemyHit = 0;
   let turnsUsed = 0;
@@ -145,6 +145,18 @@ export function simulateBattle(
   let buffMult = 1;
   let dmgToEnemy = 0;
   let healThisTurn = 0;
+  // 阶段八新增状态（增伤/点燃/眩晕/破防）。
+  // 用持有对象而非散落 let：闭包内外读写统一为属性访问，避免 TS 把闭包内赋值的
+  // let 在外层窄化为 never（运行期逻辑不变，纯类型修正）。
+  let enemyStun = 0;
+  const st: {
+    dmgBuff: { mult: number; turnsLeft: number } | null;
+    enemyDefBreak: { pct: number; turnsLeft: number } | null;
+    enemyDot: { amount: number; turnsLeft: number } | null;
+    heroDot: { amount: number; turnsLeft: number } | null;
+  } = { dmgBuff: null, enemyDefBreak: null, enemyDot: null, heroDot: null };
+  const effEnemyDef = (): number =>
+    st.enemyDefBreak ? Math.floor(enemy.def_ * (1 - st.enemyDefBreak.pct)) : enemy.def_;
 
   let waveIndex = 0;
   let enemy = spawnEnemy(stage, waveIndex);
@@ -164,7 +176,7 @@ export function simulateBattle(
     }
 
     enemyReduction = enemy.dmgReduction?.reduction ?? 0;
-    buffMult = dmgBuff?.mult ?? 1.0;
+    buffMult = st.dmgBuff?.mult ?? 1.0;
     dmgToEnemy = 0;
     healThisTurn = 0;
 
@@ -191,8 +203,10 @@ export function simulateBattle(
       if (bannedSet.has(el)) continue; // 禁用属性珠：消除无伤害
       const pet = firstPetOf(el);
       if (!pet) continue;
-      dmgToEnemy += groupsPerType * orbGroupDamage(pet.atk, el, enemy, model, buffMult, enemyReduction);
+      dmgToEnemy += groupsPerType * orbGroupDamage(pet.atk, el, enemy, effEnemyDef(), model, buffMult, enemyReduction);
     }
+    // 持续伤害（点燃）：每回合对敌人结算
+    if (st.enemyDot) dmgToEnemy += st.enemyDot.amount;
     const heartOrbs = mech.noHeartHeal ? 0 : groupsPerType * model.matchCount;
     healThisTurn += calcHeal(rcvTotal, heartOrbs, model.combo);
 
@@ -201,7 +215,7 @@ export function simulateBattle(
 
     // ── 敌人死亡 → 进波；新敌人当回合不行动 ──
     if (enemy.hp <= 0) {
-      if (waveIndex + 1 < stage.enemies.length) {
+      if (waveIndex + 1 < stage.encounters.length) {
         waveIndex++;
         enemy = spawnEnemy(stage, waveIndex);
         decayStatuses();
@@ -220,6 +234,11 @@ export function simulateBattle(
       heroHp = Math.max(0, heroHp - dmg);
       if (dmg > 0) tookDamage = true;
     }
+    // 持续伤害（敌方施加于英雄）
+    if (st.heroDot) {
+      heroHp = Math.max(0, heroHp - st.heroDot.amount);
+      if (st.heroDot.amount > 0) tookDamage = true;
+    }
     decayStatuses();
     if (heroHp <= 0) return finish(false);
   }
@@ -230,13 +249,26 @@ export function simulateBattle(
   // ════════ 内部闭包 ════════
 
   function decayStatuses(): void {
-    if (dmgBuff) {
-      dmgBuff.turnsLeft--;
-      if (dmgBuff.turnsLeft <= 0) dmgBuff = null;
+    if (st.dmgBuff) {
+      st.dmgBuff.turnsLeft--;
+      if (st.dmgBuff.turnsLeft <= 0) st.dmgBuff = null;
     }
     if (enemy.dmgReduction) {
       enemy.dmgReduction.turnsLeft--;
       if (enemy.dmgReduction.turnsLeft <= 0) enemy.dmgReduction = null;
+    }
+    if (enemyStun > 0) enemyStun--;
+    if (st.enemyDefBreak) {
+      st.enemyDefBreak.turnsLeft--;
+      if (st.enemyDefBreak.turnsLeft <= 0) st.enemyDefBreak = null;
+    }
+    if (st.enemyDot) {
+      st.enemyDot.turnsLeft--;
+      if (st.enemyDot.turnsLeft <= 0) st.enemyDot = null;
+    }
+    if (st.heroDot) {
+      st.heroDot.turnsLeft--;
+      if (st.heroDot.turnsLeft <= 0) st.heroDot = null;
     }
   }
 
@@ -246,14 +278,14 @@ export function simulateBattle(
         hp: enemy.hp,
         maxHp: enemy.maxHp,
         atk: enemy.atk,
-        def_: enemy.def_,
+        def_: effEnemyDef(),
         element: enemy.def.element,
       },
       heroHp,
       heroMaxHp,
       teamRcvTotal: rcvTotal,
       teamAtkTotal: team.reduce((sum, p) => sum + p.atk, 0),
-      teamDamageBuffMult: dmgBuff?.mult ?? 1,
+      teamDamageBuffMult: st.dmgBuff?.mult ?? 1,
       enemyDamageReduction: enemy.dmgReduction?.reduction ?? 0,
     };
   }
@@ -284,16 +316,26 @@ export function simulateBattle(
       if (event.status === 'shield') {
         shield = Math.max(shield, event.value);
       } else if (event.status === 'teamDamageBuff') {
-        dmgBuff = { mult: event.value, turnsLeft: event.turns ?? 0 };
+        st.dmgBuff = { mult: event.value, turnsLeft: event.turns ?? 0 };
       } else if (event.status === 'enemyDamageReduction') {
         if (!enemy.dmgReduction) enemy.dmgReduction = { reduction: event.value, turnsLeft: event.turns ?? 0 };
       } else if (event.status === 'charge') {
         enemy.charging = { mult: event.value, skillId: result.skill.id, releaseVfx: event.vfx };
+      } else if (event.status === 'dot') {
+        if (event.target === 'enemy') {
+          st.enemyDot = { amount: event.value, turnsLeft: event.turns ?? 0 };
+        } else {
+          st.heroDot = { amount: event.value, turnsLeft: event.turns ?? 0 };
+        }
+      } else if (event.status === 'stun') {
+        enemyStun = Math.max(enemyStun, event.turns ?? 0);
+      } else if (event.status === 'enemyDefenseBreak') {
+        st.enemyDefBreak = { pct: Math.max(st.enemyDefBreak?.pct ?? 0, event.value), turnsLeft: event.turns ?? 0 };
       }
     }
 
     for (const req of result.boardRequests) {
-      // 近似：转出的珠当回合即转化为伤害/回血
+      // 近似：转出的珠当回合即转化为伤害/回血（shape 仅近似为 count 颗）
       if (req.to === 'heart') {
         healThisTurn += calcHeal(rcvTotal, req.count, model.combo);
       } else if (covered.has(req.to as Element)) {
@@ -301,7 +343,7 @@ export function simulateBattle(
         if (pet) {
           const extraGroups = req.count / model.matchCount;
           dmgToEnemy += extraGroups * orbGroupDamage(
-            pet.atk, req.to as Element, enemy, model, dmgBuff?.mult ?? buffMult, enemy.dmgReduction?.reduction ?? enemyReduction,
+            pet.atk, req.to as Element, enemy, effEnemyDef(), model, st.dmgBuff?.mult ?? buffMult, enemy.dmgReduction?.reduction ?? enemyReduction,
           );
         }
       }
@@ -311,6 +353,8 @@ export function simulateBattle(
   /** 返回本回合对英雄的原始伤害（0 = 未攻击） */
   function enemyAct(): number {
     if (enemy.hp <= 0) return 0;
+    // 眩晕：跳过行动（蓄力中的敌人不受眩晕影响）
+    if (enemyStun > 0 && !enemy.charging) return 0;
 
     if (enemy.charging) {
       const charging = enemy.charging;
@@ -375,6 +419,7 @@ function orbGroupDamage(
   atk: number,
   el: Element,
   enemy: SimEnemy,
+  defenderDef: number,
   model: ComboModel,
   buffMult: number,
   enemyReduction: number,
@@ -385,7 +430,7 @@ function orbGroupDamage(
     combo: model.combo,
     attackerElement: el,
     defenderElement: enemy.def.element,
-    defenderDef: enemy.def_,
+    defenderDef,
     buffMult,
   });
   return raw * (1 - enemyReduction);

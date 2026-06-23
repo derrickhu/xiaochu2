@@ -8,6 +8,10 @@ import type { SkillVfxId } from './skills';
 export type SkillVfxKind =
   | 'projectile'
   | 'teamVolley'
+  | 'multiHit'
+  | 'dotApply'
+  | 'stun'
+  | 'defenseBreak'
   | 'healBurst'
   | 'shieldBurst'
   | 'buffFloat'
@@ -27,6 +31,10 @@ export interface SkillVfxDef {
 export const SKILL_VFX: readonly SkillVfxDef[] = [
   { id: 'petProjectile', kind: 'projectile', projectileFrom: 'caster', flashAlpha: 0.4, flashDuration: 0.25 },
   { id: 'teamVolley', kind: 'teamVolley', projectileFrom: 'team', flashAlpha: 0.4, flashDuration: 0.25 },
+  { id: 'multiHit', kind: 'multiHit', projectileFrom: 'caster', flashAlpha: 0.4, flashDuration: 0.22 },
+  { id: 'dotApply', kind: 'dotApply', projectileFrom: 'caster', flashAlpha: 0.35, flashDuration: 0.22, floatText: '灼烧' },
+  { id: 'stun', kind: 'stun', flashAlpha: 0.3, flashDuration: 0.2, floatText: '眩晕' },
+  { id: 'defenseBreak', kind: 'defenseBreak', flashAlpha: 0.3, flashDuration: 0.2, floatText: '破防' },
   { id: 'heal', kind: 'healBurst', flashAlpha: 0.25, flashDuration: 0.2 },
   { id: 'shield', kind: 'shieldBurst', flashAlpha: 0.25, flashDuration: 0.2 },
   { id: 'damageBoost', kind: 'buffFloat', flashAlpha: 0.22, flashDuration: 0.2 },

@@ -29,7 +29,10 @@ export const ECONOMY = {
     duplicateShards: 10,
   },
 
-  /** ── 升星碎片消耗：星级 → 所需碎片 ── */
+  /**
+   * ── 升星碎片消耗：目标星级 → 所需碎片（升星成本的唯一真源）──
+   * growth.ts 的 StarProfile 不再重复定义 upgradeCost，统一读这里。
+   */
   starUpShards: { 2: 20, 3: 50, 4: 120, 5: 300 } as Readonly<Record<number, number>>,
 
   /** ── 体力 ── */
@@ -38,5 +41,47 @@ export const ECONOMY = {
     perStage: 6,
     /** 恢复 1 点所需秒数 */
     regenSeconds: 360,
+  },
+
+  /** ── 抽卡（灵玉货币 + 招募券）── */
+  gacha: {
+    /** 单抽灵玉价 */
+    singleCost: 100,
+    /** 十连灵玉价（含 1 抽折扣） */
+    tenCost: 1000,
+    /** 硬保底：连续未出 SSR+ 达此次数，本抽必出 SSR+（rarity≥3） */
+    pitySSR: 50,
+    /** 十连保底最低稀有（rarity≥2 = SR+） */
+    tenPullFloorRarity: 2,
+    /** 重复宠转碎片数（按稀有度，越稀有越多） */
+    duplicateShards: { 1: 5, 2: 10, 3: 20, 4: 40, 5: 80 } as Readonly<Record<number, number>>,
+    /** 新号初始赠送灵玉（够一发十连体验） */
+    starterLingyu: 1000,
+  },
+
+  /** ── 灵玉里程碑产出（首通奖励）── */
+  milestone: {
+    /** 普通/精英关首通灵玉 */
+    firstClearLingyu: 20,
+    /** Boss 关首通灵玉 */
+    bossFirstClearLingyu: 60,
+  },
+
+  /** ── 战斗失败兜底（避免死局）：按理论经验产出的比例返还 ── */
+  defeat: {
+    /** 失败仍给「若通关 1★ 经验」的该比例，保证卡关也有成长 */
+    expRefundPct: 0.25,
+  },
+
+  /** ── 商店（灵宠币定向兑换碎片，作为抽卡的保底补充）── */
+  shop: {
+    /** 每个碎片包的碎片数 */
+    packSize: 10,
+    /** 每包灵宠币基础价（按稀有度，越稀有越贵） */
+    shardPackCost: { 1: 300, 2: 600, 3: 1200, 4: 2400, 5: 4800 } as Readonly<Record<number, number>>,
+    /** 每日轮换的宠数量 */
+    dailyRotationCount: 4,
+    /** 推荐属性展示的宠数量上限 */
+    recommendCount: 3,
   },
 } as const;

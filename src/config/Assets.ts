@@ -8,7 +8,7 @@
  * | bg/ | 场景全屏背景 | scene_{场景}.jpg | scene_home.jpg |
  * | board/ | 棋盘格底 | tile_{dark\|light}.jpg | tile_dark.jpg |
  * | orb/ | 消除珠 | orb_{element}.png | orb_metal.png |
- * | pet/ | 灵宠头像 | {pets.id}.png | pet_fire_001.png |
+ * | pet/ | 灵宠头像 | {pets.id}.png / {pets.id}_s3.png（★4 觉醒灵相） | pet_fire_003.png |
  * | enemy/ | 敌人立绘 | {enemies.id}.png | enemy_slime_wood.png |
  * | ui/icon/ | 图标（导航/货币/操作） | {类别}_{名称}.png | nav_pet, currency_coin |
  * | ui/frame/ | 相框/边框 | pet_{element}.png | pet_metal.png |
@@ -23,6 +23,7 @@
 import type { Element, OrbType } from '@/balance/combat';
 import { PETS } from '@/balance/pets';
 import { ENEMIES } from '@/balance/enemies';
+import { CREATURES } from '@/balance/creatures';
 
 const IMG = 'images';
 
@@ -60,9 +61,41 @@ export function enemyImage(enemyId: string): string {
   return `${IMG}/enemy/${enemyId}.png`;
 }
 
-/** 灵宠头像（路径 = pet/{pets.id}.png） */
+/** 灵宠初始头像（路径 = pet/{pets.id}.png） */
 export function petImage(petId: string): string {
   return `${IMG}/pet/${petId}.png`;
+}
+
+/** 灵宠觉醒头像（路径 = pet/{pets.id}_s3.png，素材源自 xiao_chu 同位灵兽） */
+export function petImageAwakened(petId: string): string {
+  return `${IMG}/pet/${petId}_s3.png`;
+}
+
+/**
+ * ★4 灵相觉醒阈值（对齐 xiao_chu getPetAvatarPath）。
+ * 达成后战斗/编队/图鉴/详情等全场景切换觉醒头像。
+ */
+export const PET_AWAKEN_STAR = 4;
+
+/** 按养成星级选取头像路径 */
+export function petAvatarPath(petId: string, star = 1): string {
+  return star >= PET_AWAKEN_STAR ? petImageAwakened(petId) : petImage(petId);
+}
+
+/**
+ * 生物宠物面头像（与 petAvatarPath 同义，语义化别名）：初始/觉醒头像按 star 切换。
+ */
+export function creaturePetAvatar(creatureId: string, star = 1): string {
+  return petAvatarPath(creatureId, star);
+}
+
+/**
+ * 生物怪物面全身立绘：tier1 初级 = enemy/{id}.png，tier2 高级 = enemy/{id}_awakened.png。
+ */
+export function creatureMonsterImage(creatureId: string, tier: 'tier1' | 'tier2'): string {
+  return tier === 'tier2'
+    ? `${IMG}/enemy/${creatureId}_awakened.png`
+    : `${IMG}/enemy/${creatureId}.png`;
 }
 
 /** 场景背景 */
@@ -71,6 +104,19 @@ export const BACKGROUND_IMAGES = {
   petDetail: `${IMG}/bg/scene_pet_detail.jpg`,
   petPool: `${IMG}/bg/scene_pet_pool.jpg`,
 } as const;
+
+/** 战斗敌人区背景（按敌人五行属性匹配） */
+export const BATTLE_BG_IMAGES: Readonly<Record<Element, string>> = {
+  metal: `${IMG}/bg/battle_metal.jpg`,
+  wood: `${IMG}/bg/battle_wood.jpg`,
+  water: `${IMG}/bg/battle_water.jpg`,
+  fire: `${IMG}/bg/battle_fire.jpg`,
+  earth: `${IMG}/bg/battle_earth.jpg`,
+};
+
+export function battleBgImage(element: Element): string {
+  return BATTLE_BG_IMAGES[element];
+}
 
 /** UI 贴图（框架/图标/卡片） */
 export const UI_IMAGES = {
@@ -81,6 +127,7 @@ export const UI_IMAGES = {
   navBattle: `${IMG}/ui/icon/nav_battle.png`,
   iconCoin: `${IMG}/ui/icon/currency_coin.png`,
   iconExp: `${IMG}/ui/icon/currency_exp.png`,
+  iconLingyu: `${IMG}/ui/icon/currency_lingyu.png`,
   iconRecruit: `${IMG}/ui/icon/action_recruit.png`,
   titlePlaque: `${IMG}/ui/plaque/title.png`,
   codexCardFrame: `${IMG}/ui/card/codex_frame.png`,
@@ -99,6 +146,11 @@ export const PRELOAD_IMAGES: readonly string[] = [
   ...Object.values(PET_FRAME_IMAGES),
   ...ENEMIES.map((e) => enemyImage(e.id)),
   ...PETS.map((p) => petImage(p.id)),
+  ...PETS.map((p) => petImageAwakened(p.id)),
+  // 生物怪物面（初级/高级全身），战斗历练关需要
+  ...CREATURES.map((c) => creatureMonsterImage(c.id, 'tier1')),
+  ...CREATURES.map((c) => creatureMonsterImage(c.id, 'tier2')),
+  ...Object.values(BATTLE_BG_IMAGES),
 ];
 
 /** 灵宠页按需预加载 */

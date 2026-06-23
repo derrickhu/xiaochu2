@@ -21,8 +21,9 @@ describe('teamMaxHp', () => {
   });
 
   it('换上坦克宠总生命更高', () => {
-    const base = teamMaxHp(makeTeam(['pet_fire_001']));
-    const tanky = teamMaxHp(makeTeam(['pet_earth_001']));
+    // 同稀有（rarity 2）下：攻击位 vs 坦克位，坦克 hp 更高
+    const base = teamMaxHp(makeTeam(['pet_wood_003']));
+    const tanky = teamMaxHp(makeTeam(['pet_earth_003']));
     expect(tanky).toBeGreaterThan(base);
   });
 });
@@ -35,21 +36,22 @@ describe('teamRcv', () => {
   });
 
   it('换上治疗宠总回复更高', () => {
-    const noHealer = teamRcv(makeTeam(['pet_fire_001']));
-    const withHealer = teamRcv(makeTeam(['pet_wood_001']));
+    // 同稀有（rarity 2）下：攻击位 vs 治疗位，治疗 rcv 更高
+    const noHealer = teamRcv(makeTeam(['pet_wood_003']));
+    const withHealer = teamRcv(makeTeam(['pet_wood_004']));
     expect(withHealer).toBeGreaterThan(noHealer);
   });
 });
 
 describe('teamElements', () => {
-  it('默认队伍(v0.3 挑战版)刻意只覆盖四行(缺土)，逼玩家编队', () => {
+  it('初始队伍（五行各 1）覆盖全部 5 种属性', () => {
     const set = teamElements(makeTeam(DEFAULT_TEAM));
-    expect(set.size).toBe(4);
-    expect(set.has('earth')).toBe(false);
+    expect(set.size).toBe(5);
+    expect(set.has('earth')).toBe(true);
   });
 
   it('缺属性队伍：覆盖集合反映实际属性', () => {
-    const set = teamElements(makeTeam(['pet_fire_001', 'pet_fire_002', 'pet_wood_001']));
+    const set = teamElements(makeTeam(['pet_fire_003', 'pet_fire_004', 'pet_wood_003']));
     expect(set.has('fire')).toBe(true);
     expect(set.has('wood')).toBe(true);
     expect(set.has('water')).toBe(false);

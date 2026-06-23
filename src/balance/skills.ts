@@ -22,6 +22,10 @@ export type SkillTarget = 'enemy' | 'self' | 'team' | 'board';
 export type SkillCategory =
   | 'nuke'        // 单体直伤
   | 'teamNuke'    // 全队齐射
+  | 'multiNuke'   // 多段直伤
+  | 'dot'         // 持续伤害（点燃/中毒/流血）
+  | 'control'     // 控制（眩晕等）
+  | 'debuff'      // 减益（破防等）
   | 'heal'        // 回复
   | 'shield'      // 护盾
   | 'buff'        // 增益（增伤等）
@@ -33,6 +37,10 @@ export type SkillCategory =
 export type SkillVfxId =
   | 'petProjectile'
   | 'teamVolley'
+  | 'multiHit'
+  | 'dotApply'
+  | 'stun'
+  | 'defenseBreak'
   | 'heal'
   | 'shield'
   | 'damageBoost'
@@ -41,6 +49,9 @@ export type SkillVfxId =
   | 'enemyAttack'
   | 'enemyHeal'
   | 'enemyShield';
+
+/** 转珠形状：random=随机若干颗，row=整行，col=整列 */
+export type ConvertShape = 'random' | 'row' | 'col';
 
 export type DamageSource = 'casterAtk' | 'teamAtk' | 'enemyAtk';
 
@@ -81,11 +92,44 @@ export type SkillEffectDef =
       kind: 'convertOrbs';
       to: OrbType;
       count: number;
+      /** 转珠形状，缺省 random（随机 count 颗） */
+      shape?: ConvertShape;
     }
   | {
       kind: 'charge';
       multiplier: number;
       releaseVfx: SkillVfxId;
+    }
+  | {
+      kind: 'multiHit';
+      source: DamageSource;
+      /** 每段倍率 */
+      multiplier: number;
+      /** 段数 */
+      hits: number;
+      element?: Element;
+      applyDefense?: boolean;
+      applyDmgBuff?: boolean;
+      applyEnemyReduction?: boolean;
+    }
+  | {
+      kind: 'dot';
+      source: DamageSource;
+      /** 每回合伤害 = 来源值 × multiplier */
+      multiplier: number;
+      turns: number;
+      element?: Element;
+    }
+  | {
+      kind: 'stun';
+      /** 眩晕回合数（敌人跳过行动） */
+      turns: number;
+    }
+  | {
+      kind: 'defenseBreak';
+      /** 防御降低比例（0~1） */
+      pct: number;
+      turns: number;
     };
 
 export interface SkillDef {
@@ -108,6 +152,10 @@ export interface SkillDef {
 export const CATEGORY_DEFAULT_VFX: Readonly<Record<SkillCategory, SkillVfxId>> = {
   nuke: 'petProjectile',
   teamNuke: 'teamVolley',
+  multiNuke: 'multiHit',
+  dot: 'dotApply',
+  control: 'stun',
+  debuff: 'defenseBreak',
   heal: 'heal',
   shield: 'shield',
   buff: 'damageBoost',
@@ -133,6 +181,17 @@ export const PET_SKILL_IDS = {
   fireBoost: 'pet_fire_boost',
   earthShield: 'pet_earth_shield',
   earthHeartConvert: 'pet_earth_heart_convert',
+  // ── 阶段八新增（展示 dot / stun / defenseBreak / multiHit / convertShape）──
+  fireDot: 'pet_fire_dot',
+  fireDotUr: 'pet_fire_dot_ur',
+  metalDefBreak: 'pet_metal_def_break',
+  metalMultiHit: 'pet_metal_multi_hit',
+  waterStun: 'pet_water_stun',
+  waterMultiHit: 'pet_water_multi_hit',
+  woodMultiHit: 'pet_wood_multi_hit',
+  woodBigHeal: 'pet_wood_big_heal',
+  earthConvertRow: 'pet_earth_convert_row',
+  earthHeal: 'pet_earth_heal',
 } as const;
 
 export const ENEMY_SKILL_IDS = {
@@ -225,17 +284,84 @@ function makeDamageBuff(p: {
   };
 }
 
-/** 转珠：随机 count 颗转为目标珠 */
+/** 转珠：随机 count 颗 / 整行 / 整列 转为目标珠 */
 function makeConvert(p: {
-  id: string; name: string; to: OrbType; count: number; cd: number; flavor?: string;
+  id: string; name: string; to: OrbType; count: number; cd: number;
+  shape?: ConvertShape; flavor?: string;
 }): SkillDef {
   const toName = p.to === 'heart' ? '心珠' : `${ELEMENT_NAME[p.to as Element]}珠`;
+  const shape = p.shape ?? 'random';
+  const where = shape === 'row' ? '一整行' : shape === 'col' ? '一整列' : `随机 ${p.count} 颗`;
   return {
     id: p.id, name: p.name, category: 'convert', cd: p.cd,
     owner: 'pet', trigger: 'manual', target: 'board',
     tags: ['转珠', toName],
-    desc: withFlavor(p.flavor, `将盘面随机 ${p.count} 颗珠子转为${toName}`),
-    effects: [{ kind: 'convertOrbs', to: p.to, count: p.count }],
+    desc: withFlavor(p.flavor, `将盘面${where}珠子转为${toName}`),
+    effects: [{ kind: 'convertOrbs', to: p.to, count: p.count, shape }],
+  };
+}
+
+/** 多段直伤：自身/队伍攻击 × multiplier，命中 hits 段 */
+function makeMultiHit(p: {
+  id: string; name: string; element: Element; multiplier: number; hits: number; cd: number;
+  source?: DamageSource; flavor?: string;
+}): SkillDef {
+  const source = p.source ?? 'casterAtk';
+  return {
+    id: p.id, name: p.name, category: 'multiNuke', cd: p.cd,
+    owner: 'pet', trigger: 'manual', target: 'enemy',
+    tags: ['输出', '多段'],
+    desc: withFlavor(p.flavor, `对敌人造成 ${p.hits} 段、每段 ${pct(p.multiplier)} 的${ELEMENT_NAME[p.element]}属性伤害`),
+    effects: [{ kind: 'multiHit', source, multiplier: p.multiplier, hits: p.hits, element: p.element, applyDefense: true, applyDmgBuff: true, applyEnemyReduction: true }],
+  };
+}
+
+/** 持续伤害（点燃/中毒/流血）：turns 回合内每回合造成 来源 × multiplier */
+function makeDot(p: {
+  id: string; name: string; element: Element; multiplier: number; turns: number; cd: number;
+  source?: DamageSource; flavor?: string;
+}): SkillDef {
+  const source = p.source ?? 'casterAtk';
+  return {
+    id: p.id, name: p.name, category: 'dot', cd: p.cd,
+    owner: 'pet', trigger: 'manual', target: 'enemy',
+    tags: ['输出', '持续'],
+    desc: withFlavor(p.flavor, `灼烧敌人，${p.turns} 回合内每回合造成 ${pct(p.multiplier)} 攻击的${ELEMENT_NAME[p.element]}伤害`),
+    effects: [{ kind: 'dot', source, multiplier: p.multiplier, turns: p.turns, element: p.element }],
+  };
+}
+
+/** 眩晕：turns 回合内敌人跳过行动 */
+function makeStun(p: {
+  id: string; name: string; turns: number; cd: number; flavor?: string;
+  /** 附带直伤（可选） */
+  damage?: { element: Element; multiplier: number };
+}): SkillDef {
+  const effects: SkillEffectDef[] = [{ kind: 'stun', turns: p.turns }];
+  let desc = `眩晕敌人 ${p.turns} 回合，使其无法行动`;
+  if (p.damage) {
+    effects.unshift({ kind: 'damage', source: 'casterAtk', multiplier: p.damage.multiplier, element: p.damage.element, applyDefense: true, applyDmgBuff: true, applyEnemyReduction: true });
+    desc = `对敌人造成自身攻击 ${pct(p.damage.multiplier)} 的${ELEMENT_NAME[p.damage.element]}伤害，并${desc}`;
+  }
+  return {
+    id: p.id, name: p.name, category: 'control', cd: p.cd,
+    owner: 'pet', trigger: 'manual', target: 'enemy',
+    tags: ['控制', '眩晕'],
+    desc: withFlavor(p.flavor, desc),
+    effects,
+  };
+}
+
+/** 破防：turns 回合内降低敌人防御 pct */
+function makeDefenseBreak(p: {
+  id: string; name: string; pct: number; turns: number; cd: number; flavor?: string;
+}): SkillDef {
+  return {
+    id: p.id, name: p.name, category: 'debuff', cd: p.cd,
+    owner: 'pet', trigger: 'manual', target: 'enemy',
+    tags: ['减益', '破防'],
+    desc: withFlavor(p.flavor, `${p.turns} 回合内降低敌人 ${pct(p.pct)} 防御`),
+    effects: [{ kind: 'defenseBreak', pct: p.pct, turns: p.turns }],
   };
 }
 
@@ -291,6 +417,18 @@ export const SKILLS: readonly SkillDef[] = [
   makeShield({ id: PET_SKILL_IDS.earthShield, name: '岩甲庇护', shieldPct: 0.3, cd: 7, flavor: '岩甲护体' }),
   makeConvert({ id: PET_SKILL_IDS.earthHeartConvert, name: '大地恩泽', to: 'heart', count: 5, cd: 6, flavor: '大地赐福' }),
 
+  // ── 阶段八新增宠物技能（展示新效果，全部蓝图生成）──
+  makeDot({ id: PET_SKILL_IDS.fireDot, name: '业火灼烧', element: 'fire', multiplier: 1.8, turns: 3, cd: 5, flavor: '喷吐业火' }),
+  makeDot({ id: PET_SKILL_IDS.fireDotUr, name: '焚天烈焰', element: 'fire', multiplier: 3.0, turns: 4, cd: 6, flavor: '焚尽苍穹' }),
+  makeDefenseBreak({ id: PET_SKILL_IDS.metalDefBreak, name: '裂甲冲撞', pct: 0.4, turns: 3, cd: 5, flavor: '以角破甲' }),
+  makeMultiHit({ id: PET_SKILL_IDS.metalMultiHit, name: '剑舞乱斩', element: 'metal', multiplier: 3, hits: 4, cd: 6, flavor: '剑光纷舞' }),
+  makeStun({ id: PET_SKILL_IDS.waterStun, name: '冰封锁影', turns: 1, cd: 6, flavor: '寒霜封形', damage: { element: 'water', multiplier: 4 } }),
+  makeMultiHit({ id: PET_SKILL_IDS.waterMultiHit, name: '玄冰万箭', element: 'water', multiplier: 3.5, hits: 5, cd: 7, flavor: '召玄冰之箭' }),
+  makeMultiHit({ id: PET_SKILL_IDS.woodMultiHit, name: '青藤连弩', element: 'wood', multiplier: 2.2, hits: 3, cd: 5, flavor: '藤箭连发' }),
+  makeHeal({ id: PET_SKILL_IDS.woodBigHeal, name: '灵木回春', healPct: 0.4, cd: 6, flavor: '灵木之力涌动' }),
+  makeConvert({ id: PET_SKILL_IDS.earthConvertRow, name: '裂地成行', to: 'earth', count: 0, shape: 'row', cd: 6, flavor: '震开大地' }),
+  makeHeal({ id: PET_SKILL_IDS.earthHeal, name: '厚土庇佑', healPct: 0.35, cd: 6, flavor: '厚土滋养', extraConvert: { to: 'heart', count: 4 } }),
+
   // ── 敌人技能（蓝图生成） ──
   makeEnemyGuard({ id: ENEMY_SKILL_IDS.golemGuard, name: '岩盾', reduction: 0.5, turns: 2, cd: 3 }),
   makeEnemyHeal({ id: ENEMY_SKILL_IDS.serpentHeal, name: '寒潭自愈', healPct: 0.16, cd: 3 }),
@@ -327,4 +465,32 @@ export const SKILL_TIER_BONUS: Readonly<Record<number, SkillTierBonus>> = {
 
 export function getSkillTierBonus(tier: number): SkillTierBonus {
   return SKILL_TIER_BONUS[tier] ?? SKILL_TIER_BONUS[1];
+}
+
+/**
+ * 星级质变覆写（借鉴 xiao_chu STAR3/STAR5 override）。
+ *
+ * 与 SKILL_TIER_BONUS 的平 % 不同：这里可对「指定技能 + 指定 skillTier」做质变，
+ * 例如 ★5 大幅拉高倍率、缩短 CD 或改写文案，给升星「质变感」。
+ * - 键 = 技能 id，二级键 = skillTier（2 = ★3~4，3 = ★5）。
+ * - effectMult：覆盖该 tier 的效果倍率（替代 tierBonus.effectPct，乘性，1.0 = 不变）。
+ * - cdDelta：在 tierBonus 基础上再调整 CD（负数缩短）。
+ * - desc：质变文案（覆盖原描述）。
+ * 未配置的技能按 SKILL_TIER_BONUS 平滑加成处理。
+ */
+export interface SkillStarOverride {
+  effectMult?: number;
+  cdDelta?: number;
+  desc?: string;
+}
+
+export const SKILL_STAR_OVERRIDE: Readonly<Record<string, Readonly<Record<number, SkillStarOverride>>>> = {
+  // 示例签名技能：★5 质变（Phase 3 扩宠时按需补充）
+  [PET_SKILL_IDS.fireBurst]: {
+    3: { effectMult: 1.5, cdDelta: -1, desc: '引爆燎原烈焰，对敌人造成自身攻击 1050% 的火属性伤害' },
+  },
+};
+
+export function getSkillStarOverride(skillId: string, tier: number): SkillStarOverride | null {
+  return SKILL_STAR_OVERRIDE[skillId]?.[tier] ?? null;
 }

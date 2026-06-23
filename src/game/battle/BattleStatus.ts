@@ -3,8 +3,21 @@
  */
 
 export type StatusOwner = 'team' | 'enemy';
-export type StatusKind = 'shield' | 'teamDamageBuff' | 'enemyDamageReduction' | 'charge';
+export type StatusKind =
+  | 'shield'
+  | 'teamDamageBuff'
+  | 'enemyDamageReduction'
+  | 'charge'
+  | 'dot'
+  | 'stun'
+  | 'enemyDefenseBreak';
 export type StatusStackPolicy = 'replace' | 'max' | 'add' | 'ignoreIfPresent';
+
+/** 回合结束时 dot 造成的伤害（owner = 承伤方） */
+export interface DotTick {
+  owner: StatusOwner;
+  amount: number;
+}
 
 export interface StatusInstance {
   id: string;
@@ -71,14 +84,36 @@ export class BattleStatusStore {
     return absorbed;
   }
 
-  tickTurnEnd(): void {
+  /** 敌人是否被眩晕（跳过行动） */
+  isStunned(owner: StatusOwner): boolean {
+    return !!this.get(owner, 'stun');
+  }
+
+  /** 破防比例（0~1），无则 0 */
+  defenseBreakPct(owner: StatusOwner): number {
+    return this.get(owner, 'enemyDefenseBreak')?.value ?? 0;
+  }
+
+  /**
+   * 回合结束结算：先收集 dot 伤害，再统一对所有计时状态 -1 并清除过期。
+   * 返回本回合 dot 造成的伤害列表，由调用方落地到对应 HP。
+   */
+  tickTurnEnd(): DotTick[] {
+    const ticks: DotTick[] = [];
+    for (const s of this._statuses) {
+      if (s.kind === 'dot' && s.value > 0) {
+        ticks.push({ owner: s.owner, amount: Math.floor(s.value) });
+      }
+    }
     const expired: StatusInstance[] = [];
     for (const s of this._statuses) {
       if (s.turnsLeft == null) continue;
       s.turnsLeft--;
       if (s.turnsLeft <= 0) expired.push(s);
     }
-    if (expired.length === 0) return;
-    this._statuses = this._statuses.filter((s) => !expired.includes(s));
+    if (expired.length > 0) {
+      this._statuses = this._statuses.filter((s) => !expired.includes(s));
+    }
+    return ticks;
   }
 }

@@ -12,11 +12,12 @@ import {
   PET_MAP, DEFAULT_TEAM, INITIAL_PET_LEVEL, INITIAL_PET_STAR,
   type PetDef,
 } from '@/balance/pets';
-import { ENEMY_MAP, type EnemyDef } from '@/balance/enemies';
+import { resolveEncounter, type EnemyDef, type ResolvedEncounter } from '@/balance/enemies';
 import type { SkillDef, SkillVfxId } from '@/balance/skills';
 import { STAGE_MAP, type StageDef } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
 import { stageDrops } from '@/formulas/economyOutput';
+import { ECONOMY } from '@/balance/economy';
 import { calcDamage, calcHeal, comboMultiplier } from '@/formulas/damage';
 import { enemyStats } from '@/formulas/growth';
 import { teamMaxHp, teamRcv, teamElements, petAtkInTeam, type TeamMember } from '@/formulas/team';
@@ -43,6 +44,7 @@ export type BattleState =
 
 export interface TeamPet {
   def: PetDef;
+  star: number;
   skill: SkillDef;
   atk: number;
   /** 主动技剩余冷却（0 = 就绪） */
@@ -60,6 +62,7 @@ export type SkillCastResult = SkillResult & {
   value?: number;
   to?: OrbType;
   count?: number;
+  shape?: 'random' | 'row' | 'col';
   enemyDead?: boolean;
 };
 
@@ -117,6 +120,8 @@ export interface BattleResult {
   shards: { petId: string; count: number }[];
   turnsUsed: number;
   noDamage: boolean;
+  /** 本场击败的「可收录高级怪」对应的生物 id（胜利时收录进宠物池） */
+  discoveredCreatures: string[];
 }
 
 export class BattleController {
@@ -153,6 +158,9 @@ export class BattleController {
 
   private _statuses = new BattleStatusStore();
 
+  /** 本关解析后的各波遭遇（战斗模板 + 收录元信息） */
+  private _waves: ResolvedEncounter[];
+
   private _rng: () => number;
 
   /**
@@ -168,6 +176,7 @@ export class BattleController {
     const stage = STAGE_MAP.get(stageId);
     if (!stage) throw new Error(`未知关卡: ${stageId}`);
     this.stage = stage;
+    this._waves = stage.encounters.map((ref) => resolveEncounter(ref));
     this._rng = rng;
 
     const ids = teamIds && teamIds.length > 0 ? teamIds : DEFAULT_TEAM;
@@ -178,6 +187,7 @@ export class BattleController {
 
     this.team = members.map((m) => ({
       def: m.def,
+      star: m.star,
       skill: skillForPet(m.def, m.star),
       atk: petAtkInTeam(members, m),
       skillCdLeft: skillCdForPet(m.def, m.star),
@@ -209,7 +219,7 @@ export class BattleController {
   }
 
   get totalWaves(): number {
-    return this.stage.enemies.length;
+    return this._waves.length;
   }
 
   /** 战斗是否已分出胜负 */
@@ -258,7 +268,7 @@ export class BattleController {
         combo,
         attackerElement: element,
         defenderElement: this.enemy.def.element,
-        defenderDef: this.enemy.def_,
+        defenderDef: this._enemyDefEffective,
         isCrit,
         buffMult: this.dmgBuff?.mult ?? 1.0,
       }) * this._elementTraitDamageMult(pet.def, this.enemy.def.element);
@@ -322,8 +332,17 @@ export class BattleController {
    */
   enemyAct(): EnemyActResult {
     const result = this._enemyTurnAction();
-    this._statuses.tickTurnEnd();
+    const dotTicks = this._statuses.tickTurnEnd();
+    for (const tick of dotTicks) {
+      if (tick.owner === 'enemy') {
+        this.enemy.hp = Math.max(0, this.enemy.hp - tick.amount);
+      } else {
+        this.heroHp = Math.max(0, this.heroHp - tick.amount);
+        if (tick.amount > 0) this.tookDamage = true;
+      }
+    }
     this._syncEnemyStatusMirrors();
+    if (this.heroHp <= 0) result.heroDead = true;
     return result;
   }
 
@@ -331,6 +350,11 @@ export class BattleController {
     const none: EnemyActResult = { action: 'idle', damage: 0, absorbed: 0, heroDead: false, healed: 0 };
     const enemy = this.enemy;
     if (enemy.hp <= 0) return none;
+
+    // 0) 眩晕：跳过本回合行动（蓄力中的敌人不受眩晕影响，仍打出重击）
+    if (this._statuses.isStunned('enemy') && !enemy.charging) {
+      return none;
+    }
 
     // 1) 蓄力完成：打出重击（覆盖普攻）
     if (enemy.charging) {
@@ -411,10 +435,14 @@ export class BattleController {
 
   private _applyPetSkillResult(result: SkillResult): SkillCastResult {
     this._applySkillResult(result);
-    const damage = result.damageEvents.find((e) => e.target === 'enemy')?.amount;
+    const enemyHits = result.damageEvents.filter((e) => e.target === 'enemy');
+    const damage = enemyHits.reduce((sum, e) => sum + e.amount, 0) || undefined;
     const heal = result.healEvents.find((e) => e.target === 'team')?.amount;
     const shield = result.statusEvents.find((e) => e.status === 'shield');
     const buff = result.statusEvents.find((e) => e.status === 'teamDamageBuff');
+    const dot = result.statusEvents.find((e) => e.status === 'dot');
+    const stun = result.statusEvents.find((e) => e.status === 'stun');
+    const defBreak = result.statusEvents.find((e) => e.status === 'enemyDefenseBreak');
     const board = result.boardRequests[0];
 
     return {
@@ -424,10 +452,11 @@ export class BattleController {
       damage,
       healed: heal,
       mult: buff?.value,
-      turns: buff?.turns,
-      value: shield ? this.shield : undefined,
+      turns: buff?.turns ?? dot?.turns ?? stun?.turns ?? defBreak?.turns,
+      value: shield ? this.shield : (dot?.value ?? defBreak?.value),
       to: board?.to,
       count: board?.count,
+      shape: board?.shape,
       enemyDead: this.enemy.hp <= 0,
     };
   }
@@ -519,10 +548,46 @@ export class BattleController {
           skillId: result.skill.id,
           releaseVfx: event.vfx,
         };
+      } else if (event.status === 'dot') {
+        this._statuses.add({
+          id: event.target === 'enemy' ? 'enemy_dot' : 'team_dot',
+          kind: 'dot',
+          owner: event.target === 'enemy' ? 'enemy' : 'team',
+          value: event.value,
+          turnsLeft: event.turns,
+          sourceSkillId: result.skill.id,
+          stack: event.stack,
+        });
+      } else if (event.status === 'stun') {
+        this._statuses.add({
+          id: 'enemy_stun',
+          kind: 'stun',
+          owner: 'enemy',
+          value: event.value,
+          turnsLeft: event.turns,
+          sourceSkillId: result.skill.id,
+          stack: event.stack,
+        });
+      } else if (event.status === 'enemyDefenseBreak') {
+        this._statuses.add({
+          id: 'enemy_def_break',
+          kind: 'enemyDefenseBreak',
+          owner: 'enemy',
+          value: event.value,
+          turnsLeft: event.turns,
+          sourceSkillId: result.skill.id,
+          stack: event.stack,
+        });
       }
     }
 
     this._syncEnemyStatusMirrors();
+  }
+
+  /** 当前敌人有效防御（破防后） */
+  private get _enemyDefEffective(): number {
+    const break_ = this._statuses.defenseBreakPct('enemy');
+    return break_ > 0 ? Math.floor(this.enemy.def_ * (1 - break_)) : this.enemy.def_;
   }
 
   private _runtimeContext() {
@@ -531,7 +596,7 @@ export class BattleController {
         hp: this.enemy.hp,
         maxHp: this.enemy.maxHp,
         atk: this.enemy.atk,
-        def_: this.enemy.def_,
+        def_: this._enemyDefEffective,
         element: this.enemy.def.element,
       },
       heroHp: this.heroHp,
@@ -559,20 +624,33 @@ export class BattleController {
       : null;
   }
 
+  /** 失败兜底奖励：返还「1★ 通关经验」的固定比例，避免卡关零成长（不发碎片/灵宠币） */
+  defeatExpRefund(): number {
+    const drops = stageDrops(this.stage.dropTableId, this.stage.chapter, 1, this.stage.type);
+    return Math.floor(drops.exp * ECONOMY.defeat.expRefundPct);
+  }
+
   /** 战斗结束，生成结果（胜利时计算星数、灵宠币与掉落经验/碎片） */
   finish(win: boolean): BattleResult {
     this.state = win ? 'victory' : 'defeat';
     if (!win) {
-      return { win, stars: 0, coins: 0, exp: 0, shards: [], turnsUsed: this.turnsUsed, noDamage: !this.tookDamage };
+      return {
+        win, stars: 0, coins: 0, exp: 0, shards: [],
+        turnsUsed: this.turnsUsed, noDamage: !this.tookDamage, discoveredCreatures: [],
+      };
     }
     let stars = 1; // 通关
     if (this.turnsUsed <= this.stage.starTurnLimit) stars++;
     if (!this.tookDamage) stars++;
     const coins = stageCoinReward(this.stage.chapter, stars, this.stage.isBoss);
     const drops = stageDrops(this.stage.dropTableId, this.stage.chapter, stars, this.stage.type);
+    // 胜利 = 全波击败：收录所有标记为 captureUnlock 的高级怪对应生物
+    const discoveredCreatures = [
+      ...new Set(this._waves.map((w) => w.captureCreatureId).filter((id): id is string => !!id)),
+    ];
     return {
       win, stars, coins, exp: drops.exp, shards: drops.shards,
-      turnsUsed: this.turnsUsed, noDamage: !this.tookDamage,
+      turnsUsed: this.turnsUsed, noDamage: !this.tookDamage, discoveredCreatures,
     };
   }
 
@@ -583,9 +661,9 @@ export class BattleController {
   }
 
   private _spawnEnemy(waveIndex: number): EnemyUnit {
-    const enemyId = this.stage.enemies[waveIndex];
-    const def = ENEMY_MAP.get(enemyId);
-    if (!def) throw new Error(`未知敌人: ${enemyId}`);
+    const wave = this._waves[waveIndex];
+    if (!wave) throw new Error(`未知波次: ${this.stage.id} #${waveIndex}`);
+    const def = wave.def;
     const stats = enemyStats(def, this.stage.chapter, this.stage.difficulty);
     return {
       def,

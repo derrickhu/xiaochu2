@@ -44,6 +44,63 @@ describe('技能 CD 流转', () => {
   });
 });
 
+describe('阶段八新技能整合（实战落地）', () => {
+  // 含 dot / stun / defenseBreak / multiHit 的队伍
+  const NEW_TEAM = ['pet_fire_003', 'pet_water_003', 'pet_metal_003', 'pet_metal_004', 'pet_wood_003'];
+
+  it('multiHit：多段伤害累计扣减敌人 HP', () => {
+    const ctrl = makeCtrl(NEW_TEAM);
+    const idx = ctrl.team.findIndex((p) => p.def.id === 'pet_metal_004');
+    ctrl.team[idx].skillCdLeft = 0;
+    const before = ctrl.enemy.hp;
+    const r = ctrl.castSkill(idx);
+    expect(r.type).toBe('multiHit');
+    expect((r.damage ?? 0)).toBeGreaterThan(0);
+    expect(ctrl.enemy.hp).toBe(Math.max(0, before - (r.damage ?? 0)));
+  });
+
+  it('dot：施加灼烧，敌人回合结束持续掉血', () => {
+    const ctrl = makeCtrl(NEW_TEAM);
+    const idx = ctrl.team.findIndex((p) => p.def.id === 'pet_fire_003');
+    ctrl.team[idx].skillCdLeft = 0;
+    ctrl.castSkill(idx);
+    const afterCast = ctrl.enemy.hp;
+    ctrl.beginEnemyTurn();
+    ctrl.enemyAct();
+    expect(ctrl.enemy.hp).toBeLessThan(afterCast); // dot tick 生效
+  });
+
+  it('stun：眩晕使敌人本回合跳过攻击', () => {
+    const ctrl = makeCtrl(NEW_TEAM);
+    const idx = ctrl.team.findIndex((p) => p.def.id === 'pet_water_003');
+    // 让敌人本回合本应普攻
+    ctrl.enemy.attackCountdown = 1;
+    ctrl.team[idx].skillCdLeft = 0;
+    ctrl.castSkill(idx);
+    ctrl.beginEnemyTurn();
+    const r = ctrl.enemyAct();
+    expect(r.action).toBe('idle');
+    expect(r.damage).toBe(0);
+  });
+
+  it('defenseBreak：破防后同一攻击伤害更高', () => {
+    const base = makeCtrl(NEW_TEAM);
+    const broken = makeCtrl(NEW_TEAM);
+    const bIdx = broken.team.findIndex((p) => p.def.id === 'pet_metal_003');
+    broken.team[bIdx].skillCdLeft = 0;
+    broken.castSkill(bIdx); // 施加破防
+
+    // 同一只多段宠在两个控制器中打出的伤害对比
+    const mIdxA = base.team.findIndex((p) => p.def.id === 'pet_metal_004');
+    const mIdxB = broken.team.findIndex((p) => p.def.id === 'pet_metal_004');
+    base.team[mIdxA].skillCdLeft = 0;
+    broken.team[mIdxB].skillCdLeft = 0;
+    const dmgBase = base.castSkill(mIdxA).damage ?? 0;
+    const dmgBroken = broken.castSkill(mIdxB).damage ?? 0;
+    expect(dmgBroken).toBeGreaterThan(dmgBase);
+  });
+});
+
 describe('技能效果', () => {
   it('instantDmg：直伤扣减敌人 HP', () => {
     const ctrl = makeCtrl();
@@ -54,12 +111,13 @@ describe('技能效果', () => {
     expect(result.type).toBe('instantDmg');
     if (result.type === 'instantDmg') {
       expect(result.damage).toBeGreaterThan(0);
-      expect(ctrl.enemy.hp).toBe(Math.max(0, before - result.damage));
+      expect(ctrl.enemy.hp).toBe(Math.max(0, before - result.damage!));
     }
   });
 
   it('healPct：按队伍最大生命百分比回血', () => {
-    const ctrl = makeCtrl();
+    // 初始队无治疗，取含治疗技的生物（厚土娘娘 earthHeal）
+    const ctrl = makeCtrl(['pet_earth_004', 'pet_fire_003']);
     const idx = ctrl.team.findIndex((p) => p.skill.effects.some((e) => e.kind === 'heal'));
     ctrl.team[idx].skillCdLeft = 0;
     ctrl.heroHp = Math.floor(ctrl.heroMaxHp * 0.4);
@@ -72,7 +130,8 @@ describe('技能效果', () => {
   });
 
   it('shield：敌人伤害先被护盾吸收', () => {
-    const ctrl = makeCtrl();
+    // 初始队无护盾，取含护盾技的生物（云绒灵狐 waterShield）
+    const ctrl = makeCtrl(['cr_cloud_fox', 'pet_fire_003']);
     const idx = ctrl.team.findIndex((p) => p.skill.effects.some((e) => e.kind === 'shield'));
     ctrl.team[idx].skillCdLeft = 0;
     const result = ctrl.castSkill(idx);
@@ -93,7 +152,8 @@ describe('技能效果', () => {
   });
 
   it('dmgBoost：增伤 buff 生效并随敌人回合衰减', () => {
-    const boostTeam = ['pet_fire_001', 'pet_fire_002'];
+    // 含增伤光环技的火队（星河烛龙 fireBoost）+ 火输出
+    const boostTeam = ['cr_zhulong', 'pet_fire_003'];
     const ctrl = makeCtrl(boostTeam);
     const idx = ctrl.team.findIndex((p) => p.skill.effects.some((e) => e.kind === 'status' && e.status === 'teamDamageBuff'));
     ctrl.team[idx].skillCdLeft = 0;
@@ -111,14 +171,15 @@ describe('技能效果', () => {
     expect(buffed.attacks[0].damage).toBeGreaterThan(plain.attacks[0].damage);
 
     // 敌人回合结束 turns 次后 buff 消失
-    for (let i = 0; i < result.turns; i++) {
+    for (let i = 0; i < result.turns!; i++) {
       ctrl.enemyAct();
     }
     expect(ctrl.dmgBuff).toBeNull();
   });
 
   it('convertOrbs：只返回转珠请求，不直接改盘面', () => {
-    const ctrl = makeCtrl(['pet_metal_002', 'pet_earth_002']);
+    // 星轮机关兽 earthHeartConvert：定量转珠（count > 0）
+    const ctrl = makeCtrl(['cr_star_gear', 'pet_fire_003']);
     const idx = ctrl.team.findIndex((p) => p.skill.effects.some((e) => e.kind === 'convertOrbs'));
     expect(idx).toBeGreaterThanOrEqual(0);
     ctrl.team[idx].skillCdLeft = 0;
@@ -135,7 +196,7 @@ describe('技能效果', () => {
     const before = ctrl.enemy.hp;
     const result = ctrl.castSkill(idx);
     if (result.type === 'teamAttack') {
-      expect(ctrl.enemy.hp).toBe(Math.max(0, before - result.damage));
+      expect(ctrl.enemy.hp).toBe(Math.max(0, before - result.damage!));
     }
   });
 });
@@ -209,7 +270,7 @@ describe('怪物技能', () => {
 describe('有效珠机制（队伍属性覆盖）', () => {
   it('队伍无该属性时，消除组不产生攻击但仍计 Combo', () => {
     // 纯火队
-    const ctrl = makeCtrl(['pet_fire_001', 'pet_fire_002']);
+    const ctrl = makeCtrl(['pet_fire_003', 'pet_fire_004']);
     ctrl.beginResolve();
     const res = ctrl.resolveTurn([
       { orb: 'fire', cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }] },

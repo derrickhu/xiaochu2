@@ -30,6 +30,19 @@ export const ELEMENT_COUNTERS: Readonly<Record<Element, Element>> = {
   fire: 'metal',
 };
 
+/** 克制 enemyElement 的珠子属性（拖此色珠 × counterMultiplier） */
+export function counterElementOf(enemyElement: Element): Element {
+  for (const el of ELEMENTS) {
+    if (ELEMENT_COUNTERS[el] === enemyElement) return el;
+  }
+  return enemyElement;
+}
+
+/** enemyElement 克制的珠子属性（拖此色珠 × counteredMultiplier） */
+export function resistedElementOf(enemyElement: Element): Element {
+  return ELEMENT_COUNTERS[enemyElement];
+}
+
 export const COMBAT = {
   /** 棋盘尺寸 */
   boardCols: 6,
