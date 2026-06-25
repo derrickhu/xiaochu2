@@ -7,122 +7,51 @@
  *
  * 所有数值只走 formulas + balance，本层禁止 magic number。
  */
-import { COMBAT, ELEMENT_COUNTERS, type Element, type OrbType } from '@/balance/combat';
+import { ELEMENT_COUNTERS, type Element, type OrbType } from '@/balance/combat';
 import {
   PET_MAP, DEFAULT_TEAM, INITIAL_PET_LEVEL, INITIAL_PET_STAR,
   type PetDef,
 } from '@/balance/pets';
-import { resolveEncounter, type EnemyDef, type ResolvedEncounter } from '@/balance/enemies';
-import type { SkillDef, SkillVfxId } from '@/balance/skills';
+import { resolveEncounter, type ResolvedEncounter } from '@/balance/enemies';
 import { STAGE_MAP, type StageDef } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
-import { stageDrops } from '@/formulas/economyOutput';
 import { ECONOMY } from '@/balance/economy';
-import { calcDamage, calcHeal, comboMultiplier } from '@/formulas/damage';
-import { enemyStats } from '@/formulas/growth';
-import { teamMaxHp, teamRcv, teamElements, petAtkInTeam, type TeamMember } from '@/formulas/team';
-import { stageCoinReward } from '@/formulas/economyOutput';
+import { stageDrops } from '@/formulas/economyOutput';
+import { teamMaxHp, teamRcv, teamElements, petAtkInTeam, teamPassiveAggregate, type TeamMember } from '@/formulas/team';
 import type { MatchGroup } from '@/game/board/BoardModel';
 import { BattleStatusStore } from './BattleStatus';
 import {
-  runChargedAttack,
   runSkill,
   skillCdForPet,
-  skillForEnemy,
   skillForPet,
-  type SkillCaster,
   type SkillResult,
 } from './SkillEngine';
+import type {
+  BattleResult,
+  BattleState,
+  EnemyActResult,
+  EnemyUnit,
+  PetAttack,
+  SkillCastResult,
+  TeamPet,
+  TurnResolution,
+} from './battleTypes';
+import { applySkillResult, buildPetSkillCastResult } from './battleSkillResolution';
+import { buildBattleResult, spawnBattleEnemy } from './battleLifecycle';
+import { resolvePlayerTurnDamage } from './battleTurnResolution';
+import { runEnemyTurnAction } from './battleEnemyTurn';
+import { makeEnemyCaster, makePetCaster, makeSkillRuntimeContext } from './battleRuntimeContext';
 
-export type BattleState =
-  | 'playerTurn'
-  | 'resolving'
-  | 'petAttack'
-  | 'enemyTurn'
-  | 'victory'
-  | 'defeat';
-
-export interface TeamPet {
-  def: PetDef;
-  star: number;
-  skill: SkillDef;
-  atk: number;
-  /** 主动技剩余冷却（0 = 就绪） */
-  skillCdLeft: number;
-}
-
-/** 技能释放结果（场景据此播放演出） */
-export type SkillCastResult = SkillResult & {
-  type: SkillResult['action'];
-  element?: Element;
-  damage?: number;
-  healed?: number;
-  mult?: number;
-  turns?: number;
-  value?: number;
-  to?: OrbType;
-  count?: number;
-  shape?: 'random' | 'row' | 'col';
-  enemyDead?: boolean;
-};
-
-export interface EnemyUnit {
-  def: EnemyDef;
-  maxHp: number;
-  hp: number;
-  atk: number;
-  def_: number;
-  /** 距离下次攻击的剩余回合 */
-  attackCountdown: number;
-  /** 各技能剩余冷却（与 def.skillIds 一一对应） */
-  skillCds: number[];
-  /** 蓄力中（下个敌人回合打出 atk × mult 重击） */
-  charging: { mult: number; skillId: string; releaseVfx: SkillVfxId } | null;
-  /** 减伤状态：受到伤害 ×(1-reduction) */
-  dmgReduction: { reduction: number; turnsLeft: number } | null;
-}
-
-/** 敌人回合行动结果（场景据此播放演出） */
-export interface EnemyActResult {
-  action: 'idle' | 'attack' | 'charge' | 'chargedAttack' | 'heal' | 'shield';
-  damage: number;
-  absorbed: number;
-  heroDead: boolean;
-  /** healSelf 的回复量 */
-  healed: number;
-}
-
-/** 一次宠物出手（已含本回合 Combo/克制/暴击） */
-export interface PetAttack {
-  petIndex: number;
-  element: Element;
-  damage: number;
-  isCrit: boolean;
-  /** 克制关系：1 克制 / -1 被克 / 0 无 */
-  counter: 1 | 0 | -1;
-}
-
-/** 一回合消除的结算结果 */
-export interface TurnResolution {
-  combo: number;
-  comboMul: number;
-  attacks: PetAttack[];
-  heal: number;
-}
-
-export interface BattleResult {
-  win: boolean;
-  stars: number;
-  coins: number;
-  /** 掉落经验（升级燃料） */
-  exp: number;
-  /** 掉落碎片（升星材料） */
-  shards: { petId: string; count: number }[];
-  turnsUsed: number;
-  noDamage: boolean;
-  /** 本场击败的「可收录高级怪」对应的生物 id（胜利时收录进宠物池） */
-  discoveredCreatures: string[];
-}
+export type {
+  BattleResult,
+  BattleState,
+  EnemyActResult,
+  EnemyUnit,
+  PetAttack,
+  SkillCastResult,
+  TeamPet,
+  TurnResolution,
+} from './battleTypes';
 
 export class BattleController {
   readonly stage: StageDef;
@@ -146,6 +75,11 @@ export class BattleController {
 
   heroMaxHp: number;
   heroHp: number;
+
+  /** 被动：每回合回血绝对值（队伍 regen 被动 × 最大生命） */
+  readonly passiveRegenPerTurn: number;
+  /** 被动：常驻全队增伤总乘区（1 + Σ teamDamagePct） */
+  readonly passiveTeamDamageMult: number;
 
   /** 当前波次（0 起） */
   waveIndex = 0;
@@ -197,13 +131,25 @@ export class BattleController {
     this.teamRcvTotal = teamRcv(members);
     this.teamElementSet = teamElements(members);
 
+    // 触发型被动聚合：开局护盾 / 每回合回血 / 全队增伤（与 simulation.ts 双模型镜像）
+    const passiveAgg = teamPassiveAggregate(members);
+    this.passiveRegenPerTurn = Math.floor(this.heroMaxHp * passiveAgg.regenPct);
+    this.passiveTeamDamageMult = passiveAgg.teamDamageMult;
+    const startShield = Math.floor(this.heroMaxHp * passiveAgg.startShieldPct);
+    if (startShield > 0) {
+      this._statuses.add({
+        id: 'team_shield', kind: 'shield', owner: 'team',
+        value: startShield, sourceSkillId: 'passive_start_shield', stack: 'add',
+      });
+    }
+
     const mech = resolveMechanics(stage.mechanics);
     this.sealOrbCount = mech.sealOrbs;
     this.noHeartHeal = mech.noHeartHeal;
     this.bannedElements = new Set(mech.bannedElements);
     this.mechanicHints = mech.hints;
 
-    this.enemy = this._spawnEnemy(0);
+    this.enemy = spawnBattleEnemy(this.stage, this._waves, 0);
   }
 
   /** 当前护盾值（吸收敌人伤害，先于 HP 扣减） */
@@ -243,53 +189,21 @@ export class BattleController {
    * groups 为整个连锁过程累计的所有消除组（顺序即 Combo 顺序）
    */
   resolveTurn(groups: MatchGroup[]): TurnResolution {
-    const combo = groups.length;
-    const comboMul = comboMultiplier(combo);
-
-    const attacks: PetAttack[] = [];
-    let healOrbs = 0;
-
-    for (const group of groups) {
-      if (group.orb === 'heart') {
-        healOrbs += group.cells.length;
-        continue;
-      }
-      const element = group.orb as Element;
-      // 禁用属性珠：计入 Combo，但不产生伤害
-      if (this.bannedElements.has(element)) continue;
-      const petIndex = this.team.findIndex((p) => p.def.element === element);
-      if (petIndex < 0) continue;
-      const pet = this.team[petIndex];
-
-      const isCrit = this._rng() < COMBAT.critChance;
-      const raw = calcDamage({
-        atk: pet.atk,
-        matchCount: group.cells.length,
-        combo,
-        attackerElement: element,
-        defenderElement: this.enemy.def.element,
-        defenderDef: this._enemyDefEffective,
-        isCrit,
-        buffMult: this.dmgBuff?.mult ?? 1.0,
-      }) * this._elementTraitDamageMult(pet.def, this.enemy.def.element);
-      // 敌人减伤状态（shieldSelf）独立乘区
-      const damage = Math.max(
-        1,
-        Math.floor(raw * (1 - (this.enemy.dmgReduction?.reduction ?? 0))),
-      );
-      attacks.push({
-        petIndex,
-        element,
-        damage,
-        isCrit,
-        counter: this._counterRelation(element, this.enemy.def.element),
-      });
-    }
-
-    // 禁心关：心珠不回血
-    const heal = (healOrbs > 0 && !this.noHeartHeal) ? calcHeal(this.teamRcvTotal, healOrbs, combo) : 0;
     this.state = 'petAttack';
-    return { combo, comboMul, attacks, heal };
+    return resolvePlayerTurnDamage({
+      groups,
+      team: this.team,
+      enemy: this.enemy,
+      bannedElements: this.bannedElements,
+      enemyDefEffective: this._enemyDefEffective,
+      teamRcvTotal: this.teamRcvTotal,
+      noHeartHeal: this.noHeartHeal,
+      passiveRegenPerTurn: this.passiveRegenPerTurn,
+      teamDamageMult: (this.dmgBuff?.mult ?? 1.0) * this.passiveTeamDamageMult,
+      rng: this._rng,
+      elementTraitDamageMult: (pet, defender) => this._elementTraitDamageMult(pet.def, defender),
+      counterRelation: (attacker, defender) => this._counterRelation(attacker, defender),
+    });
   }
 
   /** 应用回血（petAttack 阶段开头调用） */
@@ -317,7 +231,7 @@ export class BattleController {
   nextWave(): EnemyUnit {
     this.waveIndex++;
     this._statuses.clearOwner('enemy');
-    this.enemy = this._spawnEnemy(this.waveIndex);
+    this.enemy = spawnBattleEnemy(this.stage, this._waves, this.waveIndex);
     return this.enemy;
   }
 
@@ -347,47 +261,14 @@ export class BattleController {
   }
 
   private _enemyTurnAction(): EnemyActResult {
-    const none: EnemyActResult = { action: 'idle', damage: 0, absorbed: 0, heroDead: false, healed: 0 };
-    const enemy = this.enemy;
-    if (enemy.hp <= 0) return none;
-
-    // 0) 眩晕：跳过本回合行动（蓄力中的敌人不受眩晕影响，仍打出重击）
-    if (this._statuses.isStunned('enemy') && !enemy.charging) {
-      return none;
-    }
-
-    // 1) 蓄力完成：打出重击（覆盖普攻）
-    if (enemy.charging) {
-      const charging = enemy.charging;
-      const skill = skillForEnemy(charging.skillId);
-      enemy.charging = null;
-      enemy.attackCountdown = enemy.def.attackInterval;
-      const skillResult = runChargedAttack(skill, this._enemyCaster(), this._runtimeContext(), charging.mult, charging.releaseVfx);
-      const hit = this.applyEnemyDamage(skillResult.damageEvents[0]?.amount ?? 0);
-      return { action: 'chargedAttack', ...hit, healed: 0 };
-    }
-
-    // 2) 技能 CD 推进，按声明顺序找一个可释放的
-    const skillIds = enemy.def.skillIds ?? [];
-    for (let i = 0; i < skillIds.length; i++) {
-      if (enemy.skillCds[i] > 0) enemy.skillCds[i]--;
-    }
-    for (let i = 0; i < skillIds.length; i++) {
-      if (enemy.skillCds[i] > 0) continue;
-      const skill = skillForEnemy(skillIds[i]);
-      const fired = runSkill(skill, this._enemyCaster(), this._runtimeContext());
-      if (fired) {
-        enemy.skillCds[i] = skill.cd;
-        return this._applyEnemySkillResult(fired);
-      }
-    }
-
-    // 3) 普攻倒计时
-    enemy.attackCountdown--;
-    if (enemy.attackCountdown > 0) return none;
-    enemy.attackCountdown = enemy.def.attackInterval;
-    const hit = this.applyEnemyDamage(enemy.atk);
-    return { action: 'attack', ...hit, healed: 0 };
+    return runEnemyTurnAction({
+      enemy: this.enemy,
+      isStunned: () => this._statuses.isStunned('enemy'),
+      enemyCaster: () => makeEnemyCaster(this.enemy),
+      runtimeContext: () => this._runtimeContext(),
+      applyEnemyDamage: (raw) => this.applyEnemyDamage(raw),
+      applySkillResult: (result) => this._applySkillResult(result),
+    });
   }
 
   /** 对英雄结算一次伤害（护盾先吸收） */
@@ -428,160 +309,27 @@ export class BattleController {
     const skill = pet.skill;
     pet.skillCdLeft = skill.cd;
 
-    const result = runSkill(skill, this._petCaster(petIndex), this._runtimeContext());
+    const result = runSkill(skill, makePetCaster(this.team, petIndex), this._runtimeContext());
     if (!result) throw new Error(`技能未触发: ${skill.id}`);
     return this._applyPetSkillResult(result);
   }
 
   private _applyPetSkillResult(result: SkillResult): SkillCastResult {
     this._applySkillResult(result);
-    const enemyHits = result.damageEvents.filter((e) => e.target === 'enemy');
-    const damage = enemyHits.reduce((sum, e) => sum + e.amount, 0) || undefined;
-    const heal = result.healEvents.find((e) => e.target === 'team')?.amount;
-    const shield = result.statusEvents.find((e) => e.status === 'shield');
-    const buff = result.statusEvents.find((e) => e.status === 'teamDamageBuff');
-    const dot = result.statusEvents.find((e) => e.status === 'dot');
-    const stun = result.statusEvents.find((e) => e.status === 'stun');
-    const defBreak = result.statusEvents.find((e) => e.status === 'enemyDefenseBreak');
-    const board = result.boardRequests[0];
-
-    return {
-      ...result,
-      type: result.action,
-      element: result.caster.element,
-      damage,
-      healed: heal,
-      mult: buff?.value,
-      turns: buff?.turns ?? dot?.turns ?? stun?.turns ?? defBreak?.turns,
-      value: shield ? this.shield : (dot?.value ?? defBreak?.value),
-      to: board?.to,
-      count: board?.count,
-      shape: board?.shape,
-      enemyDead: this.enemy.hp <= 0,
-    };
-  }
-
-  private _applyEnemySkillResult(result: SkillResult): EnemyActResult {
-    if (
-      result.statusEvents.some((e) => e.status === 'enemyDamageReduction' && e.stack === 'ignoreIfPresent')
-      && this.enemy.dmgReduction
-    ) {
-      return { action: 'idle', damage: 0, absorbed: 0, heroDead: false, healed: 0 };
-    }
-
-    const hit = result.damageEvents.find((e) => e.target === 'hero');
-    if (hit) {
-      const applied = this.applyEnemyDamage(hit.amount);
-      return { action: result.action === 'chargedAttack' ? 'chargedAttack' : 'attack', ...applied, healed: 0 };
-    }
-
-    this._applySkillResult(result);
-
-    const heal = result.healEvents.find((e) => e.target === 'enemy');
-    if (heal) {
-      return { action: 'heal', damage: 0, absorbed: 0, heroDead: false, healed: heal.amount };
-    }
-
-    const charge = result.statusEvents.find((e) => e.status === 'charge');
-    if (charge) {
-      return { action: 'charge', damage: 0, absorbed: 0, heroDead: false, healed: 0 };
-    }
-
-    const reduction = result.statusEvents.find((e) => e.status === 'enemyDamageReduction');
-    if (reduction) {
-      return { action: 'shield', damage: 0, absorbed: 0, heroDead: false, healed: 0 };
-    }
-
-    return { action: 'idle', damage: 0, absorbed: 0, heroDead: false, healed: 0 };
+    return buildPetSkillCastResult(result, this.shield, this.enemy.hp);
   }
 
   private _applySkillResult(result: SkillResult): void {
-    for (const event of result.damageEvents) {
-      if (event.target === 'enemy') {
-        this.enemy.hp = Math.max(0, this.enemy.hp - event.amount);
-      } else {
-        this.applyEnemyDamage(event.amount);
-      }
-    }
-
-    for (const event of result.healEvents) {
-      if (event.target === 'team') {
-        this.applyHeal(event.amount);
-      } else {
-        this.enemy.hp = Math.min(this.enemy.maxHp, this.enemy.hp + event.amount);
-      }
-    }
-
-    for (const event of result.statusEvents) {
-      if (event.status === 'shield') {
-        this._statuses.add({
-          id: 'team_shield',
-          kind: 'shield',
-          owner: 'team',
-          value: event.value,
-          sourceSkillId: result.skill.id,
-          stack: event.stack,
-        });
-      } else if (event.status === 'teamDamageBuff') {
-        this._statuses.add({
-          id: 'team_damage_buff',
-          kind: 'teamDamageBuff',
-          owner: 'team',
-          value: event.value,
-          turnsLeft: event.turns,
-          sourceSkillId: result.skill.id,
-          stack: event.stack,
-        });
-      } else if (event.status === 'enemyDamageReduction') {
-        this._statuses.add({
-          id: 'enemy_damage_reduction',
-          kind: 'enemyDamageReduction',
-          owner: 'enemy',
-          value: event.value,
-          turnsLeft: event.turns,
-          sourceSkillId: result.skill.id,
-          stack: event.stack,
-        });
-      } else if (event.status === 'charge') {
-        this.enemy.charging = {
-          mult: event.value,
-          skillId: result.skill.id,
-          releaseVfx: event.vfx,
-        };
-      } else if (event.status === 'dot') {
-        this._statuses.add({
-          id: event.target === 'enemy' ? 'enemy_dot' : 'team_dot',
-          kind: 'dot',
-          owner: event.target === 'enemy' ? 'enemy' : 'team',
-          value: event.value,
-          turnsLeft: event.turns,
-          sourceSkillId: result.skill.id,
-          stack: event.stack,
-        });
-      } else if (event.status === 'stun') {
-        this._statuses.add({
-          id: 'enemy_stun',
-          kind: 'stun',
-          owner: 'enemy',
-          value: event.value,
-          turnsLeft: event.turns,
-          sourceSkillId: result.skill.id,
-          stack: event.stack,
-        });
-      } else if (event.status === 'enemyDefenseBreak') {
-        this._statuses.add({
-          id: 'enemy_def_break',
-          kind: 'enemyDefenseBreak',
-          owner: 'enemy',
-          value: event.value,
-          turnsLeft: event.turns,
-          sourceSkillId: result.skill.id,
-          stack: event.stack,
-        });
-      }
-    }
-
-    this._syncEnemyStatusMirrors();
+    applySkillResult({
+      getEnemyHp: () => this.enemy.hp,
+      getEnemyMaxHp: () => this.enemy.maxHp,
+      setEnemyHp: (hp) => { this.enemy.hp = hp; },
+      applyEnemyDamage: (amount) => this.applyEnemyDamage(amount),
+      applyHeal: (amount) => this.applyHeal(amount),
+      addStatus: (status) => this._statuses.add(status),
+      setEnemyCharge: (charge) => { this.enemy.charging = charge; },
+      syncEnemyStatusMirrors: () => this._syncEnemyStatusMirrors(),
+    }, result);
   }
 
   /** 当前敌人有效防御（破防后） */
@@ -591,32 +339,17 @@ export class BattleController {
   }
 
   private _runtimeContext() {
-    return {
-      enemy: {
-        hp: this.enemy.hp,
-        maxHp: this.enemy.maxHp,
-        atk: this.enemy.atk,
-        def_: this._enemyDefEffective,
-        element: this.enemy.def.element,
-      },
+    return makeSkillRuntimeContext({
+      enemy: this.enemy,
+      enemyDefEffective: this._enemyDefEffective,
       heroHp: this.heroHp,
       heroMaxHp: this.heroMaxHp,
+      team: this.team,
       teamRcvTotal: this.teamRcvTotal,
-      teamAtkTotal: this.team.reduce((sum, pet) => sum + pet.atk, 0),
       teamDamageBuffMult: this.dmgBuff?.mult ?? 1,
-      enemyDamageReduction: this.enemy.dmgReduction?.reduction ?? 0,
-    };
+      passiveTeamDamageMult: this.passiveTeamDamageMult,
+    });
   }
-
-  private _petCaster(petIndex: number): SkillCaster {
-    const pet = this.team[petIndex];
-    return { kind: 'pet', atk: pet.atk, element: pet.def.element, petIndex, petDef: pet.def };
-  }
-
-  private _enemyCaster(): SkillCaster {
-    return { kind: 'enemy', atk: this.enemy.atk, element: this.enemy.def.element };
-  }
-
   private _syncEnemyStatusMirrors(): void {
     const reduction = this._statuses.get('enemy', 'enemyDamageReduction');
     this.enemy.dmgReduction = reduction
@@ -633,49 +366,19 @@ export class BattleController {
   /** 战斗结束，生成结果（胜利时计算星数、灵宠币与掉落经验/碎片） */
   finish(win: boolean): BattleResult {
     this.state = win ? 'victory' : 'defeat';
-    if (!win) {
-      return {
-        win, stars: 0, coins: 0, exp: 0, shards: [],
-        turnsUsed: this.turnsUsed, noDamage: !this.tookDamage, discoveredCreatures: [],
-      };
-    }
-    let stars = 1; // 通关
-    if (this.turnsUsed <= this.stage.starTurnLimit) stars++;
-    if (!this.tookDamage) stars++;
-    const coins = stageCoinReward(this.stage.chapter, stars, this.stage.isBoss);
-    const drops = stageDrops(this.stage.dropTableId, this.stage.chapter, stars, this.stage.type);
-    // 胜利 = 全波击败：收录所有标记为 captureUnlock 的高级怪对应生物
-    const discoveredCreatures = [
-      ...new Set(this._waves.map((w) => w.captureCreatureId).filter((id): id is string => !!id)),
-    ];
-    return {
-      win, stars, coins, exp: drops.exp, shards: drops.shards,
-      turnsUsed: this.turnsUsed, noDamage: !this.tookDamage, discoveredCreatures,
-    };
+    return buildBattleResult({
+      win,
+      stage: this.stage,
+      turnsUsed: this.turnsUsed,
+      tookDamage: this.tookDamage,
+      waves: this._waves,
+    });
   }
 
   /** 指定属性对当前敌人的克制关系（UI 提示用） */
   counterRelationOf(orb: OrbType): 1 | 0 | -1 {
     if (orb === 'heart') return 0;
     return this._counterRelation(orb, this.enemy.def.element);
-  }
-
-  private _spawnEnemy(waveIndex: number): EnemyUnit {
-    const wave = this._waves[waveIndex];
-    if (!wave) throw new Error(`未知波次: ${this.stage.id} #${waveIndex}`);
-    const def = wave.def;
-    const stats = enemyStats(def, this.stage.chapter, this.stage.difficulty);
-    return {
-      def,
-      maxHp: stats.hp,
-      hp: stats.hp,
-      atk: stats.atk,
-      def_: stats.def,
-      attackCountdown: def.attackInterval,
-      skillCds: (def.skillIds ?? []).map((id) => skillForEnemy(id).cd),
-      charging: null,
-      dmgReduction: null,
-    };
   }
 
   private _elementTraitDamageMult(pet: PetDef, defender: Element): number {

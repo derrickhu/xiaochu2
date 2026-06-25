@@ -6,16 +6,19 @@
  * 未来扩展 = 加字段 + 加读取方，不动既有判断。
  *
  * 已落地作用：
- * - 显示（code/name/color + ui.badge*）：R→绿、SR→蓝、SSR→紫、UR→金、LR→红
+ * - 显示（code/name/color + ui.badge*）：R→绿、SR→蓝、SSR→紫、UR→金
  * - 卡边框 / 稀有度码 / 印章均读 RARITY_PROFILES，场景用 @/ui/RarityVisual 组件
  * - 抽卡概率（gachaWeight）
- * - 初始三维面板倍率（statMult）：R = 1.0 基准模板，SR/SSR/UR/LR 逐档明显递增。
+ * - 初始三维面板倍率（statMult）：R = 1.0 基准模板，SR/SSR/UR 逐档明显递增。
  *   数值层口径：同 role + 同 rarity + 同星 + 同等级 → 三维一致；差异来自档位倍率而非手填。
+ *
+ * 阶段十一：前期精简为四档（R/SR/SSR/UR），去除 LR。后续要扩 LR 只需把 Rarity 加回 5、
+ * 各表加回一行、补新宠即可，不动既有判断。
  *
  * 仍为预留（不在本阶段实现）：星级上限联动、养成经济。
  */
 
-export type Rarity = 1 | 2 | 3 | 4 | 5;
+export type Rarity = 1 | 2 | 3 | 4;
 
 /** 稀有度在 UI 上的配色（卡边框读 accent/color，印章读 badge*） */
 export interface RarityUi {
@@ -29,7 +32,7 @@ export interface RarityUi {
 
 export interface RarityDef {
   tier: Rarity;
-  /** 简码：R / SR / SSR / UR / LR */
+  /** 简码：R / SR / SSR / UR */
   code: string;
   /** 中文显示名 */
   name: string;
@@ -40,7 +43,7 @@ export interface RarityDef {
   /** 抽卡相对权重；某档概率 = 本档权重 / 池内出现档位的总权重（两段式抽卡用） */
   gachaWeight: number;
   /**
-   * 标准卡池单抽出该档的绝对概率（与 statMult 解耦，五档之和 = 1）。
+   * 标准卡池单抽出该档的绝对概率（与 statMult 解耦，四档之和 = 1）。
    * 抽卡系统按此出货；gachaWeight 仅用于「池内动态档位」归一化。
    */
   gachaRate: number;
@@ -72,20 +75,51 @@ export const RARITY_PROFILES: Readonly<Record<Rarity, RarityDef>> = {
     ui: { badgeBg: 0x3c1860, badgeText: 0xd4a8ff, badgeBorder: 0xb06bff },
   },
   4: {
-    tier: 4, code: 'UR', name: '史诗', color: 0xffb43d, gachaWeight: 4, gachaRate: 0.03, statMult: 1.75,
+    tier: 4, code: 'UR', name: '史诗', color: 0xffb43d, gachaWeight: 4, gachaRate: 0.035, statMult: 1.75,
     ui: { badgeBg: 0x5a4010, badgeText: 0xffe68c, badgeBorder: 0xffb43d },
-  },
-  5: {
-    tier: 5, code: 'LR', name: '传说', color: 0xff5252, gachaWeight: 1, gachaRate: 0.005, statMult: 2.1,
-    ui: { badgeBg: 0x5a1818, badgeText: 0xffaaaa, badgeBorder: 0xff5252 },
   },
 };
 
-export const RARITIES: readonly Rarity[] = [1, 2, 3, 4, 5];
+export const RARITIES: readonly Rarity[] = [1, 2, 3, 4];
 
 /** 取稀有度档案，越界回退到最低档 */
 export function getRarity(tier: Rarity): RarityDef {
   return RARITY_PROFILES[tier] ?? RARITY_PROFILES[1];
+}
+
+/**
+ * 稀有度 → 主动技能效果倍率（单一真源，策划调表）。
+ *
+ * 锚点 R(1) = 1.0：R 宠技能 = 蓝图基线数值不变；SR..UR 一律 ≥ 1.0 向上缩放，
+ * 由 SkillEngine.applyPetSkillModifiers 按「施法宠稀有度」叠乘到 effectMult，
+ * 与星级 tier 加成相互独立、可叠乘。保证同一 skillId 被不同稀有度引用时天然单调。
+ */
+export const RARITY_SKILL_POWER: Readonly<Record<Rarity, number>> = {
+  1: 1.0,
+  2: 1.12,
+  3: 1.28,
+  4: 1.48,
+};
+
+export function getRaritySkillPower(tier: Rarity): number {
+  return RARITY_SKILL_POWER[tier] ?? RARITY_SKILL_POWER[1];
+}
+
+/**
+ * 稀有度 → 被动效果强度倍率（单一真源，策划调表）。
+ *
+ * 锚点 R(1) = 1.0；缩放 passives.ts 蓝图的基线数值（护盾%/回血%/增伤%/面板% 等），
+ * 由 passiveForPet() 统一应用。保证「同 role 基础被动，高稀有必不弱于低稀有」。
+ */
+export const RARITY_PASSIVE_POWER: Readonly<Record<Rarity, number>> = {
+  1: 1.0,
+  2: 1.25,
+  3: 1.55,
+  4: 1.9,
+};
+
+export function getRarityPassivePower(tier: Rarity): number {
+  return RARITY_PASSIVE_POWER[tier] ?? RARITY_PASSIVE_POWER[1];
 }
 
 /** 标准卡池单抽各档绝对概率（gachaRate，和为 1） */

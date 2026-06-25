@@ -2,7 +2,7 @@
  * 统一生物表（阶段九 · 宠物即怪）——纯数据，零逻辑
  *
  * 单一真源：一个「生物 CreatureDef」同时承载
- * - 宠物面：id / name / element / rarity / role / skillId / traits（与原 PetDef 同构）
+ * - 宠物面：id / name / element / rarity / role / skillId（被动按 role+稀有度阶梯派生）
  * - 怪物面：monster.tier1（初级怪）/ monster.tier2（高级怪），各含战斗模板数值与敌人技能
  * - 四形态美术（约定）：宠物初始头像 / 宠物觉醒头像 / 初级怪全身 / 高级怪全身
  *
@@ -13,7 +13,7 @@
  */
 import type { Element } from './combat';
 import { PET_SKILL_IDS, ENEMY_SKILL_IDS } from './skills';
-import type { PetRole, PetTraitDef, StatBlock, GrowthBlock } from './petRoles';
+import type { PetRole, StatBlock, GrowthBlock } from './petRoles';
 import type { Rarity } from './rarity';
 
 /** 怪物单形态战斗模板（数值口径同 enemies.ts 的 MobDef，供 enemyStats 缩放） */
@@ -39,7 +39,10 @@ export interface CreatureDef {
   growthProfile?: Partial<GrowthBlock>;
   /** 宠物主动技引用（消珠驱动），效果在 balance/skills.ts */
   skillId: string;
-  traits?: readonly PetTraitDef[];
+  /**
+   * 被动由 role + 稀有度阶梯统一派生（见 passives.ts 的 ROLE_PASSIVE_LADDER），
+   * 此处不再承载专属被动；新增/调整被动一律改阶梯表，保证单调与超集成立。
+   */
   /** 怪物面：初级怪 / 高级怪 两形态 */
   monster: {
     tier1: CreatureMonsterTier;
@@ -89,58 +92,52 @@ export const CREATURES: readonly CreatureDef[] = [
   // ══════════════════════════════════════════════════════════════
   // ── 金 ──
   {
-    id: 'pet_metal_003', name: '裂甲铁犀', element: 'metal', rarity: 2, role: 'support',
+    id: 'pet_metal_003', name: '裂甲铁犀', element: 'metal', rarity: 1, role: 'support',
     skillId: PET_SKILL_IDS.metalDefBreak,
-    traits: [{ type: 'elementDamageBonus', element: 'metal', vs: 'wood', pct: 0.1 }],
     monster: monsterPair(6, { t2Skills: [E.golemGuard] }),
   },
   {
     id: 'pet_metal_004', name: '锋芒剑姬', element: 'metal', rarity: 4, role: 'attacker',
     skillId: PET_SKILL_IDS.metalMultiHit,
-    traits: [{ type: 'skillModifier', skillId: PET_SKILL_IDS.metalMultiHit, effectPctBonus: 0.05 }],
     monster: monsterPair(9, { t2Skills: [E.bladeCharge] }),
   },
   // ── 木 ──
   {
-    id: 'pet_wood_003', name: '青藤连弩手', element: 'wood', rarity: 2, role: 'attacker',
+    id: 'pet_wood_003', name: '青藤连弩手', element: 'wood', rarity: 1, role: 'attacker',
     skillId: PET_SKILL_IDS.woodMultiHit,
     monster: monsterPair(6, { t2Skills: [E.lionCharge] }),
   },
   {
     id: 'pet_wood_004', name: '灵鹿医者', element: 'wood', rarity: 2, role: 'healer',
     skillId: PET_SKILL_IDS.woodBigHeal,
-    traits: [{ type: 'statBonus', stat: 'rcv', pct: 0.1, scope: 'self' }],
     monster: monsterPair(8, { t2Skills: [E.serpentHeal] }),
   },
   // ── 水 ──
   {
-    id: 'pet_water_003', name: '冰魄仙鹤', element: 'water', rarity: 3, role: 'support',
+    id: 'pet_water_003', name: '冰魄仙鹤', element: 'water', rarity: 1, role: 'support',
     skillId: PET_SKILL_IDS.waterStun,
     monster: monsterPair(7, { t2Skills: [E.golemGuard] }),
   },
   {
-    id: 'pet_water_004', name: '玄冰龙皇', element: 'water', rarity: 5, role: 'attacker',
+    id: 'pet_water_004', name: '玄冰龙皇', element: 'water', rarity: 4, role: 'attacker',
     skillId: PET_SKILL_IDS.waterMultiHit,
-    traits: [{ type: 'elementDamageBonus', element: 'water', vs: 'fire', pct: 0.12 }],
     monster: monsterPair(10, { t2Skills: [E.bladeCharge, E.serpentHeal] }),
   },
   // ── 火 ──
   {
-    id: 'pet_fire_003', name: '炽羽火狐', element: 'fire', rarity: 3, role: 'attacker',
+    id: 'pet_fire_003', name: '炽羽火狐', element: 'fire', rarity: 1, role: 'attacker',
     skillId: PET_SKILL_IDS.fireDot,
     monster: monsterPair(7, { t2Skills: [E.lionCharge] }),
   },
   {
     id: 'pet_fire_004', name: '焚天魔将', element: 'fire', rarity: 4, role: 'attacker',
     skillId: PET_SKILL_IDS.fireDotUr,
-    traits: [{ type: 'skillModifier', skillId: PET_SKILL_IDS.fireDotUr, effectPctBonus: 0.05 }],
     monster: monsterPair(9, { t2Skills: [E.lionCharge, E.pandaGuard] }),
   },
   // ── 土 ──
   {
-    id: 'pet_earth_003', name: '磐石守卫', element: 'earth', rarity: 2, role: 'tank',
+    id: 'pet_earth_003', name: '磐石守卫', element: 'earth', rarity: 1, role: 'tank',
     skillId: PET_SKILL_IDS.earthConvertRow,
-    traits: [{ type: 'statBonus', stat: 'hp', pct: 0.1, scope: 'self' }],
     monster: monsterPair(6, { t2Skills: [E.golemGuard] }),
   },
   {
@@ -169,7 +166,7 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(17, { t2Skills: [E.bladeCharge, E.golemGuard] }),
   },
   {
-    id: 'cr_shadow_roc', name: '玄影天鹏', element: 'metal', rarity: 5, role: 'support',
+    id: 'cr_shadow_roc', name: '玄影天鹏', element: 'metal', rarity: 4, role: 'support',
     skillId: PET_SKILL_IDS.metalDefBreak,
     monster: monsterPair(21, { t2Skills: [E.bladeCharge, E.pandaGuard] }),
   },
@@ -190,7 +187,7 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(16, { t2Skills: [E.lionCharge] }),
   },
   {
-    id: 'cr_chaos_fox', name: '混沌骨狐', element: 'wood', rarity: 5, role: 'healer',
+    id: 'cr_chaos_fox', name: '混沌骨狐', element: 'wood', rarity: 4, role: 'healer',
     skillId: PET_SKILL_IDS.woodBigHeal,
     monster: monsterPair(20, { t2Skills: [E.pandaGuard, E.pandaHeal] }),
   },
@@ -211,7 +208,7 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(13, { t2Skills: [E.serpentHeal] }),
   },
   {
-    id: 'cr_guixu_whale', name: '归墟玄鲸', element: 'water', rarity: 5, role: 'attacker',
+    id: 'cr_guixu_whale', name: '归墟玄鲸', element: 'water', rarity: 4, role: 'attacker',
     skillId: PET_SKILL_IDS.waterPierce,
     monster: monsterPair(15, { t2Skills: [E.bladeCharge, E.serpentHeal] }),
   },
@@ -224,17 +221,15 @@ export const CREATURES: readonly CreatureDef[] = [
   {
     id: 'cr_red_crow', name: '赤日金乌', element: 'fire', rarity: 1, role: 'attacker',
     skillId: PET_SKILL_IDS.fireBurst,
-    traits: [{ type: 'elementDamageBonus', element: 'fire', vs: 'metal', pct: 0.08 }],
     monster: monsterPair(16, { t2Skills: [E.lionCharge] }),
   },
   {
     id: 'cr_zhulong', name: '星河烛龙', element: 'fire', rarity: 3, role: 'support',
     skillId: PET_SKILL_IDS.fireBoost,
-    traits: [{ type: 'teamAura', requireElement: 'fire', count: 2, stat: 'atk', pct: 0.05 }],
     monster: monsterPair(18, { t2Skills: [E.lionCharge, E.pandaGuard] }),
   },
   {
-    id: 'cr_outer_demon', name: '天外魔君', element: 'fire', rarity: 5, role: 'attacker',
+    id: 'cr_outer_demon', name: '天外魔君', element: 'fire', rarity: 4, role: 'attacker',
     skillId: PET_SKILL_IDS.fireDotUr,
     monster: monsterPair(22, { t2Skills: [E.lionCharge, E.pandaGuard, E.pandaHeal] }),
   },
@@ -252,7 +247,6 @@ export const CREATURES: readonly CreatureDef[] = [
   {
     id: 'cr_star_gear', name: '星轮机关兽', element: 'earth', rarity: 3, role: 'support',
     skillId: PET_SKILL_IDS.earthHeartConvert,
-    traits: [{ type: 'skillModifier', skillId: PET_SKILL_IDS.earthHeartConvert, convertCountBonus: 1 }],
     monster: monsterPair(17, { t2Skills: [E.golemGuard] }),
   },
   {

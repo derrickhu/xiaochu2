@@ -14,8 +14,10 @@ import type { Element } from './combat';
 import type { PetRole, PetTraitDef, StatBlock, GrowthBlock } from './petRoles';
 import type { Rarity } from './rarity';
 import { CREATURES, STARTER_CREATURE_IDS, type CreatureDef } from './creatures';
+import { resolvePassiveForCreature, type ResolvedPassive } from './passives';
 export { PET_ROLE_NAME, getPetRole, getStatUi, STAT_UI, type PetRole, type PetTraitDef, type StatKey, type StatUiDef } from './petRoles';
 export type { Rarity } from './rarity';
+export type { ResolvedPassive } from './passives';
 
 export interface PetDef {
   id: string;
@@ -30,12 +32,18 @@ export interface PetDef {
   growthProfile?: Partial<GrowthBlock>;
   /** 主动技能引用，具体效果在 balance/skills.ts */
   skillId: string;
-  /** 个性化能力：被动、光环、技能修正等 */
+  /**
+   * 已解析的 stat 类被动（= 签名被动的 stat 部分 + 专属修饰），供既有运行时钩子读取
+   * （growth.ts / team.ts / BattleController / SkillEngine）。由 petView 统一计算。
+   */
   traits?: readonly PetTraitDef[];
+  /** 统一被动（签名 ×稀有度 + 专属）。展示与触发型战斗钩子的唯一来源 */
+  passive: ResolvedPassive;
 }
 
 /** 生物 → 宠物面视图（剥离怪物面，仅保留养成/战斗用的宠物字段） */
 function petView(c: CreatureDef): PetDef {
+  const passive = resolvePassiveForCreature(c.role, c.rarity);
   return {
     id: c.id,
     name: c.name,
@@ -45,8 +53,14 @@ function petView(c: CreatureDef): PetDef {
     statProfile: c.statProfile,
     growthProfile: c.growthProfile,
     skillId: c.skillId,
-    traits: c.traits,
+    traits: passive.traits,
+    passive,
   };
+}
+
+/** 宠物最终被动的唯一读取入口（展示 / 战斗共用） */
+export function passiveForPet(pet: PetDef): ResolvedPassive {
+  return pet.passive;
 }
 
 export const PETS: readonly PetDef[] = CREATURES.map(petView);

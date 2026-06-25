@@ -5,6 +5,7 @@ import {
 } from '../skills';
 import { PET_MAP } from '../pets';
 import type { PetDef } from '../pets';
+import { getRaritySkillPower } from '../rarity';
 import {
   runSkill, skillForPet, applyPetSkillModifiers,
   type SkillCaster, type SkillRuntimeContext,
@@ -27,7 +28,7 @@ const CTX: SkillRuntimeContext = {
 function skillWith(effects: SkillEffectDef[]): SkillDef {
   return {
     id: 'test_skill', name: '测试技', category: 'nuke', cd: 5,
-    owner: 'pet', trigger: 'manual', target: 'enemy', tags: [], desc: '', effects,
+    owner: 'pet', trigger: 'manual', target: 'enemy', tags: [], desc: '', effects, basePower: 0,
   };
 }
 
@@ -56,22 +57,24 @@ describe('技能蓝图与分类', () => {
 
 describe('技能星级分档强化', () => {
   const pet = PET_MAP.get('cr_golden_crane')!; // 金羽仙鹤·金系突刺：直伤 600%，CD 4，无 skillModifier
+  // 阶段十：技能数值再叠乘「施法宠稀有度倍率」（金羽仙鹤为 SSR）
+  const rp = getRaritySkillPower(pet.rarity);
 
-  it('1★（tier1）= 基线，不改数值', () => {
+  it('1★（tier1）= 基线（仅稀有度缩放，不含星级加成）', () => {
     const s = skillForPet(pet, 1);
-    expect(damageMultiplier(s.effects)).toBeCloseTo(6, 6);
+    expect(damageMultiplier(s.effects)).toBeCloseTo(6 * rp, 6);
     expect(s.cd).toBe(4);
   });
 
   it('3★（tier2）效果 +10%', () => {
     const s = skillForPet(pet, 3);
-    expect(damageMultiplier(s.effects)).toBeCloseTo(6 * 1.1, 6);
+    expect(damageMultiplier(s.effects)).toBeCloseTo(6 * 1.1 * rp, 6);
     expect(s.cd).toBe(4);
   });
 
   it('5★（tier3）效果 +20% 且 CD -1', () => {
     const s = skillForPet(pet, 5);
-    expect(damageMultiplier(s.effects)).toBeCloseTo(6 * 1.2, 6);
+    expect(damageMultiplier(s.effects)).toBeCloseTo(6 * 1.2 * rp, 6);
     expect(s.cd).toBe(3);
   });
 });

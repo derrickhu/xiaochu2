@@ -49,11 +49,15 @@ describe('petHp / petRcv（三维模型）', () => {
     expect(petRcv(samplePet, 20, 1)).toBeGreaterThan(petRcv(samplePet, 10, 1));
   });
 
-  it('同 role + 同 rarity + 同星级基础三维完全一致', () => {
+  it('同 role + 同 rarity + 同星级基础三维完全一致（排除带个体 statBonus 修饰的宠）', () => {
     const star = 1;
     const lv = 1;
+    // 个体 statBonus(self) 是专属面板修饰，会改写自身三维，不纳入「role+rarity 基线一致」断言
+    const hasSelfStatBonus = (p: PetDef): boolean =>
+      (p.traits ?? []).some((t) => t.type === 'statBonus' && t.scope === 'self');
     const seen = new Map<string, PetDef>();
     for (const p of PETS) {
+      if (p.statProfile || hasSelfStatBonus(p)) continue;
       const key = `${p.role}_${p.rarity}`;
       const ref = seen.get(key);
       if (!ref) { seen.set(key, p); continue; }

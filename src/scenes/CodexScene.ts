@@ -8,22 +8,21 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
 import { UI } from '@/balance/ui';
-import { PETS, PET_MAP, type PetDef } from '@/balance/pets';
+import { PETS, type PetDef } from '@/balance/pets';
 import { STAGES } from '@/balance/stages';
 import { CHAPTER_NAME } from '@/balance/stages';
-import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import {
-  BACKGROUND_IMAGES, CODEX_PRELOAD_IMAGES, ORB_IMAGES, petAvatarPath, UI_IMAGES,
+  BACKGROUND_IMAGES, CODEX_PRELOAD_IMAGES, UI_IMAGES,
 } from '@/config/Assets';
-import { Platform } from '@/core/PlatformService';
 import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS, FONT_SIZE,
-  makeButton, makeCoverBackground, makeIconLabel, makePanel, makeText,
-  makeRarityBadge, makeRoleBadge, makeStarRow, makeLevelLabel, makePetStatsLine,
+  makeButton, makeCoverBackground, makeIconLabel, makeText,
 } from '@/ui';
+import { ScrollListController } from '@/ui/ScrollList';
 import type { PetDetailEnterData } from './PetDetailScene';
 import { buildAbilityPanel } from './abilityCard';
+import { buildLockedCodexCard, buildOwnedCodexCard } from './codexCards';
 
 /** xiao_chu 设计缩放：S = logicWidth / 375 */
 function designScale(w: number): number {
@@ -63,93 +62,7 @@ export class CodexScene implements Scene {
 
   // ── 列表纵向拖拽滚动状态 ──
   private _content: PIXI.Container | null = null;
-  private _scrollMin = 0;
-  private _listTop = 0;
-  private _viewportTop = 0;
-  private _viewportH = 0;
-  /** 本次手势是否在滚动（true 时屏蔽卡片 tap） */
-  private _moved = false;
-  private _dragging = false;
-  private _lastTouchY = 0;
-  /** canvas 原生 touch（小游戏 adapter 与 Pixi pointermove 隔离，对齐 BoardView） */
-  private _rawDown: ((e: unknown) => void) | null = null;
-  private _rawMove: ((e: unknown) => void) | null = null;
-  private _rawUp: (() => void) | null = null;
-
-  private _rawClientY(e: unknown): number {
-    const ev = e as { clientY?: number; y?: number; touches?: { clientY: number }[]; changedTouches?: { clientY: number }[] };
-    const t0 = ev.touches?.[0] ?? ev.changedTouches?.[0];
-    const cy = ev.clientY ?? t0?.clientY ?? ev.y ?? 0;
-    return cy * (Game.designWidth / Game.screenWidth);
-  }
-
-  private _inScrollViewport(y: number): boolean {
-    return y >= this._viewportTop && y <= this._viewportTop + this._viewportH;
-  }
-
-  private _attachScrollListeners(viewportTop: number, viewportH: number): void {
-    this._detachScrollListeners();
-    this._viewportTop = viewportTop;
-    this._viewportH = viewportH;
-
-    const canvas = Game.app.view as HTMLCanvasElement;
-
-    this._rawDown = (e: unknown) => {
-      if (!this._content) return;
-      const y = this._rawClientY(e);
-      if (!this._inScrollViewport(y)) return;
-      this._dragging = true;
-      this._moved = false;
-      this._lastTouchY = y;
-    };
-
-    this._rawMove = (e: unknown) => {
-      if (!this._dragging || !this._content) return;
-      (e as { preventDefault?: () => void }).preventDefault?.();
-      const y = this._rawClientY(e);
-      const dy = this._lastTouchY - y;
-      if (Math.abs(dy) > 2) this._moved = true;
-      if (dy === 0) return;
-      this._content.y = Math.max(this._scrollMin, Math.min(this._listTop, this._content.y - dy));
-      this._lastTouchY = y;
-    };
-
-    this._rawUp = () => { this._dragging = false; };
-
-    // 小游戏走 touch；浏览器预览走 pointer，避免双通道同帧重复滚动
-    if (Platform.isMinigame) {
-      canvas.addEventListener('touchstart', this._rawDown, { passive: true });
-      canvas.addEventListener('touchmove', this._rawMove, { passive: false });
-      canvas.addEventListener('touchend', this._rawUp);
-      canvas.addEventListener('touchcancel', this._rawUp);
-    } else {
-      canvas.addEventListener('pointerdown', this._rawDown);
-      canvas.addEventListener('pointermove', this._rawMove);
-      canvas.addEventListener('pointerup', this._rawUp);
-      canvas.addEventListener('pointercancel', this._rawUp);
-    }
-  }
-
-  private _detachScrollListeners(): void {
-    const canvas = Game.app?.view as HTMLCanvasElement | undefined;
-    if (canvas && this._rawDown) {
-      canvas.removeEventListener('touchstart', this._rawDown);
-      canvas.removeEventListener('pointerdown', this._rawDown);
-    }
-    if (canvas && this._rawMove) {
-      canvas.removeEventListener('touchmove', this._rawMove);
-      canvas.removeEventListener('pointermove', this._rawMove);
-    }
-    if (canvas && this._rawUp) {
-      canvas.removeEventListener('touchend', this._rawUp);
-      canvas.removeEventListener('touchcancel', this._rawUp);
-      canvas.removeEventListener('pointerup', this._rawUp);
-      canvas.removeEventListener('pointercancel', this._rawUp);
-    }
-    this._rawDown = null;
-    this._rawMove = null;
-    this._rawUp = null;
-  }
+  private _scroll = new ScrollListController();
 
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
@@ -163,8 +76,7 @@ export class CodexScene implements Scene {
   }
 
   onExit(): void {
-    this._detachScrollListeners();
-    this._dragging = false;
+    this._scroll.detach();
     this._content = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
   }
@@ -172,7 +84,7 @@ export class CodexScene implements Scene {
   private _build(): void {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
-    this._detachScrollListeners();
+    this._scroll.detach();
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
 
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
@@ -226,7 +138,6 @@ export class CodexScene implements Scene {
     const h = Game.logicHeight;
     const { S, cols, cardGap, cardW, cardH, marginX } = petPoolGrid(w);
     const cardBgTex = TextureCache.get(UI_IMAGES.petCardPortrait);
-    this._listTop = startY;
 
     // 三态分组：已拥有 → 已收录可获取 → 未收录（按 PETS 顺序稳定）
     const stateOf = (p: PetDef): CodexState =>
@@ -256,23 +167,23 @@ export class CodexScene implements Scene {
       const item = new PIXI.Container();
       item.position.set(x, y);
       if (state === 'owned') {
-        this._buildPetCard(item, pet, cardW, cardH, S, cardBgTex);
+        buildOwnedCodexCard(item, pet, cardW, cardH, S, cardBgTex);
       } else {
-        this._buildLockedCard(item, pet, cardW, cardH, S, state);
+        buildLockedCodexCard(item, pet, cardW, cardH, S, state);
       }
 
       item.eventMode = 'static';
       item.interactiveChildren = false;
       item.cursor = 'pointer';
       item.hitArea = new PIXI.Rectangle(0, 0, cardW, cardH);
-      item.on('pointertap', () => { if (!this._moved) this._showAbilityCard(pet, state); });
+      item.on('pointertap', () => { if (!this._scroll.moved) this._showAbilityCard(pet, state); });
       content.addChild(item);
     });
 
     // 视口与滚动范围
     const viewportH = h - startY - 16;
     const contentH = maxBottom + cardGap;
-    this._scrollMin = Math.min(startY, startY - (contentH - viewportH));
+    const scrollMin = Math.min(startY, startY - (contentH - viewportH));
 
     if (contentH > viewportH) {
       const mask = new PIXI.Graphics();
@@ -283,75 +194,16 @@ export class CodexScene implements Scene {
       content.mask = mask;
 
       // 列表区统一 canvas touch 滚动（不依赖 Pixi pointerdown，避免子元素抢事件）
-      this._attachScrollListeners(startY, viewportH);
-    } else {
-      this._detachScrollListeners();
-    }
-  }
-
-  /**
-   * 未拥有卡：
-   * - discovered（已收录可获取）：灰度头像 + 「可获取」，展示稀有度/属性供「看能力再抽」。
-   * - unknown（未收录）：剪影 + 「未收录」，仅暗示属性，引导去历练关击败高级形态。
-   */
-  private _buildLockedCard(
-    item: PIXI.Container, pet: PetDef, cardW: number, cardH: number, S: number,
-    state: 'discovered' | 'unknown',
-  ): void {
-    const discovered = state === 'discovered';
-    item.addChild(makePanel({
-      width: cardW, height: cardH, radius: 8 * S, centered: false,
-      bg: COLORS.panelBgAlt, bgAlpha: 0.9,
-      border: discovered ? COLORS.accent : COLORS.panelBorderSoft,
-    }));
-
-    const orbTex = TextureCache.get(ORB_IMAGES[pet.element]);
-    if (orbTex) {
-      const orbSz = 18 * S;
-      const orb = new PIXI.Sprite(orbTex);
-      orb.width = orbSz;
-      orb.height = orbSz;
-      orb.position.set(10 * S, 10 * S);
-      orb.alpha = discovered ? 0.85 : 0.4;
-      item.addChild(orb);
-    }
-
-    if (discovered) {
-      const badge = makeRarityBadge({ tier: pet.rarity, scale: S });
-      badge.position.set(2 * S, 2 * S);
-      item.addChild(badge);
-    }
-
-    const avatarSize = cardW * 0.62;
-    const avatarTex = TextureCache.get(petAvatarPath(pet.id, 1));
-    if (avatarTex) {
-      const avatar = new PIXI.Sprite(avatarTex);
-      avatar.width = avatarSize;
-      avatar.height = avatarSize;
-      avatar.position.set((cardW - avatarSize) / 2, 8 * S);
-      // 已收录：灰度可辨；未收录：近全黑剪影
-      avatar.tint = discovered ? 0x9a9a9a : 0x111317;
-      avatar.alpha = discovered ? 0.95 : 0.85;
-      item.addChild(avatar);
-    }
-
-    const lock = makeText(discovered ? '可获取' : '未收录', {
-      size: Math.round(11 * S), fill: discovered ? COLORS.accent : COLORS.textSub,
-      bold: true, anchor: 0.5,
-    });
-    lock.position.set(cardW / 2, 8 * S + avatarSize + 14 * S);
-    item.addChild(lock);
-
-    if (discovered) {
-      const roleBadge = makeRoleBadge({ role: pet.role, scale: S, maxWidth: cardW - 10 * S });
-      roleBadge.position.set((cardW - roleBadge.width) / 2, cardH - 21 * S);
-      item.addChild(roleBadge);
-    } else {
-      const tip = makeText('？？？', {
-        size: Math.round(11 * S), fill: COLORS.textDisabled, bold: true, anchor: 0.5,
+      this._scroll.attach({
+        content: () => this._content,
+        viewportTop: startY,
+        viewportH,
+        scrollMin,
+        listTop: startY,
+        moveThreshold: 2,
       });
-      tip.position.set(cardW / 2, cardH - 16 * S);
-      item.addChild(tip);
+    } else {
+      this._scroll.detach();
     }
   }
 
@@ -437,85 +289,4 @@ export class CodexScene implements Scene {
     }
   }
 
-  /** 单卡布局对齐 xiao_chu _drawPetCard */
-  private _buildPetCard(
-    item: PIXI.Container, pet: PetDef, cardW: number, cardH: number, S: number,
-    cardBgTex: PIXI.Texture | null,
-  ): void {
-    const petId = pet.id;
-    const lv = PlayerData.petLevel(petId);
-    const star = PlayerData.petStar(petId);
-
-    if (cardBgTex) {
-      const bg = new PIXI.Sprite(cardBgTex);
-      bg.width = cardW;
-      bg.height = cardH;
-      item.addChild(bg);
-    } else {
-      item.addChild(makePanel({
-        width: cardW, height: cardH, radius: 8 * S, centered: false,
-        bg: COLORS.panelBg, border: COLORS.panelBorderSoft,
-      }));
-    }
-
-    const orbTex = TextureCache.get(ORB_IMAGES[pet.element]);
-    if (orbTex) {
-      const orbSz = 18 * S;
-      const orb = new PIXI.Sprite(orbTex);
-      orb.width = orbSz;
-      orb.height = orbSz;
-      orb.position.set(10 * S, 10 * S);
-      item.addChild(orb);
-    }
-
-    const badge = makeRarityBadge({ tier: pet.rarity, scale: S });
-    badge.position.set(2 * S, 2 * S);
-    item.addChild(badge);
-
-    const avatarSize = cardW * 0.62;
-    const avatarX = (cardW - avatarSize) / 2;
-    const avatarY = 8 * S;
-    const avatarTex = TextureCache.get(petAvatarPath(pet.id, star));
-    if (avatarTex) {
-      const avatar = new PIXI.Sprite(avatarTex);
-      avatar.width = avatarSize;
-      avatar.height = avatarSize;
-      avatar.position.set(avatarX, avatarY);
-      item.addChild(avatar);
-    }
-
-    const displayName = pet.name.length > 4 ? `${pet.name.slice(0, 4)}…` : pet.name;
-    const nameY = avatarY + avatarSize + 6 * S;
-    const nameText = makeText(displayName, {
-      size: Math.round(10 * S), fill: 0x3b2414, bold: true, anchor: 0.5,
-      strokeColor: 0xfff0cd, strokeWidth: Math.max(2, Math.round(2 * S)),
-    });
-    nameText.position.set(cardW / 2, nameY);
-    item.addChild(nameText);
-
-    const starY = nameY + 14 * S;
-    const stars = makeStarRow({ star, scale: S, variant: 'card', anchor: 'center' });
-    stars.position.set(cardW / 2, starY);
-    item.addChild(stars);
-
-    const lvY = starY + 12 * S;
-    const lvLine = makeLevelLabel({ level: lv, scale: S, variant: 'card' });
-    lvLine.position.set(cardW / 2 - lvLine.width / 2, lvY);
-    item.addChild(lvLine);
-
-    const statsY = lvY + 12 * S;
-    const statsLine = makePetStatsLine({
-      atk: petAtk(pet, lv, star),
-      hp: petHp(pet, lv, star),
-      rcv: petRcv(pet, lv, star),
-      scale: S,
-      variant: 'card',
-    });
-    statsLine.position.set(cardW / 2 - statsLine.width / 2, statsY);
-    item.addChild(statsLine);
-
-    const roleBadge = makeRoleBadge({ role: pet.role, scale: S, maxWidth: cardW - 10 * S });
-    roleBadge.position.set((cardW - roleBadge.width) / 2, cardH - 21 * S);
-    item.addChild(roleBadge);
-  }
 }

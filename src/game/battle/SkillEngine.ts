@@ -8,6 +8,7 @@ import type { PetDef } from '@/balance/pets';
 import type { SkillDef, SkillEffectDef, SkillVfxId, ConvertShape } from '@/balance/skills';
 import { getSkill, resolveSkillVfx, getSkillTierBonus, getSkillStarOverride } from '@/balance/skills';
 import { getStarProfile } from '@/balance/growth';
+import { getRaritySkillPower } from '@/balance/rarity';
 import type { StatusStackPolicy } from './BattleStatus';
 import { defenseReduction } from '@/formulas/damage';
 
@@ -112,6 +113,8 @@ export function applyPetSkillModifiers(skill: SkillDef, pet: PetDef, skillTier =
   let cd = skill.cd + tierBonus.cdDelta + (override?.cdDelta ?? 0);
   // 质变覆写优先：effectMult 替代平 % 加成
   let effectMult = override?.effectMult ?? (1 + tierBonus.effectPct);
+  // 稀有度技能倍率（锚点 R=1.0，与星级 tier 独立叠乘，保证同 skillId 跨稀有单调）
+  effectMult *= getRaritySkillPower(pet.rarity);
   let convertCountBonus = 0;
   for (const trait of pet.traits ?? []) {
     if (trait.type !== 'skillModifier') continue;

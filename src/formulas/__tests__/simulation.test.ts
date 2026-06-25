@@ -11,7 +11,7 @@
  *  - 操作熟练度(低/中/高手)与队伍质量都应显著影响结果
  */
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_TEAM, INITIAL_PET_LEVEL, INITIAL_PET_STAR } from '@/balance/pets';
+import { DEFAULT_TEAM, INITIAL_PET_LEVEL, INITIAL_PET_STAR, PET_MAP } from '@/balance/pets';
 import { STAGES } from '@/balance/stages';
 import { CHAPTER_BUDGET, getChapterBudget } from '@/balance/growth';
 import { petExpToNext } from '../growth';
@@ -84,6 +84,22 @@ describe('1-1~1-4 教学段：可达性', () => {
     expect(r.win).toBe(true);
     expect(r.turnsUsed).toBeLessThanOrEqual(2);
     expect(r.stars).toBe(3);
+  });
+});
+
+describe('新手 5R 阵容：教学段可达性', () => {
+  it('初始赠送阵容恰为 5 只 R（rarity 1）宠', () => {
+    expect(DEFAULT_TEAM).toHaveLength(5);
+    for (const id of DEFAULT_TEAM) {
+      expect(PET_MAP.get(id)?.rarity, id).toBe(1);
+    }
+  });
+
+  it('5 只 R 初始队（L1/1★）中手 / 低手均可稳过 1-1~1-4 教学段', () => {
+    for (const id of ['stage_1_1', 'stage_1_2', 'stage_1_3', 'stage_1_4']) {
+      expect(sim(TEAMS.default, id, COMBO_MODELS.mid).win, `${id} mid`).toBe(true);
+      expect(sim(TEAMS.default, id, COMBO_MODELS.low).win, `${id} low`).toBe(true);
+    }
   });
 });
 

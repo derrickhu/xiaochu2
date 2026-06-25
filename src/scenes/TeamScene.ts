@@ -9,39 +9,29 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
-import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
-import { ELEMENTS } from '@/balance/combat';
+import { UI, ORB_COLOR } from '@/balance/ui';
 import {
   PET_MAP, TEAM_SIZE,
   type PetDef,
 } from '@/balance/pets';
 import { formatEnemyAbility, resolveEncounter } from '@/balance/enemies';
 import { STAGE_MAP, type StageDef } from '@/balance/stages';
-import { getRarity } from '@/balance/rarity';
-import { teamMaxHp, teamAtk, teamRcv, teamElements, type TeamMember } from '@/formulas/team';
-import { petAtk, petHp, petRcv } from '@/formulas/growth';
+import type { TeamMember } from '@/formulas/team';
 import {
-  BACKGROUND_IMAGES, TEAM_PRELOAD_IMAGES, petFrameImage, petAvatarPath, UI_IMAGES, enemyImage,
+  BACKGROUND_IMAGES, TEAM_PRELOAD_IMAGES, UI_IMAGES, enemyImage,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import type { BattleEnterData } from './BattleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
   makeButton, makeCoverBackground, makePanel, makeText,
-  makeRarityBadge, makeRarityCardBorder, makeRarityNameLine, makeElementRoleLine,
-  makeLevelStarLine,
-  makePetStatsLine, makeTeamStatsLine, makeShardBadge,
 } from '@/ui';
-
-/** 列表卷轴卡：360×486 原图 → 展示宽 330 */
-const LIST_CARD_W = 330;
-const LIST_CARD_H = 148;
-const SCROLL_SCALE_X = LIST_CARD_W / 360;
-const SCROLL_SCALE_Y = LIST_CARD_H / 486;
-/** 列表卡内：头像区与右侧文案区分离，避免 Lv 与相框重叠 */
-const LIST_AVATAR_SIZE = 74;
-const LIST_LEFT_PAD = 14;
-const LIST_TEXT_GAP = 14;
+import { ScrollListController } from '@/ui/ScrollList';
+import {
+  refreshTeamOverviewPanel,
+  type TeamOverviewSnapshot,
+} from './teamOverviewPanel';
+import { addTeamPetAvatar, buildTeamPetList } from './teamPetList';
 
 /** 战前编队：传入 stageId 时展示本关敌人，确认后进入战斗；缺省为自由编队 */
 export interface TeamEnterData {
@@ -54,8 +44,12 @@ export class TeamScene implements Scene {
 
   private _slotArea = new PIXI.Container();
   private _listChecks = new Map<string, PIXI.Container>();
-  private _statsRow = new PIXI.Container();
-  private _coverageText!: PIXI.Text;
+  /** 队伍总览面板内容层（每次换宠重建） */
+  private _overview = new PIXI.Container();
+  private _overviewW = 0;
+  private _overviewH = 0;
+  /** 上次总览数值，用于换宠时高亮变化项 */
+  private _prevAgg: TeamOverviewSnapshot | null = null;
   private _slotY = 0;
   private _slotSize = 96;
   /** 战前编队目标关卡；无则为底部导航进入的自由编队 */
@@ -63,16 +57,7 @@ export class TeamScene implements Scene {
   /** 战前模式：宠物池滚动 + 点击（canvas 通道，对齐 CodexScene） */
   private _listContent: PIXI.Container | null = null;
   private _listItems = new Map<string, PIXI.Container>();
-  private _scrollMin = 0;
-  private _listTop = 0;
-  private _listViewportTop = 0;
-  private _listViewportH = 0;
-  private _listDrag = false;
-  private _listMoved = false;
-  private _lastTouchY = 0;
-  private _rawDown: ((e: unknown) => void) | null = null;
-  private _rawMove: ((e: unknown) => void) | null = null;
-  private _rawUp: ((e: unknown) => void) | null = null;
+  private _listScroll = new ScrollListController();
 
   onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
@@ -98,11 +83,12 @@ export class TeamScene implements Scene {
     this._listChecks.clear();
     this._listItems.clear();
     this._prepStage = undefined;
-    this._detachListScroll();
+    this._prevAgg = null;
+    this._listScroll.detach();
     this._listContent = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
     this._slotArea = new PIXI.Container();
-    this._statsRow = new PIXI.Container();
+    this._overview = new PIXI.Container();
   }
 
   private _build(): void {
@@ -146,17 +132,25 @@ export class TeamScene implements Scene {
     }
 
     this._slotY = y;
-    const statsY = y + slotSize + 22;
-    const coverageY = statsY + 28;
-    const listStartY = coverageY + 20;
+    const panelTop = y + slotSize + 16;
+    const panelW = 690;
+    const panelH = 158;
+    const panelCenterY = panelTop + panelH / 2;
+    const listStartY = panelTop + panelH + 16;
 
-    this._statsRow = new PIXI.Container();
-    this._statsRow.position.set(w / 2, statsY);
-    this.container.addChild(this._statsRow);
-
-    this._coverageText = makeText('', { size: FONT_SIZE.xs, anchor: 0.5 });
-    this._coverageText.position.set(w / 2, coverageY);
-    this.container.addChild(this._coverageText);
+    this._overviewW = panelW;
+    this._overviewH = panelH;
+    const panelRoot = new PIXI.Container();
+    panelRoot.position.set(w / 2, panelCenterY);
+    panelRoot.addChild(makePanel({
+      width: panelW, height: panelH, radius: RADIUS.card,
+      bg: COLORS.panelBgAlt, bgAlpha: 0.92,
+      border: COLORS.panelBorderSoft, borderWidth: 1,
+      centered: true,
+    }));
+    this._overview = new PIXI.Container();
+    panelRoot.addChild(this._overview);
+    this.container.addChild(panelRoot);
 
     const bottomBtnH = 72;
     const bottomPad = 20;
@@ -169,9 +163,24 @@ export class TeamScene implements Scene {
       startBtn.position.set(w / 2, h - bottomPad - bottomBtnH / 2);
       this.container.addChild(startBtn);
       // 列表后添加，保证卡片在按钮之上可点击（按钮仅露出底栏区域）
-      this._buildPetList(listStartY, listBottom);
+      this._listContent = buildTeamPetList({
+        container: this.container,
+        startY: listStartY,
+        listBottom,
+        checks: this._listChecks,
+        items: this._listItems,
+        scroll: this._listScroll,
+        onToggle: (petId) => this._togglePet(petId),
+      });
     } else {
-      this._buildPetList(listStartY);
+      this._listContent = buildTeamPetList({
+        container: this.container,
+        startY: listStartY,
+        checks: this._listChecks,
+        items: this._listItems,
+        scroll: this._listScroll,
+        onToggle: (petId) => this._togglePet(petId),
+      });
     }
 
     this._refreshTeamUi();
@@ -297,237 +306,6 @@ export class TeamScene implements Scene {
     this.container.addChild(title);
   }
 
-  private _buildPetList(startY: number, listBottom?: number): void {
-    const w = Game.logicWidth;
-    const cols = 2;
-    const gapX = 24;
-    const gapY = 14;
-    const gridW = cols * LIST_CARD_W + (cols - 1) * gapX;
-    const startX = (w - gridW) / 2 + LIST_CARD_W / 2;
-    const scrollTex = TextureCache.get(UI_IMAGES.petCardTeamRow);
-    const scrollable = listBottom !== undefined;
-    const parent = scrollable ? new PIXI.Container() : this.container;
-    if (scrollable) {
-      this._listContent = parent;
-      parent.position.set(0, startY);
-      this.container.addChild(parent);
-    }
-
-    let maxBottom = 0;
-
-    PlayerData.ownedPets.forEach((petId, i) => {
-      const pet = PET_MAP.get(petId);
-      if (!pet) return;
-      const lv = PlayerData.petLevel(petId);
-      const star = PlayerData.petStar(petId);
-
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const itemY = row * (LIST_CARD_H + gapY) + LIST_CARD_H / 2;
-      maxBottom = Math.max(maxBottom, itemY + LIST_CARD_H / 2);
-
-      const item = new PIXI.Container();
-      item.position.set(
-        startX + col * (LIST_CARD_W + gapX),
-        scrollable ? itemY : startY + itemY,
-      );
-
-      if (scrollTex) {
-        const scroll = new PIXI.Sprite(scrollTex);
-        scroll.anchor.set(0.5);
-        scroll.scale.set(SCROLL_SCALE_X, SCROLL_SCALE_Y);
-        item.addChild(scroll);
-        item.addChild(makeRarityCardBorder({
-          width: LIST_CARD_W, height: LIST_CARD_H, tier: pet.rarity,
-          radius: RADIUS.card, centered: true, borderWidth: 3,
-        }));
-      } else {
-        item.addChild(makePanel({
-          width: LIST_CARD_W, height: LIST_CARD_H, radius: RADIUS.card,
-          bg: COLORS.panelBg, border: getRarity(pet.rarity).color,
-        }));
-      }
-
-      const badge = makeRarityBadge({ tier: pet.rarity, scale: Game.logicWidth / 375 });
-      badge.position.set(-LIST_CARD_W / 2 + LIST_LEFT_PAD, -LIST_CARD_H / 2 + 6);
-      item.addChild(badge);
-
-      const avatarX = -LIST_CARD_W / 2 + LIST_LEFT_PAD + LIST_AVATAR_SIZE / 2;
-      this._addPetAvatar(item, pet, avatarX, 4, LIST_AVATAR_SIZE);
-
-      const shardBadge = makeShardBadge({ shards: PlayerData.petShards(petId) });
-      shardBadge.position.set(avatarX, 4 + LIST_AVATAR_SIZE / 2 + 14);
-      item.addChild(shardBadge);
-
-      const textX = -LIST_CARD_W / 2 + LIST_LEFT_PAD + LIST_AVATAR_SIZE + LIST_TEXT_GAP;
-      const nameLine = makeRarityNameLine(pet.rarity, pet.name, {
-        size: FONT_SIZE.xs, nameFill: COLORS.textMain,
-      });
-      nameLine.position.set(textX, -30);
-      item.addChild(nameLine);
-
-      const line2 = makeElementRoleLine(pet.element, pet.role, { size: FONT_SIZE.xxs });
-      line2.position.set(textX, -6);
-      item.addChild(line2);
-
-      const line3 = makeLevelStarLine({
-        level: lv, star, size: FONT_SIZE.xxs, variant: 'panel', filledOnly: true,
-      });
-      line3.position.set(textX, 18);
-      item.addChild(line3);
-
-      const line4 = makePetStatsLine({
-        atk: petAtk(pet, lv, star),
-        hp: petHp(pet, lv, star),
-        rcv: petRcv(pet, lv, star),
-        size: FONT_SIZE.xxs,
-        variant: 'panel',
-      });
-      line4.position.set(textX, 40);
-      item.addChild(line4);
-
-      const check = new PIXI.Container();
-      check.addChild(makePanel({
-        width: 36, height: 36, radius: 18,
-        bg: COLORS.btnSuccessBg, border: COLORS.btnSuccessBorder, borderWidth: 2,
-      }));
-      const checkMark = makeText('上', {
-        size: FONT_SIZE.xxs, fill: COLORS.btnText, bold: true, anchor: 0.5,
-      });
-      check.addChild(checkMark);
-      check.position.set(LIST_CARD_W / 2 - 22, -LIST_CARD_H / 2 + 22);
-      item.addChild(check);
-      this._listChecks.set(pet.id, check);
-      this._listItems.set(pet.id, item);
-      item.hitArea = new PIXI.Rectangle(
-        -LIST_CARD_W / 2, -LIST_CARD_H / 2, LIST_CARD_W, LIST_CARD_H,
-      );
-
-      item.eventMode = 'static';
-      item.cursor = 'pointer';
-      item.interactiveChildren = false;
-      item.on('pointertap', () => {
-        if (scrollable && this._listMoved) return;
-        this._togglePet(pet.id);
-      });
-      parent.addChild(item);
-    });
-
-    if (scrollable && listBottom !== undefined) {
-      this._listTop = startY;
-      const viewportH = listBottom - startY;
-      const contentH = maxBottom + LIST_CARD_H / 2;
-      this._scrollMin = Math.min(startY, startY - (contentH - viewportH));
-      if (contentH > viewportH) {
-        const mask = new PIXI.Graphics();
-        mask.beginFill(0xffffff);
-        mask.drawRect(0, startY, w, viewportH);
-        mask.endFill();
-        this.container.addChild(mask);
-        parent.mask = mask;
-      }
-      // 战前列表：canvas 仅负责滚动，点击走 pointertap（与 CodexScene 一致）
-      this._attachListScroll(startY, viewportH);
-    }
-  }
-
-  private _rawClientY(e: unknown): number {
-    return Game.pointerEventToStageLocal(e).y;
-  }
-
-  private _rawClientX(e: unknown): number {
-    return Game.pointerEventToStageLocal(e).x;
-  }
-
-  private _inListViewport(y: number): boolean {
-    return y >= this._listViewportTop && y <= this._listViewportTop + this._listViewportH;
-  }
-
-  private _attachListScroll(viewportTop: number, viewportH: number): void {
-    this._detachListScroll();
-    this._listViewportTop = viewportTop;
-    this._listViewportH = viewportH;
-    const canvas = Game.app.view as HTMLCanvasElement;
-
-    this._rawDown = (e: unknown) => {
-      if (!this._listContent) return;
-      const y = this._rawClientY(e);
-      if (!this._inListViewport(y)) return;
-      this._listDrag = true;
-      this._listMoved = false;
-      this._lastTouchY = y;
-    };
-    this._rawMove = (e: unknown) => {
-      if (!this._listDrag || !this._listContent) return;
-      (e as { preventDefault?: () => void }).preventDefault?.();
-      const y = this._rawClientY(e);
-      const dy = this._lastTouchY - y;
-      if (Math.abs(dy) > 8) this._listMoved = true;
-      if (dy === 0) return;
-      this._listContent.y = Math.max(this._scrollMin, Math.min(this._listTop, this._listContent.y - dy));
-      this._lastTouchY = y;
-    };
-    this._rawUp = () => {
-      this._listDrag = false;
-    };
-
-    if (Platform.isMinigame) {
-      canvas.addEventListener('touchstart', this._rawDown, { passive: true });
-      canvas.addEventListener('touchmove', this._rawMove, { passive: false });
-      canvas.addEventListener('touchend', this._rawUp);
-      canvas.addEventListener('touchcancel', this._rawUp);
-    } else {
-      canvas.addEventListener('pointerdown', this._rawDown);
-      canvas.addEventListener('pointermove', this._rawMove);
-      canvas.addEventListener('pointerup', this._rawUp);
-      canvas.addEventListener('pointercancel', this._rawUp);
-    }
-  }
-
-  private _detachListScroll(): void {
-    const canvas = Game.app.view as HTMLCanvasElement;
-    if (this._rawDown) {
-      if (Platform.isMinigame) {
-        canvas.removeEventListener('touchstart', this._rawDown);
-        canvas.removeEventListener('touchmove', this._rawMove!);
-        canvas.removeEventListener('touchend', this._rawUp!);
-        canvas.removeEventListener('touchcancel', this._rawUp!);
-      } else {
-        canvas.removeEventListener('pointerdown', this._rawDown);
-        canvas.removeEventListener('pointermove', this._rawMove!);
-        canvas.removeEventListener('pointerup', this._rawUp!);
-        canvas.removeEventListener('pointercancel', this._rawUp!);
-      }
-    }
-    this._rawDown = null;
-    this._rawMove = null;
-    this._rawUp = null;
-    this._listDrag = false;
-    this._listMoved = false;
-  }
-
-  /** 头像 + 五行相框（编队槽与列表共用） */
-  private _addPetAvatar(
-    parent: PIXI.Container, pet: PetDef, x: number, y: number, size: number,
-  ): void {
-    const tex = TextureCache.get(petAvatarPath(pet.id, PlayerData.petStar(pet.id)));
-    if (tex) {
-      const avatar = new PIXI.Sprite(tex);
-      avatar.anchor.set(0.5);
-      avatar.scale.set((size - 8) / Math.max(tex.width, tex.height));
-      avatar.position.set(x, y);
-      parent.addChild(avatar);
-    }
-    const frameTex = TextureCache.get(petFrameImage(pet.element));
-    if (frameTex) {
-      const frame = new PIXI.Sprite(frameTex);
-      frame.anchor.set(0.5);
-      frame.scale.set(size / Math.max(frameTex.width, frameTex.height));
-      frame.position.set(x, y);
-      parent.addChild(frame);
-    }
-  }
-
   private _togglePet(petId: string): void {
     if (PlayerData.isInTeam(petId)) {
       if (!PlayerData.removeFromTeam(petId)) {
@@ -561,7 +339,7 @@ export class TeamScene implements Scene {
       const pet = petId ? PET_MAP.get(petId) : undefined;
 
       if (pet) {
-        this._addPetAvatar(slot, pet, slotSize / 2, slotSize / 2, slotSize);
+        addTeamPetAvatar(slot, pet, slotSize / 2, slotSize / 2, slotSize);
         slot.eventMode = 'static';
         slot.cursor = 'pointer';
         slot.on('pointertap', () => this._togglePet(pet.id));
@@ -586,22 +364,13 @@ export class TeamScene implements Scene {
       .map((id) => PET_MAP.get(id))
       .filter((def): def is PetDef => !!def)
       .map((def) => ({ def, level: PlayerData.petLevel(def.id), star: PlayerData.petStar(def.id) }));
-    this._statsRow.removeChildren().forEach((c) => c.destroy({ children: true }));
-    const statsLine = makeTeamStatsLine({
-      hp: teamMaxHp(members),
-      atk: teamAtk(members),
-      rcv: teamRcv(members),
-      size: FONT_SIZE.sm,
-    });
-    statsLine.position.set(-statsLine.width / 2, 0);
-    this._statsRow.addChild(statsLine);
-
-    const covered = teamElements(members);
-    const missing = ELEMENTS.filter((e) => !covered.has(e));
-    this._coverageText.text = missing.length === 0
-      ? '五行全覆盖，所有属性珠均有效'
-      : `未覆盖：${missing.map((e) => ELEMENT_NAME[e]).join('、')}（对应珠子无伤害）`;
-    this._coverageText.style.fill = missing.length === 0 ? COLORS.btnSuccessBorder : COLORS.accentDeep;
+    this._prevAgg = refreshTeamOverviewPanel(
+      this._overview,
+      this._overviewW,
+      this._overviewH,
+      members,
+      this._prevAgg,
+    );
 
     for (const [petId, check] of this._listChecks) {
       check.visible = PlayerData.isInTeam(petId);

@@ -11,20 +11,17 @@
  */
 import { COMBAT, type Element } from '@/balance/combat';
 import type { PetDef } from '@/balance/pets';
-import { PET_MAP } from '@/balance/pets';
-import type { EnemyDef } from '@/balance/enemies';
-import { resolveEncounter } from '@/balance/enemies';
 import type { StageDef } from '@/balance/stages';
 import { STAGE_MAP } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
-import type { SkillDef, SkillVfxId } from '@/balance/skills';
-import { calcDamage, calcHeal } from './damage';
-import { enemyStats } from './growth';
+import type { SkillDef } from '@/balance/skills';
+import { calcHeal } from './damage';
 import {
   petAtkInTeam,
   teamMaxHp,
   teamRcv,
   teamElements,
+  teamPassiveAggregate,
   type TeamMember,
 } from './team';
 import {
@@ -36,38 +33,24 @@ import {
   type SkillResult,
   type SkillRuntimeContext,
 } from '@/game/battle/SkillEngine';
+import { orbGroupDamage } from './simulationDamage';
+import { spawnSimEnemy, type SimEnemy } from './simulationEnemy';
+import {
+  COMBO_MODELS,
+  simulateMatrixWith,
+  type ComboModel,
+  type SimResult,
+  type StageReportRow,
+} from './simulationReport';
 
-/** 玩家操作熟练度模型 */
-export interface ComboModel {
-  name: string;
-  /** 每回合形成的消除组数（总 Combo） */
-  combo: number;
-  /** 每组平均珠数（3 连 / 4 连…） */
-  matchCount: number;
-  /** 是否会用主动技（低手不主动放技能） */
-  useSkills: boolean;
-}
-
-export const COMBO_MODELS: Readonly<Record<'low' | 'mid' | 'high', ComboModel>> = {
-  low: { name: '低手3C', combo: 3, matchCount: 3, useSkills: false },
-  mid: { name: '中手5C', combo: 5, matchCount: 3, useSkills: true },
-  high: { name: '高手7C', combo: 7, matchCount: 4, useSkills: true },
-};
-
-export interface SimResult {
-  win: boolean;
-  /** 已用回合（达到上限仍未通关 = 卡关） */
-  turnsUsed: number;
-  /** 通关时英雄剩余血量（未通关 = 0） */
-  heroHpRemaining: number;
-  heroMaxHp: number;
-  /** 单波最高承伤（评估是否被蓄力一击带走） */
-  maxEnemyHit: number;
-  /** 是否受过伤（无伤星判定） */
-  tookDamage: boolean;
-  /** 预计星数（口径同 BattleController.finish） */
-  stars: number;
-}
+export {
+  buildTeam,
+  COMBO_MODELS,
+  formatResult,
+  type ComboModel,
+  type SimResult,
+  type StageReportRow,
+} from './simulationReport';
 
 interface SimPet {
   def: PetDef;
@@ -76,38 +59,8 @@ interface SimPet {
   skillCdLeft: number;
 }
 
-interface SimEnemy {
-  def: EnemyDef;
-  maxHp: number;
-  hp: number;
-  atk: number;
-  def_: number;
-  attackCountdown: number;
-  skillCds: number[];
-  charging: { mult: number; skillId: string; releaseVfx: SkillVfxId } | null;
-  dmgReduction: { reduction: number; turnsLeft: number } | null;
-}
-
 /** 超过该回合仍未通关，按卡关处理；避免弱队无限磨死自疗怪 */
 const TURN_CAP = 55;
-
-function spawnEnemy(stage: StageDef, waveIndex: number): SimEnemy {
-  const ref = stage.encounters[waveIndex];
-  if (!ref) throw new Error(`未知波次: ${stage.id} #${waveIndex}`);
-  const def = resolveEncounter(ref).def;
-  const stats = enemyStats(def, stage.chapter, stage.difficulty);
-  return {
-    def,
-    maxHp: stats.hp,
-    hp: stats.hp,
-    atk: stats.atk,
-    def_: stats.def,
-    attackCountdown: def.attackInterval,
-    skillCds: (def.skillIds ?? []).map((id) => skillForEnemy(id).cd),
-    charging: null,
-    dmgReduction: null,
-  };
-}
 
 /**
  * 模拟一场战斗。
@@ -132,12 +85,17 @@ export function simulateBattle(
   const rcvTotal = teamRcv(members);
   const covered = teamElements(members);
 
+  // 触发型被动聚合（与 BattleController 双模型镜像）：开局护盾 / 每回合回血 / 全队增伤
+  const passiveAgg = teamPassiveAggregate(members);
+  const passiveRegenPerTurn = Math.floor(heroMaxHp * passiveAgg.regenPct);
+  const passiveTeamDamageMult = passiveAgg.teamDamageMult;
+
   /** 每元素出手宠（首个该元素，口径同 BattleController.resolveTurn 的 findIndex） */
   const firstPetOf = (el: Element): SimPet | undefined =>
     team.find((p) => p.def.element === el);
 
   let heroHp = heroMaxHp;
-  let shield = 0;
+  let shield = Math.floor(heroMaxHp * passiveAgg.startShieldPct);
   let tookDamage = false;
   let maxEnemyHit = 0;
   let turnsUsed = 0;
@@ -159,7 +117,7 @@ export function simulateBattle(
     st.enemyDefBreak ? Math.floor(enemy.def_ * (1 - st.enemyDefBreak.pct)) : enemy.def_;
 
   let waveIndex = 0;
-  let enemy = spawnEnemy(stage, waveIndex);
+  let enemy = spawnSimEnemy(stage, waveIndex);
 
   // 关卡规则机制：禁心（心珠不回血）、禁用属性珠（消除无伤害）
   const mech = resolveMechanics(stage.mechanics);
@@ -176,9 +134,9 @@ export function simulateBattle(
     }
 
     enemyReduction = enemy.dmgReduction?.reduction ?? 0;
-    buffMult = st.dmgBuff?.mult ?? 1.0;
+    buffMult = (st.dmgBuff?.mult ?? 1.0) * passiveTeamDamageMult;
     dmgToEnemy = 0;
-    healThisTurn = 0;
+    healThisTurn = passiveRegenPerTurn;
 
     // ── 主动技（中/高手）──
     if (model.useSkills) {
@@ -217,7 +175,7 @@ export function simulateBattle(
     if (enemy.hp <= 0) {
       if (waveIndex + 1 < stage.encounters.length) {
         waveIndex++;
-        enemy = spawnEnemy(stage, waveIndex);
+        enemy = spawnSimEnemy(stage, waveIndex);
         decayStatuses();
         continue;
       }
@@ -285,7 +243,7 @@ export function simulateBattle(
       heroMaxHp,
       teamRcvTotal: rcvTotal,
       teamAtkTotal: team.reduce((sum, p) => sum + p.atk, 0),
-      teamDamageBuffMult: st.dmgBuff?.mult ?? 1,
+      teamDamageBuffMult: (st.dmgBuff?.mult ?? 1) * passiveTeamDamageMult,
       enemyDamageReduction: enemy.dmgReduction?.reduction ?? 0,
     };
   }
@@ -343,7 +301,7 @@ export function simulateBattle(
         if (pet) {
           const extraGroups = req.count / model.matchCount;
           dmgToEnemy += extraGroups * orbGroupDamage(
-            pet.atk, req.to as Element, enemy, effEnemyDef(), model, st.dmgBuff?.mult ?? buffMult, enemy.dmgReduction?.reduction ?? enemyReduction,
+            pet.atk, req.to as Element, enemy, effEnemyDef(), model, (st.dmgBuff?.mult ?? 1) * passiveTeamDamageMult, enemy.dmgReduction?.reduction ?? enemyReduction,
           );
         }
       }
@@ -414,64 +372,12 @@ export function simulateBattle(
   }
 }
 
-/** 单组属性珠期望伤害（含克制/防御/增伤/敌减伤） */
-function orbGroupDamage(
-  atk: number,
-  el: Element,
-  enemy: SimEnemy,
-  defenderDef: number,
-  model: ComboModel,
-  buffMult: number,
-  enemyReduction: number,
-): number {
-  const raw = calcDamage({
-    atk,
-    matchCount: model.matchCount,
-    combo: model.combo,
-    attackerElement: el,
-    defenderElement: enemy.def.element,
-    defenderDef,
-    buffMult,
-  });
-  return raw * (1 - enemyReduction);
-}
-
 // ════════════ 报告辅助（调参 / 测试共用） ════════════
-
-/** 由宠物 id 构造固定 level/star 的队伍 */
-export function buildTeam(
-  ids: readonly string[],
-  level: number,
-  star: number,
-): TeamMember[] {
-  return ids
-    .map((id) => PET_MAP.get(id))
-    .filter((def): def is PetDef => !!def)
-    .map((def) => ({ def, level, star }));
-}
-
-export interface StageReportRow {
-  stageId: string;
-  low: SimResult;
-  mid: SimResult;
-  high: SimResult;
-}
 
 /** 跑一支队伍在一组关卡上的三模型矩阵 */
 export function simulateMatrix(
   members: readonly TeamMember[],
   stageIds: readonly string[],
 ): StageReportRow[] {
-  return stageIds.map((stageId) => ({
-    stageId,
-    low: simulateBattle(members, stageId, COMBO_MODELS.low),
-    mid: simulateBattle(members, stageId, COMBO_MODELS.mid),
-    high: simulateBattle(members, stageId, COMBO_MODELS.high),
-  }));
-}
-
-/** 人类可读的一行摘要（调参时 console 打印用） */
-export function formatResult(r: SimResult): string {
-  const hp = r.win ? `${Math.round((r.heroHpRemaining / r.heroMaxHp) * 100)}%hp` : 'DEAD';
-  return `${r.win ? `WIN ${r.stars}★` : 'LOSE'} t=${r.turnsUsed} ${hp} maxHit=${r.maxEnemyHit}`;
+  return simulateMatrixWith(simulateBattle, members, stageIds);
 }

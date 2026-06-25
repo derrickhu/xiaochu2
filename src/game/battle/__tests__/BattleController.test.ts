@@ -223,7 +223,8 @@ describe('怪物技能', () => {
     const hpBefore = ctrl.heroHp;
     const r2 = ctrl.enemyAct();
     expect(r2.action).toBe('chargedAttack');
-    expect(r2.damage).toBe(Math.floor(ctrl.enemy.atk * 2.6));
+    // 重击原始伤害 = atk × mult；被动开局护盾可能吸收一部分，故按 实扣 + 吸收 还原
+    expect(r2.damage + r2.absorbed).toBe(Math.floor(ctrl.enemy.atk * 2.6));
     expect(ctrl.heroHp).toBe(hpBefore - r2.damage);
     expect(ctrl.enemy.charging).toBeNull();
   });

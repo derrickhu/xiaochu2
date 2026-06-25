@@ -89,3 +89,30 @@ export function teamRcv(members: readonly TeamMember[]): number {
 export function teamElements(members: readonly TeamMember[]): Set<Element> {
   return new Set(members.map((m) => m.def.element));
 }
+
+/** 触发/常驻数值类被动的队伍聚合（开局护盾 / 每回合回血 / 全队增伤） */
+export interface TeamPassiveAggregate {
+  /** 开局护盾占队伍最大生命的比例之和 */
+  startShieldPct: number;
+  /** 每回合回血占队伍最大生命的比例之和 */
+  regenPct: number;
+  /** 全队增伤总乘区 = 1 + Σ teamDamagePct */
+  teamDamageMult: number;
+}
+
+/** 聚合队伍内所有宠的触发型被动（签名被动 ×稀有度 + 专属，已在 pet.passive 解析） */
+export function teamPassiveAggregate(
+  members: readonly { def: Pick<PetDef, 'passive'> }[],
+): TeamPassiveAggregate {
+  let startShieldPct = 0;
+  let regenPct = 0;
+  let teamDamagePct = 0;
+  for (const m of members) {
+    const p = m.def.passive;
+    if (!p) continue;
+    startShieldPct += p.startShieldPct;
+    regenPct += p.regenPct;
+    teamDamagePct += p.teamDamagePct;
+  }
+  return { startShieldPct, regenPct, teamDamageMult: 1 + teamDamagePct };
+}

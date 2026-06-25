@@ -7,15 +7,18 @@
  * - 8 秒限时由 update(dt) 驱动，超时强制松手
  */
 import * as PIXI from 'pixi.js';
-import { Game } from '@/core/Game';
 import { ObjectPool } from '@/core/ObjectPool';
 import { TextureCache } from '@/core/TextureCache';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
 import { UI } from '@/balance/ui';
 import { COMBAT, type OrbType } from '@/balance/combat';
-import { BOARD_IMAGES, ORB_IMAGES } from '@/config/Assets';
+import { ORB_IMAGES } from '@/config/Assets';
 import { BoardModel, type MatchGroup, type FallMove, type Cell } from './BoardModel';
+import { BoardDragController } from './BoardDragController';
+import { playBoardClear, playBoardConvert, playBoardFall } from './boardAnimations';
+import { buildBoardBackground } from './boardBackground';
+import { drawInactiveMark, drawSealMark } from './boardOrbMarks';
 
 export interface BoardViewCallbacks {
   /** 是否允许开始拖珠（战斗状态机控制） */
@@ -63,9 +66,7 @@ export class BoardView {
   private _swapLocked = false;
   private _swapUnlockTimer = 0;
 
-  /** 注册在 canvas 上的原生监听器（destroy 时移除） */
-  private _rawMove: ((e: any) => void) | null = null;
-  private _rawUp: ((e: any) => void) | null = null;
+  private _dragInput: BoardDragController | null = null;
 
   constructor(board: BoardModel, cb: BoardViewCallbacks) {
     this._board = board;
@@ -93,12 +94,20 @@ export class BoardView {
       onDiscard: (sp) => sp.destroy(),
     });
 
-    this._buildBackground();
+    buildBoardBackground(this.container, this._board.rows, this._board.cols, this._cell);
     this.container.addChild(this._orbsLayer);
     // 状态标记层（封印 / 无效），置于珠子之上
     this._overlayLayer.eventMode = 'none';
     this.container.addChild(this._overlayLayer);
-    this._buildHitArea();
+    this._dragInput = new BoardDragController({
+      container: this.container,
+      boardWidth: this.boardWidth,
+      boardHeight: this.boardHeight,
+      isDragging: () => this._dragging,
+      onDown: (e) => this._onDown(e),
+      onMove: (x, y) => this._onMove(x, y),
+      onUp: () => this._onUp(),
+    });
     // 浮珠层置顶（仅展示，不拦截触摸；触摸由 hit 层接收）
     this._floatLayer.eventMode = 'none';
     this.container.addChild(this._floatLayer);
@@ -170,11 +179,11 @@ export class BoardView {
         if (locked) {
           sp.tint = SEAL_TINT;
           sp.alpha = SEAL_ALPHA;
-          this._drawSealMark(this._cellCenterX(c), this._cellCenterY(r), size);
+          drawSealMark(this._overlayLayer, this._cellCenterX(c), this._cellCenterY(r), size);
         } else if (!active && orb !== 'heart') {
           sp.tint = INACTIVE_TINT;
           sp.alpha = INACTIVE_ALPHA;
-          this._drawInactiveMark(this._cellCenterX(c), this._cellCenterY(r), size);
+          drawInactiveMark(this._overlayLayer, this._cellCenterX(c), this._cellCenterY(r), size);
         } else {
           sp.tint = 0xffffff;
           sp.alpha = 1;
@@ -188,196 +197,19 @@ export class BoardView {
     this.refreshOrbStates();
   }
 
-  /** 封印珠：蓝紫冰层 + 金边 + 「封」字（不可拖/不可消，消邻格解封） */
-  private _drawSealMark(cx: number, cy: number, size: number): void {
-    const mark = new PIXI.Container();
-    const half = size / 2;
-
-    const frost = new PIXI.Graphics();
-    frost.beginFill(0x3d52cc, 0.55);
-    frost.lineStyle(3, 0xffd75e, 1);
-    frost.drawRoundedRect(-half, -half, size, size, 10);
-    frost.endFill();
-    mark.addChild(frost);
-
-    // 简易锁头：弧 + 锁体（不用横线，避免被看成「减号」）
-    const shackle = new PIXI.Graphics();
-    shackle.lineStyle(3, 0xffffff, 1);
-    shackle.arc(0, -half * 0.14, half * 0.2, Math.PI, 0);
-    mark.addChild(shackle);
-    const body = new PIXI.Graphics();
-    body.beginFill(0xffffff, 0.9);
-    body.drawRoundedRect(-half * 0.2, -half * 0.06, half * 0.4, half * 0.32, 4);
-    body.endFill();
-    mark.addChild(body);
-
-    const label = new PIXI.Text('封', {
-      fontSize: Math.floor(size * 0.34),
-      fill: 0xffffff,
-      fontWeight: 'bold',
-      stroke: 0x1a2266,
-      strokeThickness: 4,
-    });
-    label.anchor.set(0.5);
-    label.position.set(0, half * 0.22);
-    mark.addChild(label);
-
-    mark.position.set(cx, cy);
-    this._overlayLayer.addChild(mark);
-  }
-
-  /** 无效珠：灰化 + 红色斜杠 + 「无」字（可消无伤害） */
-  private _drawInactiveMark(cx: number, cy: number, size: number): void {
-    const mark = new PIXI.Container();
-    const half = size / 2;
-
-    const slash = new PIXI.Graphics();
-    slash.lineStyle(4, 0xff5252, 0.95);
-    slash.moveTo(-half * 0.62, half * 0.62);
-    slash.lineTo(half * 0.62, -half * 0.62);
-    mark.addChild(slash);
-
-    const badge = new PIXI.Graphics();
-    badge.beginFill(0x2a1a1a, 0.88);
-    badge.lineStyle(2, 0xff9142, 1);
-    badge.drawRoundedRect(-half * 0.55, -half * 0.72, half * 1.1, half * 0.42, 6);
-    badge.endFill();
-    mark.addChild(badge);
-
-    const label = new PIXI.Text('无', {
-      fontSize: Math.floor(size * 0.28),
-      fill: 0xff9142,
-      fontWeight: 'bold',
-    });
-    label.anchor.set(0.5);
-    label.position.set(0, -half * 0.51);
-    mark.addChild(label);
-
-    mark.position.set(cx, cy);
-    this._overlayLayer.addChild(mark);
-  }
-
   /** 播放一组消除动画（缩放消失），结束后从池回收 */
   playClear(group: MatchGroup): Promise<void> {
-    return new Promise((resolve) => {
-      let remain = group.cells.length;
-      const done = (): void => {
-        remain--;
-        if (remain <= 0) resolve();
-      };
-      for (const { r, c } of group.cells) {
-        const sp = this._sprites[r][c];
-        this._sprites[r][c] = null;
-        if (!sp) {
-          done();
-          continue;
-        }
-        // 先弹大再缩没，带一点消除“爆”感
-        TweenManager.to({
-          target: sp.scale, props: { x: sp.scale.x * 1.25, y: sp.scale.y * 1.25 },
-          duration: UI.anim.orbClear * 0.3, ease: Ease.easeOutQuad,
-          onComplete: () => {
-            TweenManager.to({
-              target: sp.scale, props: { x: 0.01, y: 0.01 },
-              duration: UI.anim.orbClear * 0.7, ease: Ease.easeInQuad,
-            });
-            TweenManager.to({
-              target: sp, props: { alpha: 0 },
-              duration: UI.anim.orbClear * 0.7,
-              onComplete: () => {
-                this._pool.release(sp);
-                done();
-              },
-            });
-          },
-        });
-      }
-      if (group.cells.length === 0) resolve();
-    });
+    return playBoardClear(this._animationContext(), group);
   }
 
   /** 播放下落/补珠动画 */
   playFall(moves: FallMove[]): Promise<void> {
-    return new Promise((resolve) => {
-      if (moves.length === 0) {
-        resolve();
-        return;
-      }
-      let remain = moves.length;
-      const done = (): void => {
-        remain--;
-        if (remain <= 0) resolve();
-      };
-      for (const m of moves) {
-        let sp: PIXI.Sprite | null;
-        if (m.fromRow !== null) {
-          sp = this._sprites[m.fromRow][m.col];
-          this._sprites[m.fromRow][m.col] = null;
-        } else {
-          // 新珠：从棋盘顶上方掉入
-          sp = this._spawnSprite(m.orb, -m.spawnAbove, m.col);
-        }
-        this._sprites[m.toRow][m.col] = sp;
-        if (!sp) {
-          done();
-          continue;
-        }
-        const targetY = this._cellCenterY(m.toRow);
-        // 距离越远时间越长，营造自然下落
-        const dist = Math.abs(targetY - sp.y) / this._cell;
-        const dur = UI.anim.orbFall * (0.5 + 0.5 * Math.min(dist / 3, 1));
-        TweenManager.to({
-          target: sp, props: { y: targetY },
-          duration: dur, ease: Ease.easeOutBounce,
-          onComplete: () => {
-            done();
-            if (remain <= 0) this.refreshOrbStates();
-          },
-        });
-      }
-    });
+    return playBoardFall(this._animationContext(), moves);
   }
 
   /** 播放转珠动画：目标格珠子弹跳缩放并切换为新珠贴图 */
   playConvert(cells: Cell[], to: OrbType): Promise<void> {
-    return new Promise((resolve) => {
-      if (cells.length === 0) {
-        resolve();
-        return;
-      }
-      let remain = cells.length;
-      const done = (): void => {
-        remain--;
-        if (remain <= 0) resolve();
-      };
-      const size = this._cell * UI.board.orbScale;
-      for (const { r, c } of cells) {
-        const sp = this._sprites[r][c];
-        if (!sp) {
-          done();
-          continue;
-        }
-        TweenManager.cancelTarget(sp.scale);
-        // 缩没 → 换贴图 → 弹回
-        TweenManager.to({
-          target: sp, props: { width: size * 0.1, height: size * 0.1 },
-          duration: UI.anim.orbSwap * 1.5, ease: Ease.easeInQuad,
-          onComplete: () => {
-            this._applyOrbTexture(sp, to);
-            sp.width = size * 0.1;
-            sp.height = size * 0.1;
-            TweenManager.to({
-              target: sp, props: { width: size, height: size },
-              duration: UI.anim.orbSwap * 2.5, ease: Ease.easeOutBack,
-              onComplete: () => {
-                done();
-                if (remain <= 0) this.refreshOrbStates();
-              },
-            });
-          },
-        });
-      }
-    });
+    return playBoardConvert(this._animationContext(), cells, to);
   }
 
   /** 强制结束拖拽（场景退出等） */
@@ -386,111 +218,14 @@ export class BoardView {
   }
 
   destroy(): void {
-    const canvas = Game.app?.view as any;
-    if (canvas) {
-      if (this._rawMove) canvas.removeEventListener('pointermove', this._rawMove);
-      if (this._rawUp) {
-        canvas.removeEventListener('pointerup', this._rawUp);
-        canvas.removeEventListener('pointercancel', this._rawUp);
-      }
-    }
-    this._rawMove = null;
-    this._rawUp = null;
+    this._dragInput?.destroy();
+    this._dragInput = null;
     this._releaseAll();
     this._pool.clear();
     this.container.destroy({ children: true });
   }
 
   // ════════════ 内部 ════════════
-
-  private _buildBackground(): void {
-    const pad = 3;
-    const w = this.boardWidth + pad * 2;
-    const h = this.boardHeight + pad * 2;
-
-    const frame = new PIXI.Graphics();
-    frame.beginFill(0x080812, 0.85);
-    frame.drawRoundedRect(-pad, -pad, w, h, 6);
-    frame.endFill();
-    frame.lineStyle(1.5, 0x505078, 0.5);
-    frame.drawRoundedRect(-pad, -pad, w, h, 6);
-    this.container.addChild(frame);
-
-    const tileDark = TextureCache.get(BOARD_IMAGES.dark);
-    const tileLight = TextureCache.get(BOARD_IMAGES.light);
-    const tiles = new PIXI.Container();
-
-    for (let r = 0; r < this._board.rows; r++) {
-      for (let c = 0; c < this._board.cols; c++) {
-        const x = c * this._cell;
-        const y = r * this._cell;
-        const isDark = (r + c) % 2 === 0;
-        const tex = isDark ? tileDark : tileLight;
-        if (tex) {
-          const sp = new PIXI.Sprite(tex);
-          sp.width = this._cell;
-          sp.height = this._cell;
-          sp.position.set(x, y);
-          tiles.addChild(sp);
-        } else {
-          const cell = new PIXI.Graphics();
-          cell.beginFill(isDark ? 0x1c1c30 : 0x121223, 0.9);
-          cell.drawRect(x, y, this._cell, this._cell);
-          cell.endFill();
-          tiles.addChild(cell);
-        }
-      }
-    }
-    this.container.addChild(tiles);
-  }
-
-  // 交互策略（沿用 game2D_huahua 验证过的方案）：
-  // pointerdown 用 PixiJS 容器事件（可靠：PixiJS 注册在 canvas 上）；
-  // pointermove / pointerup 直接注册在 canvas 元素上，完全绕过 PixiJS 事件系统。
-  // 原因：PixiJS 7 将 pointermove/pointerup 注册在 globalThis（window）上，
-  // 而小游戏 adapter 通过 canvas.addEventListener 分发触摸事件，
-  // 两个系统天然隔离，导致拖拽中 move/up 事件丢失、拖珠卡死。
-  private _buildHitArea(): void {
-    const hit = new PIXI.Graphics();
-    hit.beginFill(0xffffff, 0.001);
-    hit.drawRect(0, 0, this.boardWidth, this.boardHeight);
-    hit.endFill();
-    hit.eventMode = 'static';
-    hit.on('pointerdown', (e: PIXI.FederatedPointerEvent) => this._onDown(e));
-    this.container.addChild(hit);
-
-    const canvas = Game.app.view as any;
-    this._rawMove = (e: any) => {
-      if (!this._dragging) return;
-      const p = this._rawToLocal(e);
-      this._onMove(p.x, p.y);
-    };
-    this._rawUp = () => this._onUp();
-    canvas.addEventListener('pointermove', this._rawMove);
-    canvas.addEventListener('pointerup', this._rawUp);
-    canvas.addEventListener('pointercancel', this._rawUp);
-  }
-
-  /**
-   * 原生 pointer 事件 clientX/Y（逻辑像素）→ 棋盘本地设计坐标。
-   * 不依赖 toLocal/worldTransform：clientX * designWidth / screenWidth 得到
-   * 设计坐标，再减去容器在场景树中的累计偏移（父链均无缩放）。
-   */
-  private _rawToLocal(e: any): { x: number; y: number } {
-    const t0 = e.touches?.[0] ?? e.changedTouches?.[0];
-    const cx = e.clientX ?? t0?.clientX ?? e.x ?? 0;
-    const cy = e.clientY ?? t0?.clientY ?? e.y ?? 0;
-    const k = Game.designWidth / Game.screenWidth;
-    let ox = 0;
-    let oy = 0;
-    let node: PIXI.Container | null = this.container;
-    while (node && node !== Game.app.stage) {
-      ox += node.x;
-      oy += node.y;
-      node = node.parent;
-    }
-    return { x: cx * k - ox, y: cy * k - oy };
-  }
 
   private _onDown(e: PIXI.FederatedPointerEvent): void {
     if (this._dragging || !this._cb.canDrag()) return;
@@ -614,6 +349,18 @@ export class BoardView {
     sp.position.set(this._cellCenterX(c), this._cellCenterY(r));
     this._orbsLayer.addChild(sp);
     return sp;
+  }
+
+  private _animationContext() {
+    return {
+      cell: this._cell,
+      sprites: this._sprites,
+      pool: this._pool,
+      spawnSprite: (orb: OrbType, r: number, c: number) => this._spawnSprite(orb, r, c),
+      applyOrbTexture: (sp: PIXI.Sprite, orb: OrbType) => this._applyOrbTexture(sp, orb),
+      cellCenterY: (r: number) => this._cellCenterY(r),
+      refreshOrbStates: () => this.refreshOrbStates(),
+    };
   }
 
   private _applyOrbTexture(sp: PIXI.Sprite, orb: OrbType): void {
