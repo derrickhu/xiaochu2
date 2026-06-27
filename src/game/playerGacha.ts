@@ -17,7 +17,7 @@ export function addLingyu(data: SaveData, amount: number): boolean {
   return true;
 }
 
-/** 单抽：扣灵玉，结算保底/重复转碎片。灵玉不足返回 null。element 限定五行召唤池 */
+/** 单抽：扣灵玉，结算保底/重复转碎片。element 可选，限定五行子池 */
 export function pullGachaSingle(
   data: SaveData,
   rng: () => number = Math.random,
@@ -32,7 +32,7 @@ export function pullGachaSingle(
   return outcome;
 }
 
-/** 十连：扣灵玉，含 SR+ 保底。灵玉不足返回 null。element 限定五行召唤池 */
+/** 十连：扣灵玉，含 SR+ 保底。element 可选，限定五行子池 */
 export function pullGachaTen(
   data: SaveData,
   rng: () => number = Math.random,
@@ -66,7 +66,7 @@ function unlockPet(data: SaveData, petId: string): void {
   if (!data.discovered.includes(petId)) data.discovered.push(petId);
 }
 
-/** 出货池 = 可获取池（按属性可拆分），映射为 PetDef 列表 */
+/** 出货池 = 可获取池（element 省略时为全局收录池） */
 function gachaPool(data: SaveData, element?: Element): PetDef[] {
   return PETS
     .filter((p) => data.discovered.includes(p.id))

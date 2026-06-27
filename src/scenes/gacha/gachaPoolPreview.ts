@@ -1,0 +1,173 @@
+/**
+ * 召唤页：当前召唤池可视化（横向滚动，容纳任意数量已收录灵宠）。
+ */
+import * as PIXI from 'pixi.js';
+import { PET_MAP } from '@/balance/pets';
+import { ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
+import type { Element } from '@/balance/combat';
+import { petAvatarPath } from '@/config/Assets';
+import { TextureCache } from '@/core/TextureCache';
+import { PlayerData } from '@/game/PlayerData';
+import { COLORS, FONT_SIZE, makePanel, makeText } from '@/ui';
+
+const ICON = 48;
+const GAP = 8;
+const ROW_H = 72;
+const HEADER_H = 54;
+const PANEL_PAD = 12;
+
+export const GACHA_POOL_PANEL_H = HEADER_H + ROW_H + PANEL_PAD * 2;
+
+export interface GachaPoolPreviewHandle {
+  root: PIXI.Container;
+  teardown: () => void;
+}
+
+function attachHorizontalScroll(
+  viewport: PIXI.Container,
+  content: PIXI.Container,
+  viewportW: number,
+  contentW: number,
+): () => void {
+  const minX = Math.min(0, viewportW - contentW);
+  let dragging = false;
+  let lastX = 0;
+
+  const clamp = (): void => {
+    content.x = Math.max(minX, Math.min(0, content.x));
+  };
+
+  const onDown = (e: PIXI.FederatedPointerEvent): void => {
+    dragging = true;
+    lastX = e.global.x;
+  };
+  const onMove = (e: PIXI.FederatedPointerEvent): void => {
+    if (!dragging) return;
+    content.x += e.global.x - lastX;
+    lastX = e.global.x;
+    clamp();
+  };
+  const onUp = (): void => {
+    dragging = false;
+  };
+
+  viewport.eventMode = 'static';
+  viewport.cursor = contentW > viewportW ? 'grab' : 'default';
+  viewport.on('pointerdown', onDown);
+  viewport.on('pointermove', onMove);
+  viewport.on('pointerup', onUp);
+  viewport.on('pointerupoutside', onUp);
+  viewport.on('pointercancel', onUp);
+
+  return () => {
+    viewport.off('pointerdown', onDown);
+    viewport.off('pointermove', onMove);
+    viewport.off('pointerup', onUp);
+    viewport.off('pointerupoutside', onUp);
+    viewport.off('pointercancel', onUp);
+  };
+}
+
+/** bottomY = 面板底边设计坐标；element 省略时为全局收录池 */
+export function buildGachaPoolPreview(
+  w: number,
+  bottomY: number,
+  element?: Element,
+): GachaPoolPreviewHandle {
+  const root = new PIXI.Container();
+  const poolIds = [...PlayerData.availablePool(element)];
+  const ownedCount = poolIds.filter((id) => PlayerData.isOwned(id)).length;
+  const panelW = Math.min(620, w - 32);
+  const panelH = poolIds.length > 0 ? GACHA_POOL_PANEL_H : 88;
+  const panelLeft = w / 2 - panelW / 2;
+  root.position.set(0, bottomY - panelH);
+
+  const borderColor = element ? ORB_COLOR[element] : COLORS.accent;
+  const panel = makePanel({
+    width: panelW, height: panelH, radius: 14, centered: false,
+    bg: COLORS.panelBg, bgAlpha: 0.92, border: borderColor, borderWidth: 2,
+  });
+  panel.position.set(panelLeft, 0);
+  root.addChild(panel);
+
+  const title = makeText(
+    poolIds.length > 0
+      ? (element
+        ? `${ELEMENT_NAME[element]}系 · ${poolIds.length} 种`
+        : `全局召唤池 · ${poolIds.length} 种可出`)
+      : (element ? `${ELEMENT_NAME[element]}系 · 暂无收录` : '全局召唤池 · 暂无收录'),
+    { size: FONT_SIZE.xs, fill: COLORS.textMain, bold: true, anchor: [0, 0] },
+  );
+  title.position.set(panelLeft + PANEL_PAD, PANEL_PAD);
+  root.addChild(title);
+
+  const sub = makeText(
+    poolIds.length > 0
+      ? `已拥有 ${ownedCount}/${poolIds.length}${poolIds.length > 6 ? ' · 左右滑动' : ''}`
+      : '通关第3章后挑战「历练」收录灵宠',
+    { size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: [0, 0] },
+  );
+  sub.position.set(panelLeft + PANEL_PAD, PANEL_PAD + 22);
+  root.addChild(sub);
+
+  let teardown = (): void => {};
+
+  if (poolIds.length > 0) {
+    const viewportW = panelW - PANEL_PAD * 2;
+    const rowY = PANEL_PAD + HEADER_H;
+    const viewport = new PIXI.Container();
+    viewport.position.set(panelLeft + PANEL_PAD, rowY);
+
+    const mask = new PIXI.Graphics();
+    mask.beginFill(0xffffff);
+    mask.drawRect(0, 0, viewportW, ROW_H);
+    mask.endFill();
+    viewport.addChild(mask);
+    viewport.mask = mask;
+
+    const content = new PIXI.Container();
+    let cx = 0;
+    for (const id of poolIds) {
+      const pet = PET_MAP.get(id);
+      if (!pet) continue;
+
+      const cell = new PIXI.Container();
+      cell.position.set(cx + ICON / 2, ICON / 2);
+
+      cell.addChild(makePanel({
+        width: ICON, height: ICON, radius: 8, centered: true,
+        bg: COLORS.panelBgAlt,
+        border: PlayerData.isOwned(id) ? COLORS.accent : COLORS.panelBorderSoft,
+        borderWidth: PlayerData.isOwned(id) ? 2 : 1,
+      }));
+
+      const tex = TextureCache.get(petAvatarPath(id, Math.max(1, PlayerData.petStar(id))));
+      if (tex) {
+        const sp = new PIXI.Sprite(tex);
+        sp.anchor.set(0.5, 1);
+        const dw = ICON - 6;
+        sp.width = dw;
+        sp.height = dw * (tex.height / tex.width);
+        sp.position.set(0, ICON / 2 - 2);
+        if (!PlayerData.isOwned(id)) sp.alpha = 0.85;
+        cell.addChild(sp);
+      }
+
+      const nm = makeText(pet.name.length > 3 ? `${pet.name.slice(0, 3)}…` : pet.name, {
+        size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: [0.5, 0],
+      });
+      nm.position.set(0, ICON / 2 + 2);
+      cell.addChild(nm);
+
+      content.addChild(cell);
+      cx += ICON + GAP;
+    }
+    viewport.addChild(content);
+    root.addChild(viewport);
+
+    const contentW = Math.max(ICON, cx - GAP);
+    teardown = attachHorizontalScroll(viewport, content, viewportW, contentW);
+  }
+
+  return { root, teardown };
+}

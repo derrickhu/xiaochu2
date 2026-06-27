@@ -29,6 +29,7 @@ import {
   SceneFx,
 } from '@/ui';
 import { GachaRevealSequence } from './gacha/gachaRevealSequence';
+import { buildGachaPoolPreview } from './gacha/gachaPoolPreview';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 
 const GACHA_ELEMENTS: readonly Element[] = ['metal', 'wood', 'water', 'fire', 'earth'];
@@ -44,13 +45,14 @@ export class GachaScene implements Scene {
   /** 主页面内容层（element 切换 / 抽卡后局部重建；onExit 整页重建避免二次进入脏状态） */
   private _page = new PIXI.Container();
 
-  /** 当前选中的五行召唤池 */
-  private _element: Element = 'metal';
+  /** 当前选中的五行筛选；null = 全局池（默认） */
+  private _elementFilter: Element | null = null;
   /** 结果浮层当前的特效宿主（由 update 驱动） */
   private _fx: SceneFx | null = null;
   private _reveal: GachaRevealSequence | null = null;
   /** 上次抽卡数量，用于「再抽一次」 */
   private _lastCount: 1 | 10 = 1;
+  private _poolTeardown: (() => void) | null = null;
   private readonly _enterSeq = new SceneEnterSeq();
 
   onEnter(): void {
@@ -78,6 +80,8 @@ export class GachaScene implements Scene {
 
   onExit(): void {
     this._enterSeq.cancel();
+    this._poolTeardown?.();
+    this._poolTeardown = null;
     this._teardownResults();
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
     this._page = new PIXI.Container();
@@ -111,8 +115,23 @@ export class GachaScene implements Scene {
 
     this._buildPity(w, Game.safeTop + 134);
     this._buildRatePanel(w, Game.safeTop + 196);
-    this._buildElementTabs(w, h - 250);
+
+    this._poolTeardown?.();
+    const filterTabsY = h - 248;
+    const poolBottomY = filterTabsY - 36;
+    const poolPreview = buildGachaPoolPreview(w, poolBottomY, this._elementFilter ?? undefined);
+    this._page.addChild(poolPreview.root);
+    this._poolTeardown = poolPreview.teardown;
+
+    this._buildElementTabs(w, filterTabsY);
     this._buildPullButtons(w, h);
+
+    const codexBtn = makeButton({
+      label: '图鉴', width: 100, height: 44, variant: 'ghost', fontSize: FONT_SIZE.xs,
+      onTap: () => SceneManager.switchTo('codex'),
+    });
+    codexBtn.position.set(w - 68, Game.safeTop + 36);
+    this._page.addChild(codexBtn);
   }
 
   /** 保底进度：进度条 + 文案（距 SSR+ 硬保底还需多少抽） */
@@ -133,26 +152,24 @@ export class GachaScene implements Scene {
     this._page.addChild(label);
   }
 
-  /** 五行召唤池切换（每个属性一个独立池，仅出该属性已收录生物） */
+  /** 可选五行筛选（默认「全部」= 全局收录池） */
   private _buildElementTabs(w: number, y: number): void {
-    const tabW = 104;
-    const gap = 10;
-    const totalW = GACHA_ELEMENTS.length * tabW + (GACHA_ELEMENTS.length - 1) * gap;
+    const tabW = 92;
+    const gap = 8;
+    const tabCount = 1 + GACHA_ELEMENTS.length;
+    const totalW = tabCount * tabW + (tabCount - 1) * gap;
     const left = w / 2 - totalW / 2;
 
-    const hint = makeText('选择五行召唤池', {
-      size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: 0.5,
+    const hint = makeText('可选 · 筛选五行（默认从全部收录池抽取）', {
+      size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: 0.5,
     });
-    hint.position.set(w / 2, y - 30);
+    hint.position.set(w / 2, y - 24);
     this._page.addChild(hint);
 
-    GACHA_ELEMENTS.forEach((el, i) => {
-      const x = left + i * (tabW + gap);
-      const selected = el === this._element;
-      const poolSize = PlayerData.availablePool(el).length;
+    const mkTab = (x: number, selected: boolean, bg: number, label: string, onTap: () => void): void => {
       const tab = makePanel({
-        width: tabW, height: 64, radius: RADIUS.small, centered: false,
-        bg: selected ? ELEMENT_TINT[el] : COLORS.panelBg,
+        width: tabW, height: 58, radius: RADIUS.small, centered: false,
+        bg: selected ? bg : COLORS.panelBg,
         bgAlpha: selected ? 0.92 : 0.85,
         border: selected ? COLORS.textTitle : COLORS.panelBorder,
         borderWidth: selected ? 3 : 1,
@@ -160,19 +177,32 @@ export class GachaScene implements Scene {
       tab.position.set(x, y);
       tab.eventMode = 'static';
       tab.cursor = 'pointer';
-      tab.on('pointertap', () => {
-        if (this._element === el) return;
-        this._element = el;
-        this._build();
-      });
+      tab.on('pointertap', onTap);
       this._page.addChild(tab);
 
-      const label = makeText(`${ELEMENT_NAME[el]}\n${poolSize} 种`, {
-        size: FONT_SIZE.xs, fill: selected ? COLORS.textInverse : COLORS.textMain,
+      const text = makeText(label, {
+        size: FONT_SIZE.xxs, fill: selected ? COLORS.textInverse : COLORS.textMain,
         bold: true, anchor: 0.5, align: 'center',
       });
-      label.position.set(x + tabW / 2, y + 32);
-      this._page.addChild(label);
+      text.position.set(x + tabW / 2, y + 29);
+      this._page.addChild(text);
+    };
+
+    const globalSize = PlayerData.availablePool().length;
+    mkTab(left, this._elementFilter === null, COLORS.accent, `全部\n${globalSize}`, () => {
+      if (this._elementFilter === null) return;
+      this._elementFilter = null;
+      this._build();
+    });
+
+    GACHA_ELEMENTS.forEach((el, i) => {
+      const x = left + (i + 1) * (tabW + gap);
+      const selected = el === this._elementFilter;
+      const poolSize = PlayerData.availablePool(el).length;
+      mkTab(x, selected, ELEMENT_TINT[el], `${ELEMENT_NAME[el]}\n${poolSize}`, () => {
+        this._elementFilter = selected ? null : el;
+        this._build();
+      });
     });
   }
 
@@ -255,17 +285,24 @@ export class GachaScene implements Scene {
     this._page.addChild(ten);
   }
 
+  private _activePoolElement(): Element | undefined {
+    return this._elementFilter ?? undefined;
+  }
+
   private _doPull(count: 1 | 10): void {
-    if (PlayerData.availablePool(this._element).length === 0) {
-      Platform.showToast(`${ELEMENT_NAME[this._element]}系暂无可召唤生物，先去历练收录`);
+    const el = this._activePoolElement();
+    if (PlayerData.availablePool(el).length === 0) {
+      Platform.showToast(el
+        ? `${ELEMENT_NAME[el]}系暂无可召唤生物，先去历练收录`
+        : '召唤池暂无收录，先去历练收录灵宠');
       return;
     }
     let list: PullOutcome[] | null;
     if (count === 1) {
-      const o = PlayerData.pullGachaSingle(Math.random, this._element);
+      const o = PlayerData.pullGachaSingle(Math.random, el);
       list = o ? [o] : null;
     } else {
-      list = PlayerData.pullGachaTen(Math.random, this._element);
+      list = PlayerData.pullGachaTen(Math.random, el);
     }
     if (!list) {
       Platform.showToast('灵玉不足');
@@ -369,8 +406,9 @@ export class GachaScene implements Scene {
     const h = Game.logicHeight;
     const g = ECONOMY.gacha;
     const cost = this._lastCount === 10 ? g.tenCost : g.singleCost;
+    const el = this._activePoolElement();
     const canRepull = PlayerData.lingyu >= cost
-      && PlayerData.availablePool(this._element).length > 0;
+      && PlayerData.availablePool(el).length > 0;
 
     const btnW = 260;
     const y = h - 100;

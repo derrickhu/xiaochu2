@@ -19,6 +19,7 @@ import {
 } from '@/game/battle/PetSkillReadyFx';
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BattleLayout } from './BattleLayout';
+import { showPetSkillPreview, TAP_SLOP, type PetSkillPreviewHandle } from './PetSkillPreviewBubble';
 
 interface PetBarHooks {
   /** 上滑达阈值 → 请求对该槽位施法 */
@@ -34,9 +35,11 @@ export class BattlePetBar {
   private _slotReadyFx: PetSkillReadyFxView[] = [];
   private _slotWasReady: boolean[] = [];
   private _slotBaseY: number[] = [];
-  private _petSwipe: { index: number; startY: number; triggered: boolean } | null = null;
+  private _petPointer: { index: number; startX: number; startY: number; triggered: boolean; canCast: boolean } | null = null;
   private _petSwipeMove: ((e: unknown) => void) | null = null;
   private _petSwipeUp: ((e: unknown) => void) | null = null;
+  private _previewLayer: PIXI.Container | null = null;
+  private _skillPreview: PetSkillPreviewHandle | null = null;
   private _hooks!: PetBarHooks;
 
   constructor(private readonly _ctrl: BattleController, private readonly _layout: BattleLayout) {}
@@ -137,6 +140,9 @@ export class BattlePetBar {
       return slot;
     });
 
+    this._previewLayer = new PIXI.Container();
+    parent.addChild(this._previewLayer);
+
     this._installPetSwipeInput();
   }
 
@@ -170,7 +176,7 @@ export class BattlePetBar {
         fx.root.visible = false;
         return;
       }
-      if (this._petSwipe?.index === i) {
+      if (this._petPointer?.index === i) {
         fx.root.visible = false;
         return;
       }
@@ -209,6 +215,7 @@ export class BattlePetBar {
   }
 
   teardownInput(): void {
+    this._hideSkillPreview();
     this._teardownPetSwipeInput();
   }
 
@@ -232,7 +239,7 @@ export class BattlePetBar {
     this._teardownPetSwipeInput();
     const canvas = Game.app.view as unknown as HTMLElement;
     this._petSwipeMove = (e) => this._onPetSwipeMove(e);
-    this._petSwipeUp = () => this._cancelPetSwipe(true);
+    this._petSwipeUp = (e) => this._cancelPetPointer(true, e);
     canvas.addEventListener('pointermove', this._petSwipeMove);
     canvas.addEventListener('pointerup', this._petSwipeUp);
     canvas.addEventListener('pointercancel', this._petSwipeUp);
@@ -247,70 +254,93 @@ export class BattlePetBar {
     }
     this._petSwipeMove = null;
     this._petSwipeUp = null;
-    this._petSwipe = null;
+    this._petPointer = null;
+  }
+
+  private _hideSkillPreview(): void {
+    this._skillPreview?.dismiss();
+    this._skillPreview = null;
   }
 
   private _onPetSlotDown(petIndex: number, e: PIXI.FederatedPointerEvent): void {
-    if (this._hooks.isBusy() || !this._ctrl.canCastSkill(petIndex)) return;
+    if (this._hooks.isBusy()) return;
     const native = (e.nativeEvent ?? e) as unknown;
     const p = this._rawToDesign(native);
-    this._petSwipe = { index: petIndex, startY: p.y, triggered: false };
-    TweenManager.cancelTarget(this._slots[petIndex]);
+    this._hideSkillPreview();
+    const canCast = this._ctrl.canCastSkill(petIndex);
+    this._petPointer = { index: petIndex, startX: p.x, startY: p.y, triggered: false, canCast };
+    if (canCast) TweenManager.cancelTarget(this._slots[petIndex]);
   }
 
   private _onPetSwipeMove(e: unknown): void {
-    const swipe = this._petSwipe;
-    if (!swipe || swipe.triggered) return;
+    const ptr = this._petPointer;
+    if (!ptr || ptr.triggered || !ptr.canCast) return;
 
     const p = this._rawToDesign(e);
-    const dy = swipe.startY - p.y;
-    const slot = this._slots[swipe.index];
-    const baseY = this._slotBaseY[swipe.index];
+    const dy = ptr.startY - p.y;
+    const slot = this._slots[ptr.index];
+    const baseY = this._slotBaseY[ptr.index];
     const { skillSwipeThreshold, skillSwipeLiftMax } = UI.battle;
     const lift = Math.min(Math.max(0, dy) * 0.55, skillSwipeLiftMax);
 
     slot.y = baseY - lift;
     slot.scale.set(1 + Math.min(dy / skillSwipeThreshold, 1) * 0.1);
-    this._slotReadyFx[swipe.index].root.visible = false;
+    this._slotReadyFx[ptr.index].root.visible = false;
 
     if (dy >= skillSwipeThreshold) {
-      swipe.triggered = true;
+      ptr.triggered = true;
       slot.y = baseY;
       slot.scale.set(1);
-      this._petSwipe = null;
-      this._hooks.onSkillCast(swipe.index);
+      this._petPointer = null;
+      this._hooks.onSkillCast(ptr.index);
     }
   }
 
-  private _cancelPetSwipe(animateBack: boolean): void {
-    const swipe = this._petSwipe;
-    if (!swipe || swipe.triggered) {
-      this._petSwipe = null;
+  private _cancelPetPointer(animateBack: boolean, endEvent?: unknown): void {
+    const ptr = this._petPointer;
+    if (!ptr || ptr.triggered) {
+      this._petPointer = null;
       return;
     }
 
-    const slot = this._slots[swipe.index];
-    const baseY = this._slotBaseY[swipe.index];
-    this._petSwipe = null;
+    const slot = this._slots[ptr.index];
+    const baseY = this._slotBaseY[ptr.index];
+    let isTap = true;
+    if (endEvent) {
+      const p = this._rawToDesign(endEvent);
+      const dx = p.x - ptr.startX;
+      const dy = p.y - ptr.startY;
+      isTap = dx * dx + dy * dy <= TAP_SLOP * TAP_SLOP;
+    }
+    const index = ptr.index;
+    this._petPointer = null;
 
     if (!animateBack) {
       slot.y = baseY;
       slot.scale.set(1);
-      return;
+    } else {
+      TweenManager.cancelTarget(slot);
+      TweenManager.to({
+        target: slot,
+        props: { y: baseY },
+        duration: 0.12,
+        ease: Ease.easeOutQuad,
+      });
+      TweenManager.to({
+        target: slot.scale,
+        props: { x: 1, y: 1 },
+        duration: 0.12,
+        ease: Ease.easeOutQuad,
+      });
     }
 
-    TweenManager.cancelTarget(slot);
-    TweenManager.to({
-      target: slot,
-      props: { y: baseY },
-      duration: 0.12,
-      ease: Ease.easeOutQuad,
-    });
-    TweenManager.to({
-      target: slot.scale,
-      props: { x: 1, y: 1 },
-      duration: 0.12,
-      ease: Ease.easeOutQuad,
-    });
+    if (isTap) this._showSkillPreview(index);
+  }
+
+  private _showSkillPreview(petIndex: number): void {
+    if (!this._previewLayer) return;
+    const pet = this._ctrl.team[petIndex];
+    const slot = this._slots[petIndex];
+    this._skillPreview = showPetSkillPreview(this._previewLayer, pet, slot.x, slot.y);
   }
 }

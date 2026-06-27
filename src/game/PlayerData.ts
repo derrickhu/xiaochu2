@@ -289,7 +289,7 @@ class PlayerDataClass {
 
   /**
    * 可获取池 = 已收录 ∪ 初始赠送 ∪ 已拥有；召唤/商店仅在此池内出货。
-   * @param element 仅取该五行属性（按五行拆分宠物池）
+   * @param element 可选；传入时仅取该五行子池，省略则为全局收录池
    */
   availablePool(element?: Element): readonly string[] {
     return PETS

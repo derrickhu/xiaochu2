@@ -16,6 +16,7 @@ import { makeIconLabel, type IconLabelHandle } from '@/ui/IconLabel';
 import { COLORS } from '@/ui/theme';
 import type { BattleEnterData } from '../BattleScene';
 import type { TeamEnterData } from '../TeamScene';
+import { battleProgressHint } from './battleProgressHints';
 
 const PANEL_W = 560;
 const PANEL_H_DEFAULT = 820;
@@ -42,6 +43,7 @@ interface WinLayout {
   detail: number;
   rewardYs: number[];
   discover: number;
+  progressHint: number;
   buttonYs: number[];
 }
 
@@ -93,11 +95,15 @@ export class BattleResultOverlay {
     const rewardRowCount = win
       ? 2 + result.shards.length + (milestoneLingyu > 0 ? 1 : 0)
       : 0;
+    const progressHintText = win
+      ? battleProgressHint(ctrl.stage.id, milestoneLingyu > 0)
+      : null;
     const winLayout = win
       ? this._computeWinLayout(panelH, {
         btnCount,
         rewardRowCount,
         hasDiscover: newlyDiscovered.length > 0,
+        hasProgressHint: !!progressHintText,
       })
       : null;
 
@@ -105,7 +111,9 @@ export class BattleResultOverlay {
     panel.addChild(this._makePanelBg(win, panelH));
 
     if (win && winLayout) {
-      this._buildWinContent(panel, ctrl, result, milestoneLingyu, newlyDiscovered, winLayout);
+      this._buildWinContent(
+        panel, ctrl, result, milestoneLingyu, newlyDiscovered, progressHintText, winLayout,
+      );
       this._buildNavButtons(panel, ctrl, win, winLayout.buttonYs);
     } else {
       this._buildLoseContent(panel, ctrl, defeatRefund, panelH);
@@ -134,7 +142,7 @@ export class BattleResultOverlay {
   /** 奖励区自上而下排布，按钮贴金框底部 */
   private _computeWinLayout(
     panelH: number,
-    opts: { btnCount: number; rewardRowCount: number; hasDiscover: boolean },
+    opts: { btnCount: number; rewardRowCount: number; hasDiscover: boolean; hasProgressHint: boolean },
   ): WinLayout {
     const half = panelH / 2;
     const innerTop = -half + panelH * FRAME_INSET_TOP;
@@ -161,11 +169,15 @@ export class BattleResultOverlay {
     const lastRewardY = rewardYs.length > 0
       ? rewardYs[rewardYs.length - 1]
       : detail;
-    const discover = opts.hasDiscover
-      ? lastRewardY + WIN_GAP_REWARDS_DISCOVER + 28
-      : lastRewardY;
+    let tailY = lastRewardY;
+    if (opts.hasDiscover) tailY += WIN_GAP_REWARDS_DISCOVER + 28;
+    const discover = opts.hasDiscover ? lastRewardY + WIN_GAP_REWARDS_DISCOVER + 28 : lastRewardY;
+    if (opts.hasDiscover) tailY = discover;
+    const progressHint = opts.hasProgressHint
+      ? tailY + (opts.hasDiscover ? 56 : WIN_GAP_REWARDS_DISCOVER + 28)
+      : tailY;
 
-    return { title, stars, detail, rewardYs, discover, buttonYs };
+    return { title, stars, detail, rewardYs, discover, progressHint, buttonYs };
   }
 
   private _placeIconRow(panel: PIXI.Container, row: IconLabelHandle, y: number): void {
@@ -209,6 +221,7 @@ export class BattleResultOverlay {
     result: ReturnType<BattleController['finish']>,
     milestoneLingyu: number,
     newlyDiscovered: string[],
+    progressHintText: string | null,
     layout: WinLayout,
   ): void {
     const title = new PIXI.Text('战斗胜利！', {
@@ -311,20 +324,68 @@ export class BattleResultOverlay {
     }
 
     if (newlyDiscovered.length > 0) {
-      const names = newlyDiscovered
-        .map((cid) => PET_MAP.get(cid)?.name ?? cid)
-        .join('、');
-      const discoverText = new PIXI.Text(
-        `已收录：${names}\n可在召唤/商店中获取`,
-        { fontSize: 20, fill: COLORS.textTitle, align: 'center', fontWeight: 'bold', lineHeight: 28 },
-      );
-      discoverText.anchor.set(0.5);
-      discoverText.position.set(0, layout.discover);
-      discoverText.alpha = 0;
-      panel.addChild(discoverText);
+      const discoverTitle = new PIXI.Text('收录成功 · 已进入召唤池', {
+        fontSize: 22, fill: COLORS.accentDeep, align: 'center', fontWeight: 'bold',
+      });
+      discoverTitle.anchor.set(0.5);
+      discoverTitle.position.set(0, layout.discover - 16);
+      discoverTitle.alpha = 0;
+      panel.addChild(discoverTitle);
+
+      const iconSize = 48;
+      const gap = 10;
+      const rowW = newlyDiscovered.length * iconSize + (newlyDiscovered.length - 1) * gap;
+      let ix = -rowW / 2 + iconSize / 2;
+      const rowY = layout.discover + 20;
+      for (const cid of newlyDiscovered) {
+        const tex = TextureCache.get(petAvatarPath(cid, 1));
+        if (tex) {
+          const sp = new PIXI.Sprite(tex);
+          sp.anchor.set(0.5, 1);
+          const dw = iconSize - 4;
+          sp.width = dw;
+          sp.height = dw * (tex.height / tex.width);
+          sp.position.set(ix, rowY + iconSize / 2 - 2);
+          sp.alpha = 0;
+          panel.addChild(sp);
+          TweenManager.to({
+            target: sp, props: { alpha: 1 },
+            duration: 0.35, delay: 0.65, ease: Ease.easeOutCubic,
+          });
+        }
+        ix += iconSize + gap;
+      }
+
+      const names = newlyDiscovered.map((cid) => PET_MAP.get(cid)?.name ?? cid).join('、');
+      const discoverSub = new PIXI.Text(`${names}\n可在「召唤 / 商店」中获取`, {
+        fontSize: 18, fill: COLORS.textSub, align: 'center', lineHeight: 24,
+      });
+      discoverSub.anchor.set(0.5);
+      discoverSub.position.set(0, rowY + iconSize / 2 + 36);
+      discoverSub.alpha = 0;
+      panel.addChild(discoverSub);
+
       TweenManager.to({
-        target: discoverText, props: { alpha: 1 },
-        duration: 0.4, delay: 0.6, ease: Ease.easeOutCubic,
+        target: discoverTitle, props: { alpha: 1 },
+        duration: 0.35, delay: 0.55, ease: Ease.easeOutCubic,
+      });
+      TweenManager.to({
+        target: discoverSub, props: { alpha: 1 },
+        duration: 0.35, delay: 0.75, ease: Ease.easeOutCubic,
+      });
+    }
+
+    if (progressHintText) {
+      const hint = new PIXI.Text(progressHintText, {
+        fontSize: 19, fill: COLORS.textTitle, align: 'center', fontWeight: 'bold', lineHeight: 26,
+      });
+      hint.anchor.set(0.5);
+      hint.position.set(0, layout.progressHint);
+      hint.alpha = 0;
+      panel.addChild(hint);
+      TweenManager.to({
+        target: hint, props: { alpha: 1 },
+        duration: 0.4, delay: 0.7, ease: Ease.easeOutCubic,
       });
     }
   }
