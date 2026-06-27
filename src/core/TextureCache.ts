@@ -43,7 +43,7 @@ class TextureCacheClass {
   }
 
   /** 批量预加载 */
-  async preload(paths: string[]): Promise<void> {
+  async preload(paths: readonly string[]): Promise<void> {
     await Promise.all(paths.map((p) => this.load(p).catch(() => null)));
   }
 

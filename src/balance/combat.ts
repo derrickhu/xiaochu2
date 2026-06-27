@@ -49,7 +49,7 @@ export const COMBAT = {
   boardRows: 6,
 
   /** 拖珠限时（秒） */
-  dragTimeLimit: 8,
+  dragTimeLimit: 9,
 
   /** 最小消除数 */
   minMatch: 3,

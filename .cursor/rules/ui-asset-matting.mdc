@@ -1,0 +1,41 @@
+---
+description: xiaochu2 UI/精灵图抠底必须用 remove-background skill（rembg），禁止手写 flood-fill 凑合
+alwaysApply: true
+---
+
+# xiaochu2 游戏资源抠底
+
+生成或替换 **需要透明底的 PNG**（UI 面板、立绘、图标等）时，**必须**走 `remove-background` skill，不得用 flood-fill / 色键等临时脚本代替。
+
+## 标准流程
+
+1. 原图落盘（GenerateImage 或 `docs/prompt/` 对应 raw）
+2. **抠底**（单张）：
+
+```bash
+python3 ~/.cursor/skills/remove-background/scripts/rembg_single.py \
+  <input.png> -o <output_nobg.png> -m birefnet-general-lite
+```
+
+3. **裁透明边**（可选，game-art-pipeline）：
+
+```bash
+python3 ~/.cursor/skills/game-art-pipeline/scripts/crop_trim.py \
+  <output_nobg.png> -o <final.png> --padding 2
+```
+
+4. 拷贝到 `minigame/images/...`，执行 `npm run build`
+
+## 模型选择
+
+| 模型 | 适用 |
+|------|------|
+| `birefnet-general-lite` | UI 面板、白/灰底、写实边框（**默认**） |
+| `isnet-anime` | 二次元立绘、卡通精灵 |
+| `birefnet-general` | 复杂边缘、质量优先（较慢） |
+
+## 禁止
+
+- 不得对 AI 原图直接用 `drawRoundedRect` mask 掩盖矩形底
+- 不得用 corner flood-fill 代替 rembg
+- 临时 `_nobg.png` / `_trim.png` 交付前删除，只保留最终 `battle_victory.png` 等正式资源名

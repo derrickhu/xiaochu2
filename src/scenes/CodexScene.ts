@@ -7,12 +7,14 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
+import { CODEX_SHELL_IMAGES, codexPetPreloadImages } from '@/config/assetPreload';
+import { ensureAssets } from '@/config/Subpackages';
 import { UI } from '@/balance/ui';
 import { PETS, type PetDef } from '@/balance/pets';
 import { STAGES } from '@/balance/stages';
 import { CHAPTER_NAME } from '@/balance/stages';
 import {
-  BACKGROUND_IMAGES, CODEX_PRELOAD_IMAGES, UI_IMAGES,
+  BACKGROUND_IMAGES, UI_IMAGES, UI_SCENE_IMAGES,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import {
@@ -64,6 +66,7 @@ export class CodexScene implements Scene {
 
   // ── 列表纵向拖拽滚动状态 ──
   private _content: PIXI.Container | null = null;
+  private _listMask: PIXI.Graphics | null = null;
   private _scroll = new ScrollListController();
   private readonly _enterSeq = new SceneEnterSeq();
 
@@ -74,23 +77,40 @@ export class CodexScene implements Scene {
   }
 
   private async _enter(token: number): Promise<void> {
-    await TextureCache.preload([...CODEX_PRELOAD_IMAGES]);
+    await ensureAssets(CODEX_SHELL_IMAGES);
     if (!this._enterSeq.stillValid(token)) return;
-    deferSceneBuild(token, this._enterSeq, 'codex', () => this._build());
+    deferSceneBuild(token, this._enterSeq, 'codex', () => {
+      this._buildShell();
+      void this._loadPetCards(token);
+    });
+  }
+
+  /** 壳层先渲染，避免等全量灵宠头像时黑屏 */
+  private async _loadPetCards(token: number): Promise<void> {
+    await ensureAssets(codexPetPreloadImages());
+    if (!this._enterSeq.stillValid(token)) return;
+    if (SceneManager.current?.name !== 'codex') return;
+    this._buildPetList(Game.safeTop + 136);
   }
 
   onExit(): void {
     this._enterSeq.cancel();
     this._scroll.detach();
     this._content = null;
+    if (this._listMask) {
+      this.container.removeChild(this._listMask);
+      this._listMask.destroy();
+      this._listMask = null;
+    }
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
   }
 
-  private _build(): void {
+  private _buildShell(): void {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     this._scroll.detach();
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this._content = null;
 
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
 
@@ -118,8 +138,6 @@ export class CodexScene implements Scene {
     );
     countText.position.set(w / 2, Game.safeTop + 118);
     this.container.addChild(countText);
-
-    this._buildPetList(Game.safeTop + 136);
   }
 
   private _buildTitlePlaque(w: number, centerY: number): void {
@@ -139,10 +157,21 @@ export class CodexScene implements Scene {
   }
 
   private _buildPetList(startY: number): void {
+    this._scroll.detach();
+    if (this._listMask) {
+      this.container.removeChild(this._listMask);
+      this._listMask.destroy();
+      this._listMask = null;
+    }
+    if (this._content) {
+      this._content.destroy({ children: true });
+      this.container.removeChild(this._content);
+      this._content = null;
+    }
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     const { S, cols, cardGap, cardW, cardH, marginX } = petPoolGrid(w);
-    const cardBgTex = TextureCache.get(UI_IMAGES.petCardPortrait);
+    const cardBgTex = TextureCache.get(UI_SCENE_IMAGES.petCardPortrait);
 
     // 三态分组：已拥有 → 已收录可获取 → 未收录（按 PETS 顺序稳定）
     const stateOf = (p: PetDef): CodexState =>
@@ -201,6 +230,7 @@ export class CodexScene implements Scene {
       mask.drawRect(0, startY, w, viewportH);
       mask.endFill();
       this.container.addChild(mask);
+      this._listMask = mask;
       content.mask = mask;
 
       // 列表区统一 canvas touch 滚动（不依赖 Pixi pointerdown，避免子元素抢事件）

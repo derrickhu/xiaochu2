@@ -4,7 +4,7 @@
   "type": "module",
   "description": "灵宠消消塔 2 - 转珠消除+灵宠养成小游戏（微信/抖音）",
   "scripts": {
-    "build": "vite build && rimraf minigame/index.html",
+    "build": "vite build && rimraf minigame/index.html && node scripts/organize-subpackages.mjs",
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

@@ -3,8 +3,8 @@ import { petImage, petImageAwakened, petAvatarPath, PET_AWAKEN_STAR } from '../A
 
 describe('灵宠头像路径', () => {
   it('初始头像与觉醒头像命名对齐 xiao_chu', () => {
-    expect(petImage('pet_fire_003')).toBe('images/pet/pet_fire_003.png');
-    expect(petImageAwakened('pet_fire_003')).toBe('images/pet/pet_fire_003_s3.png');
+    expect(petImage('pet_fire_003')).toBe('subpackages/pkg-pet/images/pet/pet_fire_003.png');
+    expect(petImageAwakened('pet_fire_003')).toBe('subpackages/pkg-pet/images/pet/pet_fire_003_s3.png');
   });
 
   it('★4 及以上切换觉醒灵相', () => {

@@ -25,6 +25,13 @@ function _showDiag() {
 
 _diag('game.js 开始执行');
 
+// 尽早注册分享菜单（须在 bundle 加载前完成，否则真机体验版右上角转发可能无效；对齐 xiao_chu）
+try {
+  require('./share-bootstrap.js');
+} catch (e) {
+  _diag('share-bootstrap 失败:' + e);
+}
+
 try {
   var _api = typeof wx !== 'undefined' ? wx : (typeof tt !== 'undefined' ? tt : null);
   if (_api) {

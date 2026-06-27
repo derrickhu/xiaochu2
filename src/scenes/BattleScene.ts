@@ -15,6 +15,8 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
+import { battlePreloadImages } from '@/config/assetPreload';
+import { ensureAssets } from '@/config/Subpackages';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
 import { STAGES } from '@/balance/stages';
@@ -29,9 +31,23 @@ import { BattleHud } from './battle/BattleHud';
 import { BattlePetBar } from './battle/BattlePetBar';
 import { BattleResultOverlay } from './battle/BattleResultOverlay';
 import { presentSkillCast, type SkillCastDeps } from './battle/battleSkillPresenter';
+import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 
 export interface BattleEnterData {
   stageId: string;
+}
+
+function lerpColor(a: number, b: number, t: number): number {
+  const ar = (a >> 16) & 0xff;
+  const ag = (a >> 8) & 0xff;
+  const ab = a & 0xff;
+  const br = (b >> 16) & 0xff;
+  const bg = (b >> 8) & 0xff;
+  const bb = b & 0xff;
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const bl = Math.round(ab + (bb - ab) * t);
+  return (r << 16) | (g << 8) | bl;
 }
 
 export class BattleScene implements Scene {
@@ -50,6 +66,7 @@ export class BattleScene implements Scene {
 
   private _busy = false;
   private _tickerCb = (): void => this._update();
+  private readonly _enterSeq = new SceneEnterSeq();
 
   onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.battle);
@@ -59,7 +76,6 @@ export class BattleScene implements Scene {
     this._ctrl = new BattleController(stageId, PlayerData.team, Math.random,
       (id) => ({ level: PlayerData.petLevel(id), star: PlayerData.petStar(id) }));
     this._board = new BoardModel();
-    // 棋盘机制：开局封印珠
     if (this._ctrl.sealOrbCount > 0) {
       this._board.sealRandom(this._ctrl.sealOrbCount);
     }
@@ -71,15 +87,23 @@ export class BattleScene implements Scene {
     this._petBar = new BattlePetBar(this._ctrl, this._layout);
     this._overlay = new BattleResultOverlay();
 
-    this._build();
-    this._hud.refreshEnemy(false);
-    this._hud.refreshHeroHp();
-    this._showStageHint();
+    void this._enter(this._enterSeq.next());
+  }
 
-    Game.ticker.add(this._tickerCb);
+  private async _enter(token: number): Promise<void> {
+    const stageId = this._ctrl.stage.id;
+    await ensureAssets(battlePreloadImages(stageId, PlayerData.team));
+    if (!this._enterSeq.stillValid(token)) return;
+    deferSceneBuild(token, this._enterSeq, 'battle', () => {
+      this._build();
+      this._hud.refreshEnemy(false);
+      this._hud.refreshHeroHp();
+      Game.ticker.add(this._tickerCb);
+    });
   }
 
   onExit(): void {
+    this._enterSeq.cancel();
     Game.ticker.remove(this._tickerCb);
     this._boardView?.cancelDrag();
     this._boardView?.destroy();
@@ -96,29 +120,40 @@ export class BattleScene implements Scene {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
 
-    // 背景
+    // 全屏暗色渐变底（对齐 xiao_chu drawBattleBg，棋盘区不贴图）
     const bg = new PIXI.Graphics();
-    bg.beginFill(0x241a38);
-    bg.drawRect(0, 0, w, h);
-    bg.endFill();
+    const steps = 32;
+    for (let i = 0; i < steps; i++) {
+      const t = i / (steps - 1);
+      const color = t < 0.5
+        ? lerpColor(0x0e0b15, 0x161220, t * 2)
+        : lerpColor(0x161220, 0x0a0810, (t - 0.5) * 2);
+      bg.beginFill(color);
+      bg.drawRect(0, (h / steps) * i, w, h / steps + 1);
+      bg.endFill();
+    }
     this.container.addChild(bg);
 
     // 敌人区属性背景（最底层）
     this._hud.buildEnemyBg(this.container);
 
-    // 顶栏：返回 + 关卡名
+    // 顶栏：返回 + 关卡名（与 xiao_chu 一样画在敌人区背景之上）
+    const headerY = this._layout.headerY;
     const backBtn = makeButton('返回', 130, 56, 0x4a3a72, () => {
       SceneManager.switchTo('title');
     });
-    backBtn.position.set(85, Game.safeTop + 30);
+    backBtn.position.set(85, headerY);
     this.container.addChild(backBtn);
 
     const stageText = new PIXI.Text(
       `${this._ctrl.stage.name}${this._ctrl.stage.isBoss ? ' · BOSS' : ''}`,
-      { fontSize: 34, fill: 0xd9cdf5, fontWeight: 'bold' },
+      {
+        fontSize: 30, fill: 0xf0e0c0, fontWeight: 'bold',
+        dropShadow: true, dropShadowColor: 0x000000, dropShadowBlur: 4, dropShadowDistance: 2,
+      },
     );
     stageText.anchor.set(0.5);
-    stageText.position.set(w / 2, Game.safeTop + 30);
+    stageText.position.set(w / 2, headerY);
     this.container.addChild(stageText);
 
     // 敌人区 + 英雄血条
@@ -173,44 +208,6 @@ export class BattleScene implements Scene {
   private _refreshSkillUi(): void {
     this._petBar.refreshCooldowns();
     this._hud.refreshStatus();
-  }
-
-  /** 开场推荐解法提示：顶栏下方淡入展示数秒后自动淡出（无 hint 则跳过） */
-  private _showStageHint(): void {
-    const stage = this._ctrl.stage;
-    const tip = stage.hintText ?? (stage.hintTags ? stage.hintTags.join(' · ') : '');
-    if (!tip) return;
-
-    const banner = new PIXI.Container();
-    banner.position.set(Game.logicWidth / 2, Game.safeTop + 78);
-
-    const label = new PIXI.Text(`推荐解法：${tip}`, {
-      fontSize: 22, fill: 0xffe9a6, fontWeight: 'bold',
-      stroke: 0x1a1126, strokeThickness: 4,
-      align: 'center', wordWrap: true, wordWrapWidth: Game.logicWidth - 80,
-    });
-    label.anchor.set(0.5);
-
-    const pad = 18;
-    const bg = new PIXI.Graphics();
-    bg.beginFill(0x2e2148, 0.92);
-    bg.lineStyle(2, 0xffd75e, 0.6);
-    bg.drawRoundedRect(
-      -label.width / 2 - pad, -label.height / 2 - 10,
-      label.width + pad * 2, label.height + 20, 14,
-    );
-    bg.endFill();
-    banner.addChild(bg);
-    banner.addChild(label);
-
-    banner.alpha = 0;
-    this._fx.addFloatChild(banner);
-    TweenManager.to({ target: banner, props: { alpha: 1 }, duration: 0.25 });
-    TweenManager.to({
-      target: banner, props: { alpha: 0 },
-      duration: 0.5, delay: 3.2, ease: Ease.easeOutQuad,
-      onComplete: () => banner.destroy({ children: true }),
-    });
   }
 
   // ════════════ 回合演出序列 ════════════

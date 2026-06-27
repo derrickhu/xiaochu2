@@ -9,6 +9,8 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
 import { TextureCache } from '@/core/TextureCache';
+import { gachaPreloadImages } from '@/config/assetPreload';
+import { ensureAssets } from '@/config/Subpackages';
 import { UI, ELEMENT_NAME } from '@/balance/ui';
 import { PET_MAP } from '@/balance/pets';
 import type { Element } from '@/balance/combat';
@@ -18,7 +20,7 @@ import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
 import type { PullOutcome } from '@/game/gacha/Gacha';
 import {
-  BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES, GACHA_PRELOAD_IMAGES, petImage,
+  BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES, petImage,
 } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
@@ -58,7 +60,7 @@ export class GachaScene implements Scene {
   }
 
   private async _enter(token: number): Promise<void> {
-    await TextureCache.preload([...GACHA_PRELOAD_IMAGES]);
+    await ensureAssets(gachaPreloadImages());
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'gacha', () => {
       this._ensurePage();

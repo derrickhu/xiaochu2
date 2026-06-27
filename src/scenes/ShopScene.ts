@@ -11,6 +11,8 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
 import { TextureCache } from '@/core/TextureCache';
+import { shopPreloadImages } from '@/config/assetPreload';
+import { ensureAssets } from '@/config/Subpackages';
 import { UI, ELEMENT_NAME } from '@/balance/ui';
 import { PETS, type PetDef } from '@/balance/pets';
 import { getRarity } from '@/balance/rarity';
@@ -20,7 +22,7 @@ import { CHAPTERS, stagesOfChapter } from '@/balance/stages';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
 import {
-  BACKGROUND_IMAGES, SHOP_PRELOAD_IMAGES, UI_IMAGES, UI_FX_IMAGES, petImage,
+  BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES, petImage,
 } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
@@ -60,7 +62,7 @@ export class ShopScene implements Scene {
   }
 
   private async _enter(token: number): Promise<void> {
-    await TextureCache.preload([...SHOP_PRELOAD_IMAGES]);
+    await ensureAssets(shopPreloadImages());
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'shop', () => {
       this._fx = new SceneFx();

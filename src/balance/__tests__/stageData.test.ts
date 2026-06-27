@@ -106,12 +106,17 @@ describe('stageDrops 产出公式', () => {
     expect(c3).toBeGreaterThan(c1);
   });
 
-  it('Boss 类型碎片倍率高于普通', () => {
-    const normal = stageDrops('dt_forest_elite', 1, 1, 'normal');
+  it('常规关不掉碎片', () => {
+    const drops = stageDrops('dt_forest_metal', 1, 3, 'normal');
+    expect(drops.shards).toEqual([]);
+  });
+
+  it('Boss 类型碎片倍率高于精英', () => {
+    const elite = stageDrops('dt_forest_elite', 1, 1, 'elite');
     const boss = stageDrops('dt_forest_elite', 1, 1, 'boss');
-    const nSum = normal.shards.reduce((a, s) => a + s.count, 0);
+    const eSum = elite.shards.reduce((a, s) => a + s.count, 0);
     const bSum = boss.shards.reduce((a, s) => a + s.count, 0);
-    expect(bSum).toBeGreaterThan(nSum);
+    expect(bSum).toBeGreaterThan(eSum);
   });
 
   it('关卡类型表覆盖所有引用类型', () => {

@@ -132,6 +132,35 @@ class PlatformServiceClass {
     } catch (_) {}
   }
 
+  // ═══════════════ 分享 ═══════════════
+
+  showShareMenu(opts?: { withShareTicket?: boolean; menus?: string[] }): void {
+    try {
+      this._api?.showShareMenu?.({
+        withShareTicket: opts?.withShareTicket ?? true,
+        menus: opts?.menus ?? ['shareAppMessage', 'shareTimeline'],
+      });
+    } catch (_) {}
+  }
+
+  shareAppMessage(opts: { title: string; imageUrl?: string; query?: string }): void {
+    try {
+      this._api?.shareAppMessage?.(opts);
+    } catch (_) {}
+  }
+
+  onShareAppMessage(callback: () => { title: string; imageUrl?: string; query?: string }): void {
+    try {
+      this._api?.onShareAppMessage?.(callback);
+    } catch (_) {}
+  }
+
+  onShareTimeline(callback: () => { title: string; imageUrl?: string; query?: string }): void {
+    try {
+      this._api?.onShareTimeline?.(callback);
+    } catch (_) {}
+  }
+
   // ═══════════════ 生命周期 ═══════════════
 
   onShow(handler: (opts: any) => void): void {

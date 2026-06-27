@@ -47,11 +47,11 @@ export class BattleHud {
 
   // ════════════ 构建 ════════════
 
-  /** 敌人区背景：图片裁剪到区域内 + 暗化遮罩 + 上下渐隐，融入顶栏与队伍栏 */
+  /** 敌人区背景：宽适配 + 底对齐（对齐 xiao_chu），仅底渐隐，顶部不压暗 */
   buildEnemyBg(parent: PIXI.Container): void {
     const w = Game.logicWidth;
-    const areaTop = Game.safeTop + 64;
-    const areaBottom = this._layout.heroBarY - 6;
+    const areaTop = this._layout.enemyAreaTop;
+    const areaBottom = this._layout.enemyAreaBottom;
     const areaH = areaBottom - areaTop;
     this._enemyAreaTop = areaTop;
     this._enemyAreaBottom = areaBottom;
@@ -70,16 +70,14 @@ export class BattleHud {
     layer.addChild(this._enemyBgSprite);
 
     const dim = new PIXI.Graphics();
-    dim.beginFill(0x1a1126, 0.22);
+    dim.beginFill(0x000000, 0.15);
     dim.drawRect(0, areaTop, w, areaH);
     dim.endFill();
     layer.addChild(dim);
 
+    // xiao_chu 只有底部 20% 渐隐，顶部让背景图自然延伸供关卡信息区使用
     layer.addChild(this._makeVerticalFade(
-      0, areaTop, w, areaH * 0.16, 0x241a38, 0.95, 0,
-    ));
-    layer.addChild(this._makeVerticalFade(
-      0, areaBottom - areaH * 0.24, w, areaH * 0.24, 0x241a38, 0, 0.95,
+      0, areaBottom - areaH * 0.2, w, areaH * 0.2, 0x0a0810, 0, 0.5,
     ));
 
     parent.addChild(layer);
@@ -88,11 +86,11 @@ export class BattleHud {
   /** 敌人区：波次文字 + 立绘容器 + 名字 + 属性克制行 + 血条 + 倒计时 */
   buildEnemyArea(parent: PIXI.Container): void {
     const w = Game.logicWidth;
-    const { enemyCenterX, enemyCenterY } = this._layout;
+    const { enemyCenterX, enemyCenterY, headerY, enemyNameY, enemyTagY, enemyHpBarY } = this._layout;
 
     this._waveText = new PIXI.Text('', { fontSize: 26, fill: 0x9b8cc4 });
     this._waveText.anchor.set(1, 0.5);
-    this._waveText.position.set(w - 30, Game.safeTop + 30);
+    this._waveText.position.set(w - 30, headerY);
     parent.addChild(this._waveText);
 
     this._enemyContainer = new PIXI.Container();
@@ -102,25 +100,30 @@ export class BattleHud {
     this._enemyContainer.addChild(this._enemySprite);
     parent.addChild(this._enemyContainer);
 
-    this._enemyNameText = new PIXI.Text('', { fontSize: 28, fill: 0xffffff, fontWeight: 'bold' });
+    this._enemyNameText = new PIXI.Text('', {
+      fontSize: 26, fill: 0xffffff, fontWeight: 'bold',
+      dropShadow: true, dropShadowColor: 0x000000, dropShadowBlur: 4, dropShadowDistance: 2,
+    });
     this._enemyNameText.anchor.set(0.5);
-    this._enemyNameText.position.set(w / 2, enemyCenterY - UI.battle.enemySize / 2 - 42);
+    this._enemyNameText.position.set(w / 2, enemyNameY);
     parent.addChild(this._enemyNameText);
 
     this._enemyElementRow = new PIXI.Container();
-    this._enemyElementRow.position.set(w / 2, enemyCenterY - UI.battle.enemySize / 2 - 12);
+    this._enemyElementRow.position.set(w / 2, enemyTagY);
     parent.addChild(this._enemyElementRow);
 
     this._enemyHpBar = new PIXI.Graphics();
     parent.addChild(this._enemyHpBar);
     this._enemyHpText = new PIXI.Text('', { fontSize: 22, fill: 0xffffff });
     this._enemyHpText.anchor.set(0.5);
-    this._enemyHpText.position.set(w / 2, enemyCenterY + UI.battle.enemySize / 2 + 32);
+    this._enemyHpText.position.set(
+      w / 2, enemyHpBarY + UI.battle.enemyHpBarHeight / 2,
+    );
     parent.addChild(this._enemyHpText);
 
     this._enemyCdText = new PIXI.Text('', { fontSize: 24, fill: 0xffb74d });
     this._enemyCdText.anchor.set(0.5);
-    this._enemyCdText.position.set(w / 2, enemyCenterY + UI.battle.enemySize / 2 + 66);
+    this._enemyCdText.position.set(w / 2, enemyHpBarY + UI.battle.enemyHpBarHeight + 22);
     parent.addChild(this._enemyCdText);
   }
 
@@ -154,7 +157,7 @@ export class BattleHud {
     parent.addChild(this._comboText);
   }
 
-  /** 护盾 / 增伤 buff 状态行（英雄血条上方右侧） */
+  /** 增伤 buff 状态行（护盾已在血条上展示） */
   buildStatus(parent: PIXI.Container): void {
     this._statusText = new PIXI.Text('', { fontSize: 22, fill: 0x8fd4ff, fontWeight: 'bold' });
     this._statusText.anchor.set(1, 0.5);
@@ -187,7 +190,7 @@ export class BattleHud {
     {
       const { enemyHpBarWidth: bw, enemyHpBarHeight: bh } = UI.battle;
       const x = (Game.logicWidth - bw) / 2;
-      const y = this._layout.enemyCenterY + UI.battle.enemySize / 2 + 8;
+      const y = this._layout.enemyHpBarY;
       const g = this._enemyHpBar;
       const { shown, white } = this._enemyHpDisp;
       g.clear();
@@ -205,7 +208,7 @@ export class BattleHud {
         g.endFill();
       }
     }
-    // ---- 英雄 ----
+    // ---- 英雄（绿条从起点按 hp/max；护盾从起点同色段覆盖，先扣覆盖段再扣绿条） ----
     {
       const { heroHpBarHeight: bh } = UI.battle;
       const x = UI.board.marginX;
@@ -213,18 +216,46 @@ export class BattleHud {
       const g = this._heroHpBar;
       const { shown, white } = this._heroHpDisp;
       const heroBarY = this._layout.heroBarY;
+      const shield = this._ctrl.shield;
+      const maxHp = this._ctrl.heroMaxHp;
+
       g.clear();
       g.beginFill(0x1a1126);
       g.drawRoundedRect(x, heroBarY, bw, bh, bh / 2);
       g.endFill();
-      if (white > 0.001) {
+
+      if (white > shown + 0.001) {
         g.beginFill(0xeadfc8);
         g.drawRoundedRect(x, heroBarY, Math.max(bw * white, bh), bh, bh / 2);
         g.endFill();
       }
-      if (shown > 0.001) {
+
+      const greenW = shown > 0.001 ? Math.max(bw * shown, bh) : 0;
+      if (greenW > 0.001) {
         g.beginFill(shown > 0.3 ? 0x6fd86a : 0xffb74d);
-        g.drawRoundedRect(x, heroBarY, Math.max(bw * shown, bh), bh, bh / 2);
+        g.drawRoundedRect(x, heroBarY, greenW, bh, bh / 2);
+        g.endFill();
+      }
+
+      if (shield > 0 && maxHp > 0 && greenW > 0.001) {
+        const shieldW = Math.min(bw * (shield / maxHp), greenW);
+        if (shieldW > 1) {
+          g.beginFill(0x40b8e0);
+          g.drawRoundedRect(x, heroBarY, shieldW, bh, bh / 2);
+          g.endFill();
+          g.beginFill(0xffffff, 0.35);
+          g.drawRoundedRect(x + 2, heroBarY + 1, Math.max(shieldW - 4, 0), bh * 0.35, bh / 4);
+          g.endFill();
+        }
+        const hpHighlightW = Math.max(greenW - shieldW - 4, 0);
+        if (hpHighlightW > 0) {
+          g.beginFill(0xffffff, 0.35);
+          g.drawRoundedRect(x + shieldW + 2, heroBarY + 1, hpHighlightW, bh * 0.35, bh / 4);
+          g.endFill();
+        }
+      } else if (greenW > 0.001) {
+        g.beginFill(0xffffff, 0.35);
+        g.drawRoundedRect(x + 2, heroBarY + 1, Math.max(greenW - 4, 0), bh * 0.35, bh / 4);
         g.endFill();
       }
     }
@@ -289,7 +320,7 @@ export class BattleHud {
     this.refreshEnemyCd();
   }
 
-  /** 切换敌人区背景贴图（按属性），cover 缩放铺满区域并底部对齐 */
+  /** 切换敌人区背景：底对齐；高度不足时 cover 补顶，避免顶部蓝黑留空 */
   private _refreshEnemyBg(element: Element): void {
     const tex = TextureCache.get(battleBgImage(element));
     if (!tex) {
@@ -300,8 +331,9 @@ export class BattleHud {
     this._enemyBgSprite.texture = tex;
     const w = Game.logicWidth;
     const areaH = this._enemyAreaBottom - this._enemyAreaTop;
-    const scale = Math.max(w / tex.width, areaH / tex.height);
-    this._enemyBgSprite.scale.set(scale);
+    const fitW = w / tex.width;
+    const fitH = areaH / tex.height;
+    this._enemyBgSprite.scale.set(Math.max(fitW, fitH));
   }
 
   /** 敌人属性克制提示：弱点珠 / 抵抗珠（对齐 xiao_chu） */
@@ -401,14 +433,21 @@ export class BattleHud {
 
   refreshHeroHp(): void {
     const ratio = this._ctrl.heroHp / this._ctrl.heroMaxHp;
-    this._heroHpText.text = `${this._ctrl.heroHp} / ${this._ctrl.heroMaxHp}`;
+    this._refreshHeroHpText();
     this._animateHp(this._heroHpDisp, ratio);
   }
 
-  /** buff 状态行（护盾 / 增伤），随技能/回合刷新 */
+  private _refreshHeroHpText(): void {
+    const sh = this._ctrl.shield;
+    this._heroHpText.text = sh > 0
+      ? `${this._ctrl.heroHp} / ${this._ctrl.heroMaxHp}  +${sh}`
+      : `${this._ctrl.heroHp} / ${this._ctrl.heroMaxHp}`;
+  }
+
+  /** 增伤等 buff 状态行（护盾由血条青色段展示） */
   refreshStatus(): void {
+    this._refreshHeroHpText();
     const parts: string[] = [];
-    if (this._ctrl.shield > 0) parts.push(`护盾 ${this._ctrl.shield}`);
     if (this._ctrl.dmgBuff) {
       parts.push(`伤害×${this._ctrl.dmgBuff.mult} 剩${this._ctrl.dmgBuff.turnsLeft}回合`);
     }

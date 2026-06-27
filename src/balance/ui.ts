@@ -47,8 +47,8 @@ export const UI = {
     petGap: 16,
     /** 五行相框相对头像缩放（对齐 xiao_chu frameScale=1.12） */
     petFrameScale: 1.12,
-    /** 队伍栏距棋盘顶部距离 */
-    teamBarOffset: 130,
+    /** 队伍栏距棋盘顶部距离（含槽位下方「▲技能」标签留白） */
+    teamBarOffset: 154,
     /** 拖珠倒计时条 */
     dragBarHeight: 10,
     /** 英雄血条 */

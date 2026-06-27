@@ -7,7 +7,7 @@ import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import {
   petAvatarPath,
   petFrameImage,
-  UI_IMAGES,
+  UI_SCENE_IMAGES,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import {
@@ -55,7 +55,7 @@ export function buildTeamPetList(opts: TeamPetListOpts): PIXI.Container | null {
   const gapY = 14;
   const gridW = cols * LIST_CARD_W + (cols - 1) * gapX;
   const startX = (w - gridW) / 2 + LIST_CARD_W / 2;
-  const scrollTex = TextureCache.get(UI_IMAGES.petCardTeamRow);
+  const scrollTex = TextureCache.get(UI_SCENE_IMAGES.petCardTeamRow);
   const scrollable = listBottom !== undefined;
   const parent = scrollable ? new PIXI.Container() : container;
   if (scrollable) {

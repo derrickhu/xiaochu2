@@ -8,7 +8,10 @@ import { SceneManager } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
 import { BgmManager } from '@/core/BgmManager';
 import { Platform } from '@/core/PlatformService';
-import { PRELOAD_IMAGES } from '@/config/Assets';
+import { configureWechatShare } from '@/core/ShareService';
+import { MAIN_PRELOAD_IMAGES } from '@/config/Assets';
+import { ensureAudioSubpackage } from '@/config/Subpackages';
+import { warmupCommonSubpackages } from '@/config/SubpackageWarmup';
 import { TitleScene } from '@/scenes/TitleScene';
 import { BattleScene } from '@/scenes/BattleScene';
 import { TeamScene } from '@/scenes/TeamScene';
@@ -18,6 +21,9 @@ import { GachaScene } from '@/scenes/GachaScene';
 import { ShopScene } from '@/scenes/ShopScene';
 
 declare const GameGlobal: any;
+
+// 尽早接管 share-bootstrap 注册的回调（与 xiao_chu main 内注释一致：勿重复晚注册）
+configureWechatShare();
 
 // 全局错误捕获——确保真机上所有异常可见
 if (typeof GameGlobal !== 'undefined') {
@@ -40,8 +46,8 @@ async function main(): Promise<void> {
   Game.init(canvas);
 
   // 预加载核心资源（珠子贴图）
-  await TextureCache.preload([...PRELOAD_IMAGES]);
-  console.log(`[main] 预加载完成，纹理数: ${TextureCache.size}`);
+  await TextureCache.preload([...MAIN_PRELOAD_IMAGES]);
+  console.log(`[main] 主包预加载完成，纹理数: ${TextureCache.size}`);
 
   SceneManager.register(new TitleScene());
   SceneManager.register(new BattleScene());
@@ -51,7 +57,9 @@ async function main(): Promise<void> {
   SceneManager.register(new GachaScene());
   SceneManager.register(new ShopScene());
   SceneManager.switchTo('title');
+  warmupCommonSubpackages();
 
+  await ensureAudioSubpackage();
   BgmManager.playMain();
   Platform.onHide(() => BgmManager.pause());
   Platform.onShow(() => BgmManager.resume());

@@ -8,6 +8,8 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
+import { teamPreloadImages } from '@/config/assetPreload';
+import { ensureAssets } from '@/config/Subpackages';
 import { Platform } from '@/core/PlatformService';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import {
@@ -18,7 +20,7 @@ import { formatEnemyAbility, resolveEncounter } from '@/balance/enemies';
 import { STAGE_MAP, type StageDef } from '@/balance/stages';
 import type { TeamMember } from '@/formulas/team';
 import {
-  BACKGROUND_IMAGES, TEAM_PRELOAD_IMAGES, UI_IMAGES, enemyImage,
+  BACKGROUND_IMAGES, UI_IMAGES, enemyImage,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import type { BattleEnterData } from './BattleScene';
@@ -74,14 +76,7 @@ export class TeamScene implements Scene {
   }
 
   private async _enter(token: number): Promise<void> {
-    const images = [...TEAM_PRELOAD_IMAGES];
-    if (this._prepStage) {
-      for (const ref of this._prepStage.encounters) {
-        const { def } = resolveEncounter(ref);
-        images.push(def.image ?? enemyImage(def.id));
-      }
-    }
-    await TextureCache.preload(images);
+    await ensureAssets(teamPreloadImages(this._prepStage?.id));
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'team', () => this._build());
   }

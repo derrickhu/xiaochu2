@@ -1,7 +1,8 @@
 /**
- * 音频资源路径（相对 minigame 根目录）
+ * 音频资源路径（相对 minigame 根目录，位于 pkg-audio 分包）
  */
+import { SUBPACKAGE_ROOT } from '@/config/Subpackages';
+
 export const AUDIO = {
-  /** 主界面 / 通用循环 BGM（复用 xiao_chu audio_bgm/bgm.mp3） */
-  mainBgm: 'audio/bgm.mp3',
+  mainBgm: `${SUBPACKAGE_ROOT.audio}/audio/bgm.mp3`,
 } as const;

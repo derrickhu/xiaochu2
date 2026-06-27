@@ -10,6 +10,14 @@
 import type { Element } from './combat';
 import { ENEMY_SKILL_IDS, SKILL_MAP } from './skills';
 import { CREATURE_MAP } from './creatures';
+import { SUBPACKAGE_ROOT } from '@/config/Subpackages';
+
+function creatureEnemyRoot(creatureId: string): string {
+  const pkg = creatureId.startsWith('cr_')
+    ? SUBPACKAGE_ROOT.enemyCr
+    : SUBPACKAGE_ROOT.enemy;
+  return `${pkg}/images/enemy`;
+}
 
 export interface EnemyDef {
   id: string;
@@ -132,9 +140,10 @@ export function creatureMonsterDef(creatureId: string, tier: 'tier1' | 'tier2'):
   const c = CREATURE_MAP.get(creatureId);
   if (!c) throw new Error(`未知生物: ${creatureId}`);
   const t = c.monster[tier];
+  const enemyRoot = creatureEnemyRoot(creatureId);
   const image = tier === 'tier2'
-    ? `images/enemy/${creatureId}_awakened.png`
-    : `images/enemy/${creatureId}.png`;
+    ? `${enemyRoot}/${creatureId}_awakened.png`
+    : `${enemyRoot}/${creatureId}.png`;
   return {
     id: `${creatureId}#${tier}`,
     name: t.name ?? `${c.name}${TIER_SUFFIX[tier]}`,

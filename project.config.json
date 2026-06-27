@@ -4,7 +4,7 @@
     "minified": true,
     "enhance": true,
     "useCompilerPlugins": false,
-    "uploadWithSourceMap": true,
+    "uploadWithSourceMap": false,
     "packNpmManually": false,
     "condition": false,
     "swc": false,
