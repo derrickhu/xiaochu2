@@ -13,7 +13,9 @@ import {
 import {
   ROLE_PASSIVE_LADDER, passiveSlotsForRarity, resolvePassiveForCreature,
 } from '@/balance/passives';
+import type { PetDef } from '@/balance/pets';
 import type { PetRole } from '@/balance/petRoles';
+import { petCombatAttribs } from '@/formulas/attribs';
 
 /**
  * 被动「总强度索引」：聚合所有已解锁层的数值幅度（触发型 *Pct + 常驻 stat/aura 的 pct）。
@@ -103,6 +105,41 @@ describe('被动：槽位阶梯 R1 / SR1 / SSR2 / UR3', () => {
     for (let i = 1; i < RARITIES.length; i++) {
       expect(passiveSlotsForRarity(RARITIES[i]))
         .toBeGreaterThanOrEqual(passiveSlotsForRarity(RARITIES[i - 1]));
+    }
+  });
+});
+
+describe('战斗属性：稀有度 × 星级单调不倒挂（阶段十二）', () => {
+  const ATTRIB_ROLES: PetRole[] = ['attacker', 'healer', 'tank', 'support'];
+  const stub = (role: PetRole, rarity: Rarity): PetDef => ({ role, rarity } as PetDef);
+  const attribStrength = (role: PetRole, rarity: Rarity, star: number): number => {
+    const a = petCombatAttribs(stub(role, rarity), 1, star);
+    return a.critRate + a.critDamage + a.damageReduction + a.healBonus + a.teamDamageBonus;
+  };
+
+  it('固定星级，战斗属性总强度随稀有度非递减', () => {
+    for (const role of ATTRIB_ROLES) {
+      for (const star of [1, 3, 5]) {
+        let prev = -Infinity;
+        for (const r of RARITIES) {
+          const v = attribStrength(role, r, star);
+          expect(v, `${role} @r${r} ★${star}`).toBeGreaterThanOrEqual(prev);
+          prev = v;
+        }
+      }
+    }
+  });
+
+  it('固定稀有度，战斗属性总强度随星级非递减', () => {
+    for (const role of ATTRIB_ROLES) {
+      for (const r of RARITIES) {
+        let prev = -Infinity;
+        for (let star = 1; star <= 5; star++) {
+          const v = attribStrength(role, r, star);
+          expect(v, `${role} @r${r} ★${star}`).toBeGreaterThanOrEqual(prev);
+          prev = v;
+        }
+      }
     }
   });
 });

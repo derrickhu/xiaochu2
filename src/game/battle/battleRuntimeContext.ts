@@ -10,6 +10,10 @@ export function makeSkillRuntimeContext(params: {
   teamRcvTotal: number;
   teamDamageBuffMult: number;
   passiveTeamDamageMult: number;
+  /** 辅助招牌「全队增伤」属性乘区（1 + Σ teamDamageBonus） */
+  teamDamageBonusMult: number;
+  /** 治疗招牌「全队治疗强化」属性 */
+  teamHealBonus: number;
 }): SkillRuntimeContext {
   return {
     enemy: {
@@ -23,8 +27,10 @@ export function makeSkillRuntimeContext(params: {
     heroMaxHp: params.heroMaxHp,
     teamRcvTotal: params.teamRcvTotal,
     teamAtkTotal: params.team.reduce((sum, pet) => sum + pet.atk, 0),
-    teamDamageBuffMult: params.teamDamageBuffMult * params.passiveTeamDamageMult,
+    teamDamageBuffMult:
+      params.teamDamageBuffMult * params.passiveTeamDamageMult * params.teamDamageBonusMult,
     enemyDamageReduction: params.enemy.dmgReduction?.reduction ?? 0,
+    teamHealBonus: params.teamHealBonus,
   };
 }
 
@@ -36,6 +42,8 @@ export function makePetCaster(team: readonly TeamPet[], petIndex: number): Skill
     element: pet.def.element,
     petIndex,
     petDef: pet.def,
+    critRate: pet.critRate,
+    critDamage: pet.critDamage,
   };
 }
 

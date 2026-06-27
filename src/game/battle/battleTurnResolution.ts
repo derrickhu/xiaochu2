@@ -1,4 +1,4 @@
-import { COMBAT, type Element } from '@/balance/combat';
+import { type Element } from '@/balance/combat';
 import { calcDamage, calcHeal, comboMultiplier } from '@/formulas/damage';
 import type { MatchGroup } from '@/game/board/BoardModel';
 import type { EnemyUnit, TeamPet, TurnResolution } from './battleTypes';
@@ -13,6 +13,8 @@ export interface ResolvePlayerTurnOptions {
   noHeartHeal: boolean;
   passiveRegenPerTurn: number;
   teamDamageMult: number;
+  /** 全队治疗强化（治疗招牌属性），放大心珠回复；默认 0 */
+  teamHealBonus: number;
   rng: () => number;
   elementTraitDamageMult: (pet: TeamPet, defender: Element) => number;
   counterRelation: (attacker: Element, defender: Element) => 1 | 0 | -1;
@@ -34,7 +36,8 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
     const petIndex = opts.team.findIndex((p) => p.def.element === element);
     if (petIndex < 0) continue;
     const pet = opts.team[petIndex];
-    const isCrit = opts.rng() < COMBAT.critChance;
+    // 暴击为「个体属性」：用出手宠自身的暴击率掷骰、暴击伤害结算
+    const isCrit = opts.rng() < pet.critRate;
     const raw = calcDamage({
       atk: pet.atk,
       matchCount: group.cells.length,
@@ -43,6 +46,7 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
       defenderElement: opts.enemy.def.element,
       defenderDef: opts.enemyDefEffective,
       isCrit,
+      critDamage: pet.critDamage,
       buffMult: opts.teamDamageMult,
     }) * opts.elementTraitDamageMult(pet, opts.enemy.def.element);
     const damage = Math.max(
@@ -59,7 +63,7 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
   }
 
   const heartHeal = (healOrbs > 0 && !opts.noHeartHeal)
-    ? calcHeal(opts.teamRcvTotal, healOrbs, combo)
+    ? calcHeal(opts.teamRcvTotal, healOrbs, combo, opts.teamHealBonus)
     : 0;
   return {
     combo,

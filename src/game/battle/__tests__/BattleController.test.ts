@@ -4,6 +4,9 @@ import { STAGES } from '@/balance/stages';
 import { DEFAULT_TEAM } from '@/balance/pets';
 import { ENEMY_SKILL_IDS } from '@/balance/skills';
 import { skillForEnemy } from '../SkillEngine';
+import { resolvePlayerTurnDamage, type ResolvePlayerTurnOptions } from '../battleTurnResolution';
+import { calcHeal } from '@/formulas/damage';
+import type { EnemyUnit, TeamPet } from '../battleTypes';
 
 const STAGE_ID = STAGES[0].id;
 
@@ -125,7 +128,10 @@ describe('技能效果', () => {
     if (result.type === 'healPct') {
       const heal = ctrl.team[idx].skill.effects.find((e) => e.kind === 'heal');
       const pct = heal?.kind === 'heal' ? heal.pct : 0;
-      expect(result.healed).toBe(Math.floor(ctrl.heroMaxHp * pct));
+      // 治疗位（厚土娘娘 healer）提供治疗强化，自身治疗技按 ×(1 + teamHealBonus) 放大
+      const expectedHeal = Math.floor(ctrl.heroMaxHp * pct * (1 + ctrl.teamHealBonus));
+      const room = ctrl.heroMaxHp - Math.floor(ctrl.heroMaxHp * 0.4);
+      expect(result.healed).toBe(Math.min(expectedHeal, room));
     }
   });
 
@@ -139,16 +145,27 @@ describe('技能效果', () => {
     const shieldBefore = ctrl.shield;
     expect(shieldBefore).toBeGreaterThan(0);
 
+    // 阶段十二受击顺序：减伤 → 护盾 → 扣血。先用 teamDamageReduction 还原期望值
+    const dr = ctrl.teamDamageReduction;
+    const reduce = (raw: number): number => Math.max(0, Math.floor(raw * (1 - dr)));
+
     const hpBefore = ctrl.heroHp;
-    const hit = ctrl.applyEnemyDamage(Math.floor(shieldBefore / 2));
-    expect(hit.damage).toBe(0);
-    expect(hit.absorbed).toBe(Math.floor(shieldBefore / 2));
+    const raw1 = Math.floor(shieldBefore / 2);
+    const reduced1 = reduce(raw1);
+    const hit = ctrl.applyEnemyDamage(raw1);
+    expect(hit.damage).toBe(0); // 减伤后仍小于护盾，全额吸收
+    expect(hit.absorbed).toBe(reduced1);
     expect(ctrl.heroHp).toBe(hpBefore);
 
-    // 溢出部分扣 HP
-    const hit2 = ctrl.applyEnemyDamage(ctrl.shield + 100);
-    expect(hit2.damage).toBe(100);
-    expect(ctrl.shield).toBe(0);
+    // 溢出部分扣 HP（同样先减伤再过护盾）
+    const shieldNow = ctrl.shield;
+    const raw2 = shieldNow + 100;
+    const reduced2 = reduce(raw2);
+    const expectedAbsorbed2 = Math.min(shieldNow, reduced2);
+    const hit2 = ctrl.applyEnemyDamage(raw2);
+    expect(hit2.absorbed).toBe(expectedAbsorbed2);
+    expect(hit2.damage).toBe(reduced2 - expectedAbsorbed2);
+    expect(ctrl.shield).toBe(shieldNow - expectedAbsorbed2);
   });
 
   it('dmgBoost：增伤 buff 生效并随敌人回合衰减', () => {
@@ -223,8 +240,10 @@ describe('怪物技能', () => {
     const hpBefore = ctrl.heroHp;
     const r2 = ctrl.enemyAct();
     expect(r2.action).toBe('chargedAttack');
-    // 重击原始伤害 = atk × mult；被动开局护盾可能吸收一部分，故按 实扣 + 吸收 还原
-    expect(r2.damage + r2.absorbed).toBe(Math.floor(ctrl.enemy.atk * 2.6));
+    // 重击原始伤害 = atk × mult，先过队伍减伤；被动开局护盾可能吸收一部分，故按 实扣 + 吸收 还原
+    const rawCharge = Math.floor(ctrl.enemy.atk * 2.6);
+    const reducedCharge = Math.max(0, Math.floor(rawCharge * (1 - ctrl.teamDamageReduction)));
+    expect(r2.damage + r2.absorbed).toBe(reducedCharge);
     expect(ctrl.heroHp).toBe(hpBefore - r2.damage);
     expect(ctrl.enemy.charging).toBeNull();
   });
@@ -265,6 +284,77 @@ describe('怪物技能', () => {
     // turns 个敌人回合后状态消失（释放当回合记 1）
     ctrl.enemyAct();
     expect(ctrl.enemy.dmgReduction).toBeNull();
+  });
+});
+
+describe('阶段十二·角色专属战斗属性（全队聚合）', () => {
+  it('治疗队伍 teamHealBonus > 0，纯输出队伍为 0', () => {
+    // 灵鹿医者（healer）提供治疗强化；纯输出队伍无治疗强化
+    const healTeam = makeCtrl(['pet_wood_004', 'pet_fire_003']);
+    expect(healTeam.teamHealBonus).toBeGreaterThan(0);
+    const atkTeam = makeCtrl(['pet_fire_003', 'pet_fire_004']);
+    expect(atkTeam.teamHealBonus).toBe(0);
+  });
+
+  it('辅助队伍 teamDamageBonusMult > 1，纯输出队伍为 1', () => {
+    // 裂甲铁犀（support）提供全队增伤属性
+    const supTeam = makeCtrl(['pet_metal_003', 'pet_fire_003']);
+    expect(supTeam.teamDamageBonusMult).toBeGreaterThan(1);
+    const atkTeam = makeCtrl(['pet_fire_003', 'pet_fire_004']);
+    expect(atkTeam.teamDamageBonusMult).toBe(1);
+  });
+
+  it('resolveTurn 心珠回血按 teamHealBonus 放大（与 calcHeal 口径一致）', () => {
+    const ctrl = makeCtrl(['pet_wood_004', 'pet_fire_003']);
+    ctrl.beginResolve();
+    const heartGroups = [{ orb: 'heart' as const, cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }] }];
+    const res = ctrl.resolveTurn(heartGroups);
+    const expected = calcHeal(ctrl.teamRcvTotal, 3, 1, ctrl.teamHealBonus) + ctrl.passiveRegenPerTurn;
+    expect(res.heal).toBe(expected);
+  });
+});
+
+describe('resolvePlayerTurnDamage：治疗强化 / 全队增伤透传（纯函数）', () => {
+  const firePet = (): TeamPet => ({
+    def: { element: 'fire' } as TeamPet['def'],
+    star: 1,
+    skill: {} as TeamPet['skill'],
+    atk: 1000,
+    critRate: 0,
+    critDamage: 0,
+    skillCdLeft: 0,
+  });
+  const enemy = (): EnemyUnit => ({ def: { element: 'water' }, dmgReduction: null } as unknown as EnemyUnit);
+  const baseOpts = (over: Partial<ResolvePlayerTurnOptions>): ResolvePlayerTurnOptions => ({
+    groups: [],
+    team: [firePet()],
+    enemy: enemy(),
+    bannedElements: new Set(),
+    enemyDefEffective: 0,
+    teamRcvTotal: 1000,
+    noHeartHeal: false,
+    passiveRegenPerTurn: 0,
+    teamDamageMult: 1,
+    teamHealBonus: 0,
+    rng: () => 0.99,
+    elementTraitDamageMult: () => 1,
+    counterRelation: () => 0,
+    ...over,
+  });
+
+  it('teamHealBonus 放大心珠回血', () => {
+    const heart = [{ orb: 'heart' as const, cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }] }];
+    const plain = resolvePlayerTurnDamage(baseOpts({ groups: heart, teamHealBonus: 0 }));
+    const boosted = resolvePlayerTurnDamage(baseOpts({ groups: heart, teamHealBonus: 0.5 }));
+    expect(boosted.heal).toBeGreaterThan(plain.heal);
+    expect(boosted.heal).toBe(calcHeal(1000, 3, 1, 0.5));
+  });
+
+  it('teamDamageMult（含全队增伤）放大伤害', () => {
+    const fire = [{ orb: 'fire' as const, cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }] }];
+    const plain = resolvePlayerTurnDamage(baseOpts({ groups: fire, teamDamageMult: 1 }));
+    const boosted = resolvePlayerTurnDamage(baseOpts({ groups: fire, teamDamageMult: 1.5 }));
+    expect(boosted.attacks[0].damage).toBeGreaterThan(plain.attacks[0].damage);
   });
 });
 

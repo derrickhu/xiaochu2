@@ -22,7 +22,7 @@ const CTX: SkillRuntimeContext = {
   enemy: { hp: 100000, maxHp: 100000, atk: 500, def_: 0, element: 'metal' },
   heroHp: 5000, heroMaxHp: 5000,
   teamRcvTotal: 800, teamAtkTotal: 3000,
-  teamDamageBuffMult: 1, enemyDamageReduction: 0,
+  teamDamageBuffMult: 1, enemyDamageReduction: 0, teamHealBonus: 0,
 };
 
 function skillWith(effects: SkillEffectDef[]): SkillDef {

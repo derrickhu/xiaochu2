@@ -1,10 +1,11 @@
 import * as PIXI from 'pixi.js';
 import { ELEMENTS } from '@/balance/combat';
-import { STAT_UI } from '@/balance/petRoles';
+import { ATTRIB_UI, STAT_UI } from '@/balance/petRoles';
 import { ELEMENT_NAME } from '@/balance/ui';
 import { Ease, TweenManager } from '@/core/TweenManager';
 import {
   teamAtk,
+  teamAttribAggregate,
   teamElements,
   teamMaxHp,
   teamPassiveAggregate,
@@ -17,10 +18,15 @@ export interface TeamOverviewSnapshot {
   atk: number;
   hp: number;
   rcv: number;
+  /** 全队增伤（被动 + 辅助招牌「全队增伤」属性，同乘区合并展示） */
   dmg: number;
   shield: number;
   regen: number;
   power: number;
+  /** 全队受击减伤（坦克招牌，队伍级战斗属性；暴击是个体属性，不在总览展示） */
+  damageReduction: number;
+  /** 全队治疗强化（治疗招牌，队伍级战斗属性） */
+  healBonus: number;
 }
 
 /** 重建「队伍总览」面板内容：三维 + 聚合被动 + 五行覆盖 + 辅助战力。 */
@@ -39,9 +45,13 @@ export function refreshTeamOverviewPanel(
   const hp = teamMaxHp(members);
   const rcv = teamRcv(members);
   const agg = teamPassiveAggregate(members);
-  const dmg = Math.round((agg.teamDamageMult - 1) * 1000) / 1000;
+  const attribs = teamAttribAggregate(members);
+  // 全队增伤 = 被动 teamDamage + 辅助招牌「全队增伤」属性（同一伤害乘区，合并展示）
+  const dmg = Math.round((agg.teamDamageMult - 1 + attribs.teamDamageBonus) * 1000) / 1000;
   const shield = Math.round(agg.startShieldPct * 1000) / 1000;
   const regen = Math.round(agg.regenPct * 1000) / 1000;
+  const damageReduction = Math.round(attribs.damageReduction * 1000) / 1000;
+  const healBonus = Math.round(attribs.healBonus * 1000) / 1000;
   const power = teamPower(atk, hp, rcv, dmg, shield, regen);
 
   const title = makeText('队伍总览', {
@@ -61,14 +71,15 @@ export function refreshTeamOverviewPanel(
   root.addChild(powerRow);
 
   const statsRow = new PIXI.Container();
-  statsRow.position.set(0, top + 60);
+  statsRow.position.set(0, top + 56);
   const statsLine = makeTeamStatsLine({ hp, atk, rcv, size: FONT_SIZE.sm });
   statsLine.position.set(-statsLine.width / 2, 0);
   statsRow.addChild(statsLine);
   root.addChild(statsRow);
 
-  const passiveRow = buildPassiveRow(dmg, shield, regen);
-  passiveRow.position.set(0, top + 98);
+  // 全队属性行：增伤/减伤/治疗强化/护盾/回血（均为队伍级；个体暴击不在此展示）
+  const passiveRow = buildTeamEffectsRow(dmg, shield, regen, damageReduction, healBonus);
+  passiveRow.position.set(0, top + 100);
   root.addChild(passiveRow);
 
   const covered = teamElements(members);
@@ -82,22 +93,28 @@ export function refreshTeamOverviewPanel(
       fill: missing.length === 0 ? COLORS.btnSuccessBorder : COLORS.accentDeep,
     },
   );
-  coverText.position.set(0, top + 132);
+  coverText.position.set(0, top + 140);
   root.addChild(coverText);
 
   if (prev) {
     if (prev.atk !== atk || prev.hp !== hp || prev.rcv !== rcv) pulse(statsRow);
-    if (prev.dmg !== dmg || prev.shield !== shield || prev.regen !== regen) pulse(passiveRow);
+    if (prev.dmg !== dmg || prev.shield !== shield || prev.regen !== regen
+      || prev.damageReduction !== damageReduction || prev.healBonus !== healBonus) pulse(passiveRow);
     if (prev.power !== power) pulse(powerRow);
   }
-  return { atk, hp, rcv, dmg, shield, regen, power };
+  return { atk, hp, rcv, dmg, shield, regen, power, damageReduction, healBonus };
 }
 
-function buildPassiveRow(dmg: number, shield: number, regen: number): PIXI.Container {
+/** 全队效果行：增伤 / 全队减伤 / 治疗强化 / 开局护盾 / 每回合回血（仅展示非零项） */
+function buildTeamEffectsRow(
+  dmg: number, shield: number, regen: number, reduction: number, healBonus: number,
+): PIXI.Container {
   const row = new PIXI.Container();
   const pct = (v: number): string => `${Math.round(v * 100)}%`;
   const segs: { label: string; value: string; color: number }[] = [];
   if (dmg > 0) segs.push({ label: '全队增伤 ', value: `+${pct(dmg)}`, color: STAT_UI.atk.color });
+  if (reduction > 0) segs.push({ label: '全队减伤 ', value: pct(reduction), color: ATTRIB_UI.damageReduction.color });
+  if (healBonus > 0) segs.push({ label: '治疗强化 ', value: `+${pct(healBonus)}`, color: ATTRIB_UI.healBonus.color });
   if (shield > 0) segs.push({ label: '开局护盾 ', value: pct(shield), color: STAT_UI.hp.color });
   if (regen > 0) segs.push({ label: '每回合回血 ', value: pct(regen), color: STAT_UI.rcv.color });
 

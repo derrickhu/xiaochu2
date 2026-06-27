@@ -10,7 +10,7 @@ import { getSkill, resolveSkillVfx, getSkillTierBonus, getSkillStarOverride } fr
 import { getStarProfile } from '@/balance/growth';
 import { getRaritySkillPower } from '@/balance/rarity';
 import type { StatusStackPolicy } from './BattleStatus';
-import { defenseReduction } from '@/formulas/damage';
+import { defenseReduction, expectedCritFactor } from '@/formulas/damage';
 
 export interface SkillCaster {
   kind: 'pet' | 'enemy';
@@ -18,6 +18,10 @@ export interface SkillCaster {
   element: Element;
   petIndex?: number;
   petDef?: PetDef;
+  /** 个体暴击率（仅 pet 施法者；直伤/多段技按期望暴击放大，DOT 不暴击） */
+  critRate?: number;
+  /** 个体额外暴击伤害 */
+  critDamage?: number;
 }
 
 export interface SkillRuntimeEnemy {
@@ -36,6 +40,8 @@ export interface SkillRuntimeContext {
   teamAtkTotal: number;
   teamDamageBuffMult: number;
   enemyDamageReduction: number;
+  /** 全队治疗强化（治疗招牌属性），放大对全队的回复事件；默认 0 */
+  teamHealBonus: number;
 }
 
 export interface DamageEvent {
@@ -238,7 +244,12 @@ function resolveHitAmount(
   opts: { applyDefense?: boolean; applyDmgBuff?: boolean; applyEnemyReduction?: boolean },
 ): number {
   const raw = damageSourceValue(source, caster, ctx) * multiplier;
+  // 宠物施法的直伤/多段技按「施法宠自身」暴击的期望值放大（确定性，与模拟器镜像）；敌人技不暴击。
+  const critFactor = caster.kind === 'pet'
+    ? expectedCritFactor(caster.critRate ?? 0, caster.critDamage ?? 0)
+    : 1;
   const reduced = raw
+    * critFactor
     * (opts.applyDefense === false ? 1 : (1 - defenseReduction(ctx.enemy.def_)))
     * (opts.applyDmgBuff === false ? 1 : ctx.teamDamageBuffMult)
     * (opts.applyEnemyReduction === false ? 1 : (1 - ctx.enemyDamageReduction));
@@ -311,9 +322,12 @@ const EFFECT_HANDLERS: { [K in SkillEffectDef['kind']]: EffectHandler<K> } = {
       : effect.source === 'teamRcv'
         ? ctx.teamRcvTotal
         : ctx.enemy.maxHp;
+    const target = effect.source === 'enemyMaxHp' ? 'enemy' : 'team';
+    // 治疗强化只放大对全队的回复，不增益敌人自疗
+    const healBonusMult = target === 'team' ? 1 + Math.max(0, ctx.teamHealBonus) : 1;
     result.healEvents.push({
-      target: effect.source === 'enemyMaxHp' ? 'enemy' : 'team',
-      amount: Math.floor(base * effect.pct),
+      target,
+      amount: Math.floor(base * effect.pct * healBonusMult),
       vfx,
     });
     return true;

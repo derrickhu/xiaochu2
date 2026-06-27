@@ -144,7 +144,7 @@ export class TeamScene implements Scene {
     this._slotY = y;
     const panelTop = y + slotSize + 16;
     const panelW = 690;
-    const panelH = 158;
+    const panelH = 166;
     const panelCenterY = panelTop + panelH / 2;
     const listStartY = panelTop + panelH + 16;
 

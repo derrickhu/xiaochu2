@@ -17,7 +17,9 @@ import { STAGE_MAP, type StageDef } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
 import { ECONOMY } from '@/balance/economy';
 import { stageDrops } from '@/formulas/economyOutput';
-import { teamMaxHp, teamRcv, teamElements, petAtkInTeam, teamPassiveAggregate, type TeamMember } from '@/formulas/team';
+import { teamMaxHp, teamRcv, teamElements, petAtkInTeam, teamPassiveAggregate, teamAttribAggregate, type TeamMember } from '@/formulas/team';
+import { applyDamageReduction } from '@/formulas/damage';
+import { petCombatAttribs } from '@/formulas/attribs';
 import type { MatchGroup } from '@/game/board/BoardModel';
 import { BattleStatusStore } from './BattleStatus';
 import {
@@ -81,6 +83,17 @@ export class BattleController {
   /** 被动：常驻全队增伤总乘区（1 + Σ teamDamagePct） */
   readonly passiveTeamDamageMult: number;
 
+  // ── 战斗属性（阶段十二，构造时定值，全队属性聚合后封顶） ──
+  /**
+   * 队伍受击减伤（坦克招牌，全队属性）：各宠贡献求和后已全局封顶。
+   * 暴击为个体属性，存于每个 TeamPet.critRate/critDamage，不在队伍层聚合。
+   */
+  readonly teamDamageReduction: number;
+  /** 队伍治疗强化（治疗招牌，全队属性）：放大心珠回复 + 治疗技回复，求和后封顶。 */
+  readonly teamHealBonus: number;
+  /** 队伍全队增伤（辅助招牌，全队属性）：叠进全队伤害乘区 (1 + 求和)。 */
+  readonly teamDamageBonusMult: number;
+
   /** 当前波次（0 起） */
   waveIndex = 0;
   enemy: EnemyUnit;
@@ -119,13 +132,18 @@ export class BattleController {
       .filter((def): def is PetDef => !!def)
       .map((def) => ({ def, ...levelStarOf(def.id) }));
 
-    this.team = members.map((m) => ({
-      def: m.def,
-      star: m.star,
-      skill: skillForPet(m.def, m.star),
-      atk: petAtkInTeam(members, m),
-      skillCdLeft: skillCdForPet(m.def, m.star),
-    }));
+    this.team = members.map((m) => {
+      const attribs = petCombatAttribs(m.def, m.level, m.star);
+      return {
+        def: m.def,
+        star: m.star,
+        skill: skillForPet(m.def, m.star),
+        atk: petAtkInTeam(members, m),
+        critRate: attribs.critRate,
+        critDamage: attribs.critDamage,
+        skillCdLeft: skillCdForPet(m.def, m.star),
+      };
+    });
     this.heroMaxHp = teamMaxHp(members);
     this.heroHp = this.heroMaxHp;
     this.teamRcvTotal = teamRcv(members);
@@ -135,6 +153,12 @@ export class BattleController {
     const passiveAgg = teamPassiveAggregate(members);
     this.passiveRegenPerTurn = Math.floor(this.heroMaxHp * passiveAgg.regenPct);
     this.passiveTeamDamageMult = passiveAgg.teamDamageMult;
+
+    // 全队属性聚合（减伤/治疗强化/全队增伤，与 simulation.ts 双模型镜像）；暴击为个体属性已写入各 TeamPet
+    const teamAttribs = teamAttribAggregate(members);
+    this.teamDamageReduction = teamAttribs.damageReduction;
+    this.teamHealBonus = teamAttribs.healBonus;
+    this.teamDamageBonusMult = 1 + teamAttribs.teamDamageBonus;
     const startShield = Math.floor(this.heroMaxHp * passiveAgg.startShieldPct);
     if (startShield > 0) {
       this._statuses.add({
@@ -199,7 +223,8 @@ export class BattleController {
       teamRcvTotal: this.teamRcvTotal,
       noHeartHeal: this.noHeartHeal,
       passiveRegenPerTurn: this.passiveRegenPerTurn,
-      teamDamageMult: (this.dmgBuff?.mult ?? 1.0) * this.passiveTeamDamageMult,
+      teamDamageMult: (this.dmgBuff?.mult ?? 1.0) * this.passiveTeamDamageMult * this.teamDamageBonusMult,
+      teamHealBonus: this.teamHealBonus,
       rng: this._rng,
       elementTraitDamageMult: (pet, defender) => this._elementTraitDamageMult(pet.def, defender),
       counterRelation: (attacker, defender) => this._counterRelation(attacker, defender),
@@ -271,10 +296,11 @@ export class BattleController {
     });
   }
 
-  /** 对英雄结算一次伤害（护盾先吸收） */
+  /** 对英雄结算一次伤害：减伤 → 护盾吸收 → 扣血（阶段十二受击顺序） */
   applyEnemyDamage(raw: number): { damage: number; absorbed: number; heroDead: boolean } {
-    const absorbed = this._statuses.consumeShield(raw);
-    const damage = raw - absorbed;
+    const reduced = applyDamageReduction(raw, this.teamDamageReduction);
+    const absorbed = this._statuses.consumeShield(reduced);
+    const damage = reduced - absorbed;
     this.heroHp = Math.max(0, this.heroHp - damage);
     if (damage > 0) this.tookDamage = true;
     return { damage, absorbed, heroDead: this.heroHp <= 0 };
@@ -348,6 +374,8 @@ export class BattleController {
       teamRcvTotal: this.teamRcvTotal,
       teamDamageBuffMult: this.dmgBuff?.mult ?? 1,
       passiveTeamDamageMult: this.passiveTeamDamageMult,
+      teamDamageBonusMult: this.teamDamageBonusMult,
+      teamHealBonus: this.teamHealBonus,
     });
   }
   private _syncEnemyStatusMirrors(): void {

@@ -18,7 +18,7 @@ import { getStatUi, type StatKey } from '@/balance/petRoles';
 import { getRarity } from '@/balance/rarity';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { skillForPet } from '@/game/battle/SkillEngine';
-import { traitLines } from './abilityInfo';
+import { passiveDisplayLines } from './abilityInfo';
 import {
   petAvatarPath, petFrameImage, BACKGROUND_IMAGES, PET_DETAIL_PRELOAD_IMAGES, UI_FX_IMAGES,
 } from '@/config/Assets';
@@ -125,18 +125,18 @@ export class PetDetailScene implements Scene {
     this._buildAvatar(pet, star, w / 2, avatarCY);
 
     const meta = makeRarityElementRoleLine(pet.rarity, pet.element, pet.role, { size: FONT_SIZE.sm });
-    meta.position.set(w / 2 - meta.width / 2, avatarCY + 110);
+    meta.position.set(w / 2 - meta.width / 2, avatarCY + 130);
     this._content.addChild(meta);
 
     const maxLv = getStarProfile(star).maxLevel;
     this._starRow = makeLevelStarLine({
       level: lv, star, maxLevel: maxLv, size: FONT_SIZE.sm, emptyStyle: 'hollow',
     });
-    this._starRow.position.set(w / 2 - this._starRow.width / 2, avatarCY + 148);
+    this._starRow.position.set(w / 2 - this._starRow.width / 2, avatarCY + 168);
     this._content.addChild(this._starRow);
 
-    this._buildStatPanel(pet, lv, star, w, avatarCY + 188);
-    const abilityBottom = this._buildAbilityPanel(pet, star, w, avatarCY + 360);
+    const statBottom = this._buildStatPanel(pet, lv, star, w, avatarCY + 208);
+    const abilityBottom = this._buildAbilityPanel(pet, lv, star, w, statBottom + 16);
     this._buildActionButtons(w, h, abilityBottom + 20);
   }
 
@@ -165,9 +165,9 @@ export class PetDetailScene implements Scene {
   }
 
   /** 三维条形面板：每维 标签 + 进度条（相对满养成潜力）+ 数值 */
-  private _buildStatPanel(pet: PetDef, lv: number, star: number, w: number, y: number): void {
+  private _buildStatPanel(pet: PetDef, lv: number, star: number, w: number, y: number): number {
     const panelW = 640;
-    const panelH = 156;
+    const panelH = 162;
     const left = w / 2 - panelW / 2;
     this._content.addChild(this._panelAt(panelW, panelH, left, y));
 
@@ -211,28 +211,24 @@ export class PetDetailScene implements Scene {
 
       this._statRows[stat] = { bar, value };
     });
+
+    return y + panelH;
   }
 
-  /** 主动技能 + 被动描述（与图鉴能力卡口径一致） */
-  private _buildAbilityPanel(pet: PetDef, star: number, w: number, y: number): number {
+  /** 主动技能 + 被动（签名战斗属性 / passives / 星级成长，统一入口） */
+  private _buildAbilityPanel(pet: PetDef, _lv: number, star: number, w: number, y: number): number {
     const panelW = 640;
     const padX = 28;
     const left = w / 2 - panelW / 2;
     const skill = skillForPet(pet, star);
-    const passives = traitLines(pet);
-    const passiveText = passives.length > 0
-      ? passives.map((line) => `· ${line}`).join('\n')
-      : '无';
+    const passiveLines = passiveDisplayLines(pet, star);
 
     const descProbe = makeText(skill.desc, {
       size: FONT_SIZE.xs, fill: COLORS.textMain, wordWrapWidth: panelW - padX * 2,
     });
-    const passiveProbe = makeText(passiveText, {
-      size: FONT_SIZE.xs, fill: COLORS.textSub, wordWrapWidth: panelW - padX * 2,
-    });
-    const panelH = 18 + 34 + descProbe.height + 20 + 26 + passiveProbe.height + 24;
+    const passiveBlockH = passiveLines.length > 0 ? 26 + passiveLines.length * 26 + 8 : 26;
+    const panelH = 18 + 34 + descProbe.height + 20 + passiveBlockH + 28;
     descProbe.destroy();
-    passiveProbe.destroy();
 
     this._content.addChild(this._panelAt(panelW, panelH, left, y));
 
@@ -257,12 +253,26 @@ export class PetDetailScene implements Scene {
     this._content.addChild(passiveTitle);
 
     lineY += 26;
-    const passiveBody = makeText(passiveText, {
-      size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: [0, 0],
-      wordWrapWidth: panelW - padX * 2,
-    });
-    passiveBody.position.set(left + padX, lineY);
-    this._content.addChild(passiveBody);
+    if (passiveLines.length === 0) {
+      const none = makeText('无', {
+        size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: [0, 0],
+      });
+      none.position.set(left + padX, lineY);
+      this._content.addChild(none);
+    } else {
+      for (const line of passiveLines) {
+        const unlocked = line.unlocked !== false;
+        const t = makeText(`· ${line.text}`, {
+          size: FONT_SIZE.xs,
+          fill: unlocked ? (line.color ?? COLORS.textSub) : COLORS.textSub,
+          anchor: [0, 0],
+        });
+        t.alpha = unlocked ? 1 : 0.45;
+        t.position.set(left + padX, lineY);
+        this._content.addChild(t);
+        lineY += 26;
+      }
+    }
 
     return y + panelH;
   }

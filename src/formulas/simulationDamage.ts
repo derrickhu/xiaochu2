@@ -1,9 +1,15 @@
 import type { Element } from '@/balance/combat';
-import { calcDamage } from './damage';
+import { calcDamage, expectedCritFactor } from './damage';
 import type { SimEnemy } from './simulationEnemy';
 import type { ComboModel } from './simulationReport';
 
-/** 单组属性珠期望伤害（含克制/防御/增伤/敌减伤） */
+/** 队伍暴击属性（模拟器按期望值放大，与 BattleController 掷骰镜像） */
+export interface SimCritProfile {
+  critRate: number;
+  critDamage: number;
+}
+
+/** 单组属性珠期望伤害（含克制/防御/增伤/敌减伤/期望暴击） */
 export function orbGroupDamage(
   atk: number,
   el: Element,
@@ -12,6 +18,7 @@ export function orbGroupDamage(
   model: ComboModel,
   buffMult: number,
   enemyReduction: number,
+  crit: SimCritProfile = { critRate: 0, critDamage: 0 },
 ): number {
   const raw = calcDamage({
     atk,
@@ -22,5 +29,5 @@ export function orbGroupDamage(
     defenderDef,
     buffMult,
   });
-  return raw * (1 - enemyReduction);
+  return raw * expectedCritFactor(crit.critRate, crit.critDamage) * (1 - enemyReduction);
 }

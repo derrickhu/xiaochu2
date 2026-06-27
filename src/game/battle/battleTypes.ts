@@ -17,6 +17,10 @@ export interface TeamPet {
   star: number;
   skill: SkillDef;
   atk: number;
+  /** 个体暴击率（仅作用于该宠自身的消珠出手与主动技） */
+  critRate: number;
+  /** 个体额外暴击伤害（叠加在 COMBAT.critBase 上） */
+  critDamage: number;
   /** 主动技剩余冷却（0 = 就绪） */
   skillCdLeft: number;
 }

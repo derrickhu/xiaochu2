@@ -122,6 +122,24 @@ export function getRarityPassivePower(tier: Rarity): number {
   return RARITY_PASSIVE_POWER[tier] ?? RARITY_PASSIVE_POWER[1];
 }
 
+/**
+ * 稀有度 → 战斗属性强度倍率（阶段十二，单一真源，策划调表）。
+ *
+ * 锚点 R(1) = 1.0；缩放 petRoles 的 attribBase 与 talents 的星级特性基线
+ * （暴击率/暴击伤害/减伤），由 formulas/attribs.ts 统一应用。
+ * 保证「同 role 高稀有的战斗属性必不弱于低稀有」。
+ */
+export const RARITY_ATTRIB_POWER: Readonly<Record<Rarity, number>> = {
+  1: 1.0,
+  2: 1.2,
+  3: 1.45,
+  4: 1.7,
+};
+
+export function getRarityAttribPower(tier: Rarity): number {
+  return RARITY_ATTRIB_POWER[tier] ?? RARITY_ATTRIB_POWER[1];
+}
+
 /** 标准卡池单抽各档绝对概率（gachaRate，和为 1） */
 export function standardGachaRates(): Map<Rarity, number> {
   return new Map(RARITIES.map((t) => [t, getRarity(t).gachaRate]));

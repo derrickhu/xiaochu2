@@ -72,9 +72,20 @@ export const COMBAT = {
   /** 被克伤害倍率（v0.3 加重错属性惩罚 0.5→0.4） */
   counteredMultiplier: 0.4,
 
-  /** 暴击 */
+  /**
+   * 暴击：
+   * - critChance 为「无队伍暴击属性可用时」的全局兜底暴击率；
+   *   实战消珠暴击改用队伍聚合 critRate（见 BattleController）。
+   * - critBase 为暴击基础倍率；最终暴击倍率 = critBase + critDamage（队伍聚合暴伤）。
+   */
   critChance: 0.05,
-  critMultiplier: 1.5,
+  critBase: 1.5,
+
+  /** 队伍受击减伤聚合封顶（阶段十二，避免叠加过高免伤） */
+  damageReductionCap: 0.6,
+
+  /** 队伍治疗强化聚合封顶（阶段十二，避免叠加过高续航） */
+  healBonusCap: 1.0,
 
   /** 防御减伤系数：减伤比 = def / (def + defScale) */
   defenseScale: 300,

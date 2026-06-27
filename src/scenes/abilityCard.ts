@@ -14,7 +14,7 @@ import {
   COLORS, FONT_SIZE, RADIUS,
   makePanel, makeText, makeRarityBadge, makeRoleBadge,
 } from '@/ui';
-import { traitLines } from './abilityInfo';
+import { passiveDisplayLines } from './abilityInfo';
 
 export interface AbilityCardOpts {
   width: number;
@@ -27,8 +27,9 @@ export interface AbilityCardOpts {
 /** 构建能力卡内容（以 (0,0) 为左上角的容器，调用方负责定位） */
 export function buildAbilityPanel(pet: PetDef, opts: AbilityCardOpts): PIXI.Container {
   const w = opts.width;
-  const lines = traitLines(pet);
-  const skill = skillForPet(pet, INITIAL_PET_STAR);
+  const star = opts.star ?? INITIAL_PET_STAR;
+  const lines = passiveDisplayLines(pet, star);
+  const skill = skillForPet(pet, star);
   const padX = 28;
 
   // 估算高度：头部 + 三维 + 技能(2~3行) + 被动行
@@ -88,9 +89,8 @@ export function buildAbilityPanel(pet: PetDef, opts: AbilityCardOpts): PIXI.Cont
 
   // 初始三维（Lv1 / 1★，作为可见基线）
   const lv = INITIAL_PET_LEVEL;
-  const star = INITIAL_PET_STAR;
   const stats = makeText(
-    `攻 ${petAtk(pet, lv, star)}   血 ${petHp(pet, lv, star)}   复 ${petRcv(pet, lv, star)}`,
+    `攻 ${petAtk(pet, lv, INITIAL_PET_STAR)}   血 ${petHp(pet, lv, INITIAL_PET_STAR)}   复 ${petRcv(pet, lv, INITIAL_PET_STAR)}`,
     { size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: [0, 0] },
   );
   stats.position.set(infoX, 128);
@@ -126,7 +126,13 @@ export function buildAbilityPanel(pet: PetDef, opts: AbilityCardOpts): PIXI.Cont
     cont.addChild(none);
   } else {
     for (const line of lines) {
-      const t = makeText(`· ${line}`, { size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: [0, 0] });
+      const unlocked = line.unlocked !== false;
+      const t = makeText(`· ${line.text}`, {
+        size: FONT_SIZE.xs,
+        fill: unlocked ? (line.color ?? COLORS.textSub) : COLORS.textSub,
+        anchor: [0, 0],
+      });
+      t.alpha = unlocked ? 1 : 0.45;
       t.position.set(padX, y);
       cont.addChild(t);
       y += 26;

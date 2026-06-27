@@ -15,13 +15,15 @@ import type { StageDef } from '@/balance/stages';
 import { STAGE_MAP } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
 import type { SkillDef } from '@/balance/skills';
-import { calcHeal } from './damage';
+import { applyDamageReduction, calcHeal } from './damage';
+import { petCombatAttribs } from './attribs';
 import {
   petAtkInTeam,
   teamMaxHp,
   teamRcv,
   teamElements,
   teamPassiveAggregate,
+  teamAttribAggregate,
   type TeamMember,
 } from './team';
 import {
@@ -56,6 +58,10 @@ interface SimPet {
   def: PetDef;
   skill: SkillDef;
   atk: number;
+  /** 个体暴击率（仅作用自身消珠/主动技） */
+  critRate: number;
+  /** 个体额外暴击伤害 */
+  critDamage: number;
   skillCdLeft: number;
 }
 
@@ -75,12 +81,17 @@ export function simulateBattle(
   if (!found) throw new Error(`未知关卡: ${stageId}`);
   const stage: StageDef = found;
 
-  const team: SimPet[] = members.map((m) => ({
-    def: m.def,
-    skill: skillForPet(m.def, m.star),
-    atk: petAtkInTeam(members, m),
-    skillCdLeft: skillCdForPet(m.def, m.star),
-  }));
+  const team: SimPet[] = members.map((m) => {
+    const a = petCombatAttribs(m.def, m.level, m.star);
+    return {
+      def: m.def,
+      skill: skillForPet(m.def, m.star),
+      atk: petAtkInTeam(members, m),
+      critRate: a.critRate,
+      critDamage: a.critDamage,
+      skillCdLeft: skillCdForPet(m.def, m.star),
+    };
+  });
   const heroMaxHp = teamMaxHp(members);
   const rcvTotal = teamRcv(members);
   const covered = teamElements(members);
@@ -89,6 +100,12 @@ export function simulateBattle(
   const passiveAgg = teamPassiveAggregate(members);
   const passiveRegenPerTurn = Math.floor(heroMaxHp * passiveAgg.regenPct);
   const passiveTeamDamageMult = passiveAgg.teamDamageMult;
+
+  // 全队属性聚合（减伤/治疗强化/全队增伤，与 BattleController 双模型镜像）；暴击为个体属性，按出手宠期望放大
+  const teamAttribs = teamAttribAggregate(members);
+  const teamDmgReduction = teamAttribs.damageReduction;
+  const teamHealBonus = teamAttribs.healBonus;
+  const teamDamageBonusMult = 1 + teamAttribs.teamDamageBonus;
 
   /** 每元素出手宠（首个该元素，口径同 BattleController.resolveTurn 的 findIndex） */
   const firstPetOf = (el: Element): SimPet | undefined =>
@@ -134,7 +151,7 @@ export function simulateBattle(
     }
 
     enemyReduction = enemy.dmgReduction?.reduction ?? 0;
-    buffMult = (st.dmgBuff?.mult ?? 1.0) * passiveTeamDamageMult;
+    buffMult = (st.dmgBuff?.mult ?? 1.0) * passiveTeamDamageMult * teamDamageBonusMult;
     dmgToEnemy = 0;
     healThisTurn = passiveRegenPerTurn;
 
@@ -147,7 +164,7 @@ export function simulateBattle(
         }
         const skillResult = runSkill(
           p.skill,
-          { kind: 'pet', atk: p.atk, element: p.def.element, petDef: p.def },
+          { kind: 'pet', atk: p.atk, element: p.def.element, petDef: p.def, critRate: p.critRate, critDamage: p.critDamage },
           runtimeContext(),
         );
         if (!skillResult) continue;
@@ -161,12 +178,15 @@ export function simulateBattle(
       if (bannedSet.has(el)) continue; // 禁用属性珠：消除无伤害
       const pet = firstPetOf(el);
       if (!pet) continue;
-      dmgToEnemy += groupsPerType * orbGroupDamage(pet.atk, el, enemy, effEnemyDef(), model, buffMult, enemyReduction);
+      dmgToEnemy += groupsPerType * orbGroupDamage(
+        pet.atk, el, enemy, effEnemyDef(), model, buffMult, enemyReduction,
+        { critRate: pet.critRate, critDamage: pet.critDamage },
+      );
     }
     // 持续伤害（点燃）：每回合对敌人结算
     if (st.enemyDot) dmgToEnemy += st.enemyDot.amount;
     const heartOrbs = mech.noHeartHeal ? 0 : groupsPerType * model.matchCount;
-    healThisTurn += calcHeal(rcvTotal, heartOrbs, model.combo);
+    healThisTurn += calcHeal(rcvTotal, heartOrbs, model.combo, teamHealBonus);
 
     heroHp = Math.min(heroMaxHp, heroHp + healThisTurn);
     enemy.hp = Math.max(0, enemy.hp - Math.floor(dmgToEnemy));
@@ -185,10 +205,12 @@ export function simulateBattle(
     // ── 敌人回合 ──
     const hit = enemyAct();
     if (hit > 0) {
-      maxEnemyHit = Math.max(maxEnemyHit, hit);
-      const absorbed = Math.min(shield, hit);
+      // 受击顺序（镜像 BattleController.applyEnemyDamage）：减伤 → 护盾 → 扣血
+      const reduced = applyDamageReduction(hit, teamDmgReduction);
+      maxEnemyHit = Math.max(maxEnemyHit, reduced);
+      const absorbed = Math.min(shield, reduced);
       shield -= absorbed;
-      const dmg = hit - absorbed;
+      const dmg = reduced - absorbed;
       heroHp = Math.max(0, heroHp - dmg);
       if (dmg > 0) tookDamage = true;
     }
@@ -243,8 +265,9 @@ export function simulateBattle(
       heroMaxHp,
       teamRcvTotal: rcvTotal,
       teamAtkTotal: team.reduce((sum, p) => sum + p.atk, 0),
-      teamDamageBuffMult: (st.dmgBuff?.mult ?? 1) * passiveTeamDamageMult,
+      teamDamageBuffMult: (st.dmgBuff?.mult ?? 1) * passiveTeamDamageMult * teamDamageBonusMult,
       enemyDamageReduction: enemy.dmgReduction?.reduction ?? 0,
+      teamHealBonus,
     };
   }
 
@@ -253,12 +276,14 @@ export function simulateBattle(
       if (event.target === 'enemy') {
         dmgToEnemy += event.amount;
       } else {
-        const absorbed = Math.min(shield, event.amount);
+        // 敌方技能直伤英雄：镜像 applyEnemyDamage（减伤 → 护盾 → 扣血）
+        const reduced = applyDamageReduction(event.amount, teamDmgReduction);
+        const absorbed = Math.min(shield, reduced);
         shield -= absorbed;
-        const dmg = event.amount - absorbed;
+        const dmg = reduced - absorbed;
         heroHp = Math.max(0, heroHp - dmg);
         if (dmg > 0) tookDamage = true;
-        maxEnemyHit = Math.max(maxEnemyHit, event.amount);
+        maxEnemyHit = Math.max(maxEnemyHit, reduced);
       }
     }
 
@@ -295,13 +320,14 @@ export function simulateBattle(
     for (const req of result.boardRequests) {
       // 近似：转出的珠当回合即转化为伤害/回血（shape 仅近似为 count 颗）
       if (req.to === 'heart') {
-        healThisTurn += calcHeal(rcvTotal, req.count, model.combo);
+        healThisTurn += calcHeal(rcvTotal, req.count, model.combo, teamHealBonus);
       } else if (covered.has(req.to as Element)) {
         const pet = firstPetOf(req.to as Element);
         if (pet) {
           const extraGroups = req.count / model.matchCount;
           dmgToEnemy += extraGroups * orbGroupDamage(
-            pet.atk, req.to as Element, enemy, effEnemyDef(), model, (st.dmgBuff?.mult ?? 1) * passiveTeamDamageMult, enemy.dmgReduction?.reduction ?? enemyReduction,
+            pet.atk, req.to as Element, enemy, effEnemyDef(), model, (st.dmgBuff?.mult ?? 1) * passiveTeamDamageMult * teamDamageBonusMult, enemy.dmgReduction?.reduction ?? enemyReduction,
+            { critRate: pet.critRate, critDamage: pet.critDamage },
           );
         }
       }
