@@ -48,6 +48,8 @@ export interface BurstOptions {
   /** 自定义纹理（默认 Texture.WHITE） */
   texture?: PIXI.Texture;
   alpha?: number;
+  /** 混合模式，默认 NORMAL；黑底发光贴图传 ADD 可叠加成辉光 */
+  blendMode?: PIXI.BLEND_MODES;
 }
 
 export class FxLayer {
@@ -68,6 +70,7 @@ export class FxLayer {
         sp.visible = true;
         sp.alpha = 1;
         sp.rotation = 0;
+        sp.blendMode = PIXI.BLEND_MODES.NORMAL;
       },
       onRelease: (sp) => {
         sp.visible = false;
@@ -97,6 +100,7 @@ export class FxLayer {
       const sp = this._pool.get();
       sp.texture = tex;
       sp.tint = opts.color;
+      sp.blendMode = opts.blendMode ?? PIXI.BLEND_MODES.NORMAL;
       sp.position.set(opts.x, opts.y);
       sp.width = size;
       sp.height = size;

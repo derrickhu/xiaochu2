@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { pullOne, pullTen, type GachaState } from '../Gacha';
 import { ECONOMY } from '@/balance/economy';
+import { PET_MAP } from '@/balance/pets';
 
 /** 固定序列 rng：循环取用 */
 function seqRng(values: number[]): () => number {
@@ -52,5 +53,28 @@ describe('抽卡：十连保底', () => {
     const outs = pullTen(seqRng([0]), state, notOwned);
     expect(outs).toHaveLength(10);
     expect(outs.some((o) => o.rarity >= ECONOMY.gacha.tenPullFloorRarity)).toBe(true);
+  });
+});
+
+describe('抽卡：小池（仅一种 R 宠）', () => {
+  const soloPool = [PET_MAP.get('pet_metal_003')!];
+
+  it('出货稀有度与宠本身一致，不会出现「同宠不同框」', () => {
+    const state: GachaState = { sinceHigh: 0 };
+    const outs = pullTen(seqRng([0.99, 0.5, 0.1, 0.99, 0.5, 0.1, 0.99, 0.5, 0.1, 0.99]), state, allOwned, soloPool);
+    expect(outs).toHaveLength(10);
+    for (const o of outs) {
+      expect(o.petId).toBe('pet_metal_003');
+      expect(o.rarity).toBe(1);
+      expect(o.shards).toBe(ECONOMY.gacha.duplicateShards[1]);
+    }
+  });
+
+  it('硬保底触发时仍只出池内最高档（R），不会虚标 SSR', () => {
+    const state: GachaState = { sinceHigh: ECONOMY.gacha.pitySSR - 1 };
+    const o = pullOne(seqRng([0]), state, notOwned, 1, soloPool);
+    expect(o.pity).toBe(true);
+    expect(o.rarity).toBe(1);
+    expect(o.petId).toBe('pet_metal_003');
   });
 });

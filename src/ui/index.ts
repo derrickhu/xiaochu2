@@ -4,6 +4,8 @@
  */
 export * from './theme';
 export * from './text';
+export * from './motion';
+export * from './SceneFx';
 export * from './Button';
 export * from './IconButton';
 export * from './Panel';

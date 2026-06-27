@@ -12,7 +12,7 @@
  * | enemy/ | 敌人立绘 | {enemies.id}.png | enemy_slime_wood.png |
  * | ui/icon/ | 图标（导航/货币/操作） | {类别}_{名称}.png | nav_pet, currency_coin |
  * | ui/frame/ | 相框/边框 | pet_{element}.png | pet_metal.png |
- * | ui/card/ | 卡片底图 | {用途}.png | pet_portrait, team_row |
+ * | ui/card/ | 卡片底图 | {用途}.png | pet_portrait, pet_team_row |
  * | ui/bar/ | 条形容器 | {用途}.png | nav_bottom |
  * | ui/logo/ | Logo | {名称}.png | title |
  * | ui/plaque/ | 标题匾 | {名称}.png | title |
@@ -124,16 +124,26 @@ export const UI_IMAGES = {
   navBar: `${IMG}/ui/bar/nav_bottom.png`,
   navPet: `${IMG}/ui/icon/nav_pet.png`,
   navTeam: `${IMG}/ui/icon/nav_team.png`,
-  navBattle: `${IMG}/ui/icon/nav_battle.png`,
   iconCoin: `${IMG}/ui/icon/currency_coin.png`,
   iconExp: `${IMG}/ui/icon/currency_exp.png`,
   iconLingyu: `${IMG}/ui/icon/currency_lingyu.png`,
   iconRecruit: `${IMG}/ui/icon/action_recruit.png`,
   titlePlaque: `${IMG}/ui/plaque/title.png`,
-  codexCardFrame: `${IMG}/ui/card/codex_frame.png`,
-  codexUnknownSlot: `${IMG}/ui/card/codex_unknown.png`,
   petCardPortrait: `${IMG}/ui/card/pet_portrait.png`,
   petCardTeamRow: `${IMG}/ui/card/pet_team_row.png`,
+} as const;
+
+/**
+ * UI 特效贴图（光效/粒子）。
+ * 均为纯黑底，引擎用叠加（ADD）混合呈现，黑色即透明，无需抠图。
+ * 光柱/法阵/星爆/光环用于抽卡演出；粒子点/星芒供 SceneFx 通用粒子复用。
+ */
+export const UI_FX_IMAGES = {
+  lightPillar: `${IMG}/ui/fx/fx_light_pillar.png`,
+  summonCircle: `${IMG}/ui/fx/fx_summon_circle.png`,
+  starburst: `${IMG}/ui/fx/fx_starburst.png`,
+  auraRing: `${IMG}/ui/fx/fx_aura_ring.png`,
+  particleSpark: `${IMG}/ui/fx/p_spark.png`,
 } as const;
 
 /** 启动时需要预加载的资源 */
@@ -141,6 +151,7 @@ export const PRELOAD_IMAGES: readonly string[] = [
   BOARD_IMAGES.dark,
   BOARD_IMAGES.light,
   BACKGROUND_IMAGES.home,
+  UI_FX_IMAGES.particleSpark,
   ...Object.values(UI_IMAGES),
   ...Object.values(ORB_IMAGES),
   ...Object.values(PET_FRAME_IMAGES),
@@ -165,4 +176,28 @@ export const TEAM_PRELOAD_IMAGES: readonly string[] = [
   BACKGROUND_IMAGES.petPool,
   UI_IMAGES.titlePlaque,
   UI_IMAGES.petCardTeamRow,
+];
+
+/** 抽卡页按需预加载（召唤台背景 + 演出光效） */
+export const GACHA_PRELOAD_IMAGES: readonly string[] = [
+  BACKGROUND_IMAGES.petPool,
+  UI_IMAGES.titlePlaque,
+  UI_FX_IMAGES.lightPillar,
+  UI_FX_IMAGES.summonCircle,
+  UI_FX_IMAGES.starburst,
+  UI_FX_IMAGES.auraRing,
+];
+
+/** 商店页按需预加载 */
+export const SHOP_PRELOAD_IMAGES: readonly string[] = [
+  BACKGROUND_IMAGES.petPool,
+  UI_IMAGES.titlePlaque,
+];
+
+/** 养成页按需预加载 */
+export const PET_DETAIL_PRELOAD_IMAGES: readonly string[] = [
+  BACKGROUND_IMAGES.petDetail,
+  UI_IMAGES.titlePlaque,
+  UI_FX_IMAGES.starburst,
+  UI_FX_IMAGES.auraRing,
 ];

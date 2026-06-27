@@ -134,8 +134,8 @@ export function buildOwnedCodexCard(
   const displayName = pet.name.length > 4 ? `${pet.name.slice(0, 4)}…` : pet.name;
   const nameY = 8 * S + avatarSize + 6 * S;
   const nameText = makeText(displayName, {
-    size: Math.round(10 * S), fill: 0x3b2414, bold: true, anchor: 0.5,
-    strokeColor: 0xfff0cd, strokeWidth: Math.max(2, Math.round(2 * S)),
+    size: Math.round(10 * S), fill: COLORS.cardNameText, bold: true, anchor: 0.5,
+    strokeColor: COLORS.cardNameStroke, strokeWidth: Math.max(2, Math.round(2 * S)),
   });
   nameText.position.set(cardW / 2, nameY);
   item.addChild(nameText);

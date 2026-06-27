@@ -13,9 +13,10 @@ import { PlayerData } from '@/game/PlayerData';
 import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
-  makeText, makePanel, makeIconButton, makeCoverBackground, makeCurrencyRow,
+  makeText, makePanel, makeIconButton, makeCoverBackground, makeCurrencyRow, staggerIn,
 } from '@/ui';
 import type { TeamEnterData } from './TeamScene';
+import { deferAfterPointerEvent } from '@/utils/deferAfterPointer';
 
 export class TitleScene implements Scene {
   readonly name = 'title';
@@ -115,7 +116,10 @@ export class TitleScene implements Scene {
       if (enabled) {
         arrow.eventMode = 'static';
         arrow.cursor = 'pointer';
-        arrow.on('pointertap', () => { this._chapter = targetChapter!; this._refresh(); });
+        arrow.on('pointertap', () => {
+          this._chapter = targetChapter!;
+          deferAfterPointerEvent(() => this._refresh());
+        });
       }
       this.container.addChild(arrow);
     };
@@ -128,6 +132,7 @@ export class TitleScene implements Scene {
     const itemW = 620;
     const itemH = 86;
     const gap = 12;
+    const items: PIXI.Container[] = [];
 
     stages.forEach((stage, i) => {
       const unlocked = PlayerData.isUnlocked(stage);
@@ -192,7 +197,11 @@ export class TitleScene implements Scene {
       }
 
       this.container.addChild(item);
+      items.push(item);
     });
+
+    // 关卡列表逐项入场
+    staggerIn(items, { stepDelay: 0.04, offsetY: 16 });
   }
 
   /** 底部导航：灵宠 / 召唤 / 商店 / 编队 */

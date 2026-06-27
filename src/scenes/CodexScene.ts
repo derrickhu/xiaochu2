@@ -18,11 +18,13 @@ import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS, FONT_SIZE,
   makeButton, makeCoverBackground, makeIconLabel, makeText,
+  staggerIn,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
+import { Platform } from '@/core/PlatformService';
 import type { PetDetailEnterData } from './PetDetailScene';
-import { buildAbilityPanel } from './abilityCard';
 import { buildLockedCodexCard, buildOwnedCodexCard } from './codexCards';
+import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 
 /** xiao_chu 设计缩放：S = logicWidth / 375 */
 function designScale(w: number): number {
@@ -63,19 +65,22 @@ export class CodexScene implements Scene {
   // ── 列表纵向拖拽滚动状态 ──
   private _content: PIXI.Container | null = null;
   private _scroll = new ScrollListController();
+  private readonly _enterSeq = new SceneEnterSeq();
 
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
-    void this._enter();
+    void this._enter(this._enterSeq.next());
   }
 
-  private async _enter(): Promise<void> {
+  private async _enter(token: number): Promise<void> {
     await TextureCache.preload([...CODEX_PRELOAD_IMAGES]);
-    this._build();
+    if (!this._enterSeq.stillValid(token)) return;
+    deferSceneBuild(token, this._enterSeq, 'codex', () => this._build());
   }
 
   onExit(): void {
+    this._enterSeq.cancel();
     this._scroll.detach();
     this._content = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
@@ -155,6 +160,7 @@ export class CodexScene implements Scene {
     this._content = content;
     this.container.addChild(content);
 
+    const items: PIXI.Container[] = [];
     let maxBottom = 0;
     ordered.forEach((pet, i) => {
       const state = stateOf(pet);
@@ -176,9 +182,13 @@ export class CodexScene implements Scene {
       item.interactiveChildren = false;
       item.cursor = 'pointer';
       item.hitArea = new PIXI.Rectangle(0, 0, cardW, cardH);
-      item.on('pointertap', () => { if (!this._scroll.moved) this._showAbilityCard(pet, state); });
+      item.on('pointertap', () => { if (!this._scroll.moved) this._onPetTap(pet, state); });
       content.addChild(item);
+      items.push(item);
     });
+
+    // 卡片逐项入场（仅首屏可见项明显，超出视口的延迟也无碍）
+    staggerIn(items, { stepDelay: 0.022, offsetY: 14, duration: 0.28 });
 
     // 视口与滚动范围
     const viewportH = h - startY - 16;
@@ -207,86 +217,21 @@ export class CodexScene implements Scene {
     }
   }
 
-  /**
-   * 能力卡浮层（三态）：
-   * - owned：完整能力 + 「进入养成」。
-   * - discovered：能力可见 + 「召唤/商店获取」。
-   * - unknown：仅提示「在第 X 章·关卡击败其高级形态以收录」。
-   */
-  private _showAbilityCard(pet: PetDef, state: CodexState): void {
-    const w = Game.logicWidth;
-    const h = Game.logicHeight;
-    const owned = state === 'owned';
-
-    const overlay = new PIXI.Container();
-    this.container.addChild(overlay);
-
-    const scrim = new PIXI.Graphics();
-    scrim.beginFill(COLORS.scrim, 0.74);
-    scrim.drawRect(0, 0, w, h);
-    scrim.endFill();
-    scrim.eventMode = 'static';
-    scrim.on('pointertap', () => overlay.destroy({ children: true }));
-    overlay.addChild(scrim);
-
-    const panelW = Math.min(640, w - 60);
-    const panel = buildAbilityPanel(pet, { width: panelW, owned, star: owned ? PlayerData.petStar(pet.id) : 1 });
-    panel.position.set(w / 2 - panelW / 2, Game.safeTop + 120);
-    overlay.addChild(panel);
-
-    const btnY = Game.safeTop + 120 + panel.height + 28;
-    if (owned) {
-      const detail = makeButton({
-        label: '进入养成', width: 260, height: 64, variant: 'primary',
-        onTap: () => SceneManager.switchTo('petDetail', { petId: pet.id } satisfies PetDetailEnterData),
-      });
-      detail.position.set(w / 2 - 140, btnY + 32);
-      overlay.addChild(detail);
-
-      const close = makeButton({
-        label: '关闭', width: 160, height: 64, variant: 'ghost',
-        onTap: () => overlay.destroy({ children: true }),
-      });
-      close.position.set(w / 2 + 150, btnY + 32);
-      overlay.addChild(close);
-    } else if (state === 'discovered') {
-      const hint = makeText('已收录 · 前往召唤 / 商店获取', {
-        size: FONT_SIZE.xs, fill: COLORS.accent, bold: true, anchor: 0.5,
-      });
-      hint.position.set(w / 2, btnY);
-      overlay.addChild(hint);
-
-      const gacha = makeButton({
-        label: '去召唤', width: 200, height: 64, variant: 'primary',
-        onTap: () => SceneManager.switchTo('gacha'),
-      });
-      gacha.position.set(w / 2 - 110, btnY + 48);
-      overlay.addChild(gacha);
-
-      const close = makeButton({
-        label: '关闭', width: 160, height: 64, variant: 'ghost',
-        onTap: () => overlay.destroy({ children: true }),
-      });
-      close.position.set(w / 2 + 110, btnY + 48);
-      overlay.addChild(close);
-    } else {
-      const cap = CAPTURE_STAGE.get(pet.id);
-      const where = cap
-        ? `${CHAPTER_NAME[cap.chapter] ?? `第${cap.chapter}章`} · ${cap.name}`
-        : '历练关';
-      const hint = makeText(`未收录\n在「${where}」击败其高级形态即可收录`, {
-        size: FONT_SIZE.xs, fill: COLORS.textInverse, anchor: 0.5, align: 'center',
-      });
-      hint.position.set(w / 2, btnY + 6);
-      overlay.addChild(hint);
-
-      const close = makeButton({
-        label: '关闭', width: 220, height: 64, variant: 'ghost',
-        onTap: () => overlay.destroy({ children: true }),
-      });
-      close.position.set(w / 2, btnY + 56);
-      overlay.addChild(close);
+  /** 列表点击：已拥有直达养成；未拥有用 toast 引导 */
+  private _onPetTap(pet: PetDef, state: CodexState): void {
+    if (state === 'owned') {
+      SceneManager.switchTo('petDetail', { petId: pet.id } satisfies PetDetailEnterData);
+      return;
     }
+    if (state === 'discovered') {
+      Platform.showToast('已收录 · 前往召唤或商店获取');
+      return;
+    }
+    const cap = CAPTURE_STAGE.get(pet.id);
+    const where = cap
+      ? `${CHAPTER_NAME[cap.chapter] ?? `第${cap.chapter}章`} · ${cap.name}`
+      : '历练关';
+    Platform.showToast(`未收录 · 在「${where}」击败其高级形态即可收录`);
   }
 
 }

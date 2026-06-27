@@ -1,188 +1,409 @@
 /**
- * 灵宠详情场景：三维展示 + 升级（消耗经验池）+ 升星（消耗碎片）+ 上阵/下阵
+ * 灵宠详情场景：三维条形可视化 + 升级（消耗经验池）+ 升星（消耗碎片）+ 上阵/下阵。
  *
- * 数值与养成进度全部读写 PlayerData，单一真源。每次操作后局部刷新。
+ * 数值与养成进度全部读写 PlayerData，单一真源。
+ * 全场景走 @/ui（主题色 / 通用按钮 / 面板），不再硬编码暗色与自绘按钮。
+ * 养成成功时局部刷新 + 数字 countUp + 粒子 + 闪光 + 震动反馈。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
+import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
 import { UI } from '@/balance/ui';
 import { PET_MAP, type PetDef } from '@/balance/pets';
-import { getStarProfile } from '@/balance/growth';
+import { getStarProfile, MAX_PET_STAR } from '@/balance/growth';
+import { getStatUi, type StatKey } from '@/balance/petRoles';
+import { getRarity } from '@/balance/rarity';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { skillForPet } from '@/game/battle/SkillEngine';
-import { petAvatarPath } from '@/config/Assets';
+import { traitLines } from './abilityInfo';
+import {
+  petAvatarPath, petFrameImage, BACKGROUND_IMAGES, PET_DETAIL_PRELOAD_IMAGES, UI_FX_IMAGES,
+} from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
-import { makeRarityElementRoleLine, makeLevelStarLine, makeTeamStatsLine } from '@/ui';
+import {
+  COLORS, FONT_SIZE, RADIUS,
+  makeButton, makeCoverBackground, makePanel, makeText, makeProgressBar, makeTopBar,
+  makeRarityElementRoleLine, makeLevelStarLine, SceneFx, popIn, countUp, pulse,
+  type ProgressBarHandle,
+} from '@/ui';
+import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 
 export interface PetDetailEnterData {
   petId: string;
+}
+
+interface StatRow {
+  bar: ProgressBarHandle;
+  value: PIXI.Text;
 }
 
 export class PetDetailScene implements Scene {
   readonly name = 'petDetail';
   readonly container = new PIXI.Container();
 
+  /** 页面内容层（操作后只重建这层，特效层常驻） */
+  private _content = new PIXI.Container();
+  private _fx: SceneFx | null = null;
+
   private _petId = '';
+
+  // 局部刷新与反馈所需引用（每次 build 重置）
+  private _avatar: PIXI.Container | null = null;
+  private _starRow: PIXI.Container | null = null;
+  private _statRows: Partial<Record<StatKey, StatRow>> = {};
+  private _avatarCenter = new PIXI.Point();
+  /** 各维「满养成潜力」上限，用于条形归一 */
+  private _statPotential: Record<StatKey, number> = { atk: 1, hp: 1, rcv: 1 };
+  private readonly _enterSeq = new SceneEnterSeq();
 
   onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
     this._petId = (data as PetDetailEnterData | undefined)?.petId ?? PlayerData.ownedPets[0] ?? '';
-    this._build();
+    void this._enter(this._enterSeq.next());
+  }
+
+  private async _enter(token: number): Promise<void> {
+    await TextureCache.preload([...PET_DETAIL_PRELOAD_IMAGES]);
+    if (!this._enterSeq.stillValid(token)) return;
+    deferSceneBuild(token, this._enterSeq, 'petDetail', () => {
+      if (this._content.destroyed) this._content = new PIXI.Container();
+      if (this._content.parent !== this.container) {
+        this.container.addChild(this._content);
+      }
+      this._fx = new SceneFx();
+      this._fx.build(this.container, Game.logicWidth, Game.logicHeight);
+      this._build();
+    });
   }
 
   onExit(): void {
+    this._enterSeq.cancel();
+    this._fx?.destroy();
+    this._fx = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this._content = new PIXI.Container();
+  }
+
+  update(dt: number): void {
+    this._fx?.update(dt);
   }
 
   private _build(): void {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
-    this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this._content.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this._statRows = {};
+    this._avatar = null;
+    this._starRow = null;
 
-    const bg = new PIXI.Graphics();
-    bg.beginFill(0x1a1126);
-    bg.drawRect(0, 0, w, h);
-    bg.endFill();
-    this.container.addChild(bg);
+    this._content.addChild(makeCoverBackground(BACKGROUND_IMAGES.petDetail, w, h));
 
     const pet = PET_MAP.get(this._petId);
     if (!pet) {
-      const back = this._makeButton('返回灵宠', 220, 60, 0x4a3a72, () => SceneManager.switchTo('codex'));
+      const back = makeButton({
+        label: '返回灵宠', width: 220, height: 60, variant: 'primary',
+        onTap: () => SceneManager.switchTo('codex'),
+      });
       back.position.set(w / 2, h / 2);
-      this.container.addChild(back);
+      this._content.addChild(back);
       return;
     }
-
-    // 顶栏
-    const backBtn = this._makeButton('返回', 130, 56, 0x4a3a72, () => SceneManager.switchTo('codex'));
-    backBtn.position.set(85, Game.safeTop + 30);
-    this.container.addChild(backBtn);
 
     const lv = PlayerData.petLevel(this._petId);
     const star = PlayerData.petStar(this._petId);
 
-    // 标题：名字 + 稀有度
-    const title = new PIXI.Text(`${pet.name}`, { fontSize: 40, fill: 0xffe9a6, fontWeight: 'bold' });
-    title.anchor.set(0.5);
-    title.position.set(w / 2, Game.safeTop + 30);
-    this.container.addChild(title);
+    this._content.addChild(makeTopBar({
+      title: pet.name, width: w, centerY: Game.safeTop + 36,
+      onBack: () => SceneManager.switchTo('codex'),
+    }));
 
-    // 头像
+    const avatarCY = Game.safeTop + 170;
+    this._buildAvatar(pet, star, w / 2, avatarCY);
+
+    const meta = makeRarityElementRoleLine(pet.rarity, pet.element, pet.role, { size: FONT_SIZE.sm });
+    meta.position.set(w / 2 - meta.width / 2, avatarCY + 110);
+    this._content.addChild(meta);
+
+    const maxLv = getStarProfile(star).maxLevel;
+    this._starRow = makeLevelStarLine({
+      level: lv, star, maxLevel: maxLv, size: FONT_SIZE.sm, emptyStyle: 'hollow',
+    });
+    this._starRow.position.set(w / 2 - this._starRow.width / 2, avatarCY + 148);
+    this._content.addChild(this._starRow);
+
+    this._buildStatPanel(pet, lv, star, w, avatarCY + 188);
+    const abilityBottom = this._buildAbilityPanel(pet, star, w, avatarCY + 360);
+    this._buildActionButtons(w, h, abilityBottom + 20);
+  }
+
+  private _buildAvatar(pet: PetDef, star: number, cx: number, cy: number): void {
+    this._avatarCenter.set(cx, cy);
+    const holder = new PIXI.Container();
+    holder.position.set(cx, cy);
+
+    const frameTex = TextureCache.get(petFrameImage(pet.element));
+    if (frameTex) {
+      const frame = new PIXI.Sprite(frameTex);
+      frame.anchor.set(0.5);
+      frame.scale.set(248 / Math.max(frame.width, frame.height));
+      holder.addChild(frame);
+    }
+
     const tex = TextureCache.get(petAvatarPath(pet.id, star));
-    const avatarY = Game.safeTop + 200;
     if (tex) {
       const avatar = new PIXI.Sprite(tex);
       avatar.anchor.set(0.5);
-      avatar.scale.set(220 / Math.max(avatar.width, avatar.height));
-      avatar.position.set(w / 2, avatarY);
-      this.container.addChild(avatar);
+      avatar.scale.set(200 / Math.max(avatar.width, avatar.height));
+      holder.addChild(avatar);
     }
+    this._content.addChild(holder);
+    this._avatar = holder;
+  }
 
-    // 稀有度 / 属性 / 角色 / 等级星级
-    const meta = makeRarityElementRoleLine(pet.rarity, pet.element, pet.role, { size: 24 });
-    meta.position.set(w / 2 - meta.width / 2, avatarY + 140);
-    this.container.addChild(meta);
+  /** 三维条形面板：每维 标签 + 进度条（相对满养成潜力）+ 数值 */
+  private _buildStatPanel(pet: PetDef, lv: number, star: number, w: number, y: number): void {
+    const panelW = 640;
+    const panelH = 156;
+    const left = w / 2 - panelW / 2;
+    this._content.addChild(this._panelAt(panelW, panelH, left, y));
 
-    const maxLv = getStarProfile(star).maxLevel;
-    const lvStar = makeLevelStarLine({
-      level: lv, star, maxLevel: maxLv, size: 28, variant: 'inverse', emptyStyle: 'hollow',
-    });
-    lvStar.position.set(w / 2 - lvStar.width / 2, avatarY + 180);
-    this.container.addChild(lvStar);
-
-    // 三维
-    const stats = makeTeamStatsLine({
-      hp: petHp(pet, lv, star),
+    const maxStarLv = getStarProfile(MAX_PET_STAR).maxLevel;
+    this._statPotential = {
+      atk: petAtk(pet, maxStarLv, MAX_PET_STAR),
+      hp: petHp(pet, maxStarLv, MAX_PET_STAR),
+      rcv: petRcv(pet, maxStarLv, MAX_PET_STAR),
+    };
+    const current: Record<StatKey, number> = {
       atk: petAtk(pet, lv, star),
+      hp: petHp(pet, lv, star),
       rcv: petRcv(pet, lv, star),
-      size: 26,
-      valueFill: 0xd9cdf5,
-    });
-    stats.position.set(w / 2 - stats.width / 2, avatarY + 226);
-    this.container.addChild(stats);
+    };
 
-    const skillText = new PIXI.Text(`技能：${skillForPet(pet, star).name}`, {
-      fontSize: 22, fill: 0x9b8cc4,
-    });
-    skillText.anchor.set(0.5);
-    skillText.position.set(w / 2, avatarY + 264);
-    this.container.addChild(skillText);
+    const order: StatKey[] = ['hp', 'atk', 'rcv'];
+    const rowH = 40;
+    const barW = 360;
+    const labelX = left + 30;
+    const barX = left + 120;
+    const valX = left + panelW - 30;
+    order.forEach((stat, i) => {
+      const rowY = y + 30 + i * rowH;
+      const def = getStatUi(stat);
+      const label = makeText(def.longLabel, {
+        size: FONT_SIZE.xs, fill: def.color, bold: true, anchor: [0, 0.5],
+      });
+      label.position.set(labelX, rowY);
+      this._content.addChild(label);
 
-    // ── 升级 ──
+      const ratio = Math.min(1, current[stat] / Math.max(1, this._statPotential[stat]));
+      const bar = makeProgressBar({ width: barW, height: 14, ratio, fill: def.color });
+      bar.position.set(barX, rowY - 7);
+      this._content.addChild(bar);
+
+      const value = makeText(`${current[stat]}`, {
+        size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [1, 0.5],
+      });
+      value.position.set(valX, rowY);
+      this._content.addChild(value);
+
+      this._statRows[stat] = { bar, value };
+    });
+  }
+
+  /** 主动技能 + 被动描述（与图鉴能力卡口径一致） */
+  private _buildAbilityPanel(pet: PetDef, star: number, w: number, y: number): number {
+    const panelW = 640;
+    const padX = 28;
+    const left = w / 2 - panelW / 2;
+    const skill = skillForPet(pet, star);
+    const passives = traitLines(pet);
+    const passiveText = passives.length > 0
+      ? passives.map((line) => `· ${line}`).join('\n')
+      : '无';
+
+    const descProbe = makeText(skill.desc, {
+      size: FONT_SIZE.xs, fill: COLORS.textMain, wordWrapWidth: panelW - padX * 2,
+    });
+    const passiveProbe = makeText(passiveText, {
+      size: FONT_SIZE.xs, fill: COLORS.textSub, wordWrapWidth: panelW - padX * 2,
+    });
+    const panelH = 18 + 34 + descProbe.height + 20 + 26 + passiveProbe.height + 24;
+    descProbe.destroy();
+    passiveProbe.destroy();
+
+    this._content.addChild(this._panelAt(panelW, panelH, left, y));
+
+    const title = makeText(`技能 · ${skill.name}    CD ${skill.cd}`, {
+      size: FONT_SIZE.sm, fill: COLORS.accentDeep, bold: true, anchor: [0, 0],
+    });
+    title.position.set(left + padX, y + 18);
+    this._content.addChild(title);
+
+    const desc = makeText(skill.desc, {
+      size: FONT_SIZE.xs, fill: COLORS.textMain, anchor: [0, 0],
+      wordWrapWidth: panelW - padX * 2,
+    });
+    desc.position.set(left + padX, y + 52);
+    this._content.addChild(desc);
+
+    let lineY = y + 52 + desc.height + 16;
+    const passiveTitle = makeText('被动', {
+      size: FONT_SIZE.xs, fill: COLORS.textTitle, bold: true, anchor: [0, 0],
+    });
+    passiveTitle.position.set(left + padX, lineY);
+    this._content.addChild(passiveTitle);
+
+    lineY += 26;
+    const passiveBody = makeText(passiveText, {
+      size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: [0, 0],
+      wordWrapWidth: panelW - padX * 2,
+    });
+    passiveBody.position.set(left + padX, lineY);
+    this._content.addChild(passiveBody);
+
+    return y + panelH;
+  }
+
+  private _buildActionButtons(w: number, h: number, minTop: number): void {
+    const btnW = 480;
+    const btnH = 66;
+    const gap = 16;
+    const bottomY = h - 90 - (btnH + gap) * 2;
+    const baseY = Math.max(minTop, bottomY);
+
+    // 升级
     const lvCost = PlayerData.levelUpCost(this._petId);
     const canLv = PlayerData.canLevelUp(this._petId);
-    const lvLabel = lvCost === null
-      ? '已满级'
-      : `升级  经验 ${PlayerData.exp}/${lvCost}`;
-    const lvBtn = this._makeButton(lvLabel, 420, 64, canLv ? 0x3a7a4a : 0x35303f, () => {
-      if (PlayerData.levelUp(this._petId)) {
-        Platform.vibrateShort('light');
-        this._build();
-      } else {
-        Platform.showToast(lvCost === null ? '已满级' : '经验不足');
-      }
+    const lvLabel = lvCost === null ? '已满级' : `升级    经验 ${PlayerData.exp}/${lvCost}`;
+    const lvBtn = makeButton({
+      label: lvLabel, width: btnW, height: btnH, variant: 'success', enabled: canLv,
+      onTap: () => this._onLevelUp(),
     });
-    lvBtn.position.set(w / 2, avatarY + 340);
-    this.container.addChild(lvBtn);
+    lvBtn.position.set(w / 2, baseY);
+    this._content.addChild(lvBtn);
 
-    // ── 升星 ──
+    // 升星
     const starCost = PlayerData.starUpCost(this._petId);
     const canStar = PlayerData.canStarUp(this._petId);
     const shards = PlayerData.petShards(this._petId);
-    const starLabel = starCost === null
-      ? '已满星'
-      : `升星  碎片 ${shards}/${starCost}`;
-    const starBtn = this._makeButton(starLabel, 420, 64, canStar ? 0x8c5ad6 : 0x35303f, () => {
-      if (PlayerData.starUp(this._petId)) {
-        Platform.vibrateShort('medium');
-        this._build();
-      } else {
-        Platform.showToast(starCost === null ? '已满星' : '碎片不足');
-      }
+    const starLabel = starCost === null ? '已满星' : `升星    碎片 ${shards}/${starCost}`;
+    const starBtn = makeButton({
+      label: starLabel, width: btnW, height: btnH, variant: 'recruit', enabled: canStar,
+      onTap: () => this._onStarUp(),
     });
-    starBtn.position.set(w / 2, avatarY + 420);
-    this.container.addChild(starBtn);
+    starBtn.position.set(w / 2, baseY + btnH + gap);
+    this._content.addChild(starBtn);
 
-    // ── 上阵/下阵 ──
+    // 上阵 / 下阵
     const inTeam = PlayerData.isInTeam(this._petId);
-    const teamBtn = this._makeButton(inTeam ? '下阵' : '上阵', 420, 64, inTeam ? 0x6a4a4a : 0x4a3a72, () => {
-      if (inTeam) {
-        if (!PlayerData.removeFromTeam(this._petId)) {
-          Platform.showToast('至少保留 1 只灵宠');
-          return;
-        }
-      } else if (!PlayerData.addToTeam(this._petId)) {
-        Platform.showToast('队伍已满 5 只');
-        return;
-      }
-      Platform.vibrateShort('light');
-      this._build();
+    const teamBtn = makeButton({
+      label: inTeam ? '下阵' : '上阵', width: btnW, height: btnH,
+      variant: inTeam ? 'danger' : 'primary',
+      onTap: () => this._onToggleTeam(inTeam),
     });
-    teamBtn.position.set(w / 2, avatarY + 500);
-    this.container.addChild(teamBtn);
+    teamBtn.position.set(w / 2, baseY + (btnH + gap) * 2);
+    this._content.addChild(teamBtn);
   }
 
-  private _makeButton(
-    label: string, width: number, height: number, color: number, onTap: () => void,
-  ): PIXI.Container {
-    const btn = new PIXI.Container();
-    const bg = new PIXI.Graphics();
-    bg.beginFill(color);
-    bg.drawRoundedRect(-width / 2, -height / 2, width, height, height / 2);
-    bg.endFill();
-    btn.addChild(bg);
-    const text = new PIXI.Text(label, {
-      fontSize: Math.floor(height * 0.4), fill: 0xffffff, fontWeight: 'bold',
+  // ── 操作 + 反馈 ──
+
+  private _onLevelUp(): void {
+    const before = this._currentStats();
+    if (!PlayerData.levelUp(this._petId)) {
+      Platform.showToast(PlayerData.levelUpCost(this._petId) === null ? '已满级' : '经验不足');
+      return;
+    }
+    Platform.vibrateShort('light');
+    this._build();
+    this._playGrowthFeedback(before, false);
+  }
+
+  private _onStarUp(): void {
+    const before = this._currentStats();
+    if (!PlayerData.starUp(this._petId)) {
+      Platform.showToast(PlayerData.starUpCost(this._petId) === null ? '已满星' : '碎片不足');
+      return;
+    }
+    Platform.vibrateShort('medium');
+    this._build();
+    this._playGrowthFeedback(before, true);
+    if (this._starRow) pulse(this._starRow, { peak: 1.22 });
+  }
+
+  private _onToggleTeam(inTeam: boolean): void {
+    if (inTeam) {
+      if (!PlayerData.removeFromTeam(this._petId)) {
+        Platform.showToast('至少保留 1 只灵宠');
+        return;
+      }
+    } else if (!PlayerData.addToTeam(this._petId)) {
+      Platform.showToast('队伍已满 5 只');
+      return;
+    }
+    Platform.vibrateShort('light');
+    this._build();
+    if (this._avatar) pulse(this._avatar);
+    this._burstAtAvatar(inTeam ? COLORS.textSub : COLORS.accentDeep, false);
+  }
+
+  private _currentStats(): Record<StatKey, number> {
+    const pet = PET_MAP.get(this._petId);
+    if (!pet) return { atk: 0, hp: 0, rcv: 0 };
+    const lv = PlayerData.petLevel(this._petId);
+    const star = PlayerData.petStar(this._petId);
+    return { atk: petAtk(pet, lv, star), hp: petHp(pet, lv, star), rcv: petRcv(pet, lv, star) };
+  }
+
+  /** 数字 countUp + 条形补间 + 头像回弹 + 粒子 + 闪光 */
+  private _playGrowthFeedback(before: Record<StatKey, number>, strong: boolean): void {
+    const after = this._currentStats();
+    (['hp', 'atk', 'rcv'] as StatKey[]).forEach((stat) => {
+      const row = this._statRows[stat];
+      if (!row) return;
+      const from = before[stat];
+      const to = after[stat];
+      if (from !== to) {
+        countUp({
+          from, to, duration: 0.5,
+          onUpdate: (v) => { row.value.text = `${v}`; },
+        });
+      }
+      const cap = Math.max(1, this._statPotential[stat]);
+      const fromR = Math.min(1, from / cap);
+      const toR = Math.min(1, to / cap);
+      const dummy = { r: fromR };
+      row.bar.setRatio(fromR);
+      TweenManager.to({
+        target: dummy, props: { r: toR }, duration: 0.5, ease: Ease.easeOutCubic,
+        onUpdate: () => row.bar.setRatio(dummy.r),
+      });
     });
-    text.anchor.set(0.5);
-    btn.addChild(text);
-    btn.eventMode = 'static';
-    btn.cursor = 'pointer';
-    btn.on('pointertap', onTap);
-    return btn;
+
+    if (this._avatar) pulse(this._avatar, { peak: strong ? 1.2 : 1.12 });
+    const color = strong ? getRarity(PET_MAP.get(this._petId)?.rarity ?? 1).color : COLORS.accent;
+    this._fx?.flash(color, strong ? 0.32 : 0.18, 0.4);
+    this._burstAtAvatar(color, strong);
+  }
+
+  private _burstAtAvatar(color: number, strong: boolean): void {
+    this._fx?.burst({
+      x: this._avatarCenter.x, y: this._avatarCenter.y, color,
+      count: strong ? 22 : 12, speed: strong ? 420 : 280, life: strong ? 0.85 : 0.6,
+      gravity: 280, size: strong ? 30 : 20, endScale: 0.1,
+      texture: TextureCache.get(UI_FX_IMAGES.particleSpark) ?? undefined,
+      blendMode: PIXI.BLEND_MODES.ADD,
+    });
+  }
+
+  private _panelAt(width: number, height: number, x: number, y: number): PIXI.Container {
+    const panel = makePanel({
+      width, height, radius: RADIUS.card, centered: false,
+      bg: COLORS.panelBg, bgAlpha: 0.95, border: COLORS.panelBorder,
+    });
+    panel.position.set(x, y);
+    return panel;
   }
 }

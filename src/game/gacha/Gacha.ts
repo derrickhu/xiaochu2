@@ -29,9 +29,31 @@ export interface PullOutcome {
 
 const DEFAULT_POOL: readonly PetDef[] = PETS;
 
-function rollRarity(rng: () => number, minRarity: Rarity): Rarity {
-  // 仅在 ≥ minRarity 的档位间按 gachaRate 归一化抽取
-  const tiers = RARITIES.filter((t) => t >= minRarity);
+/** 池内实际出现的稀有度档位（升序） */
+function poolRarityTiers(pool: readonly PetDef[]): Rarity[] {
+  return [...new Set(pool.map((p) => p.rarity))].sort((a, b) => a - b) as Rarity[];
+}
+
+/**
+ * 将「最低稀有度」约束落到池内可满足的档位。
+ * 池内无 ≥ min 的宠时，回退到池内最高档（十连 SR 保底在仅 R 池时只能出 R）。
+ */
+function effectiveMinRarity(pool: readonly PetDef[], minRarity: Rarity): Rarity {
+  const tiers = poolRarityTiers(pool);
+  if (tiers.length === 0) return minRarity;
+  const eligible = tiers.filter((t) => t >= minRarity);
+  if (eligible.length > 0) return eligible[0];
+  return tiers[tiers.length - 1];
+}
+
+/** 仅在「池内出现且 ≥ minRarity」的档位间，按 gachaRate 归一化抽取 */
+function rollRarityForPool(
+  rng: () => number,
+  pool: readonly PetDef[],
+  minRarity: Rarity,
+): Rarity {
+  const tiers = poolRarityTiers(pool).filter((t) => t >= minRarity);
+  if (tiers.length === 0) return effectiveMinRarity(pool, minRarity);
   const total = tiers.reduce((s, t) => s + getRarity(t).gachaRate, 0);
   let r = rng() * total;
   for (const t of tiers) {
@@ -67,16 +89,19 @@ export function pullOne(
   const g = ECONOMY.gacha;
   const effPool = pool.length > 0 ? pool : DEFAULT_POOL;
   const pityHit = state.sinceHigh + 1 >= g.pitySSR;
-  const floor: Rarity = pityHit ? 3 : minRarity;
-  const rarity = rollRarity(rng, floor);
+  const rawFloor: Rarity = pityHit ? 3 : minRarity;
+  const floor = effectiveMinRarity(effPool, rawFloor);
+  const rarity = rollRarityForPool(rng, effPool, floor);
 
   if (rarity >= 3) state.sinceHigh = 0;
   else state.sinceHigh += 1;
 
   const pet = pickPetOfRarity(rng, rarity, effPool);
+  // 展示与碎片结算一律以「实际出货宠」的稀有度为准（与卡面/图鉴一致）
+  const actualRarity = pet.rarity;
   const duplicate = isOwned(pet.id);
-  const shards = duplicate ? (g.duplicateShards[rarity] ?? 0) : 0;
-  return { petId: pet.id, rarity, duplicate, shards, pity: pityHit };
+  const shards = duplicate ? (g.duplicateShards[actualRarity] ?? 0) : 0;
+  return { petId: pet.id, rarity: actualRarity, duplicate, shards, pity: pityHit };
 }
 
 /**

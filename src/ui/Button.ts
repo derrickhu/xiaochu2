@@ -11,6 +11,7 @@
 import * as PIXI from 'pixi.js';
 import { COLORS, RADIUS } from './theme';
 import { makeText } from './text';
+import { pressFeedback } from './motion';
 
 export type ButtonVariant = 'primary' | 'success' | 'danger' | 'recruit' | 'ghost';
 
@@ -84,6 +85,8 @@ export function makeButton(opts: ButtonOpts): ButtonHandle {
   btn.on('pointertap', () => {
     if (enabled) onTap();
   });
+  // 全局按下缩放反馈（禁用态不触发交互，故反馈也不会触发）
+  pressFeedback(btn);
   btn.setEnabled(enabled);
   redraw();
   return btn;

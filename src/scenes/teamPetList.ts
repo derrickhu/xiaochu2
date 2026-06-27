@@ -28,8 +28,11 @@ import type { ScrollListController } from '@/ui/ScrollList';
 
 const LIST_CARD_W = 330;
 const LIST_CARD_H = 148;
-const SCROLL_SCALE_X = LIST_CARD_W / 360;
-const SCROLL_SCALE_Y = LIST_CARD_H / 486;
+/** 卡片底图设计尺寸（与 LIST_CARD 同宽高比，避免压扁卷轴纹理） */
+const CARD_TEX_W = 660;
+const CARD_TEX_H = 296;
+const SCROLL_SCALE_X = LIST_CARD_W / CARD_TEX_W;
+const SCROLL_SCALE_Y = LIST_CARD_H / CARD_TEX_H;
 const LIST_AVATAR_SIZE = 74;
 const LIST_LEFT_PAD = 14;
 const LIST_TEXT_GAP = 14;

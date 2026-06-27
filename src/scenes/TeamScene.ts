@@ -25,6 +25,7 @@ import type { BattleEnterData } from './BattleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
   makeButton, makeCoverBackground, makePanel, makeText,
+  staggerIn, popIn, fadeIn,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
 import {
@@ -32,6 +33,7 @@ import {
   type TeamOverviewSnapshot,
 } from './teamOverviewPanel';
 import { addTeamPetAvatar, buildTeamPetList } from './teamPetList';
+import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 
 /** 战前编队：传入 stageId 时展示本关敌人，确认后进入战斗；缺省为自由编队 */
 export interface TeamEnterData {
@@ -50,6 +52,9 @@ export class TeamScene implements Scene {
   private _overviewH = 0;
   /** 上次总览数值，用于换宠时高亮变化项 */
   private _prevAgg: TeamOverviewSnapshot | null = null;
+  /** 上次上阵阵容，用于只对变化槽位/勾选做入场动效 */
+  private _prevTeam: string[] = [];
+  private _prevChecked = new Set<string>();
   private _slotY = 0;
   private _slotSize = 96;
   /** 战前编队目标关卡；无则为底部导航进入的自由编队 */
@@ -58,16 +63,17 @@ export class TeamScene implements Scene {
   private _listContent: PIXI.Container | null = null;
   private _listItems = new Map<string, PIXI.Container>();
   private _listScroll = new ScrollListController();
+  private readonly _enterSeq = new SceneEnterSeq();
 
   onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
     const enter = data as TeamEnterData | undefined;
     this._prepStage = enter?.stageId ? STAGE_MAP.get(enter.stageId) : undefined;
-    void this._enter();
+    void this._enter(this._enterSeq.next());
   }
 
-  private async _enter(): Promise<void> {
+  private async _enter(token: number): Promise<void> {
     const images = [...TEAM_PRELOAD_IMAGES];
     if (this._prepStage) {
       for (const ref of this._prepStage.encounters) {
@@ -76,14 +82,18 @@ export class TeamScene implements Scene {
       }
     }
     await TextureCache.preload(images);
-    this._build();
+    if (!this._enterSeq.stillValid(token)) return;
+    deferSceneBuild(token, this._enterSeq, 'team', () => this._build());
   }
 
   onExit(): void {
+    this._enterSeq.cancel();
     this._listChecks.clear();
     this._listItems.clear();
     this._prepStage = undefined;
     this._prevAgg = null;
+    this._prevTeam = [];
+    this._prevChecked.clear();
     this._listScroll.detach();
     this._listContent = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
@@ -182,6 +192,9 @@ export class TeamScene implements Scene {
         onToggle: (petId) => this._togglePet(petId),
       });
     }
+
+    // 宠物池卡片逐项入场
+    staggerIn([...this._listItems.values()], { stepDelay: 0.03, offsetY: 16, duration: 0.3 });
 
     this._refreshTeamUi();
   }
@@ -343,6 +356,8 @@ export class TeamScene implements Scene {
         slot.eventMode = 'static';
         slot.cursor = 'pointer';
         slot.on('pointertap', () => this._togglePet(pet.id));
+        // 新上阵的槽位淡入提示
+        if (this._prevTeam[i] !== petId) fadeIn(slot, { duration: 0.24 });
       } else {
         slot.addChild(makePanel({
           width: slotSize, height: slotSize, radius: RADIUS.chip,
@@ -373,7 +388,13 @@ export class TeamScene implements Scene {
     );
 
     for (const [petId, check] of this._listChecks) {
-      check.visible = PlayerData.isInTeam(petId);
+      const checked = PlayerData.isInTeam(petId);
+      check.visible = checked;
+      // 勾选 badge 从无到有时回弹入场
+      if (checked && !this._prevChecked.has(petId)) popIn(check, { duration: 0.26 });
     }
+
+    this._prevTeam = [...team];
+    this._prevChecked = new Set(team);
   }
 }

@@ -47,6 +47,18 @@ class TweenManagerClass {
   private _tweens: ActiveTween[] = [];
 
   to(config: TweenConfig): ActiveTween {
+    const tgt = config.target;
+    // 目标已销毁或为 null 时不创建补间（常见于按钮 tap 切场景后 pointer 事件仍冒泡）
+    if (
+      tgt == null ||
+      (typeof (tgt as { destroyed?: boolean }).destroyed === 'boolean' &&
+        (tgt as { destroyed: boolean }).destroyed)
+    ) {
+      return {
+        config, startValues: {}, elapsed: config.duration, delayRemaining: 0,
+      };
+    }
+
     const startValues: Record<string, number> = {};
     for (const key in config.props) {
       startValues[key] = config.target[key] ?? 0;

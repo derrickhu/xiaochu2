@@ -47,6 +47,10 @@ export const COLORS = {
   panelBorder: 0xc9a063,
   /** 面板浅描边 */
   panelBorderSoft: 0xddbf8e,
+  /** 卡面名字（深墨棕，写在浅色卡底上） */
+  cardNameText: 0x3b2414,
+  /** 卡面名字描边（浅米，提升浅底可读性） */
+  cardNameStroke: 0xfff0cd,
 
   // ── 按钮配色（variant → 一组 token，改这里全局按钮生效） ──
   btnPrimaryBg: 0xe8a33d,
