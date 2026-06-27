@@ -122,7 +122,7 @@ export function applyPetSkillModifiers(skill: SkillDef, pet: PetDef, skillTier =
   // 稀有度技能倍率（锚点 R=1.0，与星级 tier 独立叠乘，保证同 skillId 跨稀有单调）
   effectMult *= getRaritySkillPower(pet.rarity);
   let convertCountBonus = 0;
-  for (const trait of pet.traits ?? []) {
+  for (const trait of pet.skillTraits ?? []) {
     if (trait.type !== 'skillModifier') continue;
     if (trait.skillId !== skill.id) continue;
     cd += trait.cdDelta ?? 0;

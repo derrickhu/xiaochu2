@@ -6,6 +6,7 @@ import type { PetDef } from '@/balance/pets';
 import type { EnemyDef } from '@/balance/enemies';
 import { PET_ROLE_PROFILES, type StatBlock } from '@/balance/petRoles';
 import { getRarity } from '@/balance/rarity';
+import { selfStatMultiplier } from './passiveCombat';
 
 type StatKey = keyof StatBlock;
 
@@ -18,19 +19,6 @@ function petBaseStat(pet: PetDef, stat: StatKey): number {
 function petGrowth(pet: PetDef, stat: StatKey): number {
   const profile = PET_ROLE_PROFILES[pet.role];
   return pet.growthProfile?.[stat] ?? profile.growth[stat];
-}
-
-function selfStatTraitMultiplier(pet: PetDef, stat: StatKey): number {
-  let mult = 1;
-  for (const trait of pet.traits ?? []) {
-    if (trait.type !== 'statBonus') continue;
-    if (trait.scope !== 'self') continue;
-    if (trait.stat !== stat) continue;
-    if (trait.element && trait.element !== pet.element) continue;
-    if (trait.role && trait.role !== pet.role) continue;
-    mult *= 1 + trait.pct;
-  }
-  return mult;
 }
 
 /**
@@ -48,7 +36,7 @@ function petStat(pet: PetDef, stat: StatKey, level: number, star: number): numbe
   return Math.floor(
     base
     * Math.pow(1 + growth, effLevel - 1)
-    * selfStatTraitMultiplier(pet, stat),
+    * selfStatMultiplier(pet, star, stat),
   );
 }
 

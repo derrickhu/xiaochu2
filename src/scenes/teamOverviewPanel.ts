@@ -5,10 +5,9 @@ import { ELEMENT_NAME } from '@/balance/ui';
 import { Ease, TweenManager } from '@/core/TweenManager';
 import {
   teamAtk,
-  teamAttribAggregate,
+  teamEffectAggregate,
   teamElements,
   teamMaxHp,
-  teamPassiveAggregate,
   teamRcv,
   type TeamMember,
 } from '@/formulas/team';
@@ -44,14 +43,12 @@ export function refreshTeamOverviewPanel(
   const atk = teamAtk(members);
   const hp = teamMaxHp(members);
   const rcv = teamRcv(members);
-  const agg = teamPassiveAggregate(members);
-  const attribs = teamAttribAggregate(members);
-  // 全队增伤 = 被动 teamDamage + 辅助招牌「全队增伤」属性（同一伤害乘区，合并展示）
-  const dmg = Math.round((agg.teamDamageMult - 1 + attribs.teamDamageBonus) * 1000) / 1000;
-  const shield = Math.round(agg.startShieldPct * 1000) / 1000;
-  const regen = Math.round(agg.regenPct * 1000) / 1000;
-  const damageReduction = Math.round(attribs.damageReduction * 1000) / 1000;
-  const healBonus = Math.round(attribs.healBonus * 1000) / 1000;
+  const fx = teamEffectAggregate(members);
+  const dmg = Math.round((fx.teamDamageMult - 1) * 1000) / 1000;
+  const shield = Math.round(fx.startShieldPct * 1000) / 1000;
+  const regen = Math.round(fx.regenPct * 1000) / 1000;
+  const damageReduction = Math.round(fx.damageReduction * 1000) / 1000;
+  const healBonus = Math.round(fx.healBonus * 1000) / 1000;
   const power = teamPower(atk, hp, rcv, dmg, shield, regen);
 
   const title = makeText('队伍总览', {

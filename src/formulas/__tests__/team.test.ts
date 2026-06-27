@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { teamMaxHp, teamRcv, teamElements, petHpInTeam, type TeamMember } from '../team';
 import { COMBAT } from '@/balance/combat';
 import { PET_MAP, DEFAULT_TEAM } from '@/balance/pets';
-import { resolvePassiveForCreature } from '@/balance/passives';
+import { resolvePetPassiveBundle } from '@/balance/passiveEffects';
 import { petHp, petRcv } from '../growth';
 
 function makeTeam(ids: readonly string[], level = 1, star = 1): TeamMember[] {
@@ -88,8 +88,9 @@ describe('support 阵容协同光环（条件=队中输出≥2）', () => {
   });
 
   it('展示文案为「队中输出满 N 只」而非无条件「队伍满 N 只」', () => {
-    const passive = resolvePassiveForCreature('support', 1);
-    expect(passive.lines[0]).toContain('队中输出满 2 只');
-    expect(passive.lines[0]).not.toContain('队伍满');
+    const lines = resolvePetPassiveBundle('support', 1, 1).displayLines;
+    const auraLine = lines.find((l) => l.text.includes('光环'));
+    expect(auraLine?.text).toContain('队中输出满 2 只');
+    expect(auraLine?.text).not.toContain('队伍满');
   });
 });

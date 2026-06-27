@@ -13,7 +13,7 @@
  */
 import type { Element } from './combat';
 import { PET_SKILL_IDS, ENEMY_SKILL_IDS } from './skills';
-import type { PetRole, StatBlock, GrowthBlock } from './petRoles';
+import type { PetRole, SkillTraitDef, StatBlock, GrowthBlock } from './petRoles';
 import type { Rarity } from './rarity';
 
 /** 怪物单形态战斗模板（数值口径同 enemies.ts 的 MobDef，供 enemyStats 缩放） */
@@ -39,6 +39,8 @@ export interface CreatureDef {
   growthProfile?: Partial<GrowthBlock>;
   /** 宠物主动技引用（消珠驱动），效果在 balance/skills.ts */
   skillId: string;
+  /** 专属技能修饰 / 元素克制（非 PassiveEffect 管线） */
+  skillTraits?: readonly SkillTraitDef[];
   /**
    * 被动由 role + 稀有度阶梯统一派生（见 passives.ts 的 ROLE_PASSIVE_LADDER），
    * 此处不再承载专属被动；新增/调整被动一律改阶梯表，保证单调与超集成立。

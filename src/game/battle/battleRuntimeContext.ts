@@ -9,10 +9,8 @@ export function makeSkillRuntimeContext(params: {
   team: readonly TeamPet[];
   teamRcvTotal: number;
   teamDamageBuffMult: number;
-  passiveTeamDamageMult: number;
-  /** 辅助招牌「全队增伤」属性乘区（1 + Σ teamDamageBonus） */
-  teamDamageBonusMult: number;
-  /** 治疗招牌「全队治疗强化」属性 */
+  /** 合并后的被动全队增伤乘区（ladder + 招牌/星级 teamDamageBonus） */
+  teamDamageMult: number;
   teamHealBonus: number;
 }): SkillRuntimeContext {
   return {
@@ -27,8 +25,7 @@ export function makeSkillRuntimeContext(params: {
     heroMaxHp: params.heroMaxHp,
     teamRcvTotal: params.teamRcvTotal,
     teamAtkTotal: params.team.reduce((sum, pet) => sum + pet.atk, 0),
-    teamDamageBuffMult:
-      params.teamDamageBuffMult * params.passiveTeamDamageMult * params.teamDamageBonusMult,
+    teamDamageBuffMult: params.teamDamageBuffMult * params.teamDamageMult,
     enemyDamageReduction: params.enemy.dmgReduction?.reduction ?? 0,
     teamHealBonus: params.teamHealBonus,
   };

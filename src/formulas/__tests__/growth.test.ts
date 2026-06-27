@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { petAtk, petHp, petRcv, petExpToNext, enemyStats } from '../growth';
 import { PETS, type PetDef } from '@/balance/pets';
+import { resolvePetPassiveBundle } from '@/balance/passiveEffects';
 import { ENEMIES } from '@/balance/enemies';
 import { skillForPet } from '@/game/battle/SkillEngine';
 
@@ -53,8 +54,10 @@ describe('petHp / petRcv（三维模型）', () => {
     const star = 1;
     const lv = 1;
     // 个体 statBonus(self) 是专属面板修饰，会改写自身三维，不纳入「role+rarity 基线一致」断言
-    const hasSelfStatBonus = (p: PetDef): boolean =>
-      (p.traits ?? []).some((t) => t.type === 'statBonus' && t.scope === 'self');
+    const hasSelfStatBonus = (p: PetDef): boolean => {
+      const bundle = resolvePetPassiveBundle(p.role, p.rarity, star);
+      return bundle.statEffects.some((e) => e.kind === 'statBonus' && e.statScope === 'self');
+    };
     const seen = new Map<string, PetDef>();
     for (const p of PETS) {
       if (p.statProfile || hasSelfStatBonus(p)) continue;

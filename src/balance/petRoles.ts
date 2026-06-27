@@ -122,18 +122,16 @@ export interface PetRoleProfile {
   growth: GrowthBlock;
   /** 伤害/回复/承伤定位权重，供后续推荐编队和 UI 展示使用 */
   weights: StatBlock;
-  /**
-   * 战斗属性基线（R / ★1 锚点）：由 formulas/attribs.ts 按稀有度缩放 + 星级特性叠加。
-   * 默认 0 的属性（如治疗的暴伤）在详情页可显示但弱化。
-   */
-  attribBase: CombatAttribBlock;
 }
 
 export type PetTraitDef =
   | { type: 'statBonus'; stat: keyof StatBlock; pct: number; scope: 'self' | 'team'; element?: Element; role?: PetRole }
-  | { type: 'elementDamageBonus'; element: Element; vs: Element; pct: number }
-  | { type: 'skillModifier'; skillId: string; cdDelta?: number; effectPctBonus?: number; convertCountBonus?: number }
   | { type: 'teamAura'; requireRole?: PetRole; requireElement?: Element; count: number; stat: keyof StatBlock; pct: number };
+
+/** 非 PassiveEffect 的专属技能修饰（Phase B 从 traits 分离） */
+export type SkillTraitDef =
+  | { type: 'elementDamageBonus'; element: Element; vs: Element; pct: number }
+  | { type: 'skillModifier'; skillId: string; cdDelta?: number; effectPctBonus?: number; convertCountBonus?: number };
 
 /**
  * 首版模板以现有 10 只宠均值为锚点，先保证迁移后数值接近；
@@ -146,8 +144,6 @@ export const PET_ROLE_PROFILES: Readonly<Record<PetRole, PetRoleProfile>> = {
     base: { atk: 53, hp: 185, rcv: 11 },
     growth: { atk: 0.061, hp: 0.05, rcv: 0.045 },
     weights: { atk: 1.35, hp: 0.75, rcv: 0.55 },
-    // 输出：个体暴击核心（作用于自身高攻）；暴伤靠星级特性解锁，其余招牌属性归零
-    attribBase: { critRate: 0.08, critDamage: 0, damageReduction: 0, healBonus: 0, teamDamageBonus: 0 },
   },
   healer: {
     role: 'healer', name: '治疗', color: 0x52c97a,
@@ -155,8 +151,6 @@ export const PET_ROLE_PROFILES: Readonly<Record<PetRole, PetRoleProfile>> = {
     base: { atk: 34, hp: 190, rcv: 45 },
     growth: { atk: 0.05, hp: 0.05, rcv: 0.06 },
     weights: { atk: 0.65, hp: 0.9, rcv: 1.45 },
-    // 治疗：全队治疗强化核心（放大心珠回复 + 治疗技）；其余招牌属性归零
-    attribBase: { critRate: 0, critDamage: 0, damageReduction: 0, healBonus: 0.12, teamDamageBonus: 0 },
   },
   tank: {
     role: 'tank', name: '坦克', color: 0x5a9fd4,
@@ -164,8 +158,6 @@ export const PET_ROLE_PROFILES: Readonly<Record<PetRole, PetRoleProfile>> = {
     base: { atk: 37, hp: 290, rcv: 19 },
     growth: { atk: 0.05, hp: 0.063, rcv: 0.05 },
     weights: { atk: 0.7, hp: 1.45, rcv: 0.8 },
-    // 坦克：全队减伤核心；其余招牌属性归零
-    attribBase: { critRate: 0, critDamage: 0, damageReduction: 0.06, healBonus: 0, teamDamageBonus: 0 },
   },
   support: {
     role: 'support', name: '辅助', color: 0x9b7bff,
@@ -173,8 +165,6 @@ export const PET_ROLE_PROFILES: Readonly<Record<PetRole, PetRoleProfile>> = {
     base: { atk: 40, hp: 210, rcv: 25 },
     growth: { atk: 0.053, hp: 0.052, rcv: 0.052 },
     weights: { atk: 0.9, hp: 1.0, rcv: 1.1 },
-    // 辅助：全队增伤核心（放大全队输出）；其余招牌属性归零
-    attribBase: { critRate: 0, critDamage: 0, damageReduction: 0, healBonus: 0, teamDamageBonus: 0.05 },
   },
 };
 

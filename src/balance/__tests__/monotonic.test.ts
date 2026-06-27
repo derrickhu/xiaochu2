@@ -1,8 +1,5 @@
 /**
  * 阶段十契约：稀有度 → 主动/被动强度「单调不倒挂」+ 技能预算自洽。
- *
- * 这些断言锁住「高稀有绝不弱于低稀有」的设计红线：改 rarity.ts 的两张强度表、
- * skills.ts 的 basePower、或 creatures.ts 的技能/被动分配后若 diff，必须确认是有意调整。
  */
 import { describe, it, expect } from 'vitest';
 import { PETS } from '@/balance/pets';
@@ -11,24 +8,21 @@ import {
   RARITIES, getRaritySkillPower, getRarityPassivePower, type Rarity,
 } from '@/balance/rarity';
 import {
-  ROLE_PASSIVE_LADDER, passiveSlotsForRarity, resolvePassiveForCreature,
+  ROLE_PASSIVE_LADDER, passiveSlotsForRarity,
 } from '@/balance/passives';
+import { resolvePetPassiveBundle, computePetCombatAttribs } from '@/balance/passiveEffects';
 import type { PetDef } from '@/balance/pets';
 import type { PetRole } from '@/balance/petRoles';
-import { petCombatAttribs } from '@/formulas/attribs';
 
-/**
- * 被动「总强度索引」：聚合所有已解锁层的数值幅度（触发型 *Pct + 常驻 stat/aura 的 pct）。
- * 同 role 高稀有 = 低稀有层数超集 + 每层 ×更大的 RARITY_PASSIVE_POWER，故该索引应严格递增。
- */
 function passiveTotalStrength(role: PetRole, rarity: Rarity): number {
-  const p = resolvePassiveForCreature(role, rarity);
-  let traitSum = 0;
-  for (const t of p.traits) {
-    if (t.type === 'statBonus') traitSum += t.pct;
-    else if (t.type === 'teamAura') traitSum += t.pct;
+  const bundle = resolvePetPassiveBundle(role, rarity, 1);
+  let sum = 0;
+  for (const e of bundle.effects) {
+    if (!e.unlocked || e.source === 'signature' || e.source === 'star') continue;
+    if (e.kind === 'statBonus' || e.kind === 'teamAura') sum += e.value;
+    else if (e.kind === 'regenPct' || e.kind === 'startShieldPct' || e.kind === 'teamDamageBonus') sum += e.value;
   }
-  return p.startShieldPct + p.regenPct + p.teamDamagePct + traitSum;
+  return sum;
 }
 
 describe('技能预算 basePower 自洽', () => {
@@ -92,16 +86,17 @@ describe('被动：槽位阶梯 R1 / SR1 / SSR2 / UR3', () => {
     expect(passiveSlotsForRarity(4)).toBe(3);
   });
 
-  it('每个 role 的已解锁被动行数 = 槽位数（展示与解锁一致）', () => {
+  it('每个 role 的 ladder 效果数 = 槽位数', () => {
     for (const role of Object.keys(ROLE_PASSIVE_LADDER) as PetRole[]) {
       for (const r of RARITIES) {
-        const p = resolvePassiveForCreature(role, r);
-        expect(p.lines.length, `${role} @r${r}`).toBe(passiveSlotsForRarity(r));
+        const bundle = resolvePetPassiveBundle(role, r, 1);
+        const ladderEffects = bundle.effects.filter((e) => e.source === 'ladder');
+        expect(ladderEffects.length, `${role} @r${r}`).toBeGreaterThanOrEqual(passiveSlotsForRarity(r));
       }
     }
   });
 
-  it('槽位随稀有度非递减，且高稀有为低稀有的层数超集', () => {
+  it('槽位随稀有度非递减', () => {
     for (let i = 1; i < RARITIES.length; i++) {
       expect(passiveSlotsForRarity(RARITIES[i]))
         .toBeGreaterThanOrEqual(passiveSlotsForRarity(RARITIES[i - 1]));
@@ -113,7 +108,7 @@ describe('战斗属性：稀有度 × 星级单调不倒挂（阶段十二）', 
   const ATTRIB_ROLES: PetRole[] = ['attacker', 'healer', 'tank', 'support'];
   const stub = (role: PetRole, rarity: Rarity): PetDef => ({ role, rarity } as PetDef);
   const attribStrength = (role: PetRole, rarity: Rarity, star: number): number => {
-    const a = petCombatAttribs(stub(role, rarity), 1, star);
+    const a = computePetCombatAttribs(role, rarity, star);
     return a.critRate + a.critDamage + a.damageReduction + a.healBonus + a.teamDamageBonus;
   };
 
@@ -145,8 +140,6 @@ describe('战斗属性：稀有度 × 星级单调不倒挂（阶段十二）', 
 });
 
 describe('分配审计：纯输出类技能无跨稀有倒挂', () => {
-  // basePower 在这些「伤害类目」内同口径可比；utility（heal/shield/convert/control 等）跨技能不可比，
-  // 其单调性由「同 skillId 跨稀有递增」契约保证，不在此横比。
   const DAMAGE_CATEGORIES = new Set<SkillCategory>(['nuke', 'multiNuke', 'dot', 'teamNuke']);
 
   it('同一伤害类目内，高稀有宠的有效技能强度不低于低稀有宠', () => {

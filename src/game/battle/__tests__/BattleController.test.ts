@@ -296,12 +296,12 @@ describe('阶段十二·角色专属战斗属性（全队聚合）', () => {
     expect(atkTeam.teamHealBonus).toBe(0);
   });
 
-  it('辅助队伍 teamDamageBonusMult > 1，纯输出队伍为 1', () => {
-    // 裂甲铁犀（support）提供全队增伤属性
+  it('辅助队伍 teamDamageMult > 1；纯输出队仅有 ladder 增伤、无治疗强化', () => {
     const supTeam = makeCtrl(['pet_metal_003', 'pet_fire_003']);
-    expect(supTeam.teamDamageBonusMult).toBeGreaterThan(1);
+    expect(supTeam.teamDamageMult).toBeGreaterThan(1);
     const atkTeam = makeCtrl(['pet_fire_003', 'pet_fire_004']);
-    expect(atkTeam.teamDamageBonusMult).toBe(1);
+    expect(atkTeam.teamDamageMult).toBeGreaterThan(1);
+    expect(atkTeam.teamHealBonus).toBe(0);
   });
 
   it('resolveTurn 心珠回血按 teamHealBonus 放大（与 calcHeal 口径一致）', () => {

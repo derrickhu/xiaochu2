@@ -16,14 +16,13 @@ import { STAGE_MAP } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
 import type { SkillDef } from '@/balance/skills';
 import { applyDamageReduction, calcHeal } from './damage';
-import { petCombatAttribs } from './attribs';
 import {
   petAtkInTeam,
   teamMaxHp,
   teamRcv,
   teamElements,
-  teamPassiveAggregate,
-  teamAttribAggregate,
+  teamEffectAggregate,
+  petSelfCombatProfile,
   type TeamMember,
 } from './team';
 import {
@@ -82,13 +81,13 @@ export function simulateBattle(
   const stage: StageDef = found;
 
   const team: SimPet[] = members.map((m) => {
-    const a = petCombatAttribs(m.def, m.level, m.star);
+    const profile = petSelfCombatProfile(m.def, m.star);
     return {
       def: m.def,
       skill: skillForPet(m.def, m.star),
       atk: petAtkInTeam(members, m),
-      critRate: a.critRate,
-      critDamage: a.critDamage,
+      critRate: profile.critRate,
+      critDamage: profile.critDamage,
       skillCdLeft: skillCdForPet(m.def, m.star),
     };
   });
@@ -96,23 +95,18 @@ export function simulateBattle(
   const rcvTotal = teamRcv(members);
   const covered = teamElements(members);
 
-  // 触发型被动聚合（与 BattleController 双模型镜像）：开局护盾 / 每回合回血 / 全队增伤
-  const passiveAgg = teamPassiveAggregate(members);
-  const passiveRegenPerTurn = Math.floor(heroMaxHp * passiveAgg.regenPct);
-  const passiveTeamDamageMult = passiveAgg.teamDamageMult;
-
-  // 全队属性聚合（减伤/治疗强化/全队增伤，与 BattleController 双模型镜像）；暴击为个体属性，按出手宠期望放大
-  const teamAttribs = teamAttribAggregate(members);
-  const teamDmgReduction = teamAttribs.damageReduction;
-  const teamHealBonus = teamAttribs.healBonus;
-  const teamDamageBonusMult = 1 + teamAttribs.teamDamageBonus;
+  const teamFx = teamEffectAggregate(members);
+  const passiveRegenPerTurn = Math.floor(heroMaxHp * teamFx.regenPct);
+  const teamDamageMult = teamFx.teamDamageMult;
+  const teamDmgReduction = teamFx.damageReduction;
+  const teamHealBonus = teamFx.healBonus;
 
   /** 每元素出手宠（首个该元素，口径同 BattleController.resolveTurn 的 findIndex） */
   const firstPetOf = (el: Element): SimPet | undefined =>
     team.find((p) => p.def.element === el);
 
   let heroHp = heroMaxHp;
-  let shield = Math.floor(heroMaxHp * passiveAgg.startShieldPct);
+  let shield = Math.floor(heroMaxHp * teamFx.startShieldPct);
   let tookDamage = false;
   let maxEnemyHit = 0;
   let turnsUsed = 0;
@@ -151,7 +145,7 @@ export function simulateBattle(
     }
 
     enemyReduction = enemy.dmgReduction?.reduction ?? 0;
-    buffMult = (st.dmgBuff?.mult ?? 1.0) * passiveTeamDamageMult * teamDamageBonusMult;
+    buffMult = (st.dmgBuff?.mult ?? 1.0) * teamDamageMult;
     dmgToEnemy = 0;
     healThisTurn = passiveRegenPerTurn;
 
@@ -265,7 +259,7 @@ export function simulateBattle(
       heroMaxHp,
       teamRcvTotal: rcvTotal,
       teamAtkTotal: team.reduce((sum, p) => sum + p.atk, 0),
-      teamDamageBuffMult: (st.dmgBuff?.mult ?? 1) * passiveTeamDamageMult * teamDamageBonusMult,
+      teamDamageBuffMult: (st.dmgBuff?.mult ?? 1) * teamDamageMult,
       enemyDamageReduction: enemy.dmgReduction?.reduction ?? 0,
       teamHealBonus,
     };
@@ -326,7 +320,7 @@ export function simulateBattle(
         if (pet) {
           const extraGroups = req.count / model.matchCount;
           dmgToEnemy += extraGroups * orbGroupDamage(
-            pet.atk, req.to as Element, enemy, effEnemyDef(), model, (st.dmgBuff?.mult ?? 1) * passiveTeamDamageMult * teamDamageBonusMult, enemy.dmgReduction?.reduction ?? enemyReduction,
+            pet.atk, req.to as Element, enemy, effEnemyDef(), model, (st.dmgBuff?.mult ?? 1) * teamDamageMult, enemy.dmgReduction?.reduction ?? enemyReduction,
             { critRate: pet.critRate, critDamage: pet.critDamage },
           );
         }
