@@ -6,6 +6,8 @@ import { Game } from './Game';
 import { TweenManager, Ease } from './TweenManager';
 import { OverlayManager } from './OverlayManager';
 import { deferAfterPointerEvent } from '@/utils/deferAfterPointer';
+import { Platform } from './PlatformService';
+import { BootDiag, bootDiagBindScene } from './BootDiag';
 
 export interface Scene {
   readonly name: string;
@@ -21,6 +23,13 @@ class SceneManagerClass {
   /** 每帧驱动 current.update(dt) 的 ticker 是否已挂载（懒挂载，避免 Game 未初始化） */
   private _tickerInstalled = false;
 
+  constructor() {
+    bootDiagBindScene(() => {
+      const s = this._currentScene;
+      return s ? { name: s.name, container: s.container } : null;
+    });
+  }
+
   register(scene: Scene): void {
     this._scenes.set(scene.name, scene);
   }
@@ -35,14 +44,22 @@ class SceneManagerClass {
     this._tickerInstalled = true;
   }
 
-  /** 统一进场转场：淡入 + 轻微上移归位（场景内容相对 container 定位，结束回到 0/1）。 */
+  /** 统一进场转场：iOS 真机跳过 alpha=0；devtools 保留淡入以便调试 */
   private _playEnterTransition(scene: Scene): void {
     const c = scene.container;
     TweenManager.cancelTarget(c);
+    const instant = Platform.isMinigame && !Platform.isDevtools;
+    if (instant) {
+      c.alpha = 1;
+      c.y = 0;
+      BootDiag.log('enterTransition', `${scene.name} instant(ios-real)`);
+      return;
+    }
     c.alpha = 0;
     c.y = 24;
     TweenManager.to({ target: c, props: { alpha: 1 }, duration: 0.2, ease: Ease.easeOutQuad });
     TweenManager.to({ target: c, props: { y: 0 }, duration: 0.28, ease: Ease.easeOutCubic });
+    BootDiag.log('enterTransition', `${scene.name} alpha=0→1 tweens=${TweenManager.activeCount}`);
   }
 
   switchTo(name: string, data?: unknown): void {
@@ -96,6 +113,9 @@ class SceneManagerClass {
 
     // 确保全局覆盖层（弹窗面板）始终在场景之上
     this._bringOverlayToFront();
+
+    BootDiag.log('switchTo', `${name} children=${nextScene.container.children.length}`);
+    setTimeout(() => BootDiag.snapshot(`afterSwitch:${name}`), 0);
 
     console.log(`[SceneManager] 切换到场景: ${name}`);
   }

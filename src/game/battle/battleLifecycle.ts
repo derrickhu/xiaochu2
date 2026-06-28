@@ -2,6 +2,7 @@ import type { ResolvedEncounter } from '@/balance/enemies';
 import type { StageDef } from '@/balance/stages';
 import { stageDrops, stageCoinReward } from '@/formulas/economyOutput';
 import { enemyStats } from '@/formulas/growth';
+import { starsFromTurns } from '@/formulas/stars';
 import { skillForEnemy } from './SkillEngine';
 import type { BattleResult, EnemyUnit } from './battleTypes';
 
@@ -19,9 +20,7 @@ export function buildBattleResult(params: {
       turnsUsed, noDamage: !tookDamage, discoveredCreatures: [],
     };
   }
-  let stars = 1;
-  if (turnsUsed <= stage.starTurnLimit) stars++;
-  if (!tookDamage) stars++;
+  const stars = starsFromTurns(turnsUsed, stage.starTurnLimit);
   const coins = stageCoinReward(stage.chapter, stars, stage.isBoss);
   const drops = stageDrops(stage.dropTableId, stage.chapter, stars, stage.type);
   const discoveredCreatures = [

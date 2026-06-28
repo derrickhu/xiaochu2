@@ -76,19 +76,19 @@ function hex(c: string): number {
   return parseInt(c.replace('#', ''), 16);
 }
 
-function styledText(content: string, fontSize: number, fillTop: string, fillBottom: string, strokeW: number): PIXI.Text {
+/** 微信小游戏 Canvas Text 对 fill 渐变数组不稳定，使用纯色 + 描边/阴影 */
+function styledText(content: string, fontSize: number, fill: string, strokeW: number): PIXI.Text {
   const S = dmgFloatScale();
   return new PIXI.Text(content, {
     fontFamily: COMBO_FONT,
     fontSize,
     fontStyle: 'italic',
     fontWeight: '900',
-    fill: [fillTop, fillBottom],
-    fillGradientType: PIXI.TEXT_GRADIENT.LINEAR_VERTICAL,
+    fill,
     stroke: '#000000',
     strokeThickness: strokeW * S,
     dropShadow: true,
-    dropShadowColor: fillBottom,
+    dropShadowColor: fill,
     dropShadowBlur: fontSize * 0.45,
     dropShadowDistance: 0,
     dropShadowAlpha: 0.9,
@@ -117,7 +117,7 @@ export class ComboDisplay {
     this._ring = new PIXI.Graphics();
     this._root.addChild(this._ring);
 
-    this._milestone = styledText('', 40, '#ffffff', '#ffd700', 5);
+    this._milestone = styledText('', 40, '#ffd700', 5);
     this._milestone.anchor.set(0.5);
     this._milestone.visible = false;
     this._root.addChild(this._milestone);
@@ -125,15 +125,15 @@ export class ComboDisplay {
     this._mainRow = new PIXI.Container();
     this._root.addChild(this._mainRow);
 
-    this._num = styledText('0', 44, '#ffffff', '#ffd700', 5);
+    this._num = styledText('0', 44, '#ffd700', 5);
     this._num.anchor.set(0.5);
     this._mainRow.addChild(this._num);
 
-    this._suffix = styledText('连击', 32, '#ffffff', '#ffe7a8', 4);
+    this._suffix = styledText('连击', 32, '#ffe7a8', 4);
     this._suffix.anchor.set(0.5);
     this._mainRow.addChild(this._suffix);
 
-    this._mul = styledText('x1.0', 18, '#ffe082', '#ffe082', 3);
+    this._mul = styledText('x1.0', 18, '#ffe082', 3);
     this._mul.anchor.set(0.5, 0);
     this._root.addChild(this._mul);
 
@@ -160,13 +160,13 @@ export class ComboDisplay {
     this._num.text = String(combo);
     this._num.style.fontSize = numSz;
     this._num.style.strokeThickness = (style.isMega ? 7 : style.isSuper ? 6 : 5) * S;
-    this._num.style.fill = ['#ffffff', style.glowColor, style.mainColor];
+    this._num.style.fill = style.mainColor;
     this._num.style.dropShadowColor = style.glowColor;
     this._num.style.dropShadowBlur = (style.isMega ? 34 : style.isSuper ? 28 : 22) * S;
 
     this._suffix.style.fontSize = suffixSz;
     this._suffix.style.strokeThickness = (style.isMega ? 4.5 : 4) * S;
-    this._suffix.style.fill = ['#ffffff', '#ffe7a8', style.glowColor];
+    this._suffix.style.fill = '#ffe7a8';
     this._suffix.style.dropShadowColor = style.glowColor;
     this._suffix.style.dropShadowBlur = (style.isMega ? 22 : 18) * S;
 
@@ -183,7 +183,7 @@ export class ComboDisplay {
       this._milestone.visible = true;
       this._milestone.text = milestoneDef.text;
       this._milestone.style.fontSize = style.baseSz * 1.18;
-      this._milestone.style.fill = [milestoneDef.color, '#ffffff', milestoneDef.color];
+      this._milestone.style.fill = milestoneDef.color;
       this._milestone.style.dropShadowColor = milestoneDef.color;
       this._milestone.position.set(0, -style.baseSz * 1.95);
     } else {

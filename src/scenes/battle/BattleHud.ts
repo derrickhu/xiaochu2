@@ -305,7 +305,8 @@ export class BattleHud {
       `${enemy.def.name} · ${ELEMENT_NAME[enemy.def.element]}属性`;
     this._enemyNameText.style.fill = ORB_COLOR[enemy.def.element];
     this._refreshEnemyElementTags(enemy.def.element);
-    this._refreshEnemyBg(enemy.def.element);
+    // 背景按关卡属性（与 assetPreload / 场景设计一致），不按当前敌人属性
+    this._refreshEnemyBg(this._ctrl.stage.element);
     this._waveText.text = `第 ${this._ctrl.waveIndex + 1}/${this._ctrl.totalWaves} 波`;
     this.refreshEnemyHp();
     this.refreshEnemyCd();

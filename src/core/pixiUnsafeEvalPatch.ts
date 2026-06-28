@@ -5,6 +5,7 @@
  */
 import { ShaderSystem, BaseImageResource, Texture, BaseTexture } from '@pixi/core';
 import { settings } from '@pixi/settings';
+import { patchCanvasForceWebGL1 } from './forceWebGL1';
 
 // ======== 配置 PIXI.settings.ADAPTER ========
 // 关键：PixiJS 的 BrowserAdapter 默认通过 document.createElement('canvas') 创建离屏 canvas，
@@ -18,15 +19,25 @@ if (_api) {
     // 创建 2D 离屏 canvas 的辅助函数
     // 优先 createOffscreenCanvas({ type:'2d' }) 确保真机 canvas 2D 上下文可用；
     // 部分设备（如鸿蒙/旧版微信）可能不支持，安全降级到 createCanvas()
+    //
+    // iOS 15 Pro 等新机：createOffscreenCanvas 可用，但没有 toTempFilePathSync，
+    // Canvas 纹理 upload 补丁会跳过 → gl.texImage2D(canvas) 静默失败 → 启动黑屏。
+    // iPhone 13 旧微信不走 Offscreen，故正常。iOS 统一禁用，与 13 行为一致。
     let _useOffscreen = false;
+    let _sysPlatform = '';
     try {
-      if (typeof _api.createOffscreenCanvas === 'function') {
-        const _test = _api.createOffscreenCanvas({ type: '2d', width: 1, height: 1 });
-        const _testCtx = _test.getContext('2d');
-        if (_testCtx) _useOffscreen = true;
-      }
-    } catch (_) { /* 不支持则回退 */ }
-    console.log('[pixiPatch] createOffscreenCanvas 可用:', _useOffscreen);
+      _sysPlatform = _api.getSystemInfoSync?.()?.platform ?? '';
+    } catch (_) { /* */ }
+    if (_sysPlatform !== 'ios') {
+      try {
+        if (typeof _api.createOffscreenCanvas === 'function') {
+          const _test = _api.createOffscreenCanvas({ type: '2d', width: 1, height: 1 });
+          const _testCtx = _test.getContext('2d');
+          if (_testCtx) _useOffscreen = true;
+        }
+      } catch (_) { /* 不支持则回退 */ }
+    }
+    console.log('[pixiPatch] platform:', _sysPlatform, 'createOffscreenCanvas:', _useOffscreen);
 
     const _create2DCanvas = (w?: number, h?: number): any => {
       let c: any;
@@ -41,6 +52,7 @@ if (_api) {
       }
       if (w !== undefined) c.width = w;
       if (h !== undefined) c.height = h;
+      patchCanvasForceWebGL1(c);
       return c;
     };
 
@@ -185,11 +197,21 @@ if (_isRealDevice) {
   // 然后仅对 Canvas 源用 getImageData 读取像素并同步覆盖 GL 纹理。
   // 关键安全措施：
   // - 不调用 renderer.texture.bind()，避免触发递归 upload
-  // - 用 toTempFilePathSync 存在性判断 Canvas（Image 无此方法）
+  // - Canvas 用 getContext('2d') 识别（OffscreenCanvas 无 toTempFilePathSync）
   // - 加重入保护防止无限递归
   const _origUpload = BaseImageResource.prototype.upload;
   let _uploadLog = 0;
   let _inUpload = false;
+
+  const _isCanvas2DSource = (source: any): boolean => {
+    if (!source || source.width <= 0 || source.height <= 0) return false;
+    if (typeof source.getContext !== 'function') return false;
+    try {
+      return !!source.getContext('2d');
+    } catch {
+      return false;
+    }
+  };
 
   // 预检测 getImageData 是否返回有效像素
   let _canReadPixels = false;
@@ -220,13 +242,8 @@ if (_isRealDevice) {
       // 1) 永远先执行原始 upload（Image 纹理靠这步正常工作）
       const result = _origUpload.call(this, renderer, baseTexture, glTexture, source);
 
-      // 2) 仅对 Canvas 源做像素补救
-      // Canvas 独有 toTempFilePathSync，Image 对象没有
-      if (_canReadPixels
-          && source
-          && source.width > 0 && source.height > 0
-          && typeof source.getContext === 'function'
-          && typeof source.toTempFilePathSync === 'function') {
+      // 2) 仅对 Canvas 源做像素补救（含 OffscreenCanvas，勿依赖 toTempFilePathSync）
+      if (_canReadPixels && _isCanvas2DSource(source)) {
         try {
           const ctx = source.getContext('2d');
           if (ctx && typeof ctx.getImageData === 'function') {

@@ -79,7 +79,7 @@ describe('1-1~1-4 教学段：可达性', () => {
     }
   });
 
-  it('1-1 高手秒过且无伤（教学关手感）', () => {
+  it('1-1 高手快攻（教学关手感）', () => {
     const r = sim(TEAMS.default, 'stage_1_1', COMBO_MODELS.high);
     expect(r.win).toBe(true);
     expect(r.turnsUsed).toBeLessThanOrEqual(2);

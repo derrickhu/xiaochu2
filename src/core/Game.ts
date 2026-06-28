@@ -9,6 +9,9 @@
 import * as PIXI from 'pixi.js';
 import { ShaderSystem } from '@pixi/core';
 import { TweenManager } from './TweenManager';
+import { BootDiag } from './BootDiag';
+import { patchCanvasForceWebGL1, installForceWebGL1OnPlatform } from './forceWebGL1';
+import { UPDATE_PRIORITY } from '@pixi/ticker';
 
 declare const wx: any;
 declare const tt: any;
@@ -129,6 +132,8 @@ class GameClass {
     if (this._initialized) return;
 
     ensureUnsafeEvalPatch();
+    installForceWebGL1OnPlatform();
+    patchCanvasForceWebGL1(canvas);
 
     const _api: any = typeof wx !== 'undefined' ? wx : typeof tt !== 'undefined' ? tt : null;
     const sysInfo = _api?.getSystemInfoSync?.();
@@ -244,11 +249,21 @@ class GameClass {
     this.stage.scale.set(this.scale, this.scale);
     this.stage.sortableChildren = true;
 
-    // 全局 ticker：只驱动引擎级系统（Tween）
+    // 全局 ticker：Tween 须先于 Pixi 默认 render 执行（真机 iOS26 否则 alpha 补间长期不生效）
     this.ticker.add(() => {
       const dt = this.ticker.deltaMS / 1000;
       TweenManager.update(dt);
-    });
+    }, this, UPDATE_PRIORITY.HIGH);
+
+    try {
+      if (!this.ticker.started) this.ticker.start();
+      BootDiag.log('Game.init', `ticker.started=${this.ticker.started}`);
+    } catch (e) {
+      BootDiag.log('Game.init', `ticker.start 异常: ${e}`);
+    }
+
+    BootDiag.logRendererOnInit();
+    BootDiag.hookTickerOnce();
 
     // ---- 修复 EventSystem 坐标映射 ----
     // 真机 canvas.parentElement 不可写，PixiJS 内部 mapPositionToPoint

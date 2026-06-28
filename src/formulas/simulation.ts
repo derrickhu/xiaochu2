@@ -16,6 +16,7 @@ import { STAGE_MAP } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
 import type { SkillDef } from '@/balance/skills';
 import { applyDamageReduction, calcHeal } from './damage';
+import { starsFromTurns } from './stars';
 import {
   petAtkInTeam,
   teamMaxHp,
@@ -374,12 +375,7 @@ export function simulateBattle(
   }
 
   function finish(win: boolean): SimResult {
-    let stars = 0;
-    if (win) {
-      stars = 1;
-      if (turnsUsed <= stage.starTurnLimit) stars++;
-      if (!tookDamage) stars++;
-    }
+    const stars = win ? starsFromTurns(turnsUsed, stage.starTurnLimit) : 0;
     return {
       win,
       turnsUsed,

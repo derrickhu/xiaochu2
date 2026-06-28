@@ -13,6 +13,7 @@ import { UI_PANEL_IMAGES, UI_IMAGES, petAvatarPath } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import type { BattleController } from '@/game/battle/BattleController';
 import { makeButton } from './battleWidgets';
+import { formatStarTurnHint } from '@/formulas/stars';
 import { makeIconLabel, type IconLabelHandle } from '@/ui/IconLabel';
 import { COLORS } from '@/ui/theme';
 import type { BattleEnterData } from '../BattleScene';
@@ -247,7 +248,7 @@ export class BattleResultOverlay {
     panel.addChild(starText);
 
     const detail = new PIXI.Text(
-      `回合数 ${result.turnsUsed} / ${ctrl.stage.starTurnLimit}${result.noDamage ? ' · 无伤' : ''}`,
+      `回合数 ${result.turnsUsed}（${formatStarTurnHint(ctrl.stage.starTurnLimit)}）`,
       { fontSize: 22, fill: COLORS.textSub },
     );
     detail.anchor.set(0.5);

@@ -88,10 +88,24 @@ try {
 
 _diag('全部加载完成');
 
-// 5秒后如果还没有渲染，自动弹窗显示诊断（兜底）
+// 5秒后诊断：未渲染 或 仍黑屏时弹窗（含 BootDiag 快照）
 setTimeout(function() {
-  if (typeof GameGlobal !== 'undefined' && !GameGlobal.__gameRendered) {
+  var api = typeof wx !== 'undefined' ? wx : (typeof tt !== 'undefined' ? tt : null);
+  var gg = typeof GameGlobal !== 'undefined' ? GameGlobal : null;
+  if (gg && typeof gg.__bootDiagSnapshot === 'function') {
+    try { gg.__bootDiagSnapshot(); } catch (e) { _diag('BootDiag快照失败:' + e); }
+  }
+  if (gg && typeof gg.__bootDiagLines === 'function') {
+    try {
+      var lines = gg.__bootDiagLines();
+      for (var i = 0; i < lines.length; i++) _diag('BD|' + lines[i]);
+    } catch (e2) { _diag('BootDiagLines失败:' + e2); }
+  }
+  if (gg && !gg.__gameRendered) {
     _diag('5秒超时 - 游戏未渲染');
     _showDiag();
+    return;
   }
+  // 已 init 但用户仍可能黑屏：强制再采样，便于导出 vConsole
+  _diag('5秒复检 - gameRendered=true，详见 BD| 行');
 }, 5000);

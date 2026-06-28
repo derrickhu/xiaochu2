@@ -1,0 +1,33 @@
+Create ONE image: a 3 columns x 3 rows sprite sheet (9 equal panels) for a Chinese fantasy mobile match-3 RPG.
+
+GLOBAL STYLE (match reference pet art — NOT photorealistic):
+- 2D hand-painted mobile game monster sprite, cute-chibi proportions
+- Clean bold black outlines, soft cel-shading (2-3 flat tone layers only)
+- Big expressive eyes, simplified shapes, slightly messy playful energy
+- NO 3D render, NO photo texture, NO hyper-detailed scales/fur/pores
+- NO horror, NO gore, NO realistic anatomy
+- Each panel: ONE full-body monster centered, slight 3/4 view, feet visible, facing camera
+- Plain solid light gray #D8D8D8 background in EVERY panel (for cutout)
+- NO TEXT, no labels, no captions, no UI, no watermark, no grid lines between panels
+
+PANEL LAYOUT left-to-right, top-to-bottom:
+
+Row1 Col1 — Wood moss slime: round bouncy green jelly blob, tiny leaf sprout on head, goofy grin, stubby nubs for arms, cute not scary.
+
+Row1 Col2 — Fire bat: fluffy round bat with tiny fangs, orange-red flame wing tips, big shiny eyes, hanging mid-hop pose.
+
+Row1 Col3 — Earth rock golem: chunky pebble-stack body, square head, stubby block arms, moss patches, sleepy expression.
+
+Row2 Col1 — Water baby serpent: small cute serpent/dragon, round head, tiny horns, blue scales as simple flat shapes, coiled playful pose.
+
+Row2 Col2 — Metal crystal scorpion: stylized chibi scorpion, golden crystal plates (geometric facets, not realistic), cute pincers raised.
+
+Row2 Col3 — Water poison toad: puffy round toad, purple-green spots, one cheek inflated, tiny poison bubble floating, silly face.
+
+Row3 Col1 — Wood bamboo tyrant (mini-boss): chubby bamboo-armored ogre general, green bamboo hat & shoulder pads, wooden club, fierce but cute.
+
+Row3 Col2 — Earth crystal colossus (mini-boss): blocky crystal rock giant, glowing amber cracks, bigger than others but same chibi style.
+
+Row3 Col3 — Wood thunder lord (mini-boss): small cloud spirit warrior, jade armor hints, lightning whiskers, wind ribbons, majestic but cute.
+
+Keep all 9 characters visually consistent in line weight, shading style, and color saturation.

@@ -36,6 +36,12 @@ import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 
 export interface PetDetailEnterData {
   petId: string;
+  /** 返回目标场景，默认 codex */
+  backScene?: string;
+  /** 返回时传给 backScene 的 onEnter 数据 */
+  backData?: unknown;
+  /** 仅查看属性（隐藏升级/上阵），章节目标卡等入口使用 */
+  preview?: boolean;
 }
 
 interface StatRow {
@@ -52,6 +58,9 @@ export class PetDetailScene implements Scene {
   private _fx: SceneFx | null = null;
 
   private _petId = '';
+  private _backScene = 'codex';
+  private _backData: unknown;
+  private _preview = false;
 
   // 局部刷新与反馈所需引用（每次 build 重置）
   private _avatar: PIXI.Container | null = null;
@@ -65,7 +74,11 @@ export class PetDetailScene implements Scene {
   onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
-    this._petId = (data as PetDetailEnterData | undefined)?.petId ?? PlayerData.ownedPets[0] ?? '';
+    const enter = data as PetDetailEnterData | undefined;
+    this._petId = enter?.petId ?? PlayerData.ownedPets[0] ?? '';
+    this._backScene = enter?.backScene ?? 'codex';
+    this._backData = enter?.backData;
+    this._preview = enter?.preview ?? false;
     void this._enter(this._enterSeq.next());
   }
 
@@ -123,7 +136,7 @@ export class PetDetailScene implements Scene {
 
     this._content.addChild(makeTopBar({
       title: pet.name, width: w, centerY: Game.safeTop + 36,
-      onBack: () => SceneManager.switchTo('codex'),
+      onBack: () => SceneManager.switchTo(this._backScene, this._backData),
     }));
 
     const avatarCY = Game.safeTop + 170;
@@ -142,7 +155,20 @@ export class PetDetailScene implements Scene {
 
     const statBottom = this._buildStatPanel(pet, lv, star, w, avatarCY + 208);
     const abilityBottom = this._buildAbilityPanel(pet, lv, star, w, statBottom + 16);
-    this._buildActionButtons(w, h, abilityBottom + 20);
+    if (this._preview) {
+      this._buildPreviewHint(w, abilityBottom + 24);
+    } else {
+      this._buildActionButtons(w, h, abilityBottom + 20);
+    }
+  }
+
+  /** 章节收录等预览入口：说明文案，不提供养成操作 */
+  private _buildPreviewHint(w: number, y: number): void {
+    const hint = makeText('章节收录预览 · 以 ★1 初始属性展示', {
+      size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: 0.5,
+    });
+    hint.position.set(w / 2, y);
+    this._content.addChild(hint);
   }
 
   private _buildAvatar(pet: PetDef, star: number, cx: number, cy: number): void {

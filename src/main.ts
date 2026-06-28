@@ -12,6 +12,7 @@ import { configureWechatShare } from '@/core/ShareService';
 import { MAIN_PRELOAD_IMAGES } from '@/config/Assets';
 import { ensureAudioSubpackage } from '@/config/Subpackages';
 import { warmupCommonSubpackages } from '@/config/SubpackageWarmup';
+import { BootDiag } from '@/core/BootDiag';
 import { TitleScene } from '@/scenes/TitleScene';
 import { BattleScene } from '@/scenes/BattleScene';
 import { TeamScene } from '@/scenes/TeamScene';
@@ -44,8 +45,8 @@ async function main(): Promise<void> {
   }
 
   Game.init(canvas);
+  console.log('[main] Game.init 完成');
 
-  // 预加载核心资源（珠子贴图）
   await TextureCache.preload([...MAIN_PRELOAD_IMAGES]);
   console.log(`[main] 主包预加载完成，纹理数: ${TextureCache.size}`);
 
@@ -57,6 +58,8 @@ async function main(): Promise<void> {
   SceneManager.register(new GachaScene());
   SceneManager.register(new ShopScene());
   SceneManager.switchTo('title');
+  BootDiag.attachProbe();
+  BootDiag.startWatchdog();
   warmupCommonSubpackages();
 
   await ensureAudioSubpackage();

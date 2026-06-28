@@ -57,16 +57,28 @@ export function loadSubpackage(name: SubpackageName): Promise<void> {
     return Promise.resolve();
   }
   const promise = new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+    const timer = setTimeout(() => {
+      const err = new Error(`[Subpackage] 加载超时 ${WX_SUBPACKAGE_NAME[name]}`);
+      console.error(err.message);
+      finish(() => reject(err));
+    }, 45000);
     loadPkg.call(wxApi, {
       name: WX_SUBPACKAGE_NAME[name],
       success: () => {
         loaded.add(name);
         console.log(`[Subpackage] 已加载 ${WX_SUBPACKAGE_NAME[name]}`);
-        resolve();
+        finish(resolve);
       },
       fail: (err) => {
         console.error(`[Subpackage] 加载失败 ${WX_SUBPACKAGE_NAME[name]}`, err);
-        reject(err);
+        finish(() => reject(err));
       },
     });
   }).finally(() => {

@@ -92,7 +92,7 @@ export class BattleController {
 
   /** 已用回合数（拖珠并发生交换记 1 回合） */
   turnsUsed = 0;
-  /** 英雄是否受过伤（无伤星判定） */
+  /** 英雄是否受过伤（统计用，不影响星级） */
   tookDamage = false;
 
   private _statuses = new BattleStatusStore();

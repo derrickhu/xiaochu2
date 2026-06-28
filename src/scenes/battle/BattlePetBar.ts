@@ -31,7 +31,7 @@ interface PetBarHooks {
 
 export class BattlePetBar {
   private _slots: PIXI.Container[] = [];
-  private _slotCdMask: PIXI.Graphics[] = [];
+  private _slotCdBadge: PIXI.Graphics[] = [];
   private _slotCdText: PIXI.Text[] = [];
   private _slotReadyFx: PetSkillReadyFxView[] = [];
   private _slotWasReady: boolean[] = [];
@@ -53,7 +53,7 @@ export class BattlePetBar {
     const y = this._layout.boardY - UI.battle.teamBarOffset + petSize / 2;
     const frameSize = petSize * petFrameScale;
 
-    this._slotCdMask = [];
+    this._slotCdBadge = [];
     this._slotCdText = [];
     this._slotReadyFx = [];
     this._slotWasReady = [];
@@ -99,18 +99,24 @@ export class BattlePetBar {
       badge.position.set(petSize / 2 - 16, -petSize / 2 + 16);
       slot.addChild(badge);
 
-      const cdMask = new PIXI.Graphics();
-      cdMask.beginFill(0x000000, 0.55);
-      cdMask.drawRoundedRect(-petSize / 2, -petSize / 2, petSize, petSize, 16);
-      cdMask.endFill();
-      slot.addChild(cdMask);
-      this._slotCdMask.push(cdMask);
+      // 冷却标记：右下角小圆标（对齐 xiao_chu，不暗化头像）
+      const cdR = petSize * 0.2;
+      const cdCx = petSize / 2 - cdR - 2;
+      const cdCy = petSize / 2 - cdR - 2;
+      const cdBadge = new PIXI.Graphics();
+      cdBadge.beginFill(0x000000, 0.75);
+      cdBadge.drawCircle(cdCx, cdCy, cdR);
+      cdBadge.endFill();
+      cdBadge.lineStyle(1, 0xffffff, 0.3);
+      cdBadge.drawCircle(cdCx, cdCy, cdR);
+      slot.addChild(cdBadge);
+      this._slotCdBadge.push(cdBadge);
 
       const cdText = new PIXI.Text('', {
-        fontSize: 38, fill: 0xffffff, fontWeight: 'bold',
-        stroke: 0x000000, strokeThickness: 4,
+        fontSize: Math.round(petSize * 0.22), fill: 0xffd700, fontWeight: 'bold',
       });
       cdText.anchor.set(0.5);
+      cdText.position.set(cdCx, cdCy);
       slot.addChild(cdText);
       this._slotCdText.push(cdText);
 
@@ -155,10 +161,13 @@ export class BattlePetBar {
   /** 刷新宠物槽技能状态（CD 数字 / 就绪动效） */
   refreshCooldowns(): void {
     this._ctrl.team.forEach((pet, i) => {
+      const badge = this._slotCdBadge[i];
+      const cdText = this._slotCdText[i];
+      if (!badge || !cdText) return;
       const ready = pet.skillCdLeft <= 0;
-      this._slotCdMask[i].visible = !ready;
-      this._slotCdText[i].visible = !ready;
-      this._slotCdText[i].text = String(pet.skillCdLeft);
+      badge.visible = !ready;
+      cdText.visible = !ready;
+      cdText.text = String(pet.skillCdLeft);
       if (ready && !this._slotWasReady[i]) {
         triggerPetSkillReadyFlash(this._slotReadyFx[i]);
       }

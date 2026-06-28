@@ -19,10 +19,17 @@ import {
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
 import type { TeamEnterData } from './TeamScene';
+import type { PetDetailEnterData } from './PetDetailScene';
 import { deferAfterPointerEvent } from '@/utils/deferAfterPointer';
 import {
   buildChapterGoalCard, CHAPTER_GOAL_CARD_H, CHAPTER_GOAL_CARD_W,
 } from './chapterGoalCard';
+import { BootDiag } from '@/core/BootDiag';
+
+export interface TitleEnterData {
+  /** 进入时选中的章节（默认最新已解锁章） */
+  chapter?: number;
+}
 
 export class TitleScene implements Scene {
   readonly name = 'title';
@@ -40,16 +47,16 @@ export class TitleScene implements Scene {
   private _stageContent: PIXI.Container | null = null;
   private _stageMask: PIXI.Graphics | null = null;
 
-  onEnter(): void {
+  onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
-    this._chapter = this._latestUnlockedChapter();
-    void this._preloadAndBuild();
+    const enter = data as TitleEnterData | undefined;
+    this._chapter = enter?.chapter ?? this._latestUnlockedChapter();
+    this._rebuild();
   }
 
-  private async _preloadAndBuild(): Promise<void> {
-    const goal = getChapterGoal(this._chapter);
-    if (goal) await ensurePetAvatars([{ petId: goal.petId, star: 1 }]);
+  /** 立刻渲染 UI；收录怪头像后台加载，避免分包卡住导致整屏黑 */
+  private _rebuild(): void {
     this._scroll.detach();
     this._stageContent = null;
     if (this._stageMask) {
@@ -58,6 +65,17 @@ export class TitleScene implements Scene {
     }
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
     this._build();
+    void this._preloadGoalAvatar();
+  }
+
+  private async _preloadGoalAvatar(): Promise<void> {
+    const goal = getChapterGoal(this._chapter);
+    if (!goal) return;
+    try {
+      await ensurePetAvatars([{ petId: goal.petId, star: 1 }]);
+    } catch (e) {
+      console.warn('[TitleScene] 章节收录头像加载失败（不影响首屏）:', e);
+    }
   }
 
   private _latestUnlockedChapter(): number {
@@ -109,6 +127,13 @@ export class TitleScene implements Scene {
     const listBottom = h - TitleScene.BOTTOM_RESERVE - 12;
     this._buildStageList(w, listTop, listBottom);
     this._buildBottomNav(w, h);
+
+    const homeTex = TextureCache.get(BACKGROUND_IMAGES.home);
+    BootDiag.log(
+      'TitleScene._build',
+      `children=${this.container.children.length} `
+      + `homeTex=${!!homeTex} logoTex=${!!logoTex} chapter=${this._chapter}`,
+    );
   }
 
   private _buildBackground(w: number, h: number): void {
@@ -149,7 +174,7 @@ export class TitleScene implements Scene {
         arrow.cursor = 'pointer';
         arrow.on('pointertap', () => {
           this._chapter = targetChapter!;
-          deferAfterPointerEvent(() => { void this._preloadAndBuild(); });
+          deferAfterPointerEvent(() => { this._rebuild(); });
         });
       }
       this.container.addChild(arrow);
@@ -165,7 +190,17 @@ export class TitleScene implements Scene {
 
     const wrap = new PIXI.Container();
     wrap.position.set(w / 2, topY + CHAPTER_GOAL_CARD_H / 2);
-    const card = buildChapterGoalCard(goal, { width: CHAPTER_GOAL_CARD_W });
+    const card = buildChapterGoalCard(goal, {
+      width: CHAPTER_GOAL_CARD_W,
+      onTap: () => {
+        SceneManager.switchTo('petDetail', {
+          petId: goal.petId,
+          backScene: 'title',
+          backData: { chapter: this._chapter } satisfies TitleEnterData,
+          preview: true,
+        } satisfies PetDetailEnterData);
+      },
+    });
     wrap.addChild(card);
     this.container.addChild(wrap);
     popIn(wrap, { fromScale: 0.94 });
@@ -339,6 +374,6 @@ export class TitleScene implements Scene {
   }
 
   private _refresh(): void {
-    void this._preloadAndBuild();
+    this._rebuild();
   }
 }

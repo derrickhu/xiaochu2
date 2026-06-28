@@ -157,8 +157,10 @@ export class BattleScene implements Scene {
     stageText.position.set(w / 2, headerY);
     this.container.addChild(stageText);
 
-    // 敌人区 + 英雄血条
+    // 敌人区（尽早 refresh，避免后续组件构建异常时立绘/背景未挂上）
     this._hud.buildEnemyArea(this.container);
+    this._hud.refreshEnemy(false);
+
     this._hud.buildHeroBar(this.container);
 
     // 队伍栏 + buff 状态行

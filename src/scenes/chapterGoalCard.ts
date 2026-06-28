@@ -18,6 +18,8 @@ export const CHAPTER_GOAL_CARD_H = 132;
 export interface ChapterGoalCardOpts {
   width?: number;
   captured?: boolean;
+  /** 点击卡片（如跳转养成详情预览） */
+  onTap?: () => void;
 }
 
 function drawParchmentPanel(g: PIXI.Graphics, w: number, h: number, accent: number): void {
@@ -151,6 +153,13 @@ export function buildChapterGoalCard(goal: ChapterGoalInfo, opts: ChapterGoalCar
   });
   reward.position.set(textX, textY);
   card.addChild(reward);
+
+  if (opts.onTap) {
+    card.eventMode = 'static';
+    card.cursor = 'pointer';
+    card.hitArea = new PIXI.Rectangle(-w / 2, -h / 2, w, h);
+    card.on('pointertap', opts.onTap);
+  }
 
   return card;
 }
