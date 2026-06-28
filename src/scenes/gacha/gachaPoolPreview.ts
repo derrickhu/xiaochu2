@@ -5,8 +5,8 @@ import * as PIXI from 'pixi.js';
 import { PET_MAP } from '@/balance/pets';
 import { ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
-import { petAvatarPath } from '@/config/Assets';
 import { TextureCache } from '@/core/TextureCache';
+import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { PlayerData } from '@/game/PlayerData';
 import { COLORS, FONT_SIZE, makePanel, makeText } from '@/ui';
 
@@ -104,7 +104,7 @@ export function buildGachaPoolPreview(
   const sub = makeText(
     poolIds.length > 0
       ? `已拥有 ${ownedCount}/${poolIds.length}${poolIds.length > 6 ? ' · 左右滑动' : ''}`
-      : '通关第3章后挑战「历练」收录灵宠',
+      : '推进主线关卡，击败灵宠高级形态即可收录',
     { size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: [0, 0] },
   );
   sub.position.set(panelLeft + PANEL_PAD, PANEL_PAD + 22);
@@ -141,7 +141,7 @@ export function buildGachaPoolPreview(
         borderWidth: PlayerData.isOwned(id) ? 2 : 1,
       }));
 
-      const tex = TextureCache.get(petAvatarPath(id, Math.max(1, PlayerData.petStar(id))));
+      const tex = getPetAvatarTexture(id, Math.max(1, PlayerData.petStar(id)));
       if (tex) {
         const sp = new PIXI.Sprite(tex);
         sp.anchor.set(0.5, 1);

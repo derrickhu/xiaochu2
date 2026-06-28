@@ -9,7 +9,8 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
 import { TextureCache } from '@/core/TextureCache';
-import { gachaPreloadImages } from '@/config/assetPreload';
+import { getPetAvatarTexture } from '@/config/petAvatarTexture';
+import { gachaPreloadImages, gachaPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ELEMENT_NAME } from '@/balance/ui';
 import { PET_MAP } from '@/balance/pets';
@@ -20,7 +21,7 @@ import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
 import type { PullOutcome } from '@/game/gacha/Gacha';
 import {
-  BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES, petImage,
+  BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES,
 } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
@@ -63,6 +64,7 @@ export class GachaScene implements Scene {
 
   private async _enter(token: number): Promise<void> {
     await ensureAssets(gachaPreloadImages());
+    await ensurePetAvatars(gachaPetAvatarEntries());
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'gacha', () => {
       this._ensurePage();
@@ -293,8 +295,8 @@ export class GachaScene implements Scene {
     const el = this._activePoolElement();
     if (PlayerData.availablePool(el).length === 0) {
       Platform.showToast(el
-        ? `${ELEMENT_NAME[el]}系暂无可召唤生物，先去历练收录`
-        : '召唤池暂无收录，先去历练收录灵宠');
+        ? `${ELEMENT_NAME[el]}系暂无可召唤生物，先去关卡战斗收录`
+        : '召唤池暂无收录，先去关卡战斗收录灵宠');
       return;
     }
     let list: PullOutcome[] | null;
@@ -471,7 +473,7 @@ export class GachaScene implements Scene {
     card.addChild(badge);
 
     const avatarSize = cardW * 0.66;
-    const avatarTex = TextureCache.get(petImage(o.petId));
+    const avatarTex = getPetAvatarTexture(o.petId, 1);
     if (avatarTex) {
       const avatar = new PIXI.Sprite(avatarTex);
       avatar.width = avatarSize;

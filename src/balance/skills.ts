@@ -16,3 +16,4 @@ export * from './skills/vfx';
 export * from './skills/ids';
 export * from './skills/registry';
 export * from './skills/tier';
+export * from './skills/display';

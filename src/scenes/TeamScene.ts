@@ -8,7 +8,7 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
-import { teamPreloadImages } from '@/config/assetPreload';
+import { teamPreloadImages, teamPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { Platform } from '@/core/PlatformService';
 import { UI, ORB_COLOR } from '@/balance/ui';
@@ -77,6 +77,7 @@ export class TeamScene implements Scene {
 
   private async _enter(token: number): Promise<void> {
     await ensureAssets(teamPreloadImages(this._prepStage?.id));
+    await ensurePetAvatars(teamPetAvatarEntries());
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'team', () => this._build());
   }

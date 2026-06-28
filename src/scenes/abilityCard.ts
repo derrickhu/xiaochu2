@@ -4,12 +4,13 @@
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
+import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import type { PetDef } from '@/balance/pets';
 import { ELEMENT_NAME } from '@/balance/ui';
 import { INITIAL_PET_LEVEL, INITIAL_PET_STAR } from '@/balance/pets';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { skillForPet } from '@/game/battle/SkillEngine';
-import { petAvatarPath, ORB_IMAGES } from '@/config/Assets';
+import { ORB_IMAGES } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
   makePanel, makeText, makeRarityBadge, makeRoleBadge,
@@ -45,7 +46,7 @@ export function buildAbilityPanel(pet: PetDef, opts: AbilityCardOpts): PIXI.Cont
   }));
 
   // 头像
-  const avatarTex = TextureCache.get(petAvatarPath(pet.id, opts.star ?? 1));
+  const avatarTex = getPetAvatarTexture(pet.id, opts.star ?? 1);
   const avatarSize = 110;
   if (avatarTex) {
     const avatar = new PIXI.Sprite(avatarTex);

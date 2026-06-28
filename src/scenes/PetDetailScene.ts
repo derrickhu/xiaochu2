@@ -10,7 +10,8 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
-import { petDetailPreloadImages } from '@/config/assetPreload';
+import { getPetAvatarTexture } from '@/config/petAvatarTexture';
+import { petDetailPreloadImages, petDetailAvatarEntry, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { Platform } from '@/core/PlatformService';
 import { UI } from '@/balance/ui';
@@ -22,7 +23,7 @@ import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { skillForPet } from '@/game/battle/SkillEngine';
 import { passiveDisplayLines } from './abilityInfo';
 import {
-  petAvatarPath, petFrameImage, BACKGROUND_IMAGES, UI_FX_IMAGES,
+  petFrameImage, BACKGROUND_IMAGES, UI_FX_IMAGES,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import {
@@ -70,6 +71,8 @@ export class PetDetailScene implements Scene {
 
   private async _enter(token: number): Promise<void> {
     await ensureAssets(petDetailPreloadImages(this._petId));
+    const avatarEntry = petDetailAvatarEntry(this._petId);
+    if (avatarEntry) await ensurePetAvatars([avatarEntry]);
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'petDetail', () => {
       if (this._content.destroyed) this._content = new PIXI.Container();
@@ -155,7 +158,7 @@ export class PetDetailScene implements Scene {
       holder.addChild(frame);
     }
 
-    const tex = TextureCache.get(petAvatarPath(pet.id, star));
+    const tex = getPetAvatarTexture(pet.id, star);
     if (tex) {
       const avatar = new PIXI.Sprite(tex);
       avatar.anchor.set(0.5);

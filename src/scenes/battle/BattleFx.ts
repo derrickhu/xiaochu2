@@ -15,6 +15,34 @@ import { FlashOverlay } from '@/core/FlashOverlay';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
 import { ORB_IMAGES } from '@/config/Assets';
+import {
+  applyDmgRenderStyle,
+  buildPetDmgLabel,
+  createPetDamageFloatRuntime,
+  DMG_MOTION,
+  PET_FLOAT_CFG,
+  petSlotDamageAnchor,
+  resolvePetDmgStyleKey,
+  SLOT_ATTR_PALETTE,
+  type PetDamageFloatRuntime,
+  type PetDmgStyleKey,
+} from './damageFloatStyle';
+
+export interface PetDamageFloatOpts {
+  slotX: number;
+  slotY: number;
+  element: Element;
+  damage: number;
+  isCrit?: boolean;
+  counter?: 1 | 0 | -1;
+  /** 同回合多段出手时的横向/时序错开 */
+  orderIdx?: number;
+  /** 技能伤害：仅数字、scale 1.04 */
+  skill?: boolean;
+  /** 多段次要命中 */
+  minor?: boolean;
+  lane?: 'main' | 'minorUpper' | 'minorLower';
+}
 
 export class BattleFx {
   private _fx!: FxLayer;
@@ -22,6 +50,8 @@ export class BattleFx {
   private _flash!: FlashOverlay;
   private _floatLayer!: PIXI.Container;
   private _floatPool!: ObjectPool<PIXI.Text>;
+  private _petDmgPool!: ObjectPool<PIXI.Text>;
+  private _petDmgRuntimes: PetDamageFloatRuntime[] = [];
 
   /** 创建并按 z 序加入父容器：粒子层（最底）→ 飘字层 → 全屏闪光（最顶）。 */
   build(parent: PIXI.Container, w: number, h: number): void {
@@ -58,15 +88,43 @@ export class BattleFx {
       maxSize: 24,
       onDiscard: (t) => t.destroy(),
     });
+
+    this._petDmgPool = new ObjectPool<PIXI.Text>({
+      create: () => {
+        const t = new PIXI.Text('', { fontSize: 42, fill: 0xffffff });
+        t.anchor.set(0.5, 0.5);
+        return t;
+      },
+      onGet: (t) => {
+        t.visible = true;
+        t.alpha = 1;
+        t.scale.set(1);
+      },
+      onRelease: (t) => {
+        t.visible = false;
+        if (t.parent) t.parent.removeChild(t);
+      },
+      maxSize: 16,
+      onDiscard: (t) => t.destroy(),
+    });
   }
 
   update(dt: number): void {
     this._fx.update(dt);
     this._shake.update(dt);
+    for (let i = this._petDmgRuntimes.length - 1; i >= 0; i--) {
+      const rt = this._petDmgRuntimes[i];
+      if (rt.update(dt)) {
+        this._petDmgPool.release(rt.text);
+        this._petDmgRuntimes.splice(i, 1);
+      }
+    }
   }
 
   destroy(): void {
+    this._petDmgRuntimes.length = 0;
     this._floatPool?.clear();
+    this._petDmgPool?.clear();
     this._fx?.destroy();
     this._flash?.destroy();
     this._shake?.reset();
@@ -91,11 +149,13 @@ export class BattleFx {
     this._floatLayer.addChild(obj);
   }
 
-  /** 飘字：上浮淡出，复用对象池 */
+  /** 通用飘字（回血 / 受击等） */
   spawnFloat(text: string, x: number, y: number, color: number, scale = 1): void {
     const t = this._floatPool.get();
     t.text = text;
     t.style.fill = color;
+    t.style.fontSize = 36;
+    t.style.strokeThickness = 5;
     t.position.set(x, y);
     t.scale.set(scale);
     this._floatLayer.addChild(t);
@@ -104,6 +164,44 @@ export class BattleFx {
       duration: UI.anim.damageFloat, ease: Ease.easeOutQuad,
       onComplete: () => this._floatPool.release(t),
     });
+  }
+
+  /** 宠物槽位伤害飘字 — 样式/运动对齐 xiao_chu slotDamageMain / slotDamageCrit */
+  spawnPetDamageFloat(opts: PetDamageFloatOpts): void {
+    const {
+      slotX, slotY, element, damage, isCrit = false,
+      orderIdx = 0, skill = false, minor = false,
+      lane = minor ? (orderIdx === 0 ? 'minorUpper' : 'minorLower') : 'main',
+    } = opts;
+
+    const styleKey: PetDmgStyleKey = resolvePetDmgStyleKey(isCrit && !minor, minor);
+    const palette = SLOT_ATTR_PALETTE[element];
+    const motion = DMG_MOTION[styleKey];
+    const baseScale = skill ? PET_FLOAT_CFG.skill.scale : PET_FLOAT_CFG.normalAtk.scale;
+    const anchor = petSlotDamageAnchor(slotX, slotY, lane);
+    const x = anchor.x + (minor ? (orderIdx - 0.5) * PET_FLOAT_CFG.multiHit.xStep : 0);
+    const y = anchor.y;
+
+    const t = this._petDmgPool.get();
+    t.text = buildPetDmgLabel(element, damage);
+    applyDmgRenderStyle(t, styleKey, palette);
+    this._floatLayer.addChild(t);
+
+    const delayFrames = minor
+      ? orderIdx * 3
+      : Math.max(0, orderIdx) * PET_FLOAT_CFG.normalAtk.delayStep;
+
+    this._petDmgRuntimes.push(createPetDamageFloatRuntime({
+      text: t,
+      baseX: x,
+      baseY: y,
+      baseScale,
+      styleKey,
+      motion,
+      delayFrames,
+    }));
+
+    if (isCrit && !minor) this.shakeLight();
   }
 
   /** 属性色弹道：珠子贴图 + 拖尾粒子，从起点飞向终点（宠物 / 敌人共用） */

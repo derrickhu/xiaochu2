@@ -31,6 +31,7 @@ const NAME_BY_PREFIX = (Object.entries(SUBPACKAGE_ROOT) as [SubpackageName, stri
   .map(([name, root]) => ({ name, prefix: `${root}/` }));
 
 const loaded = new Set<SubpackageName>();
+const inflight = new Map<SubpackageName, Promise<void>>();
 
 /** 由资源路径反查所属分包（主包资源返回 null） */
 export function subpackageForPath(assetPath: string): SubpackageName | null {
@@ -43,6 +44,8 @@ export function subpackageForPath(assetPath: string): SubpackageName | null {
 /** 加载单个分包（非小游戏环境 no-op） */
 export function loadSubpackage(name: SubpackageName): Promise<void> {
   if (loaded.has(name)) return Promise.resolve();
+  const pending = inflight.get(name);
+  if (pending) return pending;
   if (!Platform.isMinigame) {
     loaded.add(name);
     return Promise.resolve();
@@ -53,7 +56,7 @@ export function loadSubpackage(name: SubpackageName): Promise<void> {
     loaded.add(name);
     return Promise.resolve();
   }
-  return new Promise((resolve, reject) => {
+  const promise = new Promise<void>((resolve, reject) => {
     loadPkg.call(wxApi, {
       name: WX_SUBPACKAGE_NAME[name],
       success: () => {
@@ -66,7 +69,11 @@ export function loadSubpackage(name: SubpackageName): Promise<void> {
         reject(err);
       },
     });
+  }).finally(() => {
+    inflight.delete(name);
   });
+  inflight.set(name, promise);
+  return promise;
 }
 
 /** 按资源路径集合加载所需分包 */

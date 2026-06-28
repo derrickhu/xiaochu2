@@ -1,8 +1,9 @@
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
+import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import type { PetDef } from '@/balance/pets';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
-import { ORB_IMAGES, petAvatarPath } from '@/config/Assets';
+import { ORB_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS,
@@ -51,7 +52,7 @@ export function buildLockedCodexCard(
   }
 
   const avatarSize = cardW * 0.62;
-  const avatarTex = TextureCache.get(petAvatarPath(pet.id, 1));
+  const avatarTex = getPetAvatarTexture(pet.id, 1);
   if (avatarTex) {
     const avatar = new PIXI.Sprite(avatarTex);
     avatar.width = avatarSize;
@@ -122,7 +123,7 @@ export function buildOwnedCodexCard(
   item.addChild(badge);
 
   const avatarSize = cardW * 0.62;
-  const avatarTex = TextureCache.get(petAvatarPath(pet.id, star));
+  const avatarTex = getPetAvatarTexture(pet.id, star);
   if (avatarTex) {
     const avatar = new PIXI.Sprite(avatarTex);
     avatar.width = avatarSize;

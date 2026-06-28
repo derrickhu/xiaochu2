@@ -57,14 +57,14 @@ describe('抽卡：十连保底', () => {
 });
 
 describe('抽卡：小池（仅一种 R 宠）', () => {
-  const soloPool = [PET_MAP.get('pet_metal_003')!];
+  const soloPool = [PET_MAP.get('pet_001')!];
 
   it('出货稀有度与宠本身一致，不会出现「同宠不同框」', () => {
     const state: GachaState = { sinceHigh: 0 };
     const outs = pullTen(seqRng([0.99, 0.5, 0.1, 0.99, 0.5, 0.1, 0.99, 0.5, 0.1, 0.99]), state, allOwned, soloPool);
     expect(outs).toHaveLength(10);
     for (const o of outs) {
-      expect(o.petId).toBe('pet_metal_003');
+      expect(o.petId).toBe('pet_001');
       expect(o.rarity).toBe(1);
       expect(o.shards).toBe(ECONOMY.gacha.duplicateShards[1]);
     }
@@ -75,6 +75,6 @@ describe('抽卡：小池（仅一种 R 宠）', () => {
     const o = pullOne(seqRng([0]), state, notOwned, 1, soloPool);
     expect(o.pity).toBe(true);
     expect(o.rarity).toBe(1);
-    expect(o.petId).toBe('pet_metal_003');
+    expect(o.petId).toBe('pet_001');
   });
 });

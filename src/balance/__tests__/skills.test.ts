@@ -3,6 +3,7 @@ import {
   SKILLS, getSkill, resolveSkillVfx, PET_SKILL_IDS,
   CATEGORY_DEFAULT_VFX, type SkillEffectDef, type SkillDef,
 } from '../skills';
+import { formatBasePower, describeSkillBudget, describeSkillEffects } from '../skills/display';
 import { PET_MAP } from '../pets';
 import type { PetDef } from '../pets';
 import { getRaritySkillPower } from '../rarity';
@@ -55,8 +56,30 @@ describe('技能蓝图与分类', () => {
   });
 });
 
+describe('技能展示 display', () => {
+  it('formatBasePower 消除浮点噪声', () => {
+    expect(formatBasePower(6)).toBe('6');
+    expect(formatBasePower(12.000000000000002)).toBe('12');
+    expect(formatBasePower(1.4)).toBe('1.4');
+  });
+
+  it('describeSkillBudget 含预算与 UR 参考', () => {
+    const s = getSkill(PET_SKILL_IDS.metalSlash);
+    const text = describeSkillBudget(s);
+    expect(text).toContain('预算指数 6');
+    expect(text).toContain('UR≈');
+    expect(text).toContain('不直接读 basePower');
+  });
+
+  it('describeSkillEffects 含倍率摘要', () => {
+    const text = describeSkillEffects(getSkill(PET_SKILL_IDS.metalSlash));
+    expect(text).toContain('600%');
+    expect(text).toContain('casterAtk');
+  });
+});
+
 describe('技能星级分档强化', () => {
-  const pet = PET_MAP.get('cr_golden_crane')!; // 金羽仙鹤·金系突刺：直伤 600%，CD 4，无 skillModifier
+  const pet = PET_MAP.get('pet_011')!; // 金羽仙鹤·金系突刺：直伤 600%，CD 4，无 skillModifier
   // 阶段十：技能数值再叠乘「施法宠稀有度倍率」（金羽仙鹤为 SSR）
   const rp = getRaritySkillPower(pet.rarity);
 

@@ -11,7 +11,8 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
 import { TextureCache } from '@/core/TextureCache';
-import { shopPreloadImages } from '@/config/assetPreload';
+import { getPetAvatarTexture } from '@/config/petAvatarTexture';
+import { shopPreloadImages, shopPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ELEMENT_NAME } from '@/balance/ui';
 import { PETS, type PetDef } from '@/balance/pets';
@@ -22,7 +23,7 @@ import { CHAPTERS, stagesOfChapter } from '@/balance/stages';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
 import {
-  BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES, petImage,
+  BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES,
 } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
@@ -63,6 +64,7 @@ export class ShopScene implements Scene {
 
   private async _enter(token: number): Promise<void> {
     await ensureAssets(shopPreloadImages());
+    await ensurePetAvatars(shopPetAvatarEntries());
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'shop', () => {
       this._fx = new SceneFx();
@@ -179,7 +181,7 @@ export class ShopScene implements Scene {
     if (daily.length > 0) {
       y = this._section(content, animTargets, '每日轮换', daily, startY, y);
     } else if (recommended.length === 0) {
-      const empty = makeText('暂无可兑换碎片\n先在历练关击败高级形态以收录生物', {
+      const empty = makeText('暂无可兑换碎片\n先在关卡战斗击败灵宠高级形态以收录', {
         size: FONT_SIZE.sm, fill: COLORS.textSub, anchor: 0.5, align: 'center',
       });
       empty.position.set(w / 2, h / 2 - startY);
@@ -275,7 +277,7 @@ export class ShopScene implements Scene {
       bg: COLORS.panelBg, bgAlpha: 0.96, border: def.color, borderWidth: 2,
     }));
 
-    const avatarTex = TextureCache.get(petImage(pet.id));
+    const avatarTex = getPetAvatarTexture(pet.id, 1);
     if (avatarTex) {
       const sz = rowH - 20;
       const avatar = new PIXI.Sprite(avatarTex);

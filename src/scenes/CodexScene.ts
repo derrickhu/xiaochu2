@@ -7,7 +7,7 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
-import { CODEX_SHELL_IMAGES, codexPetPreloadImages } from '@/config/assetPreload';
+import { CODEX_SHELL_IMAGES, codexPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI } from '@/balance/ui';
 import { PETS, type PetDef } from '@/balance/pets';
@@ -87,7 +87,7 @@ export class CodexScene implements Scene {
 
   /** 壳层先渲染，避免等全量灵宠头像时黑屏 */
   private async _loadPetCards(token: number): Promise<void> {
-    await ensureAssets(codexPetPreloadImages());
+    await ensurePetAvatars(codexPetAvatarEntries());
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'codex') return;
     this._buildPetList(Game.safeTop + 136);
@@ -260,8 +260,8 @@ export class CodexScene implements Scene {
     const cap = CAPTURE_STAGE.get(pet.id);
     const where = cap
       ? `${CHAPTER_NAME[cap.chapter] ?? `第${cap.chapter}章`} · ${cap.name}`
-      : '历练关';
-    Platform.showToast(`未收录 · 在「${where}」击败其高级形态即可收录`);
+      : '暂未开放获取';
+    Platform.showToast(cap ? `未收录 · 在「${where}」击败其高级形态即可收录` : `未收录 · ${where}`);
   }
 
 }

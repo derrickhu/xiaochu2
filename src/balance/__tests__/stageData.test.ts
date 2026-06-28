@@ -1,14 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { STAGES, CHAPTERS, stagesOfChapter } from '../stages';
+import {
+  STAGES, CHAPTERS, stagesOfChapter, CHAPTER_BOSS_CHALLENGE, CHAPTER_REWARD_PET,
+  CHAPTER_CAPTURE_RARITY,
+} from '../stages';
+import { chapterCaptureRarityMatches } from '../chapterGoal';
 import { DROP_TABLES, getDropTable } from '../drops';
 import { STAGE_TYPE_PROFILES, getStageType } from '../stageTypes';
 import { MECHANICS, resolveMechanics } from '../stageMechanics';
 import { ENEMY_MAP } from '../enemies';
-import { CREATURE_MAP } from '../creatures';
+import { CREATURE_MAP, CREATURES } from '../creatures';
 import { PET_MAP } from '../pets';
+import { stageMatchesChallenge } from '../bossChallenge';
 import { stageDrops } from '@/formulas/economyOutput';
 
 describe('关卡数据完整性（单一真源约束）', () => {
+  it('共 52 关', () => {
+    expect(STAGES.length).toBe(52);
+  });
+
   it('每关引用的掉落表 / 遭遇 / 类型 / 机制均存在', () => {
     for (const s of STAGES) {
       expect(getDropTable(s.dropTableId), `掉落表 ${s.dropTableId} @ ${s.id}`).toBeDefined();
@@ -35,7 +44,7 @@ describe('关卡数据完整性（单一真源约束）', () => {
   });
 
   it('章节连续且每章首关 index=1', () => {
-    expect(CHAPTERS.length).toBeGreaterThanOrEqual(3);
+    expect(CHAPTERS.length).toBe(8);
     for (const ch of CHAPTERS) {
       const list = stagesOfChapter(ch);
       expect(list.length).toBeGreaterThan(0);
@@ -49,30 +58,96 @@ describe('关卡数据完整性（单一真源约束）', () => {
       expect(bosses.length, `章节 ${ch} Boss 数`).toBe(1);
     }
   });
-});
 
-describe('机制节奏', () => {
-  it('每 3~5 关至少首现一个新机制（机制密度）', () => {
-    // 统计每关引入的「首次出现」机制
-    const seen = new Set<string>();
-    let gapSinceNew = 0;
-    let maxGap = 0;
-    for (const s of STAGES) {
-      let introducedNew = false;
-      for (const m of s.mechanics ?? []) {
-        if (!seen.has(m)) {
-          seen.add(m);
-          introducedNew = true;
-        }
-      }
-      gapSinceNew = introducedNew ? 0 : gapSinceNew + 1;
-      maxGap = Math.max(maxGap, gapSinceNew);
+  it('每章恰有一个 tier2 收录点', () => {
+    for (const ch of CHAPTERS) {
+      const captureCount = stagesOfChapter(ch).flatMap((s) => s.encounters).filter(
+        (e) => e.kind === 'creature' && e.tier === 'tier2' && e.captureUnlock,
+      ).length;
+      expect(captureCount, `章节 ${ch} 收录点`).toBe(1);
     }
-    // 任意连续无新机制的关卡数不超过 5
-    expect(maxGap).toBeLessThanOrEqual(5);
   });
 
-  it('resolveMechanics 正确聚合禁心 / 禁属性 / 封印珠', () => {
+  it('战斗收录宠共 8 只（不含开局赠送）', () => {
+    const ids = new Set<string>();
+    for (const s of STAGES) {
+      for (const e of s.encounters) {
+        if (e.kind === 'creature' && e.tier === 'tier2' && e.captureUnlock) ids.add(e.id);
+      }
+    }
+    expect(ids.size).toBe(8);
+    for (const petId of Object.values(CHAPTER_REWARD_PET)) {
+      expect(ids.has(petId)).toBe(true);
+    }
+  });
+});
+
+describe('灵宠 ID 规范', () => {
+  it('CREATURES 均为 pet_XXX 且连续编号', () => {
+    expect(CREATURES.length).toBeGreaterThan(0);
+    for (const c of CREATURES) {
+      expect(c.id).toMatch(/^pet_\d{3}$/);
+    }
+    const nums = CREATURES.map((c) => Number(c.id.slice(4))).sort((a, b) => a - b);
+    for (let i = 0; i < nums.length; i++) {
+      expect(nums[i]).toBe(i + 1);
+    }
+  });
+});
+
+describe('Boss 挑战 archetype', () => {
+  it('每章 Boss 对应 CHAPTER_BOSS_CHALLENGE 且遭遇一致', () => {
+    for (const ch of CHAPTERS) {
+      const boss = stagesOfChapter(ch).find((s) => s.isBoss)!;
+      const kind = CHAPTER_BOSS_CHALLENGE[ch];
+      expect(kind, `章 ${ch}`).toBeDefined();
+      expect(
+        stageMatchesChallenge(kind, boss.encounters, boss.mechanics ? [...boss.mechanics] : undefined),
+        `${boss.id} vs ${kind}`,
+      ).toBe(true);
+    }
+  });
+
+  it('Boss 收录宠与 CHAPTER_REWARD_PET 一致', () => {
+    for (const ch of CHAPTERS) {
+      const boss = stagesOfChapter(ch).find((s) => s.isBoss)!;
+      const cap = boss.encounters.find(
+        (e) => e.kind === 'creature' && e.tier === 'tier2' && e.captureUnlock,
+      );
+      expect(cap?.kind === 'creature' && cap.id).toBe(CHAPTER_REWARD_PET[ch]);
+    }
+  });
+
+  it('各章收录宠稀有度按 CHAPTER_CAPTURE_RARITY 递进', () => {
+    for (const ch of CHAPTERS) {
+      expect(chapterCaptureRarityMatches(ch), `章节 ${ch} 收录稀有度`).toBe(true);
+      const petId = CHAPTER_REWARD_PET[ch];
+      const pet = PET_MAP.get(petId);
+      expect(pet?.rarity).toBe(CHAPTER_CAPTURE_RARITY[ch]);
+      expect(pet!.rarity, `章节 ${ch} 收录最低 SR`).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('各章收录宠定位轮替，不连续重复', () => {
+    const roles = CHAPTERS.map((ch) => PET_MAP.get(CHAPTER_REWARD_PET[ch])!.role);
+    for (let i = 1; i < roles.length; i++) {
+      expect(roles[i], `章节 ${i + 1} 与 ${i} 定位`).not.toBe(roles[i - 1]);
+    }
+    expect(roles).toEqual([
+      'attacker', 'healer', 'tank', 'support',
+      'attacker', 'healer', 'tank', 'attacker',
+    ]);
+  });
+
+  it('第 8 章 Boss 首教封火（rule_ban_fire）', () => {
+    const boss = stagesOfChapter(8).find((s) => s.isBoss)!;
+    expect(CHAPTER_BOSS_CHALLENGE[8]).toBe('banElement');
+    expect(boss.mechanics).toContain('rule_ban_fire');
+  });
+});
+
+describe('resolveMechanics 聚合', () => {
+  it('正确聚合禁心 / 禁属性 / 封印珠', () => {
     const eff = resolveMechanics(['rule_no_heal', 'rule_ban_water', 'orb_sealed']);
     expect(eff.noHeartHeal).toBe(true);
     expect(eff.bannedElements).toContain('water');
@@ -113,7 +188,7 @@ describe('stageDrops 产出公式', () => {
 
   it('Boss 类型碎片倍率高于精英', () => {
     const elite = stageDrops('dt_forest_elite', 1, 1, 'elite');
-    const boss = stageDrops('dt_forest_elite', 1, 1, 'boss');
+    const boss = stageDrops('dt_forest_boss', 1, 1, 'boss');
     const eSum = elite.shards.reduce((a, s) => a + s.count, 0);
     const bSum = boss.shards.reduce((a, s) => a + s.count, 0);
     expect(bSum).toBeGreaterThan(eSum);

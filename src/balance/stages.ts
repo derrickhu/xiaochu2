@@ -1,54 +1,160 @@
 /**
  * 关卡表（纯数据，零逻辑）
  *
- * 阶段九：StageDef.enemies(string[]) 升级为 encounters(EncounterRef[])——每波可为
- * 「杂怪 mob」或「生物 creature 的 tier1/tier2 形态」，tier2 + captureUnlock 即收录点。
- * 敌人实际数值由公式层（formulas/growth.ts enemyStats）按章节/难度生成。
+ * 52 关 · 8 章 · 每章 Boss 收录 1 只 + 首教 1 种可玩挑战（bossChallenge.ts）。
  */
 import type { Element } from './combat';
 import type { StageType } from './stageTypes';
 import type { EncounterRef } from './enemies';
 import { CREATURE_MAP } from './creatures';
 import { STARTER_CREATURE_IDS } from './creatures';
+import type { Rarity } from './rarity';
+import {
+  type BossChallengeKind,
+  bossChallengeConfig,
+  bossChallengeLabel,
+  CHAPTER_BOSS_CHALLENGE,
+  recipeForChallenge,
+} from './bossChallenge';
+
+export type { BossChallengeKind };
+export {
+  bossChallengeLabel,
+  CHAPTER_BOSS_CHALLENGE,
+} from './bossChallenge';
 
 export interface StageDef {
   id: string;
   chapter: number;
   index: number;
   name: string;
-  /** 关卡主属性（克制软墙提示用） */
   element: Element;
-  /** 关卡类型（单一真源 stageTypes.ts，决定产出倍率/UI 标识/体力） */
   type: StageType;
-  /** 掉落表引用（drops.ts），结算经验/碎片用 */
   dropTableId: string;
-  /** 遭遇序列（依次为每波）：杂怪 或 生物形态 */
   encounters: readonly EncounterRef[];
-  /** 关内难度递增系数（敌人曲线额外乘数） */
   difficulty: number;
-  /** 是否章节 Boss 关 */
   isBoss?: boolean;
-  /** 三星目标：回合数限制 */
   starTurnLimit: number;
-  /** 本关引入/复用的机制 id 列表（stageMechanics.ts 三轴：棋盘珠/敌人/规则） */
   mechanics?: readonly string[];
-  /** 推荐解法标签（选关/开场提示用，简短关键词） */
   hintTags?: readonly string[];
-  /** 推荐解法一句话提示（缺省时用 hintTags 拼接） */
   hintText?: string;
 }
 
-/** 遭遇引用便捷构造：杂怪 */
+export const CHAPTER_STAGE_COUNT: Readonly<Record<number, number>> = {
+  1: 5, 2: 6, 3: 6, 4: 6, 5: 7, 6: 7, 7: 7, 8: 8,
+};
+
+/** 各章 Boss 收录宠期望稀有度（最低 SR；SR → SSR → UR 递进） */
+export const CHAPTER_CAPTURE_RARITY: Readonly<Record<number, Rarity>> = {
+  1: 2,
+  2: 2,
+  3: 3,
+  4: 4,
+  5: 3,
+  6: 3,
+  7: 4,
+  8: 4,
+};
+
+/**
+ * 各章 Boss 收录宠（定位轮替：输出 → 治疗 → 坦克 → 辅助，循环至终章）。
+ * R 档见 DEFAULT_SUMMON_POOL_R_IDS，不进章节收录。
+ */
+export const CHAPTER_REWARD_PET: Readonly<Record<number, string>> = {
+  1: 'pet_017', // SR 输出 · 木
+  2: 'pet_004', // SR 治疗 · 木
+  3: 'pet_028', // SSR 坦克 · 土
+  4: 'pet_014', // UR 辅助 · 金
+  5: 'pet_011', // SSR 输出 · 金
+  6: 'pet_010', // SSR 治疗 · 土
+  7: 'pet_030', // UR 坦克 · 土
+  8: 'pet_026', // UR 输出 · 火
+};
+
 const mob = (id: string): EncounterRef => ({ kind: 'mob', id });
 
-/** 本关波次数（UI/进度） */
+const creature = (
+  id: string,
+  tier: 'tier1' | 'tier2',
+  captureUnlock?: boolean,
+): EncounterRef => ({ kind: 'creature', id, tier, ...(captureUnlock ? { captureUnlock: true } : {}) });
+
+function buildChapterCaptureBoss(opts: {
+  id: string;
+  chapter: number;
+  index: number;
+  name: string;
+  element: Element;
+  dropTableId: string;
+  creatureId: string;
+  difficulty: number;
+  starTurnLimit: number;
+  challenge: BossChallengeKind;
+}): StageDef {
+  const c = CREATURE_MAP.get(opts.creatureId);
+  if (!c) throw new Error(`收录 Boss 未知生物: ${opts.creatureId}`);
+  const cfg = bossChallengeConfig(opts.challenge, { ruleBanElement: opts.element });
+  return {
+    id: opts.id,
+    chapter: opts.chapter,
+    index: opts.index,
+    name: opts.name,
+    element: opts.element,
+    type: 'boss',
+    dropTableId: opts.dropTableId,
+    encounters: [
+      mob(cfg.prepMob),
+      creature(opts.creatureId, 'tier1'),
+      creature(opts.creatureId, 'tier2', true),
+    ],
+    difficulty: opts.difficulty,
+    isBoss: true,
+    starTurnLimit: opts.starTurnLimit,
+    mechanics: cfg.mechanics,
+    hintTags: cfg.hintTags,
+    hintText: cfg.hintText,
+  };
+}
+
+function fillerStage(opts: {
+  id: string;
+  chapter: number;
+  index: number;
+  name: string;
+  element: Element;
+  type: StageType;
+  dropTableId: string;
+  difficulty: number;
+  starTurnLimit: number;
+  challenge: BossChallengeKind;
+}): StageDef {
+  const r = recipeForChallenge(opts.challenge);
+  return {
+    id: opts.id,
+    chapter: opts.chapter,
+    index: opts.index,
+    name: opts.name,
+    element: opts.element,
+    type: opts.type,
+    dropTableId: opts.dropTableId,
+    encounters: r.encounters,
+    difficulty: opts.difficulty,
+    starTurnLimit: opts.starTurnLimit,
+    mechanics: r.mechanics,
+    hintTags: r.hintTags,
+    hintText: r.hintText,
+  };
+}
+
 export function stageWaveCount(stage: StageDef): number {
   return stage.encounters.length;
 }
 
-/**
- * 第一章（8 关）：教学 + 编队需求建立。全部使用杂怪（mob），不引入可收服生物。
- */
+export function chapterBossStage(chapter: number): StageDef | undefined {
+  return STAGES.find((s) => s.chapter === chapter && s.isBoss);
+}
+
+// ── 第一章（5 关）：铺垫无新挑战 · Boss 教多波 + 收录星辉灵鹿（SR 输出） ──
 const CHAPTER_1: readonly StageDef[] = [
   {
     id: 'stage_1_1', chapter: 1, index: 1, name: '青苔林边', element: 'wood',
@@ -60,226 +166,177 @@ const CHAPTER_1: readonly StageDef[] = [
     id: 'stage_1_2', chapter: 1, index: 2, name: '林间小径', element: 'wood',
     type: 'normal', dropTableId: 'dt_forest_wood',
     encounters: [mob('enemy_slime_wood'), mob('enemy_bat_fire')], difficulty: 1.1, starTurnLimit: 8,
-    mechanics: ['rule_multi_wave'],
-    hintTags: ['多波'], hintText: '两波敌人，注意保留血量',
+    hintTags: ['两波'], hintText: '两拨敌人，先熟悉换波节奏',
   },
   {
     id: 'stage_1_3', chapter: 1, index: 3, name: '焰蝠洞口', element: 'fire',
     type: 'normal', dropTableId: 'dt_forest_fire',
-    encounters: [mob('enemy_bat_fire'), mob('enemy_bat_fire')], difficulty: 1.2, starTurnLimit: 9,
-    hintTags: ['火属性', '推荐水克制'], hintText: '火怪攻击高，带水宠克制并准备治疗',
+    encounters: [mob('enemy_bat_fire')], difficulty: 1.15, starTurnLimit: 8,
+    hintTags: ['火属性'], hintText: '火怪攻击偏高，带水宠克制',
   },
   {
     id: 'stage_1_4', chapter: 1, index: 4, name: '荆棘丛林', element: 'wood',
     type: 'normal', dropTableId: 'dt_forest_wood',
-    encounters: [mob('enemy_hedgehog_wood'), mob('enemy_hedgehog_wood')], difficulty: 1.25, starTurnLimit: 10,
-    mechanics: ['enemy_fast_attack'],
-    hintTags: ['高攻速攻', '推荐治疗/护盾'], hintText: '刺猬攻速快，无治疗会被持续磨血',
+    encounters: [mob('enemy_slime_wood'), mob('enemy_slime_wood')], difficulty: 1.2, starTurnLimit: 9,
+    hintTags: ['木属性'], hintText: '稳扎稳打，为章末试炼留技能',
   },
-  {
-    id: 'stage_1_5', chapter: 1, index: 5, name: '碎岩谷', element: 'earth',
-    type: 'elite', dropTableId: 'dt_forest_elite',
-    encounters: [mob('enemy_golem_earth')], difficulty: 1.3, starTurnLimit: 12,
-    mechanics: ['enemy_damage_reduce'],
-    hintTags: ['高防减伤', '推荐木克制/爆发'], hintText: '傀儡高防且会减伤，带木系克制或直伤爆发破防',
-  },
-  {
-    id: 'stage_1_6', chapter: 1, index: 6, name: '寒潭深处', element: 'water',
-    type: 'normal', dropTableId: 'dt_forest_water',
-    encounters: [mob('enemy_serpent_water'), mob('enemy_serpent_water')], difficulty: 1.35, starTurnLimit: 13,
-    mechanics: ['enemy_self_heal'],
-    hintTags: ['自疗', '推荐土克制+爆发'], hintText: '幼蛟会自愈，带土系克制并集中爆发抢血线',
-  },
-  {
-    id: 'stage_1_7', chapter: 1, index: 7, name: '烈焰隘口', element: 'fire',
-    type: 'elite', dropTableId: 'dt_forest_elite',
-    encounters: [mob('enemy_bat_fire'), mob('enemy_lion_fire')], difficulty: 1.4, starTurnLimit: 14,
-    mechanics: ['enemy_charge'],
-    hintTags: ['蓄力重击', '推荐水克制+护盾'], hintText: '狂狮会蓄力重击，带护盾/治疗扛住并用水克制',
-  },
-  {
-    id: 'stage_1_8', chapter: 1, index: 8, name: '蛮竹王座', element: 'wood',
-    type: 'boss', dropTableId: 'dt_forest_boss',
-    encounters: [mob('enemy_hedgehog_wood'), mob('enemy_panda_boss_wood')], difficulty: 1.5, isBoss: true, starTurnLimit: 18,
-    mechanics: ['orb_rock'],
-    hintTags: ['BOSS', '克制+爆发+续航'], hintText: '熊猫王减伤又自疗，需金系克制、爆发与续航三者兼备，盘面出现顽石珠',
-  },
+  buildChapterCaptureBoss({
+    id: 'stage_1_5', chapter: 1, index: 5, name: '星辉试炼', element: 'wood',
+    dropTableId: 'dt_forest_boss', creatureId: 'pet_017',
+    difficulty: 1.45, starTurnLimit: 18, challenge: 'multiWave',
+  }),
 ];
 
-/**
- * 第二章（6 关 · 幽晶溶洞）：引入「封印珠」棋盘机制。
- */
+// ── 第二章（6 关）：铺垫复用多波 · Boss 教封印珠 + 收录灵鹿 ──
 const CHAPTER_2: readonly StageDef[] = [
-  {
+  fillerStage({
     id: 'stage_2_1', chapter: 2, index: 1, name: '晶洞入口', element: 'metal',
-    type: 'normal', dropTableId: 'dt_cave_normal',
-    encounters: [mob('enemy_scorpion_metal')], difficulty: 1.0, starTurnLimit: 10,
-    mechanics: ['orb_sealed'],
-    hintTags: ['封印珠'], hintText: '初遇封印珠：消除其相邻珠子来解封',
-  },
-  {
+    type: 'normal', dropTableId: 'dt_cave_normal', difficulty: 1.0, starTurnLimit: 10,
+    challenge: 'multiWave',
+  }),
+  fillerStage({
     id: 'stage_2_2', chapter: 2, index: 2, name: '回音廊道', element: 'water',
-    type: 'normal', dropTableId: 'dt_cave_normal',
-    encounters: [mob('enemy_toad_water'), mob('enemy_bat_fire')], difficulty: 1.1, starTurnLimit: 12,
-    mechanics: ['orb_sealed', 'rule_multi_wave'],
-    hintTags: ['封印珠', '多波'], hintText: '封印珠 + 多波：边解封边保血',
-  },
-  {
+    type: 'normal', dropTableId: 'dt_cave_normal', difficulty: 1.05, starTurnLimit: 11,
+    challenge: 'multiWave',
+  }),
+  fillerStage({
     id: 'stage_2_3', chapter: 2, index: 3, name: '晶甲巢穴', element: 'metal',
-    type: 'elite', dropTableId: 'dt_cave_elite',
-    encounters: [mob('enemy_scorpion_metal')], difficulty: 1.2, starTurnLimit: 13,
-    mechanics: ['enemy_damage_reduce', 'enemy_charge'],
-    hintTags: ['减伤', '蓄力'], hintText: '晶甲蝎减伤又蓄力：克制破防并护盾扛击',
-  },
-  {
+    type: 'elite', dropTableId: 'dt_cave_elite', difficulty: 1.1, starTurnLimit: 12,
+    challenge: 'multiWave',
+  }),
+  fillerStage({
     id: 'stage_2_4', chapter: 2, index: 4, name: '毒雾深渊', element: 'water',
-    type: 'normal', dropTableId: 'dt_cave_normal',
-    encounters: [mob('enemy_toad_water'), mob('enemy_toad_water')], difficulty: 1.3, starTurnLimit: 14,
-    mechanics: ['orb_sealed', 'enemy_self_heal'],
-    hintTags: ['封印珠', '自疗'], hintText: '封印珠拖慢节奏 + 敌人自疗：解封后集中爆发',
-  },
-  {
+    type: 'normal', dropTableId: 'dt_cave_normal', difficulty: 1.15, starTurnLimit: 13,
+    challenge: 'multiWave',
+  }),
+  fillerStage({
     id: 'stage_2_5', chapter: 2, index: 5, name: '幽光裂隙', element: 'fire',
-    type: 'elite', dropTableId: 'dt_cave_elite',
-    encounters: [mob('enemy_bat_fire'), mob('enemy_scorpion_metal')], difficulty: 1.35, starTurnLimit: 15,
-    mechanics: ['rule_ban_water', 'enemy_damage_reduce'],
-    hintTags: ['封水', '减伤'], hintText: '本关水珠失效：改用其它属性破减伤',
-  },
-  {
-    id: 'stage_2_6', chapter: 2, index: 6, name: '幽晶王座', element: 'earth',
-    type: 'boss', dropTableId: 'dt_cave_boss',
-    encounters: [mob('enemy_toad_water'), mob('enemy_crystal_boss_earth')], difficulty: 1.5, isBoss: true, starTurnLimit: 20,
-    mechanics: ['orb_rock', 'enemy_damage_reduce', 'enemy_charge'],
-    hintTags: ['BOSS', '顽石封印', '减伤+蓄力'], hintText: '巨像减伤蓄力 + 顽石封印满盘：解封、破防、扛击三线兼顾',
-  },
+    type: 'elite', dropTableId: 'dt_cave_elite', difficulty: 1.2, starTurnLimit: 14,
+    challenge: 'multiWave',
+  }),
+  buildChapterCaptureBoss({
+    id: 'stage_2_6', chapter: 2, index: 6, name: '灵鹿试炼', element: 'wood',
+    dropTableId: 'dt_cave_boss', creatureId: 'pet_004',
+    difficulty: 1.5, starTurnLimit: 20, challenge: 'boardSeal',
+  }),
 ];
 
-/**
- * 第三章（6 关 · 风雷绝巅）：组合加难 + 引入「禁心」规则机制。
- */
+// ── 第三章（6 关）：铺垫混多波+封印 · Boss 教高防减伤 + 收录归墟玄龟（SSR 坦克） ──
 const CHAPTER_3: readonly StageDef[] = [
-  {
+  fillerStage({
     id: 'stage_3_1', chapter: 3, index: 1, name: '裂风崖', element: 'fire',
-    type: 'normal', dropTableId: 'dt_peak_normal',
-    encounters: [mob('enemy_eagle_fire'), mob('enemy_eagle_fire')], difficulty: 1.0, starTurnLimit: 13,
-    mechanics: ['enemy_double_charge'],
-    hintTags: ['连续蓄力'], hintText: '雷羽鹰连续蓄力：护盾与续航要足',
-  },
-  {
+    type: 'normal', dropTableId: 'dt_peak_normal', difficulty: 1.0, starTurnLimit: 13,
+    challenge: 'multiWave',
+  }),
+  fillerStage({
     id: 'stage_3_2', chapter: 3, index: 2, name: '雷鸣回廊', element: 'metal',
-    type: 'elite', dropTableId: 'dt_peak_elite',
-    encounters: [mob('enemy_warden_metal')], difficulty: 1.15, starTurnLimit: 15,
-    mechanics: ['orb_sealed', 'enemy_guard_heal'],
-    hintTags: ['封印珠', '减伤+自疗'], hintText: '守卫减伤自疗 + 封印珠：解封后克制爆发',
-  },
-  {
+    type: 'elite', dropTableId: 'dt_peak_elite', difficulty: 1.1, starTurnLimit: 14,
+    challenge: 'boardSeal',
+  }),
+  fillerStage({
     id: 'stage_3_3', chapter: 3, index: 3, name: '无心祭坛', element: 'water',
-    type: 'normal', dropTableId: 'dt_peak_normal',
-    encounters: [mob('enemy_toad_water'), mob('enemy_eagle_fire')], difficulty: 1.25, starTurnLimit: 16,
-    mechanics: ['rule_no_heal'],
-    hintTags: ['禁心'], hintText: '首现禁心：心珠不回血，靠护盾与速杀',
-  },
-  {
+    type: 'normal', dropTableId: 'dt_peak_normal', difficulty: 1.15, starTurnLimit: 15,
+    challenge: 'multiWave',
+  }),
+  fillerStage({
     id: 'stage_3_4', chapter: 3, index: 4, name: '绝风险道', element: 'fire',
-    type: 'elite', dropTableId: 'dt_peak_elite',
-    encounters: [mob('enemy_eagle_fire'), mob('enemy_warden_metal')], difficulty: 1.35, starTurnLimit: 17,
-    mechanics: ['rule_no_heal', 'enemy_double_charge'],
-    hintTags: ['禁心', '连续蓄力'], hintText: '禁心 + 连续蓄力：护盾流稳住节奏',
-  },
-  {
+    type: 'elite', dropTableId: 'dt_peak_elite', difficulty: 1.25, starTurnLimit: 16,
+    challenge: 'boardSeal',
+  }),
+  fillerStage({
     id: 'stage_3_5', chapter: 3, index: 5, name: '焚天台', element: 'fire',
-    type: 'elite', dropTableId: 'dt_peak_elite',
-    encounters: [mob('enemy_warden_metal'), mob('enemy_eagle_fire')], difficulty: 1.45, starTurnLimit: 18,
-    mechanics: ['rule_ban_fire', 'enemy_guard_heal'],
-    hintTags: ['封火', '减伤+自疗'], hintText: '本关火珠失效：换属性破减伤自疗',
-  },
-  {
-    id: 'stage_3_6', chapter: 3, index: 6, name: '风雷绝巅', element: 'wood',
-    type: 'boss', dropTableId: 'dt_peak_boss',
-    encounters: [mob('enemy_warden_metal'), mob('enemy_thunderlord_boss_wood')], difficulty: 1.6, isBoss: true, starTurnLimit: 24,
-    mechanics: ['rule_no_heal', 'orb_sealed', 'enemy_guard_heal', 'enemy_double_charge'],
-    hintTags: ['BOSS', '禁心', '封印珠', '减伤自疗+连续蓄力'],
-    hintText: '终章试炼：禁心 + 封印珠 + 减伤自疗 + 连续蓄力，养成与编队的总检验',
-  },
+    type: 'elite', dropTableId: 'dt_peak_elite', difficulty: 1.35, starTurnLimit: 17,
+    challenge: 'multiWave',
+  }),
+  buildChapterCaptureBoss({
+    id: 'stage_3_6', chapter: 3, index: 6, name: '玄龟试炼', element: 'earth',
+    dropTableId: 'dt_peak_boss', creatureId: 'pet_028',
+    difficulty: 2.3, starTurnLimit: 24, challenge: 'highDefense',
+  }),
 ];
 
-// ════════════════════════════════════════════════════════════════
-// 历练章（阶段九收录入口）：每关用杂怪铺垫，生物初级形态预告、高级形态收录。
-//   击败 tier2 + captureUnlock 即把该生物收录进 PlayerData.discovered。
-// ════════════════════════════════════════════════════════════════
-
+// ── 历练 4～8 章 ──
 interface TrialChapterDef {
   chapter: number;
   name: string;
-  /** 铺垫杂怪 id */
-  mob: string;
-  /** 章首引入的新机制（保证机制密度 + 关卡叙事） */
-  introMechanic: string;
-  /** 收录关额外规则机制（可空） */
-  extraMechanic?: string;
+  stageCount: number;
   difficultyBase: number;
-  /** 本章依次收录的生物 id（最后一只为章 Boss） */
-  creatureIds: readonly string[];
+  captureCreatureId: string;
+  bossChallenge: BossChallengeKind;
+  /** 长度 = stageCount - 1，仅已学挑战 */
+  fillerChallenges: readonly BossChallengeKind[];
+  fillerNames: readonly string[];
 }
 
 const TRIAL_CHAPTERS: readonly TrialChapterDef[] = [
   {
-    chapter: 4, name: '历练 · 锋芒试炼', mob: 'enemy_blade_metal',
-    introMechanic: 'trial_capture', difficultyBase: 0.85,
-    creatureIds: ['pet_metal_004', 'pet_wood_004', 'pet_water_004', 'pet_fire_004', 'pet_earth_004'],
+    chapter: 4, name: '历练 · 炽土试炼', stageCount: 6, difficultyBase: 0.9,
+    captureCreatureId: 'pet_014', bossChallenge: 'boardRock',
+    fillerChallenges: ['multiWave', 'boardSeal', 'highDefense', 'multiWave', 'boardSeal'],
+    fillerNames: ['炽土前哨', '熔岩小径', '岩傀儡阵', '焦土深谷', '封印残阵'],
   },
   {
-    chapter: 5, name: '历练 · 灵兽秘境', mob: 'enemy_slime_wood',
-    introMechanic: 'rule_ban_metal', extraMechanic: 'trial_elite_pair', difficultyBase: 0.85,
-    creatureIds: ['cr_jadehorn_goat', 'cr_golden_crane', 'cr_cloud_fox', 'cr_stone_ape', 'cr_kunlun_dragon'],
+    chapter: 5, name: '历练 · 灵兽秘境', stageCount: 7, difficultyBase: 0.92,
+    captureCreatureId: 'pet_011', bossChallenge: 'selfHeal',
+    fillerChallenges: ['boardRock', 'highDefense', 'boardSeal', 'multiWave', 'boardRock', 'highDefense'],
+    fillerNames: ['秘境入口', '顽石迷阵', '巨像守卫', '灵泉浅滩', '熔岩岔路', '古阵核心'],
   },
   {
-    chapter: 6, name: '历练 · 归墟深渊', mob: 'enemy_toad_water',
-    introMechanic: 'rule_ban_wood', extraMechanic: 'trial_elite_pair', difficultyBase: 0.8,
-    creatureIds: ['cr_abyss_jellyfish', 'cr_frost_seal', 'cr_guixu_turtle', 'cr_tide_manta', 'cr_guixu_whale'],
+    chapter: 6, name: '历练 · 归墟深渊', stageCount: 7, difficultyBase: 0.94,
+    captureCreatureId: 'pet_010', bossChallenge: 'chargeHit',
+    fillerChallenges: ['selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'selfHeal', 'multiWave'],
+    fillerNames: ['深渊上层', '寒潭回响', '晶甲巢穴', '自疗深池', '蓄力试场', '归墟裂隙'],
   },
   {
-    chapter: 7, name: '历练 · 星轨之野', mob: 'enemy_eagle_fire',
-    introMechanic: 'rule_ban_earth', extraMechanic: 'trial_elite_pair', difficultyBase: 0.75,
-    creatureIds: ['cr_star_deer', 'cr_thunder_cicada', 'cr_red_crow', 'cr_star_gear', 'cr_zhulong'],
+    chapter: 7, name: '历练 · 星轨之野', stageCount: 7, difficultyBase: 0.96,
+    captureCreatureId: 'pet_030', bossChallenge: 'noHeart',
+    fillerChallenges: ['chargeHit', 'selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'chargeHit'],
+    fillerNames: ['星轨外环', '蓄力星门', '自愈绿洲', '顽石星带', '巨像轨道', '禁心前庭'],
   },
   {
-    chapter: 8, name: '历练 · 虚空之巅', mob: 'enemy_warden_metal',
-    introMechanic: 'trial_void', extraMechanic: 'rule_no_heal', difficultyBase: 0.7,
-    creatureIds: ['cr_void_eye', 'cr_chaos_fox', 'cr_rift_beetle', 'cr_shadow_roc', 'cr_outer_demon'],
+    chapter: 8, name: '历练 · 虚空之巅', stageCount: 8, difficultyBase: 0.98,
+    captureCreatureId: 'pet_026', bossChallenge: 'banElement',
+    fillerChallenges: ['noHeart', 'chargeHit', 'selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'noHeart'],
+    fillerNames: ['虚空门扉', '禁心廊道', '蓄力深渊', '寒潭虚影', '顽石天阶', '封印核心', '封元前厅'],
   },
 ];
 
 function buildTrialChapter(def: TrialChapterDef): StageDef[] {
-  return def.creatureIds.map((cid, i): StageDef => {
-    const c = CREATURE_MAP.get(cid);
-    if (!c) throw new Error(`历练章引用未知生物: ${cid}`);
+  const c = CREATURE_MAP.get(def.captureCreatureId);
+  if (!c) throw new Error(`历练章收录宠未知: ${def.captureCreatureId}`);
+  const bossIndex = def.stageCount;
+  const stages: StageDef[] = [];
+
+  def.fillerChallenges.forEach((ch, i) => {
     const index = i + 1;
-    const isBoss = index === def.creatureIds.length;
-    const mechanics: string[] = [];
-    if (index === 1) mechanics.push(def.introMechanic);
-    if (def.extraMechanic && isBoss) mechanics.push(def.extraMechanic);
-    return {
+    stages.push(fillerStage({
       id: `stage_${def.chapter}_${index}`,
       chapter: def.chapter,
       index,
-      name: `${c.name}·历练`,
+      name: def.fillerNames[i] ?? `历练 ${index}`,
       element: c.element,
-      type: isBoss ? 'boss' : 'elite',
-      dropTableId: `dt_trial_${cid}`,
-      encounters: [
-        mob(def.mob),
-        { kind: 'creature', id: cid, tier: 'tier1' },
-        { kind: 'creature', id: cid, tier: 'tier2', captureUnlock: true },
-      ],
-      difficulty: def.difficultyBase + i * 0.06,
-      isBoss: isBoss || undefined,
-      starTurnLimit: 16 + def.chapter,
-      mechanics: mechanics.length > 0 ? mechanics : undefined,
-      hintTags: ['历练', '收录'],
-      hintText: `击败「${c.name}」的高级形态即可收录进宠物池`,
-    };
+      type: index % 2 === 0 ? 'elite' : 'normal',
+      dropTableId: index % 2 === 0 ? 'dt_trial_elite' : 'dt_trial_normal',
+      difficulty: def.difficultyBase + i * 0.05,
+      starTurnLimit: 14 + def.chapter + i,
+      challenge: ch,
+    }));
   });
+
+  stages.push(buildChapterCaptureBoss({
+    id: `stage_${def.chapter}_${bossIndex}`,
+    chapter: def.chapter,
+    index: bossIndex,
+    name: `${c.name}·试炼`,
+    element: c.element,
+    dropTableId: `dt_ch${def.chapter}_boss`,
+    creatureId: def.captureCreatureId,
+    difficulty: def.difficultyBase + def.stageCount * 0.08,
+    starTurnLimit: 18 + def.chapter * 2,
+    challenge: def.bossChallenge,
+  }));
+
+  return stages;
 }
 
 const TRIAL_STAGES: readonly StageDef[] = TRIAL_CHAPTERS.flatMap(buildTrialChapter);
@@ -290,15 +347,12 @@ export const STAGES: readonly StageDef[] = [
 
 export const STAGE_MAP: ReadonlyMap<string, StageDef> = new Map(STAGES.map((s) => [s.id, s]));
 
-/** 章节列表（去重，升序） */
 export const CHAPTERS: readonly number[] = [...new Set(STAGES.map((s) => s.chapter))].sort((a, b) => a - b);
 
-/** 取某章节的所有关卡 */
 export function stagesOfChapter(chapter: number): readonly StageDef[] {
   return STAGES.filter((s) => s.chapter === chapter);
 }
 
-/** 章节名 */
 export const CHAPTER_NAME: Readonly<Record<number, string>> = {
   1: '第一章 · 灵兽森林',
   2: '第二章 · 幽晶溶洞',
@@ -306,5 +360,14 @@ export const CHAPTER_NAME: Readonly<Record<number, string>> = {
   ...Object.fromEntries(TRIAL_CHAPTERS.map((t) => [t.chapter, `第${t.chapter}章 · ${t.name}`])),
 };
 
-// 兼容/便捷：初始赠送生物（其它模块可读）
+/** 旧关卡 id → 新 id（存档星数迁移） */
+export const STAGE_STAR_MIGRATION: Readonly<Record<string, string>> = {
+  stage_1_8: 'stage_1_5',
+  stage_4_5: 'stage_4_6',
+  stage_5_5: 'stage_5_7',
+  stage_6_5: 'stage_6_7',
+  stage_7_5: 'stage_7_7',
+  stage_8_2: 'stage_8_8',
+};
+
 export { STARTER_CREATURE_IDS };

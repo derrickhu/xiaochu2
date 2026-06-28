@@ -7,16 +7,22 @@ import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { CHAPTERS, CHAPTER_NAME, stagesOfChapter, stageWaveCount } from '@/balance/stages';
+import { getChapterGoal } from '@/balance/chapterGoal';
+import { ensurePetAvatars } from '@/config/assetPreload';
 import { getStageType } from '@/balance/stageTypes';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
 import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
-  makeText, makePanel, makeIconButton, makeCoverBackground, makeCurrencyRow, staggerIn,
+  makeText, makePanel, makeIconButton, makeCoverBackground, makeCurrencyRow, staggerIn, popIn,
 } from '@/ui';
+import { ScrollListController } from '@/ui/ScrollList';
 import type { TeamEnterData } from './TeamScene';
 import { deferAfterPointerEvent } from '@/utils/deferAfterPointer';
+import {
+  buildChapterGoalCard, CHAPTER_GOAL_CARD_H, CHAPTER_GOAL_CARD_W,
+} from './chapterGoalCard';
 
 export class TitleScene implements Scene {
   readonly name = 'title';
@@ -24,14 +30,33 @@ export class TitleScene implements Scene {
 
   /** 底部导航区高度（紫祥云底栏 + 三图标 + 文字标签） */
   private static readonly BOTTOM_RESERVE = 128;
+  private static readonly STAGE_ITEM_H = 86;
+  private static readonly STAGE_GAP = 12;
+  private static readonly GOAL_AFTER_NAV = 28;
+  private static readonly GOAL_LIST_GAP = 18;
 
-  /** 当前选中章节（进入时定位到最新已解锁章节） */
   private _chapter = 1;
+  private _scroll = new ScrollListController();
+  private _stageContent: PIXI.Container | null = null;
+  private _stageMask: PIXI.Graphics | null = null;
 
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
     this._chapter = this._latestUnlockedChapter();
+    void this._preloadAndBuild();
+  }
+
+  private async _preloadAndBuild(): Promise<void> {
+    const goal = getChapterGoal(this._chapter);
+    if (goal) await ensurePetAvatars([{ petId: goal.petId, star: 1 }]);
+    this._scroll.detach();
+    this._stageContent = null;
+    if (this._stageMask) {
+      this._stageMask.destroy();
+      this._stageMask = null;
+    }
+    this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
     this._build();
   }
 
@@ -44,6 +69,12 @@ export class TitleScene implements Scene {
   }
 
   onExit(): void {
+    this._scroll.detach();
+    this._stageContent = null;
+    if (this._stageMask) {
+      this._stageMask.destroy();
+      this._stageMask = null;
+    }
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
   }
 
@@ -52,11 +83,8 @@ export class TitleScene implements Scene {
     const h = Game.logicHeight;
 
     this._buildBackground(w, h);
-
-    // 顶栏：灵宠币 + 经验（资源图标置顶，更符合手游习惯）
     this._buildResourceBar(w, Game.safeTop + 36);
 
-    // 标题 logo（水墨书法「灵宠消消塔」，置于资源条下方，留足间距防重叠）
     const logoTex = TextureCache.get(UI_IMAGES.titleLogo);
     const logoY = Game.safeTop + 168;
     if (logoTex) {
@@ -72,17 +100,21 @@ export class TitleScene implements Scene {
       this.container.addChild(title);
     }
 
-    this._buildChapterNav(w, Game.safeTop + 268);
-    this._buildStageList(w, Game.safeTop + 320);
+    const navY = Game.safeTop + 268;
+    this._buildChapterNav(w, navY);
+
+    const goalTop = navY + TitleScene.GOAL_AFTER_NAV;
+    const goalBottom = this._buildChapterGoal(w, goalTop);
+    const listTop = goalBottom + TitleScene.GOAL_LIST_GAP;
+    const listBottom = h - TitleScene.BOTTOM_RESERVE - 12;
+    this._buildStageList(w, listTop, listBottom);
     this._buildBottomNav(w, h);
   }
 
-  /** 主背景：home_bg cover 铺满，缺图回退暖米白 */
   private _buildBackground(w: number, h: number): void {
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.home, w, h));
   }
 
-  /** 灵宠币 + 经验 + 灵玉，图标并排左对齐 */
   private _buildResourceBar(w: number, y: number): void {
     const padX = 48;
     this.container.addChild(makeCurrencyRow({
@@ -93,7 +125,6 @@ export class TitleScene implements Scene {
     }));
   }
 
-  /** 章节切换：◀ 章节名 ▶ */
   private _buildChapterNav(w: number, y: number): void {
     const chapterUnlocked = PlayerData.isChapterUnlocked(this._chapter);
     const name = CHAPTER_NAME[this._chapter] ?? `第${this._chapter}章`;
@@ -118,7 +149,7 @@ export class TitleScene implements Scene {
         arrow.cursor = 'pointer';
         arrow.on('pointertap', () => {
           this._chapter = targetChapter!;
-          deferAfterPointerEvent(() => this._refresh());
+          deferAfterPointerEvent(() => { void this._preloadAndBuild(); });
         });
       }
       this.container.addChild(arrow);
@@ -127,20 +158,53 @@ export class TitleScene implements Scene {
     mkArrow('▶', w / 2 + 220, idx < CHAPTERS.length - 1 ? CHAPTERS[idx + 1] : null);
   }
 
-  private _buildStageList(w: number, startY: number): void {
+  /** @returns 卡片底边 Y（设计坐标） */
+  private _buildChapterGoal(w: number, topY: number): number {
+    const goal = getChapterGoal(this._chapter);
+    if (!goal) return topY;
+
+    const wrap = new PIXI.Container();
+    wrap.position.set(w / 2, topY + CHAPTER_GOAL_CARD_H / 2);
+    const card = buildChapterGoalCard(goal, { width: CHAPTER_GOAL_CARD_W });
+    wrap.addChild(card);
+    this.container.addChild(wrap);
+    popIn(wrap, { fromScale: 0.94 });
+
+    return topY + CHAPTER_GOAL_CARD_H;
+  }
+
+  private _buildStageList(w: number, listTop: number, listBottom: number): void {
+    this._scroll.detach();
+    if (this._stageMask) {
+      this.container.removeChild(this._stageMask);
+      this._stageMask.destroy();
+      this._stageMask = null;
+    }
+    if (this._stageContent) {
+      this._stageContent.destroy({ children: true });
+      this._stageContent = null;
+    }
+
     const stages = stagesOfChapter(this._chapter);
-    const itemW = 620;
-    const itemH = 86;
-    const gap = 12;
+    const itemW = CHAPTER_GOAL_CARD_W;
+    const itemH = TitleScene.STAGE_ITEM_H;
+    const gap = TitleScene.STAGE_GAP;
+    const content = new PIXI.Container();
+    content.position.set(0, listTop);
+    this._stageContent = content;
+    this.container.addChild(content);
+
     const items: PIXI.Container[] = [];
+    let maxBottom = 0;
 
     stages.forEach((stage, i) => {
       const unlocked = PlayerData.isUnlocked(stage);
       const stars = PlayerData.starsOf(stage.id);
       const typeDef = getStageType(stage.type);
+      const y = i * (itemH + gap);
 
       const item = new PIXI.Container();
-      item.position.set(w / 2, startY + i * (itemH + gap) + itemH / 2);
+      item.position.set(w / 2, y + itemH / 2);
 
       const itemBg = makePanel({
         width: itemW, height: itemH, radius: RADIUS.card,
@@ -158,8 +222,13 @@ export class TitleScene implements Scene {
       nameText.position.set(-itemW / 2 + 28, -14);
       item.addChild(nameText);
 
-      // 关卡类型徽标（颜色取自 stageTypes 单一真源）
-      if (stage.type !== 'normal') {
+      if (stage.isBoss) {
+        const capBadge = makeText('收录', {
+          size: FONT_SIZE.xs, fill: COLORS.accent, bold: true, anchor: [0, 0.5],
+        });
+        capBadge.position.set(-itemW / 2 + 28 + nameText.width + 14, -14);
+        item.addChild(capBadge);
+      } else if (stage.type !== 'normal') {
         const badge = makeText(typeDef.name, {
           size: FONT_SIZE.xs, fill: unlocked ? typeDef.color : COLORS.textDisabled, bold: true, anchor: [0, 0.5],
         });
@@ -192,24 +261,46 @@ export class TitleScene implements Scene {
         item.eventMode = 'static';
         item.cursor = 'pointer';
         item.on('pointertap', () => {
+          if (this._scroll.moved) return;
           SceneManager.switchTo('team', { stageId: stage.id } satisfies TeamEnterData);
         });
       }
 
-      this.container.addChild(item);
+      content.addChild(item);
       items.push(item);
+      maxBottom = Math.max(maxBottom, y + itemH);
     });
 
-    // 关卡列表逐项入场
     staggerIn(items, { stepDelay: 0.04, offsetY: 16 });
+
+    const viewportH = listBottom - listTop;
+    const contentH = maxBottom + gap;
+    const scrollMin = Math.min(listTop, listTop - Math.max(0, contentH - viewportH));
+
+    if (contentH > viewportH) {
+      const mask = new PIXI.Graphics();
+      mask.beginFill(0xffffff);
+      mask.drawRect(0, listTop, w, viewportH);
+      mask.endFill();
+      this.container.addChild(mask);
+      this._stageMask = mask;
+      content.mask = mask;
+
+      this._scroll.attach({
+        content: () => this._stageContent,
+        viewportTop: listTop,
+        viewportH,
+        scrollMin,
+        listTop,
+        moveThreshold: 2,
+      });
+    }
   }
 
-  /** 底部导航：灵宠 / 召唤 / 商店 / 编队 */
   private _buildBottomNav(w: number, h: number): void {
     const reserve = TitleScene.BOTTOM_RESERVE;
     const navTop = h - reserve;
 
-    // 底栏背景：紫祥云贴图（缺图回退纯色条）
     const navTex = TextureCache.get(UI_IMAGES.navBar);
     if (navTex) {
       const navBg = new PIXI.Sprite(navTex);
@@ -226,7 +317,6 @@ export class TitleScene implements Scene {
       this.container.addChild(barBg);
     }
 
-    // 四按钮均分底栏（贴图图标 + 文字标签）
     const navIconSize = 64;
     const btnY = navTop + 56;
     const canGacha = PlayerData.lingyu >= ECONOMY.gacha.singleCost;
@@ -249,7 +339,6 @@ export class TitleScene implements Scene {
   }
 
   private _refresh(): void {
-    this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
-    this._build();
+    void this._preloadAndBuild();
   }
 }

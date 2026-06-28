@@ -1,0 +1,339 @@
+/**
+ * 宠物槽位伤害飘字 — 样式/文案/运动参数对齐 xiao_chu dmgFloat.js
+ */
+import * as PIXI from 'pixi.js';
+import { Game } from '@/core/Game';
+import type { Element } from '@/balance/combat';
+import { UI } from '@/balance/ui';
+
+/** xiao_chu main.js: S = W / 375 */
+export function dmgFloatScale(): number {
+  return Game.logicWidth / 375;
+}
+
+/** xiao_chu SLOT_ATTR_PALETTE */
+export interface SlotAttrPalette {
+  fillTop: string;
+  fillBottom: string;
+  glowColor: string;
+}
+
+export const SLOT_ATTR_PALETTE: Readonly<Record<Element, SlotAttrPalette>> = {
+  metal: { fillTop: '#fff7a8', fillBottom: '#ffd63d', glowColor: '#ffe14d' },
+  wood: { fillTop: '#d8ff8d', fillBottom: '#6ef235', glowColor: '#90ff57' },
+  water: { fillTop: '#b8fdff', fillBottom: '#44d7ff', glowColor: '#61efff' },
+  fire: { fillTop: '#ffd0b8', fillBottom: '#ff7a58', glowColor: '#ff9668' },
+  earth: { fillTop: '#fff7d8', fillBottom: '#ffd76a', glowColor: '#ffe89a' },
+};
+
+export interface DmgRenderStyle {
+  fontSize: number;
+  stroke: number;
+  strokeColor: string;
+  glow: number;
+  fillTop: string;
+  fillBottom: string;
+  fontWeight: number | string;
+  fontFamily: string;
+}
+
+const DMG_FONT = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
+
+/** xiao_chu RENDER_CFG.dmgFloat.styles */
+export const DMG_RENDER_STYLES: Readonly<Record<string, DmgRenderStyle>> = {
+  slotDamageMain: {
+    fontSize: 21,
+    stroke: 5,
+    strokeColor: '#101010',
+    glow: 10,
+    fillTop: '#fff8ca',
+    fillBottom: '#ffd84c',
+    fontWeight: 900,
+    fontFamily: DMG_FONT,
+  },
+  slotDamageCrit: {
+    fontSize: 29,
+    stroke: 6.8,
+    strokeColor: '#120d08',
+    glow: 24,
+    fillTop: '#ffffff',
+    fillBottom: '#ffe56c',
+    fontWeight: 900,
+    fontFamily: DMG_FONT,
+  },
+  slotDamageMinor: {
+    fontSize: 13,
+    stroke: 3.2,
+    strokeColor: '#101010',
+    glow: 6,
+    fillTop: '#fff7b8',
+    fillBottom: '#ffd43c',
+    fontWeight: 900,
+    fontFamily: DMG_FONT,
+  },
+};
+
+export interface DmgMotionPreset {
+  startScale: number;
+  peakScale: number;
+  settleScale: number;
+  popFrames: number;
+  settleFrames: number;
+  startYOffset?: number;
+  riseFrames: number;
+  riseDist: number;
+  returnFrames?: number;
+  returnTo?: number;
+  reboundFrames?: number;
+  reboundTo?: number;
+  holdFrames?: number;
+  driftFrames?: number;
+  driftDist?: number;
+  lifeFrames: number;
+  fadeStart: number;
+  shakeDur?: number;
+  shakeAmp?: number;
+  jitterFrames?: number;
+  jitterAmp?: number;
+}
+
+/** xiao_chu MOTION_PRESETS（宠物槽位伤害） */
+export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
+  slotDamageMain: {
+    startScale: 0.64,
+    peakScale: 1.36,
+    settleScale: 1.02,
+    popFrames: 4,
+    settleFrames: 15,
+    startYOffset: 14,
+    riseFrames: 11,
+    riseDist: 54,
+    returnFrames: 10,
+    returnTo: -7,
+    reboundFrames: 9,
+    reboundTo: 4,
+    holdFrames: 24,
+    driftFrames: 12,
+    driftDist: 5,
+    lifeFrames: 80,
+    fadeStart: 62,
+  },
+  slotDamageCrit: {
+    startScale: 0.68,
+    peakScale: 1.62,
+    settleScale: 1.1,
+    popFrames: 4,
+    settleFrames: 16,
+    startYOffset: 16,
+    riseFrames: 12,
+    riseDist: 64,
+    returnFrames: 10,
+    returnTo: -9,
+    reboundFrames: 10,
+    reboundTo: 4.5,
+    holdFrames: 30,
+    driftFrames: 13,
+    driftDist: 6,
+    lifeFrames: 94,
+    fadeStart: 72,
+    shakeDur: 13,
+    shakeAmp: 4.8,
+    jitterFrames: 16,
+    jitterAmp: 3.3,
+  },
+  slotDamageMinor: {
+    startScale: 0.8,
+    peakScale: 1.12,
+    settleScale: 1,
+    popFrames: 4,
+    settleFrames: 8,
+    riseFrames: 5,
+    riseDist: 10,
+    returnFrames: 7,
+    returnTo: 1,
+    holdFrames: 12,
+    lifeFrames: 28,
+    fadeStart: 21,
+  },
+};
+
+/** xiao_chu FLOAT_CFG 宠物伤害缩放 / 延迟 */
+export const PET_FLOAT_CFG = {
+  normalAtk: { slotYRatio: 0.6, scale: 1.03, delayStep: 3 },
+  skill: { slotYRatio: 0.6, scale: 1.04 },
+  multiHit: { upperYRatio: 0.5, lowerYRatio: 0.78, xStep: 8, scale: 1.03 },
+} as const;
+
+export type PetDmgStyleKey = 'slotDamageMain' | 'slotDamageCrit' | 'slotDamageMinor';
+
+export function resolvePetDmgStyleKey(isCrit: boolean, minor: boolean): PetDmgStyleKey {
+  if (minor) return 'slotDamageMinor';
+  if (isCrit) return 'slotDamageCrit';
+  return 'slotDamageMain';
+}
+
+export function formatDmgNumber(n: number): string {
+  return Math.max(0, Math.round(n || 0)).toLocaleString('en-US');
+}
+
+export function buildPetDmgLabel(_element: Element, damage: number): string {
+  return formatDmgNumber(damage);
+}
+
+/** 槽位锚点：对齐 xiao_chu _petSlotAnchor main lane */
+export function petSlotDamageAnchor(slotX: number, slotY: number, lane: 'main' | 'minorUpper' | 'minorLower' = 'main'): { x: number; y: number } {
+  const { petSize, petFrameScale } = UI.battle;
+  const frameH = petSize * petFrameScale;
+  const frameTop = slotY - frameH / 2;
+  const ratio = lane === 'minorUpper'
+    ? PET_FLOAT_CFG.multiHit.upperYRatio
+    : lane === 'minorLower'
+      ? PET_FLOAT_CFG.multiHit.lowerYRatio
+      : PET_FLOAT_CFG.normalAtk.slotYRatio;
+  return { x: slotX, y: frameTop + frameH * ratio };
+}
+
+export function applyDmgRenderStyle(
+  text: PIXI.Text,
+  styleKey: PetDmgStyleKey,
+  palette: SlotAttrPalette,
+): void {
+  const S = dmgFloatScale();
+  const RS = DMG_RENDER_STYLES[styleKey];
+  text.style.fontFamily = RS.fontFamily;
+  text.style.fontSize = RS.fontSize * S;
+  text.style.fontWeight = '900' as PIXI.TextStyleFontWeight;
+  text.style.fill = [palette.fillTop || RS.fillTop, palette.fillBottom || RS.fillBottom];
+  text.style.fillGradientType = PIXI.TEXT_GRADIENT.LINEAR_VERTICAL;
+  text.style.stroke = RS.strokeColor;
+  text.style.strokeThickness = RS.stroke * S;
+  text.style.dropShadow = true;
+  text.style.dropShadowColor = palette.glowColor;
+  text.style.dropShadowBlur = RS.glow * S;
+  text.style.dropShadowDistance = 0;
+  text.style.dropShadowAlpha = 1;
+  text.style.align = 'center';
+}
+
+function lerp(a: number, b: number, p: number): number {
+  return a + (b - a) * p;
+}
+
+function easeOutCubic(p: number): number {
+  const x = Math.max(0, Math.min(1, p));
+  return 1 - (1 - x) ** 3;
+}
+
+export interface PetDamageFloatRuntime {
+  text: PIXI.Text;
+  update(dt: number): boolean;
+}
+
+/** 帧驱动飘字（逻辑同 xiao_chu animations.js _updateDmgFloatList） */
+export function createPetDamageFloatRuntime(opts: {
+  text: PIXI.Text;
+  baseX: number;
+  baseY: number;
+  baseScale: number;
+  styleKey: PetDmgStyleKey;
+  motion: DmgMotionPreset;
+  delayFrames?: number;
+}): PetDamageFloatRuntime {
+  const { text, baseX, baseY, baseScale, styleKey, motion } = opts;
+  const S = dmgFloatScale();
+  let delay = opts.delayFrames ?? 0;
+  let t = 0;
+  let dead = false;
+  const targetAlpha = 1;
+  const startScale = motion.startScale ?? 0.78;
+
+  text.position.set(baseX, baseY);
+  text.scale.set(baseScale * startScale);
+  text.alpha = delay > 0 ? 0 : 1;
+
+  return {
+    text,
+    update(dt: number): boolean {
+      if (dead) return true;
+      const fps = UI.fps.battle;
+      if (delay > 0) {
+        delay -= dt * fps;
+        if (delay > 0) return false;
+        text.alpha = targetAlpha;
+      }
+
+      t += dt * fps;
+      const popFrames = Math.max(1, motion.popFrames);
+      const settleFrames = Math.max(popFrames + 1, motion.settleFrames);
+      const riseFrames = Math.max(1, motion.riseFrames);
+      const driftFrames = Math.max(0, motion.driftFrames ?? 0);
+      const returnFrames = Math.max(0, motion.returnFrames ?? 0);
+      const reboundFrames = Math.max(0, motion.reboundFrames ?? 0);
+      const holdFrames = Math.max(0, motion.holdFrames ?? 0);
+      const lifeFrames = Math.max(settleFrames + 1, motion.lifeFrames);
+      const fadeStart = Math.min(lifeFrames - 1, Math.max(settleFrames, motion.fadeStart));
+      const peakScale = motion.peakScale ?? 1.18;
+      const settleScale = motion.settleScale ?? 1;
+
+      let motionScale: number;
+      if (t <= popFrames) {
+        motionScale = lerp(startScale, peakScale, easeOutCubic(t / popFrames));
+      } else if (t <= settleFrames) {
+        motionScale = lerp(peakScale, settleScale, easeOutCubic((t - popFrames) / (settleFrames - popFrames)));
+      } else {
+        motionScale = settleScale;
+      }
+      text.scale.set(baseScale * motionScale);
+
+      const startYOffset = (motion.startYOffset ?? 0) * S;
+      const riseDist = (motion.riseDist ?? 0) * S;
+      const returnTo = (motion.returnTo ?? 0) * S;
+      const reboundTo = (motion.reboundTo ?? motion.returnTo ?? 0) * S;
+      const settleTo = reboundFrames > 0 ? reboundTo : returnTo;
+
+      const riseP = Math.min(1, t / riseFrames);
+      let yOffset = startYOffset - easeOutCubic(riseP) * riseDist;
+
+      if (returnFrames > 0 && t > riseFrames) {
+        if (reboundFrames > 0 && t > riseFrames + returnFrames) {
+          const reboundP = Math.min(1, (t - riseFrames - returnFrames) / reboundFrames);
+          yOffset = lerp(-returnTo, -reboundTo, easeOutCubic(reboundP));
+        } else {
+          const returnP = Math.min(1, (t - riseFrames) / returnFrames);
+          yOffset = lerp(-riseDist, -returnTo, easeOutCubic(returnP));
+        }
+      } else if (t > riseFrames && driftFrames > 0) {
+        const driftP = Math.min(1, (t - riseFrames) / driftFrames);
+        yOffset -= easeOutCubic(driftP) * (motion.driftDist ?? 0) * S;
+      }
+
+      if (returnFrames > 0 && t > riseFrames + returnFrames + reboundFrames + holdFrames && driftFrames > 0) {
+        const driftP = Math.min(1, (t - riseFrames - returnFrames - reboundFrames - holdFrames) / driftFrames);
+        yOffset = -settleTo - easeOutCubic(driftP) * (motion.driftDist ?? 0) * S;
+      }
+
+      let shakeOffset = 0;
+      if (styleKey === 'slotDamageCrit' && (motion.shakeDur ?? 0) > 0 && t <= (motion.shakeDur ?? 0)) {
+        shakeOffset += Math.sin(t * 3.5) * (motion.shakeAmp ?? 0) * S * (1 - t / (motion.shakeDur ?? 1));
+      }
+      if ((motion.jitterFrames ?? 0) > 0 && t <= (motion.jitterFrames ?? 0)) {
+        shakeOffset += Math.sin(t * 5.2) * (motion.jitterAmp ?? 0) * S * (1 - t / (motion.jitterFrames ?? 1));
+      }
+
+      text.position.set(baseX + shakeOffset, baseY + yOffset);
+
+      if (t < fadeStart) {
+        text.alpha = targetAlpha;
+      } else {
+        const fadeDur = Math.max(1, lifeFrames - fadeStart);
+        text.alpha = Math.max(0, targetAlpha * (1 - (t - fadeStart) / fadeDur));
+      }
+
+      if (t >= lifeFrames || text.alpha <= 0) {
+        dead = true;
+        return true;
+      }
+      return false;
+    },
+  };
+}

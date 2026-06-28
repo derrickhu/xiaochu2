@@ -13,7 +13,8 @@ import { Platform } from '@/core/PlatformService';
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BoardModel } from '@/game/board/BoardModel';
 import type { BoardView } from '@/game/board/BoardView';
-import type { BattleFx } from './BattleFx';
+import type { Element } from '@/balance/combat';
+import type { BattleFx, PetDamageFloatOpts } from './BattleFx';
 import type { BattleHud } from './BattleHud';
 import type { BattlePetBar } from './BattlePetBar';
 import type { BattleLayout } from './BattleLayout';
@@ -30,6 +31,28 @@ export interface SkillCastDeps {
   refreshSkillUi: () => void;
   /** 敌人死亡处理，返回 true = 战斗结束 */
   handleEnemyDefeat: () => Promise<boolean>;
+}
+
+function spawnSkillDamage(
+  fx: BattleFx,
+  petBar: BattlePetBar,
+  petIndex: number,
+  element: Element,
+  damage: number,
+  opts?: Pick<PetDamageFloatOpts, 'isCrit' | 'orderIdx' | 'minor' | 'skill'>,
+): void {
+  if (damage <= 0) return;
+  const slot = petBar.slotAt(petIndex);
+  fx.spawnPetDamageFloat({
+    slotX: slot.x,
+    slotY: slot.y,
+    element,
+    damage,
+    isCrit: opts?.isCrit ?? false,
+    orderIdx: opts?.orderIdx ?? 0,
+    minor: opts?.minor,
+    skill: opts?.skill ?? true,
+  });
 }
 
 /** 返回 true 表示战斗已结束（最后一波敌人被击败）。 */
@@ -56,12 +79,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         slot.x, slot.y - 60, enemyCenterX, enemyCenterY, result.element ?? pet.def.element,
       );
       hud.playEnemyHit(fx, result.element ?? pet.def.element, damage, true);
-      fx.spawnFloat(
-        `${damage}`,
-        enemyCenterX + (Math.random() - 0.5) * 100,
-        enemyCenterY - 40,
-        color, 1.4,
-      );
+      spawnSkillDamage(fx, petBar, petIndex, result.element ?? pet.def.element, damage);
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
       break;
@@ -75,7 +93,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         ),
       ));
       hud.playEnemyHit(fx, pet.def.element, damage, true);
-      fx.spawnFloat(`${damage}`, enemyCenterX, enemyCenterY - 40, color, 1.5);
+      spawnSkillDamage(fx, petBar, petIndex, pet.def.element, damage);
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
       break;
@@ -89,12 +107,10 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       for (let i = 0; i < hits; i++) {
         await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
         hud.playEnemyHit(fx, el, Math.round(total / hits), i === hits - 1);
-        fx.spawnFloat(
-          `${Math.round(total / hits)}`,
-          enemyCenterX + (Math.random() - 0.5) * 110,
-          enemyCenterY - 40 - i * 8,
-          color, 1.2,
-        );
+        spawnSkillDamage(fx, petBar, petIndex, el, Math.round(total / hits), {
+          orderIdx: i,
+          minor: i > 0,
+        });
       }
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
@@ -107,7 +123,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
       if (initial > 0) {
         hud.playEnemyHit(fx, el, initial, true);
-        fx.spawnFloat(`${initial}`, enemyCenterX, enemyCenterY - 40, color, 1.3);
+        spawnSkillDamage(fx, petBar, petIndex, el, initial);
       }
       fx.spawnFloat(
         `灼烧 ${result.value ?? 0}/回合 ×${result.turns ?? 0}`,
@@ -128,7 +144,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         const el = result.element ?? pet.def.element;
         await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
         hud.playEnemyHit(fx, el, damage, true);
-        fx.spawnFloat(`${damage}`, enemyCenterX, enemyCenterY - 40, color, 1.3);
+        spawnSkillDamage(fx, petBar, petIndex, el, damage);
       }
       fx.spawnFloat(`眩晕 ${result.turns ?? 0} 回合`, enemyCenterX, enemyCenterY - 76, 0xfff176, 1.2);
       fx.burst({

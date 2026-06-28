@@ -6,6 +6,7 @@ import { Game } from '@/core/Game';
 import { SceneManager } from '@/core/SceneManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
+import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { STAGES } from '@/balance/stages';
 import { PET_MAP } from '@/balance/pets';
 import { UI_PANEL_IMAGES, UI_IMAGES, petAvatarPath } from '@/config/Assets';
@@ -338,7 +339,7 @@ export class BattleResultOverlay {
       let ix = -rowW / 2 + iconSize / 2;
       const rowY = layout.discover + 20;
       for (const cid of newlyDiscovered) {
-        const tex = TextureCache.get(petAvatarPath(cid, 1));
+        const tex = getPetAvatarTexture(cid, 1);
         if (tex) {
           const sp = new PIXI.Sprite(tex);
           sp.anchor.set(0.5, 1);

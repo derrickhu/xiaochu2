@@ -5,6 +5,11 @@
  * 分包：见 config/Subpackages.ts（构建后由 scripts/organize-subpackages.mjs 整理目录）
  */
 import type { Element, OrbType } from '@/balance/combat';
+import {
+  creatureUsesCrSubpackage,
+  legacyCreatureId,
+  migrateCreatureId,
+} from '@/balance/creatureIdMigration';
 import { SUBPACKAGE_ROOT } from '@/config/Subpackages';
 
 const IMG = 'images';
@@ -39,9 +44,9 @@ export const ORB_IMAGES: Readonly<Record<OrbType, string>> = {
   heart: `${IMG}/orb/orb_heart.png`,
 };
 
-/** 敌人立绘根目录（cr_ _creature 面单独分包；enemy_/pet_ 在 pkg-enemy） */
+/** 敌人立绘根目录（pet_011+ 收录怪单独分包） */
 function enemyImageRoot(id: string): string {
-  const pkg = id.startsWith('cr_') ? PKG.enemyCr : PKG.enemy;
+  const pkg = creatureUsesCrSubpackage(id) ? PKG.enemyCr : PKG.enemy;
   return `${pkg}/images/enemy`;
 }
 
@@ -50,17 +55,35 @@ export function enemyImage(enemyId: string): string {
   return `${enemyImageRoot(enemyId)}/${enemyId}.png`;
 }
 
+/** ★4 及以上使用觉醒灵相头像（*_s3.png） */
+export const PET_AWAKEN_STAR = 4;
+
+function canonicalCreatureId(id: string): string {
+  return migrateCreatureId(id) ?? id;
+}
+
 /** 灵宠初始头像（pkg-pet） */
 export function petImage(petId: string): string {
-  return `${PKG.pet}/images/pet/${petId}.png`;
+  return `${PKG.pet}/images/pet/${canonicalCreatureId(petId)}.png`;
 }
 
 /** 灵宠觉醒头像（pkg-pet） */
 export function petImageAwakened(petId: string): string {
-  return `${PKG.pet}/images/pet/${petId}_s3.png`;
+  return `${PKG.pet}/images/pet/${canonicalCreatureId(petId)}_s3.png`;
 }
 
-export const PET_AWAKEN_STAR = 4;
+/**
+ * 预加载候选路径：新 ID 文件名 + 旧 ID 文件名（迁移过渡期，见 scripts/rename-creature-assets.mjs）
+ */
+export function petAvatarLoadPaths(petId: string, star = 1): readonly string[] {
+  const id = canonicalCreatureId(petId);
+  const primary = star >= PET_AWAKEN_STAR ? petImageAwakened(id) : petImage(id);
+  const legacy = legacyCreatureId(id);
+  if (!legacy) return [primary];
+  const suffix = star >= PET_AWAKEN_STAR ? '_s3' : '';
+  const fallback = `${PKG.pet}/images/pet/${legacy}${suffix}.png`;
+  return fallback === primary ? [primary] : [primary, fallback];
+}
 
 export function petAvatarPath(petId: string, star = 1): string {
   return star >= PET_AWAKEN_STAR ? petImageAwakened(petId) : petImage(petId);

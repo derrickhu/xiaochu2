@@ -14,12 +14,12 @@ import { Platform } from '@/core/PlatformService';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
 import { enemyImage, battleBgImage, ORB_IMAGES } from '@/config/Assets';
-import { comboMultiplier } from '@/formulas/damage';
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BoardView } from '@/game/board/BoardView';
 import { delay } from './battleWidgets';
 import type { BattleLayout } from './BattleLayout';
 import type { BattleFx } from './BattleFx';
+import { ComboDisplay } from './ComboDisplay';
 
 export class BattleHud {
   private _waveText!: PIXI.Text;
@@ -36,7 +36,7 @@ export class BattleHud {
   private _heroHpBar!: PIXI.Graphics;
   private _heroHpText!: PIXI.Text;
   private _dragBar!: PIXI.Graphics;
-  private _comboText!: PIXI.Text;
+  private _combo!: ComboDisplay;
   private _statusText!: PIXI.Text;
 
   /** 血条显示状态：shown = 主条（快速跟随），white = 损血白条（延迟收缩） */
@@ -144,17 +144,8 @@ export class BattleHud {
   }
 
   buildCombo(parent: PIXI.Container): void {
-    this._comboText = new PIXI.Text('', {
-      fontSize: 44,
-      fill: 0xffe082,
-      fontWeight: 'bold',
-      stroke: 0x4a2c00,
-      strokeThickness: 5,
-    });
-    this._comboText.anchor.set(0.5);
-    this._comboText.position.set(Game.logicWidth / 2, this._layout.boardY - 36);
-    this._comboText.visible = false;
-    parent.addChild(this._comboText);
+    this._combo = new ComboDisplay(this._layout);
+    this._combo.build(parent);
   }
 
   /** 增伤 buff 状态行（护盾已在血条上展示） */
@@ -456,35 +447,17 @@ export class BattleHud {
 
   // ════════════ Combo ════════════
 
-  /** Combo 跳字：数字越大字号越大颜色越烈；连锁(天降)时弹跳更强 */
-  showCombo(combo: number, emphasized = false): void {
-    const tier = UI.comboTiers.find((t) => combo >= t.from) ?? UI.comboTiers[UI.comboTiers.length - 1];
-    this._comboText.visible = true;
-    this._comboText.alpha = 1;
-    this._comboText.style.fontSize = tier.fontSize;
-    this._comboText.style.fill = tier.color;
-    this._comboText.text = combo >= 2
-      ? `${combo} Combo ×${comboMultiplier(combo).toFixed(1)}`
-      : '1 Combo';
-    TweenManager.cancelTarget(this._comboText);
-    TweenManager.cancelTarget(this._comboText.scale);
-    this._comboText.scale.set(emphasized ? 1.7 : 1.4);
-    TweenManager.to({
-      target: this._comboText.scale, props: { x: 1, y: 1 },
-      duration: UI.anim.comboPop, ease: Ease.easeOutBack,
-    });
+  /** Combo 跳字 + 粒子/闪光（对齐 xiao_chu 棋盘中央展示） */
+  showCombo(combo: number, fx: BattleFx): void {
+    this._combo.show(combo, fx);
   }
 
   hideCombo(): void {
-    const t = this._comboText;
-    TweenManager.to({
-      target: t, props: { alpha: 0 },
-      duration: UI.anim.comboFade, delay: UI.anim.comboFadeDelay,
-      onComplete: () => {
-        t.visible = false;
-        t.alpha = 1;
-      },
-    });
+    this._combo.hide();
+  }
+
+  updateCombo(dt: number): void {
+    this._combo.update(dt);
   }
 
   /** 英雄血条数字受击跳动 */

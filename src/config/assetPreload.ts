@@ -18,10 +18,11 @@ import {
   UI_SCENE_IMAGES,
   battleBgImage,
   enemyImage,
-  petAvatarPath,
+  petAvatarLoadPaths,
   petFrameImage,
-  petImage,
 } from '@/config/Assets';
+import { loadSubpackagesForPaths } from '@/config/Subpackages';
+import { preloadPetAvatarTextures } from '@/config/petAvatarTexture';
 
 /** 灵宠池系页面共用壳（背景 + 标题匾） */
 export const PET_POOL_SHELL_IMAGES: readonly string[] = [
@@ -65,25 +66,22 @@ function unique(paths: Iterable<string>): string[] {
   return [...new Set(paths)];
 }
 
-/** 图鉴列表：已拥有用当前星级头像，其余只用普通头像 */
-export function codexPetPreloadImages(): readonly string[] {
-  const paths: string[] = [];
-  for (const pet of PETS) {
-    if (PlayerData.isOwned(pet.id)) {
-      paths.push(petAvatarPath(pet.id, PlayerData.petStar(pet.id)));
-    } else {
-      paths.push(petImage(pet.id));
-    }
-  }
-  return paths;
+export interface PetAvatarPreloadEntry {
+  petId: string;
+  star?: number;
+}
+
+/** 图鉴：全部灵宠头像（已拥有用当前星级） */
+export function codexPetAvatarEntries(): PetAvatarPreloadEntry[] {
+  return PETS.map((pet) => ({
+    petId: pet.id,
+    star: PlayerData.isOwned(pet.id) ? PlayerData.petStar(pet.id) : 1,
+  }));
 }
 
 /** 编队页：已拥有灵宠 + 可选本关敌人 */
 export function teamPreloadImages(stageId?: string): readonly string[] {
   const paths = [...TEAM_SHELL_IMAGES];
-  for (const id of PlayerData.ownedPets) {
-    paths.push(petAvatarPath(id, PlayerData.petStar(id)));
-  }
   if (stageId) {
     const stage = STAGE_MAP.get(stageId);
     if (stage) {
@@ -94,6 +92,13 @@ export function teamPreloadImages(stageId?: string): readonly string[] {
     }
   }
   return unique(paths);
+}
+
+export function teamPetAvatarEntries(): PetAvatarPreloadEntry[] {
+  return PlayerData.ownedPets.map((id) => ({
+    petId: id,
+    star: PlayerData.petStar(id),
+  }));
 }
 
 /** 战斗页：本关背景 + 本关敌人 + 上阵灵宠（棋盘/珠子已在主包预加载） */
@@ -109,26 +114,39 @@ export function battlePreloadImages(stageId: string, teamPetIds: readonly string
     const { def } = resolveEncounter(ref);
     paths.push(def.image ?? enemyImage(def.id));
   }
-  for (const id of teamPetIds) {
-    paths.push(petAvatarPath(id, PlayerData.petStar(id)));
-  }
-  const table = getDropTable(stage.dropTableId);
+  return unique(paths);
+}
+
+export function battlePetAvatarEntries(stageId: string, teamPetIds: readonly string[]): PetAvatarPreloadEntry[] {
+  const entries: PetAvatarPreloadEntry[] = teamPetIds.map((id) => ({
+    petId: id,
+    star: PlayerData.petStar(id),
+  }));
+  const table = getDropTable((STAGE_MAP.get(stageId) ?? STAGES[0]).dropTableId);
   if (table) {
     for (const drop of table.shards) {
-      paths.push(petAvatarPath(drop.petId, 1));
+      entries.push({ petId: drop.petId, star: 1 });
     }
   }
-  return unique(paths);
+  return entries;
 }
 
 /** 召唤页：壳 + 全部普通头像（抽卡 reveal 用） */
 export function gachaPreloadImages(): readonly string[] {
-  return unique([...GACHA_SHELL_IMAGES, ...PETS.map((p) => petImage(p.id))]);
+  return [...GACHA_SHELL_IMAGES];
+}
+
+export function gachaPetAvatarEntries(): PetAvatarPreloadEntry[] {
+  return PETS.map((pet) => ({ petId: pet.id, star: 1 }));
 }
 
 /** 商店页：壳 + 全部普通头像 */
 export function shopPreloadImages(): readonly string[] {
-  return unique([...SHOP_SHELL_IMAGES, ...PETS.map((p) => petImage(p.id))]);
+  return [...SHOP_SHELL_IMAGES];
+}
+
+export function shopPetAvatarEntries(): PetAvatarPreloadEntry[] {
+  return PETS.map((pet) => ({ petId: pet.id, star: 1 }));
 }
 
 /** 灵宠详情：壳 + 当前灵宠头像与相框 */
@@ -137,7 +155,19 @@ export function petDetailPreloadImages(petId: string): readonly string[] {
   const paths = [...PET_DETAIL_SHELL_IMAGES];
   if (pet) {
     paths.push(petFrameImage(pet.element));
-    paths.push(petAvatarPath(petId, PlayerData.petStar(petId)));
   }
   return unique(paths);
+}
+
+export function petDetailAvatarEntry(petId: string): PetAvatarPreloadEntry | null {
+  if (!PET_MAP.has(petId)) return null;
+  return { petId, star: PlayerData.petStar(petId) };
+}
+
+/** 预加载灵宠头像（含 ID 迁移 fallback + 限并发） */
+export async function ensurePetAvatars(entries: readonly PetAvatarPreloadEntry[]): Promise<void> {
+  if (entries.length === 0) return;
+  const paths = entries.flatMap(({ petId, star = 1 }) => [...petAvatarLoadPaths(petId, star)]);
+  await loadSubpackagesForPaths(paths);
+  await preloadPetAvatarTextures(entries);
 }

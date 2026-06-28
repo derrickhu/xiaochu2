@@ -4,7 +4,7 @@
 import type { Element } from './combat';
 import type { PetRole, SkillTraitDef, StatBlock, GrowthBlock } from './petRoles';
 import type { Rarity } from './rarity';
-import { CREATURES, STARTER_CREATURE_IDS, type CreatureDef } from './creatures';
+import { CREATURES, STARTER_CREATURE_IDS, DEFAULT_SUMMON_POOL_R_IDS, type CreatureDef } from './creatures';
 import { resolvePetPassiveBundle, type PassiveEffectBundle } from './passiveEffects';
 export { PET_ROLE_NAME, getPetRole, getStatUi, STAT_UI, type PetRole, type PetTraitDef, type SkillTraitDef, type StatKey, type StatUiDef } from './petRoles';
 export type { Rarity } from './rarity';
@@ -47,6 +47,8 @@ export { resolvePetPassiveBundle };
 export const PETS: readonly PetDef[] = CREATURES.map(petView);
 
 export const PET_MAP: ReadonlyMap<string, PetDef> = new Map(PETS.map((p) => [p.id, p]));
+
+export { DEFAULT_SUMMON_POOL_R_IDS };
 
 export const DEFAULT_TEAM: readonly string[] = [...STARTER_CREATURE_IDS];
 

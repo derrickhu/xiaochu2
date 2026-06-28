@@ -6,8 +6,8 @@
  * - enemy：敌人机制（复用 enemies.ts 的技能组合，标签用于 UI 提示与节奏统计）。
  * - rule：关卡规则机制（最轻，数据驱动：禁心、禁属性珠、多波等）。
  *
- * 节奏原则：每关 StageDef.mechanics 标注「首次引入/复用」的机制 id；
- * 设计上每 3~5 关至少一个「首现」机制，且首现时尽量单独出现（先教会，再组合）。
+ * 节奏原则：每章 Boss 首教 1 种可玩挑战（bossChallenge.ts）；
+ * 铺垫关仅复用已学挑战。本表 orb_* / rule_* 为真机制；enemy_* 多为 UI 提示，实际靠 encounters 配 mob。
  */
 import type { Element } from './combat';
 

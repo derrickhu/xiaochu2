@@ -89,9 +89,9 @@ describe('petHp / petRcv（三维模型）', () => {
 
   it('角色定位体现在三维分布上：同稀有下坦克 hp 最高 / 治疗 rcv 最高', () => {
     // 统一取 1★ 1级，并按各自稀有度计算（定位差异在权重，不被稀有度抹平时成立）
-    const tank = PETS.find((p) => p.id === 'cr_stone_ape')!;       // R 坦克（玄岩石猿）
-    const healer = PETS.find((p) => p.id === 'cr_jadehorn_goat')!; // R 治疗（玉角灵羊）
-    const attacker = PETS.find((p) => p.id === 'cr_red_crow')!;    // R 输出（赤日金乌）
+    const tank = PETS.find((p) => p.id === 'pet_027')!;       // R 坦克（玄岩石猿）
+    const healer = PETS.find((p) => p.id === 'pet_015')!; // R 治疗（玉角灵羊）
+    const attacker = PETS.find((p) => p.id === 'pet_024')!;    // R 输出（赤日金乌）
     expect(petHp(tank, 1, 1)).toBeGreaterThan(petHp(attacker, 1, 1));
     expect(petRcv(healer, 1, 1)).toBeGreaterThan(petRcv(attacker, 1, 1));
     expect(petAtk(attacker, 1, 1)).toBeGreaterThan(petAtk(healer, 1, 1));
@@ -112,7 +112,7 @@ describe('petHp / petRcv（三维模型）', () => {
 
 describe('星级成长档案', () => {
   // R 稀有度攻击位（statMult = 1），与 role 模板基线一致
-  const pet = PETS.find((p) => p.id === 'cr_red_crow')!;
+  const pet = PETS.find((p) => p.id === 'pet_024')!;
 
   it('1★ 为恒等档：与不带星级倍率的基线一致（hp 不变）', () => {
     // 1★ baseMult/growthMult = 1，Lv1 = role 模板基础

@@ -15,7 +15,7 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
-import { battlePreloadImages } from '@/config/assetPreload';
+import { battlePreloadImages, battlePetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
@@ -93,6 +93,7 @@ export class BattleScene implements Scene {
   private async _enter(token: number): Promise<void> {
     const stageId = this._ctrl.stage.id;
     await ensureAssets(battlePreloadImages(stageId, PlayerData.team));
+    await ensurePetAvatars(battlePetAvatarEntries(stageId, PlayerData.team));
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'battle', () => {
       this._build();
@@ -182,11 +183,12 @@ export class BattleScene implements Scene {
     this._boardView.container.position.set(this._layout.boardX, this._layout.boardY);
     this.container.addChild(this._boardView.container);
 
-    // Combo 大字（棋盘上方）
+    // 特效层（粒子 / 飘字 / 闪光）
+    this._fx.build(this.container, w, h);
+
+    // Combo 大字（棋盘中央，叠在珠盘与粒子之上）
     this._hud.buildCombo(this.container);
 
-    // 特效层（粒子 / 飘字 / 闪光），其上再叠结算浮层
-    this._fx.build(this.container, w, h);
     this._overlay.build(this.container);
 
     // 初始刷新槽位 CD / 状态行
@@ -202,6 +204,7 @@ export class BattleScene implements Scene {
     this._petBar.update(dt);
     this._hud.redrawDragBar(this._boardView);
     this._hud.redrawHpBars();
+    this._hud.updateCombo(dt);
   }
 
   /** 刷新槽位技能 CD + buff 状态行（队伍栏 + HUD 协同） */
@@ -230,7 +233,7 @@ export class BattleScene implements Scene {
         allGroups.push(group);
         this._board.clearCells(group.cells);
         this._burstGroup(group);
-        this._hud.showCombo(allGroups.length, chainDepth > 0);
+        this._hud.showCombo(allGroups.length, this._fx);
         Platform.vibrateShort(allGroups.length >= 7 ? 'medium' : 'light');
         if (allGroups.length >= 7) this._fx.shakeLight();
         await this._boardView!.playClear(group);
@@ -300,8 +303,9 @@ export class BattleScene implements Scene {
       }
     }
 
-    for (const attack of res.attacks) {
-      await this._playPetAttack(attack);
+    for (let i = 0; i < res.attacks.length; i++) {
+      const attack = res.attacks[i];
+      await this._playPetAttack(attack, i);
       const { enemyDead } = this._ctrl.applyPetAttack(attack);
       this._hud.refreshEnemyHp();
       if (enemyDead && await this._handleEnemyDefeat()) return;
@@ -356,7 +360,7 @@ export class BattleScene implements Scene {
   }
 
   /** 单只宠物冲刺 → 属性弹道飞向敌人 → 命中瞬间受击反馈 + 飘字 → 回位 */
-  private _playPetAttack(attack: PetAttack): Promise<void> {
+  private _playPetAttack(attack: PetAttack, orderIdx: number): Promise<void> {
     return new Promise((resolve) => {
       const slot = this._petBar.slotAt(attack.petIndex);
       const baseY = slot.y;
@@ -364,7 +368,6 @@ export class BattleScene implements Scene {
         target: slot, props: { y: baseY - 46 },
         duration: UI.anim.petDash, ease: Ease.easeOutQuad,
         onComplete: () => {
-          // 弹道与回位并行；命中瞬间才弹伤害数字
           TweenManager.to({
             target: slot, props: { y: baseY },
             duration: UI.anim.petReturn, ease: Ease.easeInQuad,
@@ -373,7 +376,7 @@ export class BattleScene implements Scene {
             slot.x, slot.y - 60, this._layout.enemyCenterX, this._layout.enemyCenterY, attack.element,
           ).then(() => {
             this._hud.playEnemyHit(this._fx, attack.element, attack.damage, attack.isCrit);
-            this._spawnDamageFloat(attack);
+            this._spawnDamageFloat(attack, orderIdx);
             resolve();
           });
         },
@@ -381,18 +384,18 @@ export class BattleScene implements Scene {
     });
   }
 
-  /** 伤害数字：属性着色，暴击放大 + 标记，克制加前缀 */
-  private _spawnDamageFloat(attack: PetAttack): void {
-    const color = attack.isCrit ? 0xffd75e : ORB_COLOR[attack.element];
-    const prefix = attack.counter === 1 ? '克 ' : '';
-    const text = `${prefix}${attack.damage}${attack.isCrit ? ' 暴击!' : ''}`;
-    this._fx.spawnFloat(
-      text,
-      this._layout.enemyCenterX + (Math.random() - 0.5) * 120,
-      this._layout.enemyCenterY - 40,
-      color,
-      attack.isCrit ? 1.4 : 1,
-    );
+  /** 伤害数字：从出手宠物槽位弹出，属性色 + 克制/暴击标记 */
+  private _spawnDamageFloat(attack: PetAttack, orderIdx: number): void {
+    const slot = this._petBar.slotAt(attack.petIndex);
+    this._fx.spawnPetDamageFloat({
+      slotX: slot.x,
+      slotY: slot.y,
+      element: attack.element,
+      damage: attack.damage,
+      isCrit: attack.isCrit,
+      counter: attack.counter,
+      orderIdx,
+    });
   }
 
   /**

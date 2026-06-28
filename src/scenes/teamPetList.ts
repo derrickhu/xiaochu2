@@ -1,11 +1,11 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { TextureCache } from '@/core/TextureCache';
+import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { getRarity } from '@/balance/rarity';
 import { PET_MAP, type PetDef } from '@/balance/pets';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import {
-  petAvatarPath,
   petFrameImage,
   UI_SCENE_IMAGES,
 } from '@/config/Assets';
@@ -112,7 +112,7 @@ export function addTeamPetAvatar(
   y: number,
   size: number,
 ): void {
-  const tex = TextureCache.get(petAvatarPath(pet.id, PlayerData.petStar(pet.id)));
+  const tex = getPetAvatarTexture(pet.id, PlayerData.petStar(pet.id));
   if (tex) {
     const avatar = new PIXI.Sprite(tex);
     avatar.anchor.set(0.5);

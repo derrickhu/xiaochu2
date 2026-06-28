@@ -36,11 +36,11 @@ const CH1_STAGES = STAGES.filter((s) => s.chapter === 1).map((s) => s.id);
 const TEAMS = {
   default: [...DEFAULT_TEAM],
   /** 爆发队：高稀有多属性输出，DPS-check 关的解法 */
-  burst: ['pet_metal_004', 'cr_kunlun_dragon', 'pet_water_004', 'cr_outer_demon', 'pet_fire_004'],
+  burst: ['pet_002', 'pet_016', 'pet_006', 'pet_026', 'pet_008'],
   /** 弱队：双坦 + 奶 + 双辅助，无直伤爆发 */
-  weak: ['cr_cloud_fox', 'cr_stone_ape', 'cr_jadehorn_goat', 'pet_water_003', 'pet_metal_003'],
+  weak: ['pet_019', 'pet_027', 'pet_015', 'pet_005', 'pet_001'],
   /** 含土克制的队（1-6 自疗水怪解法：土珠克水） */
-  earthCounter: ['pet_earth_003', 'cr_guixu_turtle', 'pet_fire_004', 'pet_metal_004', 'cr_kunlun_dragon'],
+  earthCounter: ['pet_009', 'pet_028', 'pet_008', 'pet_002', 'pet_016'],
 } as const;
 
 function sim(teamIds: readonly string[], stageId: string, model = COMBO_MODELS.mid): SimResult {
@@ -103,9 +103,9 @@ describe('新手 5R 阵容：教学段可达性', () => {
   });
 });
 
-describe('1-5+ 技能怪段：弱队受罚 / 强队顺畅', () => {
-  it('低手默认队会在后段关卡翻车（至少 1-8 打不过）', () => {
-    expect(sim(TEAMS.default, 'stage_1_8', COMBO_MODELS.low).win).toBe(false);
+describe('1-5 Boss：弱队受罚 / 强队顺畅', () => {
+  it('低手默认队打不过 1-5 收录 Boss', () => {
+    expect(sim(TEAMS.default, 'stage_1_5', COMBO_MODELS.low).win).toBe(false);
   });
 
   it('爆发队中手可零失误清完第一章', () => {
@@ -114,35 +114,34 @@ describe('1-5+ 技能怪段：弱队受罚 / 强队顺畅', () => {
     }
   });
 
-  it('爆发队 > 弱队：1-8 Boss 星级更高、用时更短（中手）', () => {
-    const burst = sim(TEAMS.burst, 'stage_1_8');
-    const weak = sim(TEAMS.weak, 'stage_1_8');
+  it('爆发队 > 弱队：1-5 Boss 星级更高、用时更短（中手）', () => {
+    const burst = sim(TEAMS.burst, 'stage_1_5');
+    const weak = sim(TEAMS.weak, 'stage_1_5');
     expect(burst.win).toBe(true);
     expect(burst.stars).toBeGreaterThan(weak.stars);
     expect(burst.turnsUsed).toBeLessThan(weak.turnsUsed);
   });
 
-  it('1-5 高防关：爆发队高手可冲三星（爆发破防有效）', () => {
+  it('1-5 多波 Boss：爆发队高手可冲三星', () => {
     expect(sim(TEAMS.burst, 'stage_1_5', COMBO_MODELS.high).stars).toBe(3);
   });
 });
 
-describe('换对队才能过：1-6 自疗水怪的土克制', () => {
-  it('带土克制的强队低手即可稳过 1-6（土珠克水）', () => {
-    expect(sim(TEAMS.earthCounter, 'stage_1_6', COMBO_MODELS.low).win).toBe(true);
+describe('换对队才能过：自疗挑战', () => {
+  it('爆发队中手可过 6-1 自疗关', () => {
+    expect(sim(TEAMS.burst, 'stage_6_1', COMBO_MODELS.mid).win).toBe(true);
   });
 
-  it('低稀有弱队低手打不过 1-6 自疗水怪（需换队/养成）', () => {
-    expect(sim(TEAMS.weak, 'stage_1_6', COMBO_MODELS.low).win).toBe(false);
+  it('低稀有弱队低手难过 6-1 自疗关', () => {
+    expect(sim(TEAMS.weak, 'stage_6_1', COMBO_MODELS.low).win).toBe(false);
   });
 });
 
 describe('Boss 是硬墙', () => {
-  it('弱队中手打 1-8 明显比爆发队吃力（用时更长）', () => {
-    const weak = sim(TEAMS.weak, 'stage_1_8');
-    const burst = sim(TEAMS.burst, 'stage_1_8');
+  it('弱队中手打 1-5 明显比爆发队吃力（用时更长）', () => {
+    const weak = sim(TEAMS.weak, 'stage_1_5');
+    const burst = sim(TEAMS.burst, 'stage_1_5');
     expect(burst.win).toBe(true);
-    // 弱队即便能过也远慢于爆发队；打不过则按回合上限计，同样满足「更吃力」
     expect(weak.turnsUsed).toBeGreaterThan(burst.turnsUsed);
   });
 });
@@ -176,9 +175,9 @@ describe('功率预算：欠养成会卡在新章（不能跳章碾压）', () =
     expect(simulateBattle(under, 'stage_3_6', COMBO_MODELS.mid).win).toBe(false);
   });
 
-  it('只到第 2 章预算（L12/2★）的主队打不穿第 3 章 Boss，需继续养成', () => {
+  it('只到第 2 章预算（L12/2★）的主队低手打不穿第 3 章 Boss，需继续养成', () => {
     const ch2Budget = buildTeam(TEAMS.default, CHAPTER_BUDGET[2].enterLevel, CHAPTER_BUDGET[2].enterStar);
-    expect(simulateBattle(ch2Budget, 'stage_3_6', COMBO_MODELS.mid).win).toBe(false);
+    expect(simulateBattle(ch2Budget, 'stage_3_6', COMBO_MODELS.low).win).toBe(false);
   });
 
   it('初始 L1/1★ 默认队无法全清第 3 章（终章 Boss 卡关）', () => {

@@ -8,6 +8,8 @@
 import * as PIXI from 'pixi.js';
 import { Platform } from './PlatformService';
 
+const PRELOAD_BATCH_SIZE = 6;
+
 class TextureCacheClass {
   private _cache: Map<string, PIXI.Texture> = new Map();
   private _inflight: Map<string, Promise<PIXI.Texture>> = new Map();
@@ -15,6 +17,15 @@ class TextureCacheClass {
   /** 同步取缓存（未加载返回 null） */
   get(path: string): PIXI.Texture | null {
     return this._cache.get(path) ?? null;
+  }
+
+  /** 按候选路径顺序查缓存 */
+  getFirst(paths: readonly string[]): PIXI.Texture | null {
+    for (const path of paths) {
+      const tex = this._cache.get(path);
+      if (tex) return tex;
+    }
+    return null;
   }
 
   /** 加载纹理（带缓存与并发去重） */
@@ -42,9 +53,26 @@ class TextureCacheClass {
     return promise;
   }
 
-  /** 批量预加载 */
+  /** 加载首个可用路径，可选写入 canonical 别名 */
+  async loadFirst(paths: readonly string[], aliasTo?: string): Promise<PIXI.Texture | null> {
+    for (const path of paths) {
+      try {
+        const tex = await this.load(path);
+        if (aliasTo && aliasTo !== path) this._cache.set(aliasTo, tex);
+        return tex;
+      } catch {
+        /* 尝试下一候选路径 */
+      }
+    }
+    return null;
+  }
+
+  /** 批量预加载（限并发，避免小游戏同时拉过多分包图） */
   async preload(paths: readonly string[]): Promise<void> {
-    await Promise.all(paths.map((p) => this.load(p).catch(() => null)));
+    for (let i = 0; i < paths.length; i += PRELOAD_BATCH_SIZE) {
+      const batch = paths.slice(i, i + PRELOAD_BATCH_SIZE);
+      await Promise.all(batch.map((p) => this.load(p).catch(() => null)));
+    }
   }
 
   /** 释放单张纹理 */

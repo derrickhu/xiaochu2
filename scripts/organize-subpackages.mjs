@@ -73,17 +73,25 @@ function ensureSubpackageEntryFiles() {
   }
 }
 
-/** cr_ 收录怪拆到 pkg-enemy-cr（原整包 enemy 超 4MB） */
+/** pet_011+ 收录怪拆到 pkg-enemy-cr（原 cr_* 分包逻辑） */
+const CREATURE_CR_SUBPACKAGE_FROM = 11;
+
+function enemyUsesCrSubpackage(filename) {
+  const base = filename.replace(/_awakened\.png$/, '.png').replace(/\.png$/, '');
+  const m = /^pet_(\d+)$/.exec(base);
+  return !!m && Number(m[1]) >= CREATURE_CR_SUBPACKAGE_FROM;
+}
+
 function splitEnemySubpackage() {
   const enemyDir = path.join(ROOT, 'subpackages/pkg-enemy/images/enemy');
   const crDir = path.join(ROOT, 'subpackages/pkg-enemy-cr/images/enemy');
   if (!fs.existsSync(enemyDir)) return;
   ensureDir(crDir);
 
-  // 若曾误拆 pet_*，移回 pkg-enemy
+  // 若曾误拆 pet_001–010，移回 pkg-enemy
   if (fs.existsSync(crDir)) {
     for (const f of fs.readdirSync(crDir)) {
-      if (f.startsWith('pet_')) {
+      if (f.startsWith('pet_') && !enemyUsesCrSubpackage(f)) {
         moveFile(path.join(crDir, f), path.join(enemyDir, f));
       }
     }
@@ -91,12 +99,12 @@ function splitEnemySubpackage() {
 
   let moved = 0;
   for (const f of fs.readdirSync(enemyDir)) {
-    if (f.startsWith('cr_')) {
+    if (enemyUsesCrSubpackage(f)) {
       moveFile(path.join(enemyDir, f), path.join(crDir, f));
       moved++;
     }
   }
-  if (moved > 0) console.log(`[subpackage] cr_ 敌人面 ${moved} 张 → pkg-enemy-cr`);
+  if (moved > 0) console.log(`[subpackage] pet_011+ 敌人面 ${moved} 张 → pkg-enemy-cr`);
 }
 
 function reportSizes() {

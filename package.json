@@ -4,11 +4,14 @@
   "type": "module",
   "description": "灵宠消消塔 2 - 转珠消除+灵宠养成小游戏（微信/抖音）",
   "scripts": {
-    "build": "vite build && rimraf minigame/index.html && node scripts/organize-subpackages.mjs",
+    "build": "vite build && rimraf minigame/index.html && node scripts/rename-creature-assets.mjs && node scripts/organize-subpackages.mjs",
+    "assets:rename-creatures": "node scripts/rename-creature-assets.mjs",
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "balance:dashboard": "vite --config tools/balance-dashboard/vite.config.ts",
+    "balance:dashboard:build": "vite build --config tools/balance-dashboard/vite.config.ts"
   },
   "dependencies": {
     "@pixi/unsafe-eval": "^7.3.2",

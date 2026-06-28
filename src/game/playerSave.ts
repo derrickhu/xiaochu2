@@ -1,16 +1,19 @@
 import {
   DEFAULT_TEAM,
+  DEFAULT_SUMMON_POOL_R_IDS,
   INITIAL_PET_LEVEL,
   INITIAL_PET_STAR,
   PET_MAP,
   TEAM_SIZE,
 } from '@/balance/pets';
+import { STAGES, STAGE_STAR_MIGRATION } from '@/balance/stages';
+import { migrateCreatureId } from '@/balance/creatureIdMigration';
 import { getStarProfile } from '@/balance/growth';
 import { ECONOMY } from '@/balance/economy';
 
 export const SAVE_KEY = 'xiaochu2_save_v2';
 export const LEGACY_SAVE_KEY = 'xiaochu2_save_v1';
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** 单只灵宠的养成进度 */
 export interface OwnedPet {
@@ -40,7 +43,7 @@ export interface SaveData {
   pendingShards: Record<string, number>;
   /** 已招募新宠次数（招募定价用，含碎片溢出招募） */
   recruitedCount: number;
-  /** 已收录生物 id；初始 5 只赠送宠开局即同时进入 ownedPets / discovered / team。 */
+  /** 已收录生物 id；R 档开局即入召唤池，SR+ 由章节 Boss 收录扩展。 */
   discovered: string[];
 }
 
@@ -73,60 +76,59 @@ export function initialData(): SaveData {
     ownedPets: initialOwned(),
     pendingShards: {},
     recruitedCount: 0,
-    discovered: [...DEFAULT_TEAM],
+    discovered: [...DEFAULT_SUMMON_POOL_R_IDS],
   };
 }
 
-/** 解析 v2 存档，缺字段回退默认 */
+/** 解析存档，缺字段回退默认；v3 起迁移灵宠 ID */
 export function parseSaveData(parsed: Partial<SaveData>): SaveData {
-  const owned = sanitizeOwned(parsed.ownedPets);
+  const migrated = migratePetIdsInPartialSave(parsed);
+  const owned = sanitizeOwned(migrated.ownedPets);
   return {
     version: SAVE_VERSION,
-    coins: typeof parsed.coins === 'number' ? parsed.coins : 0,
-    lingyu: typeof parsed.lingyu === 'number' ? parsed.lingyu : ECONOMY.gacha.starterLingyu,
-    tickets: typeof parsed.tickets === 'number' ? parsed.tickets : 0,
-    gachaSinceHigh: typeof parsed.gachaSinceHigh === 'number' ? parsed.gachaSinceHigh : 0,
-    exp: typeof parsed.exp === 'number' ? parsed.exp : 0,
-    stars: parsed.stars && typeof parsed.stars === 'object' ? parsed.stars : {},
+    coins: typeof migrated.coins === 'number' ? migrated.coins : 0,
+    lingyu: typeof migrated.lingyu === 'number' ? migrated.lingyu : ECONOMY.gacha.starterLingyu,
+    tickets: typeof migrated.tickets === 'number' ? migrated.tickets : 0,
+    gachaSinceHigh: typeof migrated.gachaSinceHigh === 'number' ? migrated.gachaSinceHigh : 0,
+    exp: typeof migrated.exp === 'number' ? migrated.exp : 0,
+    stars: migrateStageStars(migrated.stars && typeof migrated.stars === 'object' ? migrated.stars : {}),
     ownedPets: owned,
-    pendingShards: sanitizeShardLedger(parsed.pendingShards, owned),
-    team: sanitizeTeam(parsed.team, owned),
-    recruitedCount: typeof parsed.recruitedCount === 'number'
-      ? parsed.recruitedCount
+    pendingShards: sanitizeShardLedger(migrated.pendingShards, owned),
+    team: sanitizeTeam(migrated.team, owned),
+    recruitedCount: typeof migrated.recruitedCount === 'number'
+      ? migrated.recruitedCount
       : countNonInitial(owned),
-    discovered: sanitizeDiscovered(parsed.discovered, owned),
+    discovered: sanitizeDiscovered(migrated.discovered, owned),
   };
 }
 
-/** v1 → v2：保留 coins/stars/team，拥有列表 = 默认队 ∪ 原队伍 */
+/** v1 → v3：保留 coins/stars/team，拥有列表 = 默认队 ∪ 原队伍 */
 export function migrateLegacySave(legacy: { coins?: number; stars?: unknown; team?: unknown }): SaveData {
   const owned = initialOwned();
   if (Array.isArray(legacy.team)) {
     for (const id of legacy.team) {
-      if (typeof id === 'string' && PET_MAP.has(id) && !owned[id]) {
-        owned[id] = { level: INITIAL_PET_LEVEL, star: INITIAL_PET_STAR, shards: 0 };
+      if (typeof id !== 'string') continue;
+      const mapped = migrateCreatureId(id);
+      if (mapped && PET_MAP.has(mapped) && !owned[mapped]) {
+        owned[mapped] = { level: INITIAL_PET_LEVEL, star: INITIAL_PET_STAR, shards: 0 };
       }
     }
   }
-  return {
-    version: SAVE_VERSION,
-    coins: typeof legacy.coins === 'number' ? legacy.coins : 0,
-    lingyu: ECONOMY.gacha.starterLingyu,
-    tickets: 0,
-    gachaSinceHigh: 0,
-    exp: 0,
-    stars: legacy.stars && typeof legacy.stars === 'object' ? (legacy.stars as Record<string, number>) : {},
+  return parseSaveData({
+    coins: legacy.coins,
+    stars: legacy.stars && typeof legacy.stars === 'object'
+      ? migrateStageStars(legacy.stars as Record<string, number>)
+      : {},
     ownedPets: owned,
-    pendingShards: {},
-    team: sanitizeTeam(legacy.team, owned),
-    recruitedCount: countNonInitial(owned),
-    discovered: sanitizeDiscovered(undefined, owned),
-  };
+    team: Array.isArray(legacy.team)
+      ? legacy.team.filter((id): id is string => typeof id === 'string')
+      : undefined,
+  });
 }
 
-/** 收录列表清洗：仅保留合法生物 id；并入初始赠送 + 已拥有，保证可获取池一致 */
+/** 收录列表清洗：R 档默认池 + 已拥有 + 存档收录 */
 function sanitizeDiscovered(discovered: unknown, owned: Record<string, OwnedPet>): string[] {
-  const set = new Set<string>(DEFAULT_TEAM);
+  const set = new Set<string>(DEFAULT_SUMMON_POOL_R_IDS);
   for (const id of Object.keys(owned)) set.add(id);
   if (Array.isArray(discovered)) {
     for (const id of discovered) {
@@ -185,6 +187,66 @@ function sanitizeTeam(team: unknown, owned: Record<string, OwnedPet>): string[] 
 
 function countNonInitial(owned: Record<string, OwnedPet>): number {
   return Object.keys(owned).filter((id) => !DEFAULT_TEAM.includes(id)).length;
+}
+
+function mergeOwned(into: Record<string, OwnedPet>, id: string, pet: OwnedPet): void {
+  const prev = into[id];
+  if (!prev) {
+    into[id] = pet;
+    return;
+  }
+  into[id] = {
+    star: Math.max(prev.star, pet.star),
+    level: Math.max(prev.level, pet.level),
+    shards: Math.max(prev.shards, pet.shards),
+  };
+}
+
+function migratePetIdsInPartialSave(parsed: Partial<SaveData>): Partial<SaveData> {
+  const ownedPets: Record<string, OwnedPet> = {};
+  if (parsed.ownedPets && typeof parsed.ownedPets === 'object') {
+    for (const [id, v] of Object.entries(parsed.ownedPets)) {
+      const mapped = migrateCreatureId(id);
+      if (!mapped || !v || typeof v !== 'object') continue;
+      mergeOwned(ownedPets, mapped, v as OwnedPet);
+    }
+  }
+
+  const pendingShards: Record<string, number> = {};
+  if (parsed.pendingShards && typeof parsed.pendingShards === 'object') {
+    for (const [id, v] of Object.entries(parsed.pendingShards)) {
+      const mapped = migrateCreatureId(id);
+      if (!mapped) continue;
+      const n = typeof v === 'number' ? Math.floor(v) : 0;
+      if (n > 0) pendingShards[mapped] = (pendingShards[mapped] ?? 0) + n;
+    }
+  }
+
+  const team = Array.isArray(parsed.team)
+    ? parsed.team
+      .map((id) => (typeof id === 'string' ? migrateCreatureId(id) : null))
+      .filter((id): id is string => !!id)
+    : parsed.team;
+
+  const discovered = Array.isArray(parsed.discovered)
+    ? parsed.discovered
+      .map((id) => (typeof id === 'string' ? migrateCreatureId(id) : null))
+      .filter((id): id is string => !!id)
+    : parsed.discovered;
+
+  return { ...parsed, ownedPets, pendingShards, team, discovered };
+}
+
+function migrateStageStars(stars: Record<string, number>): Record<string, number> {
+  const validIds = new Set(STAGES.map((s) => s.id));
+  const out: Record<string, number> = {};
+  for (const [id, n] of Object.entries(stars)) {
+    const mapped = STAGE_STAR_MIGRATION[id] ?? id;
+    if (validIds.has(mapped)) {
+      out[mapped] = Math.max(out[mapped] ?? 0, n);
+    }
+  }
+  return out;
 }
 
 function clampInt(v: unknown, min: number, max: number, fallback: number): number {

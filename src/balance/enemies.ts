@@ -2,7 +2,7 @@
  * 敌人战斗模板（纯数据 + 解析，零战斗逻辑）
  *
  * 阶段九拆成两类，统一为 EnemyDef 战斗模板供 formulas/growth.ts enemyStats 缩放：
- * - MobDef「杂怪」：单图、低数值、不可收服，关卡大量铺设以省美术（保留原 14 个 enemy_*）。
+ * - MobDef「杂怪」：单图、低数值、不可收服，关卡循环复用以省美术（核心 6 + 章 Boss 魔物 3）。
  * - CreatureDef 的怪物面（tier1 初级 / tier2 高级）：可收服生物，击败高级形态进收录池。
  *
  * 关卡通过 EncounterRef 引用二者；resolveEncounter() 把引用解析成 EnemyDef + 收录元信息。
@@ -10,10 +10,11 @@
 import type { Element } from './combat';
 import { ENEMY_SKILL_IDS, SKILL_MAP } from './skills';
 import { CREATURE_MAP } from './creatures';
+import { creatureUsesCrSubpackage } from './creatureIdMigration';
 import { SUBPACKAGE_ROOT } from '@/config/Subpackages';
 
 function creatureEnemyRoot(creatureId: string): string {
-  const pkg = creatureId.startsWith('cr_')
+  const pkg = creatureUsesCrSubpackage(creatureId)
     ? SUBPACKAGE_ROOT.enemyCr
     : SUBPACKAGE_ROOT.enemy;
   return `${pkg}/images/enemy`;
@@ -46,12 +47,12 @@ export type MobDef = EnemyDef;
 
 /**
  * v0.3 挑战版杂怪基值（第 1 章基准）。调参由 formulas/simulation.ts 模拟器驱动。
+ * 核心 6 种在全章节循环复用；3 种章 Boss 魔物作收录关铺垫波。
  */
 export const MOBS: readonly MobDef[] = [
-  // ── 普攻教学怪 ──
+  // ── 核心循环杂兵（6） ──
   { id: 'enemy_slime_wood', name: '青苔史莱姆', element: 'wood', baseHp: 620, baseAtk: 95, baseDef: 12, attackInterval: 2 },
   { id: 'enemy_bat_fire', name: '焰翼蝠', element: 'fire', baseHp: 540, baseAtk: 120, baseDef: 8, attackInterval: 2 },
-  // ── 技能怪 ──
   {
     id: 'enemy_golem_earth', name: '碎岩傀儡', element: 'earth',
     baseHp: 1500, baseAtk: 120, baseDef: 70, attackInterval: 3,
@@ -63,50 +64,25 @@ export const MOBS: readonly MobDef[] = [
     skillIds: [ENEMY_SKILL_IDS.serpentHeal],
   },
   {
-    id: 'enemy_blade_metal', name: '锈刃魔', element: 'metal',
-    baseHp: 900, baseAtk: 150, baseDef: 28, attackInterval: 3,
-    skillIds: [ENEMY_SKILL_IDS.bladeCharge],
-  },
-  // ── 第一章扩展怪 ──
-  { id: 'enemy_hedgehog_wood', name: '荆棘刺猬', element: 'wood', baseHp: 760, baseAtk: 175, baseDef: 10, attackInterval: 2 },
-  {
-    id: 'enemy_lion_fire', name: '烈焰狂狮', element: 'fire',
-    baseHp: 1320, baseAtk: 185, baseDef: 16, attackInterval: 2,
-    skillIds: [ENEMY_SKILL_IDS.lionCharge],
-  },
-  {
-    id: 'enemy_panda_boss_wood', name: '蛮竹熊猫王', element: 'wood',
-    baseHp: 3600, baseAtk: 170, baseDef: 30, attackInterval: 2,
-    skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal],
-  },
-
-  // ── 第二章 · 幽晶溶洞 ──
-  {
     id: 'enemy_scorpion_metal', name: '晶甲蝎', element: 'metal',
     baseHp: 1200, baseAtk: 150, baseDef: 55, attackInterval: 3,
-    skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.bladeCharge],
+    skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.lionCharge],
   },
   {
     id: 'enemy_toad_water', name: '溶洞毒蟾', element: 'water',
     baseHp: 1100, baseAtk: 170, baseDef: 20, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.serpentHeal],
   },
+  // ── 章 Boss 魔物铺垫（3，非灵宠造型） ──
+  {
+    id: 'enemy_bamboo_tyrant_wood', name: '蛮竹魔将', element: 'wood',
+    baseHp: 3600, baseAtk: 170, baseDef: 30, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal],
+  },
   {
     id: 'enemy_crystal_boss_earth', name: '幽晶巨像', element: 'earth',
     baseHp: 4200, baseAtk: 180, baseDef: 60, attackInterval: 2,
-    skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.bladeCharge],
-  },
-
-  // ── 第三章 · 风雷绝巅 ──
-  {
-    id: 'enemy_eagle_fire', name: '雷羽鹰', element: 'fire',
-    baseHp: 1600, baseAtk: 200, baseDef: 22, attackInterval: 2,
-    skillIds: [ENEMY_SKILL_IDS.lionCharge],
-  },
-  {
-    id: 'enemy_warden_metal', name: '绝巅守卫', element: 'metal',
-    baseHp: 2200, baseAtk: 185, baseDef: 50, attackInterval: 2,
-    skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.serpentHeal],
+    skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.lionCharge],
   },
   {
     id: 'enemy_thunderlord_boss_wood', name: '风雷天尊', element: 'wood',

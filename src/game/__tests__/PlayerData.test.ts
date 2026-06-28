@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { PlayerData } from '../PlayerData';
-import { PETS, DEFAULT_TEAM } from '@/balance/pets';
+import { PETS, DEFAULT_TEAM, DEFAULT_SUMMON_POOL_R_IDS } from '@/balance/pets';
 import { ECONOMY } from '@/balance/economy';
 
 beforeAll(() => {
@@ -17,6 +17,13 @@ describe('初始存档', () => {
       expect(PlayerData.isOwned(id)).toBe(true);
     }
     expect(PlayerData.codexCount).toBeGreaterThanOrEqual(DEFAULT_TEAM.length);
+  });
+
+  it('R 档灵宠开局即在召唤池', () => {
+    for (const id of DEFAULT_SUMMON_POOL_R_IDS) {
+      expect(PlayerData.isDiscovered(id)).toBe(true);
+    }
+    expect(PlayerData.availablePool().length).toBeGreaterThanOrEqual(DEFAULT_SUMMON_POOL_R_IDS.length);
   });
 
   it('编队默认非空且均为已拥有', () => {

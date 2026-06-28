@@ -9,8 +9,9 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
+import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
-import { petFrameImage, petAvatarPath } from '@/config/Assets';
+import { petFrameImage } from '@/config/Assets';
 import {
   createPetSkillReadyFx,
   triggerPetSkillReadyFlash,
@@ -69,7 +70,7 @@ export class BattlePetBar {
       bg.endFill();
       slot.addChild(bg);
 
-      const tex = TextureCache.get(petAvatarPath(pet.def.id, pet.star));
+      const tex = getPetAvatarTexture(pet.def.id, pet.star);
       if (tex) {
         const avatar = new PIXI.Sprite(tex);
         avatar.anchor.set(0.5, 1);

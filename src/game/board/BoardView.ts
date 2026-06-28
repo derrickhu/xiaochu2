@@ -4,7 +4,7 @@
  * - 珠子 Sprite 走对象池，sprites[r][c] 与 BoardModel.grid 一一对应
  * - 拖拽目标格判定沿用 xiao_chu 验证过的算法：只在「当前格 + 四正交邻格」
  *   中选最近中心，避免整盘 floor 在格缝抖动导致交换误判
- * - 8 秒限时由 update(dt) 驱动，超时强制松手
+ * - 拖珠限时由 update(dt) 驱动，超时强制松手
  */
 import * as PIXI from 'pixi.js';
 import { ObjectPool } from '@/core/ObjectPool';
@@ -132,7 +132,7 @@ export class BoardView {
     return Math.max(0, 1 - this._dragTimer / COMBAT.dragTimeLimit);
   }
 
-  /** 每帧驱动：8 秒限时 + 交换锁计时 */
+  /** 每帧驱动：拖珠限时 + 交换锁计时 */
   update(dt: number): void {
     if (this._swapUnlockTimer > 0) {
       this._swapUnlockTimer -= dt;
