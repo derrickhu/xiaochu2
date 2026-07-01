@@ -308,53 +308,16 @@ export const BootDiag = {
 
   _sampleScreen2d(parts: string[]): void {
     try {
-      const main = GameGlobal?.__mainCanvas;
-      const pixiView = GameGlobal?.__pixiViewCanvas;
       const display = GameGlobal?.canvas;
       const nativeScreen = GameGlobal?.screencanvas;
-      const physical = GameGlobal?.__physicalScreenCanvas;
-      const method = GameGlobal?.__compositeMethod ?? '?';
-      const frames = GameGlobal?.__compositeFrameCount ?? 0;
-
       parts.push(
         'canvas拓扑:'
-        + ` mainId=${canvasDiagId(main)}`
-        + ` pixiId=${canvasDiagId(pixiView)}`
         + ` displayId=${canvasDiagId(display)}`
-        + ` nativeScreenId=${canvasDiagId(nativeScreen)}`
-        + ` physicalId=${canvasDiagId(physical)}`,
+        + ` nativeScreenId=${canvasDiagId(nativeScreen)}`,
       );
-      parts.push(
-        `canvas关系: main===display=${main === display}`
-        + ` main===nativeScreen=${main === nativeScreen}`
-        + ` display===pixi=${display === pixiView}`
-        + ` src=${GameGlobal?.__mainCanvasSource ?? '?'}`
-        + ` physicalBlit=${!!physical}`,
-      );
-      parts.push(
-        `renderPath=${GameGlobal?.__renderPath ?? 'default'}`
-        + ` compositor=${GameGlobal?.__mainCtx2d ? '2d' : 'direct-webgl'}`
-        + ` hook=${GameGlobal?.__compositorHook ?? '?'}`
-        + ` method=${method}`
-        + ` frames=${frames}`,
-      );
-      if (GameGlobal?.__mainCtx2d && frames > 0 && frames < 10) {
-        parts.push('WARN compositor frames 异常偏低，2D 合成可能未持续执行');
-      }
+      parts.push(`renderPath=${GameGlobal?.__renderPath ?? 'direct-webgl'}`);
 
-      if (main && GameGlobal?.__mainCtx2d?.getImageData) {
-        const ctx = GameGlobal.__mainCtx2d as CanvasRenderingContext2D;
-        const cx = Math.floor(main.width / 2);
-        const cy = Math.floor(main.height / 2);
-        const px = ctx.getImageData(cx, cy, 1, 1).data;
-        parts.push(`main2d center: rgba(${px[0]},${px[1]},${px[2]},${px[3]})`);
-        try {
-          const tl = ctx.getImageData(20, 20, 1, 1).data;
-          parts.push(`main2d top-left: rgba(${tl[0]},${tl[1]},${tl[2]},${tl[3]})`);
-        } catch (_) { /* */ }
-      }
-
-      if (nativeScreen && nativeScreen !== main) {
+      if (nativeScreen && nativeScreen !== display) {
         sampleCtx2d(nativeScreen, 'nativeScreen', parts);
       }
       if (physical && physical !== main && physical !== nativeScreen) {

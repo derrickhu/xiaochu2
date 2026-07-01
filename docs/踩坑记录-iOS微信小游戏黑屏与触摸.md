@@ -13,10 +13,10 @@ iOS 微信小游戏上，Pixi WebGL、事件系统、场景切换时序都与开
 
 | 路径 | 角色 | 当前结论 |
 |------|------|----------|
-| `direct-webgl` | `pixi-primary` 单 canvas 直接上屏 | 当前完整游戏优先路径；对齐 `game2D_huahua`，转珠交互最稳定 |
-| `2d-compositor` | WebGL 离屏 + `main-2d` 合成 | 仍可作为黑屏排查/兜底，但拖动、短动画、逐帧上屏成本高 |
+| `direct-webgl` | `pixi-adapter` 单 canvas 直接上屏 | **唯一生产路径**；对齐 `game2D_huahua` |
+| ~~`2d-compositor`~~ | WebGL 离屏 + `main-2d` 合成 | 已移除（排查期临时方案，拖动/动画成本高且易出上屏 bug） |
 
-入口在 `minigame/game.js`：固定 `direct-webgl` 单 canvas 启动（对齐 `game2D_huahua`），加载 share-bootstrap、adapter 与 bundle，设置 `GameGlobal.__renderPath = 'direct-webgl'`。
+入口在 `minigame/game.js`：固定 `direct-webgl` 单 canvas 启动，加载 share-bootstrap、adapter 与 bundle。
 
 **典型误区**：把所有 iOS 问题都归因于 WebGL 黑屏。实际这轮问题分成四层：渲染路径、EventSystem 坐标、canvas move/up 链、战斗动画 Promise。
 

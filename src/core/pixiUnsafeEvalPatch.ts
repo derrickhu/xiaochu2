@@ -145,11 +145,6 @@ Object.assign(ShaderSystem.prototype, {
 
 console.log('[pixiPatch] unsafe-eval patch 已应用');
 
-// L1 纯红块可跳过；L3+ 测真实图片须保留真机纹理 patch
-const _minimalLv = typeof GameGlobal !== 'undefined' ? GameGlobal.__minimalLevel : false;
-const _skipTexturePatch = !!(GameGlobal?.__minimalBoot && _minimalLv !== false && _minimalLv < 3);
-
-if (!_skipTexturePatch) {
 const _isRealDevice = (() => {
   try {
     const p: any = typeof wx !== 'undefined' ? wx : typeof tt !== 'undefined' ? tt : null;
@@ -237,7 +232,6 @@ if (_isRealDevice) {
   };
 
   console.log('[pixiPatch] 真机 canvas 纹理上传 patch 已应用');
-}
 }
 
 } // end if !__patched

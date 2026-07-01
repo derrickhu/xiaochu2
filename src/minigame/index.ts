@@ -5,7 +5,7 @@
  * - 点击 → bindPointerTap / canvasTapRouter
  * - 拖拽 → bindCanvasDrag
  * - 坐标 → clientEventToDesign
- * - 上屏 → Game.syncFrameToScreen / warmSceneCompositor
+ * - 上屏 → Game.syncFrameToScreen / warmScenePresent
  * - 触摸桥 → minigame/pixi-adapter/TouchEvent.js
  */
 export {

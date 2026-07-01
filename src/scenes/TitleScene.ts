@@ -65,17 +65,7 @@ export class TitleScene implements Scene {
     const enter = data as TitleEnterData | undefined;
     this._minimalStrip = enter?.minimalStrip;
     if (this._minimalStrip !== 'l7like') {
-      const applyIdleFps = (): void => { Game.setMaxFPS(UI.fps.idle); };
-      try {
-        if (typeof GameGlobal !== 'undefined' && GameGlobal.__minimalBoot) {
-          // 首屏 compositor 同步后再降帧，避免 iOS main2d 卡在红块探针
-          GameGlobal.__deferredIdleFps = applyIdleFps;
-        } else {
-          applyIdleFps();
-        }
-      } catch {
-        applyIdleFps();
-      }
+      Game.setMaxFPS(UI.fps.idle);
     }
     PlayerData.load();
     this._chapter = enter?.chapter ?? this._latestUnlockedChapter();
@@ -93,7 +83,7 @@ export class TitleScene implements Scene {
     }
     if (SceneManager.current?.name !== 'title') return;
     this._rebuild();
-    await Game.warmSceneCompositor();
+    await Game.warmScenePresent();
   }
 
   private _rebuild(): void {

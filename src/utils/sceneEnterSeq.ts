@@ -37,6 +37,6 @@ export function deferSceneBuild(
     if (!seq.stillValid(token)) return;
     if (SceneManager.current?.name !== sceneName) return;
     build();
-    void Game.warmSceneCompositor();
+    void Game.warmScenePresent();
   });
 }

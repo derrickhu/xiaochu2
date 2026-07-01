@@ -83,8 +83,6 @@ export class BoardView {
   private _swapLockUntilMs = 0;
 
   private _detachCanvasMove: (() => void) | null = null;
-  /** 2D compositor 专用：拖动期间每帧 render+上屏一次 */
-  private _frameSyncPending = false;
 
   constructor(board: BoardModel, cb: BoardViewCallbacks) {
     this._board = board;
@@ -286,12 +284,8 @@ export class BoardView {
     };
   }
 
-  /** direct-webgl / compositor：拖动或交换 tween 期间强制 present */
+  /** direct-webgl：拖动或交换 tween 期间强制 present */
   private _presentDragFrame(): void {
-    if (Game.usesCompositor && Platform.isMinigame) {
-      Game.syncFrameToScreen();
-      return;
-    }
     if (!Platform.isMinigame || Platform.isDevtools || (!this._dragging && !this._swapAnim)) return;
     Game.app?.renderer?.render(Game.stage);
   }
@@ -390,25 +384,7 @@ export class BoardView {
 
     Platform.vibrateShort();
     this._cb.onDragStart?.();
-    if (Game.usesCompositor && Platform.isMinigame) {
-      Game.setCompositorBoost(60_000);
-      this._scheduleDragFrameSync();
-    } else {
-      this._presentDragFrame();
-    }
-  }
-
-  /** compositor 专用：拖动跟手每帧 render+上屏 */
-  private _scheduleDragFrameSync(): void {
-    if (!Game.usesCompositor || !Platform.isMinigame || !this._dragging || this._frameSyncPending) return;
-    this._frameSyncPending = true;
-    const run = (): void => {
-      this._frameSyncPending = false;
-      if (!this._dragging) return;
-      Game.syncFrameToScreen();
-    };
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
-    else setTimeout(run, 16);
+    this._presentDragFrame();
   }
 
   private _onMove(x: number, y: number): void {
@@ -418,11 +394,7 @@ export class BoardView {
     const py = Math.max(0, Math.min(this.boardHeight, y));
     if (this._floatOrb) this._floatOrb.position.set(px, py);
     this._advanceSwapAnim();
-    if (Game.usesCompositor && Platform.isMinigame) {
-      this._scheduleDragFrameSync();
-    } else {
-      this._presentDragFrame();
-    }
+    this._presentDragFrame();
 
     if (this._swapLogicLocked()) return;
 
@@ -483,12 +455,7 @@ export class BoardView {
       this._pool.release(this._floatOrb);
       this._floatOrb = null;
     }
-    if (Game.usesCompositor && Platform.isMinigame) {
-      Game.setCompositorBoost(0);
-      Game.syncFrameToScreen();
-    } else if (Platform.isMinigame) {
-      Game.app?.renderer?.render(Game.stage);
-    }
+    this._presentDragFrame();
     this._cb.onDragEnd(this._didMove);
   }
 

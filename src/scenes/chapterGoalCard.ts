@@ -193,6 +193,6 @@ function mountChapterGoalAvatar(
     }
     if (card.destroyed) return;
     apply(getPetAvatarTexture(petId, 1) ?? await loadPetAvatarTexture(petId, 1));
-    void Game.warmSceneCompositor();
+    void Game.warmScenePresent();
   })();
 }

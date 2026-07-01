@@ -108,8 +108,8 @@ class SceneManagerClass {
     BootDiag.log('switchTo', `${name} children=${nextScene.container.children.length}`);
     setTimeout(() => BootDiag.snapshot(`afterSwitch:${name}`), 0);
 
-    // iOS 2d-compositor：切场景后立即合成（build 完成后 deferSceneBuild 会 warmSceneCompositor）
-    void Game.warmSceneCompositor();
+    // 切场景后立即 present（build 完成后 deferSceneBuild 也会 warmScenePresent）
+    void Game.warmScenePresent();
   }
 
   get current(): Scene | null {

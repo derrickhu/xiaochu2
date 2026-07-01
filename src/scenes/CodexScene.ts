@@ -92,7 +92,7 @@ export class CodexScene implements Scene {
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'codex') return;
     this._buildPetList(Game.safeTop + 136);
-    await Game.warmSceneCompositor();
+    await Game.warmScenePresent();
   }
 
   onExit(): void {
