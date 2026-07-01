@@ -4,6 +4,9 @@
  */
 import * as PIXI from 'pixi.js';
 import { TweenManager } from '@/core/TweenManager';
+import { Platform } from '@/core/PlatformService';
+import { minigameFrameDelay } from '@/core/animationGuard';
+import { bindPointerTap } from '@/utils/bindPointerTap';
 
 /** 圆角文字按钮：纯 Graphics 底 + 居中文字，点击回调 */
 export function makeButton(
@@ -20,13 +23,17 @@ export function makeButton(
   btn.addChild(text);
   btn.eventMode = 'static';
   btn.cursor = 'pointer';
-  btn.on('pointertap', onTap);
+  bindPointerTap(btn, onTap);
   return btn;
 }
 
 /** 基于补间时钟的延时（与场景动画同一时间轴，暂停/销毁自动失效） */
 export function delay(sec: number): Promise<void> {
   return new Promise((resolve) => {
+    if (Platform.isMinigame) {
+      void minigameFrameDelay(sec).then(resolve);
+      return;
+    }
     TweenManager.to({
       target: { t: 0 }, props: { t: 1 },
       duration: sec, onComplete: resolve,

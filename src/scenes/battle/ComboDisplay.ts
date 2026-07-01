@@ -275,8 +275,15 @@ export class ComboDisplay {
     this._root.alpha = style.isLow ? 0.5 : 1;
   }
 
-  hide(): void {
+  hide(immediate = false): void {
     this._inBattle = false;
+    if (immediate) {
+      this._root.visible = false;
+      this._root.alpha = 0;
+      this._ring.clear();
+      this._milestone.visible = false;
+      this._anim = null;
+    }
   }
 
   update(dt: number): void {

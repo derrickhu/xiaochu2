@@ -22,7 +22,12 @@ try { document = require('./document'); console.log('[pixi-adapter] ✓ document
 try { navigator = require('./navigator'); console.log('[pixi-adapter] ✓ navigator'); } catch(e) { console.error('[pixi-adapter] ✗ navigator:', e); navigator = {}; }
 try { localStorage = require('./localStorage'); console.log('[pixi-adapter] ✓ localStorage'); } catch(e) { console.error('[pixi-adapter] ✗ localStorage:', e); localStorage = {}; }
 try { XMLHttpRequest = require('./XMLHttpRequest'); console.log('[pixi-adapter] ✓ XMLHttpRequest'); } catch(e) { console.error('[pixi-adapter] ✗ XMLHttpRequest:', e); }
-try { registerTouchEvents = require('./TouchEvent').registerTouchEvents; console.log('[pixi-adapter] ✓ TouchEvent'); } catch(e) { console.error('[pixi-adapter] ✗ TouchEvent:', e); registerTouchEvents = function(){}; }
+try {
+  var _touchMod = require('./TouchEvent');
+  registerTouchEvents = _touchMod.registerTouchEvents;
+  var AdapterTouchEvent = _touchMod.TouchEvent;
+  console.log('[pixi-adapter] ✓ TouchEvent');
+} catch(e) { console.error('[pixi-adapter] ✗ TouchEvent:', e); registerTouchEvents = function(){}; AdapterTouchEvent = function(){}; }
 try {
   var _elem = require('./element');
   Element = _elem.Element;
@@ -124,14 +129,12 @@ if (typeof GameGlobal !== 'undefined') {
 }
 
 // ======== WebGL / Canvas2D 上下文构造函数 ========
-// 业界已知坑：Android/鸿蒙 WebGL contextAttributes 中 stencil 返回数字 0 而不是 false，
-// 导致 PixiJS 判断为不支持 stencil，Filter/Mask/Graphics 全部失效
+// 对齐 game2D_huahua：用临时 canvas 探测 + patch（勿碰主 canvas）
 let _WebGLRenderingContext = {};
 try {
   const _tmpCanvas = platform.createCanvas();
   console.log('[pixi-adapter] WebGL: tmpCanvas created, type:', typeof _tmpCanvas);
   if (_tmpCanvas && typeof _tmpCanvas.getContext === 'function') {
-    // 业界经验：优先 webgl，不要尝试 webgl2（鸿蒙/部分安卓返回假上下文）
     var _tmpGl = _tmpCanvas.getContext('webgl', {
       stencil: true,
       antialias: true,
@@ -143,8 +146,6 @@ try {
       _WebGLRenderingContext = _tmpGl.constructor || {};
       console.log('[pixi-adapter] WebGL context 获取成功');
 
-      // 业界已知坑修复：contextAttributes 中 stencil/antialias 返回 0/1 而不是 bool
-      // PixiJS 用 === true 判断，导致功能被误关闭
       try {
         var _origGetCtxAttr = _tmpGl.getContextAttributes;
         if (_origGetCtxAttr) {
@@ -153,7 +154,6 @@ try {
             _patchProto.getContextAttributes = function() {
               var attr = _origGetCtxAttr.call(this);
               if (attr) {
-                // 强制布尔化（修复返回 0/1 的 bug）
                 attr.stencil = !!attr.stencil;
                 attr.antialias = !!attr.antialias;
                 attr.alpha = !!attr.alpha;
@@ -169,11 +169,9 @@ try {
         console.warn('[pixi-adapter] patch getContextAttributes 失败:', e3);
       }
 
-      // 业界已知坑：OES_vertex_array_object 在部分 Android/鸿蒙上返回假对象
       try {
         var _vaoExt = _tmpGl.getExtension('OES_vertex_array_object');
         if (_vaoExt && typeof _vaoExt.createVertexArrayOES !== 'function') {
-          // 假扩展，禁用它
           var _origGetExt = _tmpGl.__proto__.getExtension;
           _tmpGl.__proto__.getExtension = function(name) {
             if (name === 'OES_vertex_array_object') return null;
@@ -279,8 +277,9 @@ const _allGlobals = {
   addEventListener: _windowAddEventListener,
   removeEventListener: _windowRemoveEventListener,
   self: null,            // 下面特殊处理
+  // 对齐 game2D_huahua：真机也 stub PointerEvent，让 Pixi 走 pointerdown(canvas)+pointerup(window)
   PointerEvent: _PointerEvent,
-  TouchEvent: _TouchEventCtor,
+  TouchEvent: AdapterTouchEvent,
   MouseEvent: _MouseEvent,
   URL: _URL,
   Blob: _Blob,
@@ -419,10 +418,15 @@ if (isDevtools) {
     ', self.addEventListener === _windowAddEventListener:', (_realGlobal.self && _realGlobal.self.addEventListener === _windowAddEventListener));
 }
 
-// ======== 全局 canvas ========
-// 微信框架可能已将 canvas 设为只读属性，需 try-catch 保护
-try { GameGlobal.canvas = canvas; } catch (e) { /* 已由框架设置 */ }
-try { _realGlobal.canvas = canvas; } catch (e) { /* 只读属性忽略 */ }
+// ======== 全局 canvas（对齐 game2D_huahua）========
+try {
+  GameGlobal.canvas = canvas;
+} catch (e) {
+  console.warn('[pixi-adapter] GameGlobal.canvas 设置失败:', e);
+}
+try {
+  _realGlobal.canvas = canvas;
+} catch (e) { /* 只读属性忽略 */ }
 
 // ======== navigator.userAgent ========
 try {

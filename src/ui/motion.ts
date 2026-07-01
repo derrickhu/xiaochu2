@@ -6,17 +6,29 @@
  */
 import * as PIXI from 'pixi.js';
 import { TweenManager, Ease } from '@/core/TweenManager';
+import { Platform } from '@/core/PlatformService';
+import { iosPlatform } from '@/core/webglContextPatch';
+
+/** iOS 真机 Tween 补间可能不生效，UI 须直接落到终态（与 SceneManager 进场 instant 一致） */
+function useInstantUiMotion(): boolean {
+  return Platform.isMinigame && !Platform.isDevtools && iosPlatform();
+}
 
 /** 面板/卡片回弹入场：缩放 + 淡入（easeOutBack）。 */
 export function popIn(
   target: PIXI.Container,
   opts?: { delay?: number; duration?: number; fromScale?: number },
 ): void {
+  TweenManager.cancelTarget(target);
+  TweenManager.cancelTarget(target.scale);
+  if (useInstantUiMotion()) {
+    target.alpha = 1;
+    target.scale.set(1);
+    return;
+  }
   const delay = opts?.delay ?? 0;
   const duration = opts?.duration ?? 0.32;
   const fromScale = opts?.fromScale ?? 0.82;
-  TweenManager.cancelTarget(target);
-  TweenManager.cancelTarget(target.scale);
   target.alpha = 0;
   target.scale.set(fromScale);
   TweenManager.to({
@@ -32,10 +44,14 @@ export function fadeIn(
   target: PIXI.Container,
   opts?: { delay?: number; duration?: number; to?: number },
 ): void {
-  const delay = opts?.delay ?? 0;
-  const duration = opts?.duration ?? 0.22;
   const to = opts?.to ?? 1;
   TweenManager.cancelTarget(target);
+  if (useInstantUiMotion()) {
+    target.alpha = to;
+    return;
+  }
+  const delay = opts?.delay ?? 0;
+  const duration = opts?.duration ?? 0.22;
   target.alpha = 0;
   TweenManager.to({ target, props: { alpha: to }, duration, delay, ease: Ease.easeOutQuad });
 }
@@ -109,6 +125,11 @@ export function staggerIn(
   items.forEach((item, i) => {
     const baseY = item.y;
     TweenManager.cancelTarget(item);
+    if (useInstantUiMotion()) {
+      item.alpha = 1;
+      item.y = baseY;
+      return;
+    }
     item.alpha = 0;
     item.y = baseY + offsetY;
     TweenManager.to({

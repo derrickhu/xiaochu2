@@ -103,7 +103,6 @@ class TextureCacheClass {
       }
       img.onload = () => {
         try {
-          // 真机不能走 Texture.from(img.src) 的 document 路径，直接用 BaseTexture 包装平台 Image
           const base = PIXI.BaseTexture.from(img as any);
           resolve(new PIXI.Texture(base));
         } catch (e) {

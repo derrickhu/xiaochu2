@@ -11,11 +11,11 @@ import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
-import { petDetailPreloadImages, petDetailAvatarEntry, ensurePetAvatars } from '@/config/assetPreload';
+import { ensurePetAvatars, petDetailPreloadImages, petDetailAvatarEntry } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { Platform } from '@/core/PlatformService';
 import { UI } from '@/balance/ui';
-import { PET_MAP, type PetDef } from '@/balance/pets';
+import { PET_MAP, type PetDef, INITIAL_PET_LEVEL, INITIAL_PET_STAR } from '@/balance/pets';
 import { getStarProfile, MAX_PET_STAR } from '@/balance/growth';
 import { getStatUi, type StatKey } from '@/balance/petRoles';
 import { getRarity } from '@/balance/rarity';
@@ -79,23 +79,100 @@ export class PetDetailScene implements Scene {
     this._backScene = enter?.backScene ?? 'codex';
     this._backData = enter?.backData;
     this._preview = enter?.preview ?? false;
-    void this._enter(this._enterSeq.next());
+    this._fx?.destroy();
+    this._fx = null;
+    this._mountEnterShell();
+    const token = this._enterSeq.next();
+    // 下一帧先铺骨架 UI（不等分包），避免 preload 期间整屏空白
+    deferSceneBuild(token, this._enterSeq, 'petDetail', () => this._buildSafe());
+    void this._enter(token);
+  }
+
+  /** 异步 preload 完成前先铺深色底 + 加载提示，避免真机切场景白屏 */
+  private _mountEnterShell(): void {
+    const w = Game.logicWidth;
+    const h = Game.logicHeight;
+    this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
+    const base = new PIXI.Graphics();
+    base.beginFill(0x1a1126);
+    base.drawRect(0, 0, w, h);
+    base.endFill();
+    this.container.addChild(base);
+    this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.home, w, h));
+    if (this._content.destroyed) this._content = new PIXI.Container();
+    this.container.addChild(this._content);
+    const hint = makeText('加载中…', {
+      size: FONT_SIZE.sm, fill: COLORS.textInverse, anchor: 0.5,
+    });
+    hint.name = 'petDetailLoading';
+    hint.position.set(w / 2, h / 2);
+    this.container.addChild(hint);
+  }
+
+  private _prepareContentLayer(): void {
+    if (this._content.destroyed) this._content = new PIXI.Container();
+    if (this._content.parent !== this.container) {
+      this.container.addChild(this._content);
+    }
+    this.container.getChildByName('petDetailLoading')?.destroy();
+  }
+
+  private _buildSafe(): void {
+    try {
+      this._prepareContentLayer();
+      this._build();
+      this._ensureSceneFx();
+    } catch (e) {
+      console.error('[PetDetailScene] _build 失败:', e);
+      this._buildErrorFallback();
+    }
+  }
+
+  private _buildErrorFallback(): void {
+    this._prepareContentLayer();
+    const w = Game.logicWidth;
+    const h = Game.logicHeight;
+    this._content.removeChildren().forEach((c) => c.destroy({ children: true }));
+    const msg = makeText('页面加载异常', {
+      size: FONT_SIZE.md, fill: COLORS.textMain, anchor: 0.5,
+    });
+    msg.position.set(w / 2, h / 2 - 40);
+    this._content.addChild(msg);
+    const back = makeButton({
+      label: '返回', width: 220, height: 60, variant: 'primary',
+      onTap: () => SceneManager.switchTo(this._backScene, this._backData),
+    });
+    back.position.set(w / 2, h / 2 + 40);
+    this._content.addChild(back);
+  }
+
+  /** 特效层须在 UI 之后挂载，且 FlashOverlay 空闲时不可见（见 FlashOverlay） */
+  private _ensureSceneFx(): void {
+    const w = Game.logicWidth;
+    const h = Game.logicHeight;
+    this._fx?.destroy();
+    this._fx = new SceneFx();
+    this._fx.build(this.container, w, h);
   }
 
   private async _enter(token: number): Promise<void> {
-    await ensureAssets(petDetailPreloadImages(this._petId));
-    const avatarEntry = petDetailAvatarEntry(this._petId);
-    if (avatarEntry) await ensurePetAvatars([avatarEntry]);
-    if (!this._enterSeq.stillValid(token)) return;
-    deferSceneBuild(token, this._enterSeq, 'petDetail', () => {
-      if (this._content.destroyed) this._content = new PIXI.Container();
-      if (this._content.parent !== this.container) {
-        this.container.addChild(this._content);
+    try {
+      await ensureAssets(petDetailPreloadImages(this._petId));
+    } catch (e) {
+      console.warn('[PetDetailScene] 资源预加载部分失败:', e);
+    }
+    const avatarEntry = this._preview
+      ? { petId: this._petId, star: 1 as const }
+      : petDetailAvatarEntry(this._petId);
+    if (avatarEntry) {
+      try {
+        await ensurePetAvatars([avatarEntry]);
+      } catch (e) {
+        console.warn('[PetDetailScene] 头像加载失败:', e);
       }
-      this._fx = new SceneFx();
-      this._fx.build(this.container, Game.logicWidth, Game.logicHeight);
-      this._build();
-    });
+    }
+    if (!this._enterSeq.stillValid(token)) return;
+    deferSceneBuild(token, this._enterSeq, 'petDetail', () => this._buildSafe());
   }
 
   onExit(): void {
@@ -131,8 +208,8 @@ export class PetDetailScene implements Scene {
       return;
     }
 
-    const lv = PlayerData.petLevel(this._petId);
-    const star = PlayerData.petStar(this._petId);
+    const lv = this._preview ? INITIAL_PET_LEVEL : PlayerData.petLevel(this._petId);
+    const star = this._preview ? INITIAL_PET_STAR : PlayerData.petStar(this._petId);
 
     this._content.addChild(makeTopBar({
       title: pet.name, width: w, centerY: Game.safeTop + 36,

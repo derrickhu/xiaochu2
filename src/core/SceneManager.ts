@@ -5,7 +5,6 @@ import * as PIXI from 'pixi.js';
 import { Game } from './Game';
 import { TweenManager, Ease } from './TweenManager';
 import { OverlayManager } from './OverlayManager';
-import { deferAfterPointerEvent } from '@/utils/deferAfterPointer';
 import { Platform } from './PlatformService';
 import { BootDiag, bootDiagBindScene } from './BootDiag';
 
@@ -63,14 +62,6 @@ class SceneManagerClass {
   }
 
   switchTo(name: string, data?: unknown): void {
-    // 底栏「灵宠/返回」等 pointertap 内同步切场景会 destroy 命中节点，
-    // 微信端 Pixi pointerup 仍可能在本轮事件栈内访问 pressTargets → null.scale。
-    deferAfterPointerEvent(() => this._switchToImmediate(name, data));
-  }
-
-  private _switchToImmediate(name: string, data?: unknown): void {
-    console.log(`[SceneManager] switchTo("${name}") Game.uid=${(Game as any)._uid}, stage=${!!Game.stage}`);
-
     const nextScene = this._scenes.get(name);
     if (!nextScene) {
       console.error(`[SceneManager] 场景 "${name}" 未注册`);
@@ -117,7 +108,8 @@ class SceneManagerClass {
     BootDiag.log('switchTo', `${name} children=${nextScene.container.children.length}`);
     setTimeout(() => BootDiag.snapshot(`afterSwitch:${name}`), 0);
 
-    console.log(`[SceneManager] 切换到场景: ${name}`);
+    // iOS 2d-compositor：切场景后立即合成（build 完成后 deferSceneBuild 会 warmSceneCompositor）
+    void Game.warmSceneCompositor();
   }
 
   get current(): Scene | null {
@@ -128,9 +120,6 @@ class SceneManagerClass {
   private _bringOverlayToFront(): void {
     try {
       OverlayManager.bringToFront();
-      // 调试：打印 stage 子元素顺序
-      const stageChildren = Game.stage.children.map((c: any) => c.constructor?.name || 'Container');
-      console.log(`[SceneManager] bringToFront 完成, stage 子元素顺序: [${stageChildren.join(', ')}]`);
     } catch (e) {
       console.warn('[SceneManager] bringToFront 失败:', e);
     }

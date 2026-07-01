@@ -36,6 +36,8 @@ import {
 } from './teamOverviewPanel';
 import { addTeamPetAvatar, buildTeamPetList } from './teamPetList';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
+import { bindPointerTap } from '@/utils/bindPointerTap';
+import { touchDiag } from '@/utils/touchDiag';
 
 /** 战前编队：传入 stageId 时展示本关敌人，确认后进入战斗；缺省为自由编队 */
 export interface TeamEnterData {
@@ -316,6 +318,7 @@ export class TeamScene implements Scene {
   }
 
   private _togglePet(petId: string): void {
+    touchDiag('team.toggle', petId);
     if (PlayerData.isInTeam(petId)) {
       if (!PlayerData.removeFromTeam(petId)) {
         Platform.showToast('至少保留 1 只灵宠');
@@ -327,6 +330,7 @@ export class TeamScene implements Scene {
     }
     Platform.vibrateShort('light');
     this._refreshTeamUi();
+    if (Platform.isMinigame) Game.syncFrameToScreen();
   }
 
   private _refreshTeamUi(): void {
@@ -337,36 +341,42 @@ export class TeamScene implements Scene {
 
     const gap = 10;
     const totalW = TEAM_SIZE * slotSize + (TEAM_SIZE - 1) * gap;
-    const startX = (w - totalW) / 2 + slotSize / 2;
+    const leftX = (w - totalW) / 2;
     const y = slotY;
 
     const team = PlayerData.team;
     for (let i = 0; i < TEAM_SIZE; i++) {
       const slot = new PIXI.Container();
-      slot.position.set(startX + i * (slotSize + gap), y);
+      // 与 makeButton 一致：position 在槽位中心 + 居中 hitArea
+      const cx = leftX + i * (slotSize + gap) + slotSize / 2;
+      const cy = y + slotSize / 2;
+      slot.position.set(cx, cy);
       const petId = team[i];
       const pet = petId ? PET_MAP.get(petId) : undefined;
 
       if (pet) {
-        addTeamPetAvatar(slot, pet, slotSize / 2, slotSize / 2, slotSize);
+        addTeamPetAvatar(slot, pet, 0, 0, slotSize);
+        slot.hitArea = new PIXI.Rectangle(-slotSize / 2, -slotSize / 2, slotSize, slotSize);
+        slot.interactiveChildren = false;
         slot.eventMode = 'static';
         slot.cursor = 'pointer';
-        slot.on('pointertap', () => this._togglePet(pet.id));
-        // 新上阵的槽位淡入提示
+        bindPointerTap(slot, () => this._togglePet(pet.id), { label: `team-slot-${i}` });
         if (this._prevTeam[i] !== petId) fadeIn(slot, { duration: 0.24 });
       } else {
         slot.addChild(makePanel({
           width: slotSize, height: slotSize, radius: RADIUS.chip,
           bg: COLORS.panelBg, bgAlpha: 0.85,
           border: COLORS.panelBorderSoft, borderWidth: 2,
-          centered: false,
+          centered: true,
         }));
         const plus = makeText('+', { size: FONT_SIZE.lg, fill: COLORS.textSub, anchor: 0.5 });
-        plus.position.set(slotSize / 2, slotSize / 2);
+        plus.position.set(0, 0);
         slot.addChild(plus);
+        slot.hitArea = new PIXI.Rectangle(-slotSize / 2, -slotSize / 2, slotSize, slotSize);
+        slot.interactiveChildren = false;
         slot.eventMode = 'static';
         slot.cursor = 'pointer';
-        slot.on('pointertap', () => Platform.showToast('请从下方列表选择灵宠上阵'));
+        bindPointerTap(slot, () => Platform.showToast('请从下方列表选择灵宠上阵'), { label: `team-empty-${i}` });
       }
       this._slotArea.addChild(slot);
     }

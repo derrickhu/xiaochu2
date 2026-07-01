@@ -32,6 +32,7 @@ import {
 import { GachaRevealSequence } from './gacha/gachaRevealSequence';
 import { buildGachaPoolPreview } from './gacha/gachaPoolPreview';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
+import { bindPointerTap } from '@/utils/bindPointerTap';
 
 const GACHA_ELEMENTS: readonly Element[] = ['metal', 'wood', 'water', 'fire', 'earth'];
 
@@ -179,7 +180,7 @@ export class GachaScene implements Scene {
       tab.position.set(x, y);
       tab.eventMode = 'static';
       tab.cursor = 'pointer';
-      tab.on('pointertap', onTap);
+      bindPointerTap(tab, onTap);
       this._page.addChild(tab);
 
       const text = makeText(label, {

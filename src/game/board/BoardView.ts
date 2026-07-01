@@ -7,15 +7,15 @@
  * - 拖珠限时由 update(dt) 驱动，超时强制松手
  */
 import * as PIXI from 'pixi.js';
+import { Game } from '@/core/Game';
 import { ObjectPool } from '@/core/ObjectPool';
 import { TextureCache } from '@/core/TextureCache';
-import { TweenManager, Ease } from '@/core/TweenManager';
+import { TweenManager } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
 import { UI } from '@/balance/ui';
 import { COMBAT, type OrbType } from '@/balance/combat';
 import { ORB_IMAGES } from '@/config/Assets';
 import { BoardModel, type MatchGroup, type FallMove, type Cell } from './BoardModel';
-import { BoardDragController } from './BoardDragController';
 import { playBoardClear, playBoardConvert, playBoardFall } from './boardAnimations';
 import { buildBoardBackground } from './boardBackground';
 import { drawInactiveMark, drawSealMark } from './boardOrbMarks';
@@ -26,11 +26,10 @@ export interface BoardViewCallbacks {
   onDragStart?: () => void;
   /** 松手或超时（didMove = 拖动期间发生过交换） */
   onDragEnd: (didMove: boolean) => void;
-  /**
-   * 有效珠判定（队伍属性覆盖）：返回 false 的珠子降饱和显示，
-   * 提示玩家消除它不产生伤害。不传 = 全部有效。
-   */
+  /** 有效珠判定（队伍属性覆盖）：返回 false 的珠子降饱和显示，提示消除无伤害 */
   isOrbActive?: (orb: OrbType) => boolean;
+  /** 诊断：canStart=false 时输出 busy/state 等 */
+  whyCantDrag?: () => string;
 }
 
 /** 无效珠：降饱和 + 半透明（仍可拖消，仅无伤害） */
@@ -39,6 +38,22 @@ const INACTIVE_ALPHA = 0.58;
 /** 封印珠：冷色覆层，与无效珠明显区分 */
 const SEAL_TINT = 0xc8d4ff;
 const SEAL_ALPHA = 0.72;
+
+/** 拖动期双珠交换 tween（对齐 xiao_chu g.swapAnim，连拖路径上逐格换位） */
+interface DragSwapAnim {
+  spA: PIXI.Sprite;
+  spB: PIXI.Sprite;
+  aFromX: number;
+  aFromY: number;
+  aToX: number;
+  aToY: number;
+  bFromX: number;
+  bFromY: number;
+  bToX: number;
+  bToY: number;
+  startMs: number;
+  durationMs: number;
+}
 
 export class BoardView {
   readonly container = new PIXI.Container();
@@ -62,11 +77,14 @@ export class BoardView {
   private _dragTimer = 0;
   private _didMove = false;
   private _floatOrb: PIXI.Sprite | null = null;
-  /** 交换动画期间禁止再次换格，避免格缝处 pointermove 来回 oscillate 卡死 */
-  private _swapLocked = false;
-  private _swapUnlockTimer = 0;
+  /** 当前交换动画；逻辑锁另用真实时间，避免真机 touchmove 期间 ticker 不推进 */
+  private _swapAnim: DragSwapAnim | null = null;
+  /** 触摸事件用真实时间解锁；真机拖动时 Pixi ticker 可能被 touchmove 挤压 */
+  private _swapLockUntilMs = 0;
 
-  private _dragInput: BoardDragController | null = null;
+  private _detachCanvasMove: (() => void) | null = null;
+  /** 2D compositor 专用：拖动期间每帧 render+上屏一次 */
+  private _frameSyncPending = false;
 
   constructor(board: BoardModel, cb: BoardViewCallbacks) {
     this._board = board;
@@ -99,16 +117,8 @@ export class BoardView {
     // 状态标记层（封印 / 无效），置于珠子之上
     this._overlayLayer.eventMode = 'none';
     this.container.addChild(this._overlayLayer);
-    this._dragInput = new BoardDragController({
-      container: this.container,
-      boardWidth: this.boardWidth,
-      boardHeight: this.boardHeight,
-      isDragging: () => this._dragging,
-      onDown: (e) => this._onDown(e),
-      onMove: (x, y) => this._onMove(x, y),
-      onUp: () => this._onUp(),
-    });
-    // 浮珠层置顶（仅展示，不拦截触摸；触摸由 hit 层接收）
+    this._setupInteraction();
+    // 浮珠层置顶（仅展示，不拦截触摸；pointerdown 在棋盘 hitArea）
     this._floatLayer.eventMode = 'none';
     this.container.addChild(this._floatLayer);
     this.rebuild();
@@ -132,15 +142,9 @@ export class BoardView {
     return Math.max(0, 1 - this._dragTimer / COMBAT.dragTimeLimit);
   }
 
-  /** 每帧驱动：拖珠限时 + 交换锁计时 */
+  /** 每帧驱动：拖珠限时 + 路径交换 tween */
   update(dt: number): void {
-    if (this._swapUnlockTimer > 0) {
-      this._swapUnlockTimer -= dt;
-      if (this._swapUnlockTimer <= 0) {
-        this._swapUnlockTimer = 0;
-        this._swapLocked = false;
-      }
-    }
+    this._advanceSwapAnim();
     if (!this._dragging) return;
     this._dragTimer += dt;
     if (this._dragTimer >= COMBAT.dragTimeLimit) {
@@ -218,8 +222,8 @@ export class BoardView {
   }
 
   destroy(): void {
-    this._dragInput?.destroy();
-    this._dragInput = null;
+    this._detachCanvasMove?.();
+    this._detachCanvasMove = null;
     this._releaseAll();
     this._pool.clear();
     this.container.destroy({ children: true });
@@ -227,11 +231,135 @@ export class BoardView {
 
   // ════════════ 内部 ════════════
 
-  private _onDown(e: PIXI.FederatedPointerEvent): void {
+  /**
+   * 对齐 game2D_huahua BoardView：
+   * - pointerdown：Pixi 容器命中（EventSystem patch 后的坐标）
+   * - pointermove/up：直接挂 Game.app.view，绕过 window 上的 EventSystem 丢 move
+   */
+  private _setupInteraction(): void {
+    this.container.eventMode = 'static';
+    this.container.hitArea = new PIXI.Rectangle(0, 0, this.boardWidth, this.boardHeight);
+    this.container.interactiveChildren = false;
+
+    const onPixiDown = (e: PIXI.FederatedPointerEvent): void => {
+      if (this._dragging) return;
+      if (!this._cb.canDrag()) return;
+      const p = this._boardLocalFromClient(e);
+      if (p.x < 0 || p.y < 0 || p.x > this.boardWidth || p.y > this.boardHeight) return;
+      this._onDown(p.x, p.y);
+    };
+    this.container.on('pointerdown', onPixiDown);
+
+    const canvas = Game.app.view as unknown as {
+      addEventListener: (type: string, fn: EventListener) => void;
+      removeEventListener: (type: string, fn: EventListener) => void;
+    };
+
+    const onMove = (e: Event): void => {
+      if (!this._dragging) return;
+      (e as { preventDefault?: () => void }).preventDefault?.();
+      const p = this._boardLocalFromClient(e);
+      this._onMove(p.x, p.y);
+    };
+    const onUp = (): void => {
+      if (this._dragging) this._onUp();
+    };
+
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onUp);
+
+    this._detachCanvasMove = () => {
+      this.container.off('pointerdown', onPixiDown);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointercancel', onUp);
+    };
+  }
+
+  /** clientX/Y → 棋盘 container 本地（与 Game.pointerEventToStageLocal / huahua _rawToLocal 一致） */
+  private _boardLocalFromClient(e: unknown): { x: number; y: number } {
+    const stageLocal = Game.pointerEventToStageLocal(e);
+    return {
+      x: stageLocal.x - this.container.x,
+      y: stageLocal.y - this.container.y,
+    };
+  }
+
+  /** direct-webgl / compositor：拖动或交换 tween 期间强制 present */
+  private _presentDragFrame(): void {
+    if (Game.usesCompositor && Platform.isMinigame) {
+      Game.syncFrameToScreen();
+      return;
+    }
+    if (!Platform.isMinigame || Platform.isDevtools || (!this._dragging && !this._swapAnim)) return;
+    Game.app?.renderer?.render(Game.stage);
+  }
+
+  private _advanceSwapAnim(nowMs = Date.now()): void {
+    const a = this._swapAnim;
+    if (!a) return;
+    const t = Math.min(1, (nowMs - a.startMs) / a.durationMs);
+    // 被拖珠的真实视觉由 floatOrb 跟手；底层半透明珠固定在当前逻辑格，避免“幽灵飘动”。
+    a.spA.position.set(a.aToX, a.aToY);
+    a.spB.position.set(
+      a.bFromX + (a.bToX - a.bFromX) * t,
+      a.bFromY + (a.bToY - a.bFromY) * t,
+    );
+    if (t >= 1) this._swapAnim = null;
+  }
+
+  private _swapLogicLocked(): boolean {
+    return Date.now() < this._swapLockUntilMs;
+  }
+
+  private _finishSwapAnim(): void {
+    const a = this._swapAnim;
+    if (!a) return;
+    a.spA.position.set(a.aToX, a.aToY);
+    a.spB.position.set(a.bToX, a.bToY);
+    this._swapAnim = null;
+  }
+
+  private _beginSwapAnim(
+    dragSp: PIXI.Sprite,
+    otherSp: PIXI.Sprite,
+    fromR: number,
+    fromC: number,
+    toR: number,
+    toC: number,
+  ): void {
+    this._finishSwapAnim();
+    const aFromX = this._cellCenterX(fromC);
+    const aFromY = this._cellCenterY(fromR);
+    const aToX = this._cellCenterX(toC);
+    const aToY = this._cellCenterY(toR);
+    const bFromX = aToX;
+    const bFromY = aToY;
+    const bToX = aFromX;
+    const bToY = aFromY;
+    dragSp.position.set(aToX, aToY);
+    otherSp.position.set(bFromX, bFromY);
+    this._swapAnim = {
+      spA: dragSp,
+      spB: otherSp,
+      aFromX,
+      aFromY,
+      aToX,
+      aToY,
+      bFromX,
+      bFromY,
+      bToX,
+      bToY,
+      startMs: Date.now(),
+      durationMs: Math.max(1, UI.anim.orbSwap * 1000),
+    };
+  }
+
+  private _onDown(localX: number, localY: number): void {
     if (this._dragging || !this._cb.canDrag()) return;
-    const p = this.container.toLocal(e.global);
-    const c = Math.floor(p.x / this._cell);
-    const r = Math.floor(p.y / this._cell);
+    const c = Math.floor(localX / this._cell);
+    const r = Math.floor(localY / this._cell);
     if (!this._board.inBounds(r, c)) return;
     const orb = this._board.get(r, c);
     if (!orb) return;
@@ -243,6 +371,8 @@ export class BoardView {
 
     this._dragging = true;
     this._didMove = false;
+    this._finishSwapAnim();
+    this._swapLockUntilMs = 0;
     this._dragR = r;
     this._dragC = c;
     this._dragTimer = 0;
@@ -254,12 +384,31 @@ export class BoardView {
     this._applyOrbTexture(float, orb);
     float.width = this._cell * UI.board.orbScale * 1.15;
     float.height = this._cell * UI.board.orbScale * 1.15;
-    float.position.set(p.x, p.y);
+    float.position.set(localX, localY);
     this._floatLayer.addChild(float);
     this._floatOrb = float;
 
     Platform.vibrateShort();
     this._cb.onDragStart?.();
+    if (Game.usesCompositor && Platform.isMinigame) {
+      Game.setCompositorBoost(60_000);
+      this._scheduleDragFrameSync();
+    } else {
+      this._presentDragFrame();
+    }
+  }
+
+  /** compositor 专用：拖动跟手每帧 render+上屏 */
+  private _scheduleDragFrameSync(): void {
+    if (!Game.usesCompositor || !Platform.isMinigame || !this._dragging || this._frameSyncPending) return;
+    this._frameSyncPending = true;
+    const run = (): void => {
+      this._frameSyncPending = false;
+      if (!this._dragging) return;
+      Game.syncFrameToScreen();
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+    else setTimeout(run, 16);
   }
 
   private _onMove(x: number, y: number): void {
@@ -268,11 +417,16 @@ export class BoardView {
     const px = Math.max(0, Math.min(this.boardWidth, x));
     const py = Math.max(0, Math.min(this.boardHeight, y));
     if (this._floatOrb) this._floatOrb.position.set(px, py);
+    this._advanceSwapAnim();
+    if (Game.usesCompositor && Platform.isMinigame) {
+      this._scheduleDragFrameSync();
+    } else {
+      this._presentDragFrame();
+    }
 
-    // 交换动画锁定期内只跟手，不再判格（对齐 xiao_chu swapLogicLocked）
-    if (this._swapLocked) return;
+    if (this._swapLogicLocked()) return;
 
-    // 目标格：当前格 + 四正交邻格中选最近中心
+    // 目标格：当前格 + 四正交邻格中选最近中心（对齐 xiao_chu / 首版 Demo）
     const dr = this._dragR;
     const dc = this._dragC;
     let r = dr;
@@ -281,7 +435,6 @@ export class BoardView {
     const neigh = [[dr - 1, dc], [dr + 1, dc], [dr, dc - 1], [dr, dc + 1]];
     for (const [nr, nc] of neigh) {
       if (!this._board.inBounds(nr, nc)) continue;
-      // 封印珠不可被换入
       if (this._board.isLocked(nr, nc)) continue;
       const d = (px - this._cellCenterX(nc)) ** 2 + (py - this._cellCenterY(nr)) ** 2;
       if (d < bestD) {
@@ -291,34 +444,27 @@ export class BoardView {
       }
     }
 
-    // 必须换到正交邻格，且目标格与当前拖珠格不同
-    if (r === dr && c === dc) return;
     if (Math.abs(r - dr) + Math.abs(c - dc) !== 1) return;
 
-    // 数据交换
-    this._board.swap(dr, dc, r, c);
-    this._didMove = true;
-    this._swapLocked = true;
-    this._swapUnlockTimer = UI.anim.orbSwap;
-
-    // Sprite 交换：被换走的珠 tween 到旧格，拖动珠瞬移到新格（保持半透明）
-    const dragSp = this._sprites[dr][dc];
+    const fromR = dr;
+    const fromC = dc;
+    const dragSp = this._sprites[fromR][fromC];
     const otherSp = this._sprites[r][c];
-    this._sprites[r][c] = dragSp;
-    this._sprites[dr][dc] = otherSp;
+    if (!dragSp || !otherSp) return;
 
-    if (dragSp) dragSp.position.set(this._cellCenterX(c), this._cellCenterY(r));
-    if (otherSp) {
-      TweenManager.cancelTarget(otherSp);
-      TweenManager.to({
-        target: otherSp,
-        props: { x: this._cellCenterX(dc), y: this._cellCenterY(dr) },
-        duration: UI.anim.orbSwap, ease: Ease.easeOutQuad,
-      });
-    }
+    this._board.swap(fromR, fromC, r, c);
+    this._didMove = true;
+    this._sprites[r][c] = dragSp;
+    this._sprites[fromR][fromC] = otherSp;
+
+    this._beginSwapAnim(dragSp, otherSp, fromR, fromC, r, c);
+    otherSp.alpha = 1;
+    dragSp.alpha = 0.35;
+    this._presentDragFrame();
 
     this._dragR = r;
     this._dragC = c;
+    this._swapLockUntilMs = Date.now() + UI.anim.orbSwapLogicLock * 1000;
   }
 
   private _onUp(): void {
@@ -329,13 +475,19 @@ export class BoardView {
   private _endDrag(): void {
     this._dragging = false;
     this._dragTimer = 0;
-    this._swapLocked = false;
-    this._swapUnlockTimer = 0;
+    this._finishSwapAnim();
+    this._swapLockUntilMs = 0;
     const sp = this._sprites[this._dragR][this._dragC];
     if (sp) sp.alpha = 1;
     if (this._floatOrb) {
       this._pool.release(this._floatOrb);
       this._floatOrb = null;
+    }
+    if (Game.usesCompositor && Platform.isMinigame) {
+      Game.setCompositorBoost(0);
+      Game.syncFrameToScreen();
+    } else if (Platform.isMinigame) {
+      Game.app?.renderer?.render(Game.stage);
     }
     this._cb.onDragEnd(this._didMove);
   }
@@ -369,7 +521,6 @@ export class BoardView {
     const size = this._cell * UI.board.orbScale;
     sp.width = size;
     sp.height = size;
-    // tint/alpha 由 refreshOrbStates 统一处理
     sp.tint = 0xffffff;
     sp.alpha = 1;
   }

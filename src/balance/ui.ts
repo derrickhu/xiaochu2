@@ -61,7 +61,9 @@ export const UI = {
 
   /** ── 动效时长（秒） ── */
   anim: {
-    orbSwap: 0.08,
+    orbSwap: 4 / 60,
+    /** 交换后逻辑锁（秒），对齐 xiao_chu SWAP_LOGIC_LOCK_FRAMES=2，动画后半段可连续换格 */
+    orbSwapLogicLock: 2 / 60,
     orbClear: 0.25,
     orbFall: 0.3,
     petDash: 0.18,

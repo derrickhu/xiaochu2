@@ -3,13 +3,16 @@
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
-import { getPetAvatarTexture } from '@/config/petAvatarTexture';
+import { getPetAvatarTexture, loadPetAvatarTexture } from '@/config/petAvatarTexture';
+import { ensurePetAvatars } from '@/config/assetPreload';
 import type { ChapterGoalInfo } from '@/balance/chapterGoal';
 import { getRarity } from '@/balance/rarity';
 import { ORB_COLOR } from '@/balance/ui';
 import { petFrameImage } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import { COLORS, FONT_SIZE, makeText } from '@/ui';
+import { bindPointerTap } from '@/utils/bindPointerTap';
+import { Game } from '@/core/Game';
 
 export const CHAPTER_GOAL_CARD_W = 620;
 /** 四行文案 + 头像区；行距按实际文字高度累加，避免名字与属性行重叠 */
@@ -62,14 +65,7 @@ export function buildChapterGoalCard(goal: ChapterGoalInfo, opts: ChapterGoalCar
   const avatarX = -w / 2 + padH;
   const avatarY = -h / 2 + (h - avatarSz) / 2;
 
-  const avatarTex = getPetAvatarTexture(goal.petId, 1);
-  if (avatarTex) {
-    const avatar = new PIXI.Sprite(avatarTex);
-    avatar.width = avatarSz;
-    avatar.height = avatarSz;
-    avatar.position.set(avatarX + 2, avatarY);
-    card.addChild(avatar);
-  }
+  mountChapterGoalAvatar(card, goal.petId, { avatarX, avatarY, avatarSz });
 
   const frameTex = TextureCache.get(petFrameImage(goal.elementKey));
   if (frameTex) {
@@ -158,8 +154,45 @@ export function buildChapterGoalCard(goal: ChapterGoalInfo, opts: ChapterGoalCar
     card.eventMode = 'static';
     card.cursor = 'pointer';
     card.hitArea = new PIXI.Rectangle(-w / 2, -h / 2, w, h);
-    card.on('pointertap', opts.onTap);
+    bindPointerTap(card, opts.onTap);
   }
 
   return card;
+}
+
+const GOAL_AVATAR_NAME = 'chapterGoalAvatar';
+
+/** 章节收录头像（pkg-pet 分包），缓存命中即同步挂载，否则异步加载后刷新 */
+function mountChapterGoalAvatar(
+  card: PIXI.Container,
+  petId: string,
+  slot: { avatarX: number; avatarY: number; avatarSz: number },
+): void {
+  const apply = (tex: PIXI.Texture | null): void => {
+    if (!tex || card.destroyed) return;
+    let spr = card.getChildByName(GOAL_AVATAR_NAME) as PIXI.Sprite | null;
+    if (!spr) {
+      spr = new PIXI.Sprite(tex);
+      spr.name = GOAL_AVATAR_NAME;
+      card.addChildAt(spr, 1);
+    } else {
+      spr.texture = tex;
+    }
+    spr.width = slot.avatarSz;
+    spr.height = slot.avatarSz;
+    spr.position.set(slot.avatarX + 2, slot.avatarY);
+  };
+
+  apply(getPetAvatarTexture(petId, 1));
+
+  void (async () => {
+    try {
+      await ensurePetAvatars([{ petId, star: 1 }]);
+    } catch (e) {
+      console.warn('[chapterGoalCard] 头像分包加载失败:', petId, e);
+    }
+    if (card.destroyed) return;
+    apply(getPetAvatarTexture(petId, 1) ?? await loadPetAvatarTexture(petId, 1));
+    void Game.warmSceneCompositor();
+  })();
 }

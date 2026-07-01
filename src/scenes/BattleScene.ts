@@ -32,6 +32,9 @@ import { BattlePetBar } from './battle/BattlePetBar';
 import { BattleResultOverlay } from './battle/BattleResultOverlay';
 import { presentSkillCast, type SkillCastDeps } from './battle/battleSkillPresenter';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
+import {
+  guardedPromise, guardedTween, minigameFallback, once, startMinigamePresentLoop,
+} from '@/core/animationGuard';
 
 export interface BattleEnterData {
   stageId: string;
@@ -173,20 +176,20 @@ export class BattleScene implements Scene {
     // 拖珠倒计时条
     this._hud.buildDragBar(this.container);
 
-    // 珠盘
+    // 特效层（粒子 / 飘字 / 闪光）—— 先加，珠盘后加以保证跟手珠不被挡住
+    this._fx.build(this.container, w, h);
+
+    // 珠盘（须在 FX 之上；输入走 canvas touchstart，不依赖 Pixi 层级）
     this._boardView = new BoardView(this._board, {
       canDrag: () => !this._busy && this._ctrl.state === 'playerTurn',
       onDragEnd: (didMove) => {
         void this._onDragEnd(didMove);
       },
-      // 队伍未覆盖的属性珠 = 无效珠（可消无伤害）；表现见 BoardView.refreshOrbStates
       isOrbActive: (orb) => orb === 'heart' || this._ctrl.teamElementSet.has(orb as Element),
+      whyCantDrag: () => `busy=${this._busy} state=${this._ctrl.state}`,
     });
     this._boardView.container.position.set(this._layout.boardX, this._layout.boardY);
     this.container.addChild(this._boardView.container);
-
-    // 特效层（粒子 / 飘字 / 闪光）
-    this._fx.build(this.container, w, h);
 
     // Combo 大字（棋盘中央，叠在珠盘与粒子之上）
     this._hud.buildCombo(this.container);
@@ -199,8 +202,7 @@ export class BattleScene implements Scene {
 
   // ════════════ 每帧 ════════════
 
-  private _update(): void {
-    const dt = Game.ticker.deltaMS / 1000;
+  private _update(dt = Game.ticker.deltaMS / 1000): void {
     this._boardView?.update(dt);
     this._fx.update(dt);
     this._petBar.update(dt);
@@ -219,62 +221,81 @@ export class BattleScene implements Scene {
 
   private async _onDragEnd(didMove: boolean): Promise<void> {
     if (this._busy || this._ctrl.state !== 'playerTurn') return;
-    if (!didMove) return; // 没动过不算回合
+    if (!didMove) return;
 
     this._busy = true;
     this._ctrl.beginResolve();
+    const visualScope = this._fx.beginTransientScope();
 
-    // ---- 消除/下落连锁，收集所有组 ----
-    // 节奏对齐智龙迷城：一组一组爆掉，每组 Combo +1 跳字、轻震，连锁(天降)时强调
-    const allGroups: MatchGroup[] = [];
-    let chainDepth = 0;
-    for (;;) {
-      const groups = this._board.findMatches();
-      if (groups.length === 0) break;
-      for (const group of groups) {
-        allGroups.push(group);
-        this._board.clearCells(group.cells);
-        this._burstGroup(group);
-        this._hud.showCombo(allGroups.length, this._fx);
-        Platform.vibrateShort(allGroups.length >= 7 ? 'medium' : 'light');
-        if (allGroups.length >= 7) this._fx.shakeLight();
-        await this._boardView!.playClear(group);
-        await delay(UI.anim.groupClearGap);
+    const resolveTimeout = Platform.isMinigame
+      ? new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('resolve timeout 8s')), 8000);
+      })
+      : null;
+
+    const stopPresent = startMinigamePresentLoop({
+      onUpdate: (dt) => this._update(dt),
+      pauseTicker: true,
+    });
+    try {
+      await (resolveTimeout
+        ? Promise.race([this._resolveAfterDrag(), resolveTimeout])
+        : this._resolveAfterDrag());
+    } catch (e) {
+      console.error('[BattleScene] _onDragEnd', e);
+    } finally {
+      this._settleBattleVisuals(visualScope);
+      stopPresent();
+      this._busy = false;
+      if (!this._ctrl.isFinished && this._ctrl.state !== 'playerTurn') {
+        this._ctrl.beginPlayerTurn();
       }
-      const moves = this._board.collapse();
-      await this._boardView!.playFall(moves);
-      this._boardView!.refreshOrbStates();
-      chainDepth++;
     }
+  }
 
-    // 高 Combo 收尾：全屏属性光 + 中震，给“打出大连锁”一个确定性的爽点
-    if (allGroups.length >= 7) {
-      this._fx.flash(0xfff3c8, 0.22, 0.35);
-      this._fx.shakeMedium();
-      Platform.vibrateShort('heavy');
-    }
+  private async _resolveAfterDrag(): Promise<void> {
+    try {
+      const allGroups: MatchGroup[] = [];
+      for (;;) {
+        const groups = this._board.findMatches();
+        if (groups.length === 0) break;
+        for (const group of groups) {
+          allGroups.push(group);
+          this._board.clearCells(group.cells);
+          this._burstGroup(group);
+          this._hud.showCombo(allGroups.length, this._fx);
+          Platform.vibrateShort(allGroups.length >= 7 ? 'medium' : 'light');
+          if (allGroups.length >= 7) this._fx.shakeLight();
+          await this._boardView!.playClear(group);
+          await delay(UI.anim.groupClearGap);
+        }
+        const moves = this._board.collapse();
+        await this._boardView!.playFall(moves);
+        this._boardView!.refreshOrbStates();
+      }
 
-    if (allGroups.length === 0) {
-      // 拖了但没消除：仍消耗回合，直接敌人行动
-      this._hud.hideCombo();
+      if (allGroups.length >= 7) {
+        this._fx.flash(0xfff3c8, 0.22, 0.35);
+        this._fx.shakeMedium();
+        Platform.vibrateShort('heavy');
+      }
+
+      if (allGroups.length === 0) {
+        await this._enemyPhase();
+        return;
+      }
+
+      const resolution = this._ctrl.resolveTurn(allGroups);
+      await this._playPetPhase(resolution);
+
+      if (this._ctrl.isFinished) {
+        return;
+      }
+
       await this._enemyPhase();
-      this._busy = false;
-      return;
+    } catch (e) {
+      throw e;
     }
-
-    // ---- 宠物攻击结算 ----
-    const resolution = this._ctrl.resolveTurn(allGroups);
-    await this._playPetPhase(resolution);
-    this._hud.hideCombo();
-
-    if (this._ctrl.isFinished) {
-      this._busy = false;
-      return;
-    }
-
-    // ---- 敌人回合 ----
-    await this._enemyPhase();
-    this._busy = false;
   }
 
   /** 消除组爆裂粒子：组内每颗珠喷属性色光点 */
@@ -325,7 +346,17 @@ export class BattleScene implements Scene {
       return false;
     }
     this._overlay.show(this._ctrl, true);
+    await delay(0.3);
     return true;
+  }
+
+  /** 回合/战斗逻辑已落定后，把表现层强制收敛到稳定帧，避免真机残留中间态。 */
+  private _settleBattleVisuals(scopeId?: number): void {
+    this._hud.hideCombo(true);
+    this._hud.snapHpBarsToModel();
+    this._fx.clearTransient(scopeId);
+    this._boardView?.refreshOrbStates();
+    Game.app?.renderer?.render(Game.stage);
   }
 
   private async _enemyPhase(): Promise<void> {
@@ -341,6 +372,7 @@ export class BattleScene implements Scene {
         );
         if (result.heroDead) {
           this._overlay.show(this._ctrl, false);
+          await delay(0.3);
           return;
         }
         break;
@@ -362,28 +394,41 @@ export class BattleScene implements Scene {
   }
 
   /** 单只宠物冲刺 → 属性弹道飞向敌人 → 命中瞬间受击反馈 + 飘字 → 回位 */
-  private _playPetAttack(attack: PetAttack, orderIdx: number): Promise<void> {
-    return new Promise((resolve) => {
-      const slot = this._petBar.slotAt(attack.petIndex);
-      const baseY = slot.y;
-      TweenManager.to({
+  private async _playPetAttack(attack: PetAttack, orderIdx: number): Promise<void> {
+    const slot = this._petBar.slotAt(attack.petIndex);
+    const baseY = slot.y;
+    const finishHit = once(() => {
+      TweenManager.cancelTarget(slot);
+      slot.y = baseY;
+      this._hud.playEnemyHit(this._fx, attack.element, attack.damage, attack.isCrit);
+      this._spawnDamageFloat(attack, orderIdx);
+    });
+
+    minigameFallback(UI.anim.petDash + UI.anim.projectile + 0.35, finishHit);
+
+    if (Platform.isMinigame) {
+      // 真机上 Tween onComplete 偶发不回调；战斗状态机不能 await 表现层 Tween。
+      slot.y = baseY - 46;
+      await delay(UI.anim.petDash);
+      slot.y = baseY;
+    } else {
+      await guardedTween({
         target: slot, props: { y: baseY - 46 },
         duration: UI.anim.petDash, ease: Ease.easeOutQuad,
-        onComplete: () => {
-          TweenManager.to({
-            target: slot, props: { y: baseY },
-            duration: UI.anim.petReturn, ease: Ease.easeInQuad,
-          });
-          void this._fx.fireProjectileBetween(
-            slot.x, slot.y - 60, this._layout.enemyCenterX, this._layout.enemyCenterY, attack.element,
-          ).then(() => {
-            this._hud.playEnemyHit(this._fx, attack.element, attack.damage, attack.isCrit);
-            this._spawnDamageFloat(attack, orderIdx);
-            resolve();
-          });
-        },
       });
-    });
+      void guardedTween({
+        target: slot, props: { y: baseY },
+        duration: UI.anim.petReturn, ease: Ease.easeInQuad,
+      });
+    }
+
+    await guardedPromise(
+      this._fx.fireProjectileBetween(
+        slot.x, slot.y - 60, this._layout.enemyCenterX, this._layout.enemyCenterY, attack.element,
+      ),
+      UI.anim.projectile + 0.12,
+    );
+    finishHit();
   }
 
   /** 伤害数字：从出手宠物槽位弹出，属性色 + 克制/暴击标记 */

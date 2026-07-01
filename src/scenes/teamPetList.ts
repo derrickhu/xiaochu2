@@ -25,10 +25,10 @@ import {
   makeText,
 } from '@/ui';
 import type { ScrollListController } from '@/ui/ScrollList';
+import { bindPointerTap } from '@/utils/bindPointerTap';
 
 const LIST_CARD_W = 330;
 const LIST_CARD_H = 148;
-/** 卡片底图设计尺寸（与 LIST_CARD 同宽高比，避免压扁卷轴纹理） */
 const CARD_TEX_W = 660;
 const CARD_TEX_H = 296;
 const SCROLL_SCALE_X = LIST_CARD_W / CARD_TEX_W;
@@ -69,7 +69,7 @@ export function buildTeamPetList(opts: TeamPetListOpts): PIXI.Container | null {
     if (!pet) return;
     const lv = PlayerData.petLevel(petId);
     const star = PlayerData.petStar(petId);
-    const item = buildListItem(pet, lv, star, scrollTex, scrollable, onToggle, scroll);
+    const item = buildListItem(pet, lv, star, scrollTex, scroll, onToggle);
 
     const col = i % cols;
     const row = Math.floor(i / cols);
@@ -135,9 +135,8 @@ function buildListItem(
   lv: number,
   star: number,
   scrollTex: PIXI.Texture | null,
-  scrollable: boolean,
-  onToggle: (petId: string) => void,
   scroll: ScrollListController,
+  onToggle: (petId: string) => void,
 ): PIXI.Container {
   const item = new PIXI.Container();
   if (scrollTex) {
@@ -153,6 +152,7 @@ function buildListItem(
     item.addChild(makePanel({
       width: LIST_CARD_W, height: LIST_CARD_H, radius: RADIUS.card,
       bg: COLORS.panelBg, border: getRarity(pet.rarity).color,
+      centered: true,
     }));
   }
 
@@ -197,15 +197,19 @@ function buildListItem(
   item.eventMode = 'static';
   item.cursor = 'pointer';
   item.interactiveChildren = false;
-  item.on('pointertap', () => {
-    if (scrollable && scroll.moved) return;
-    onToggle(pet.id);
+
+  // 点击统一走 bindPointerTap / canvasTapRouter；ScrollList 只负责滚动
+  bindPointerTap(item, () => onToggle(pet.id), {
+    label: `team-pet-${pet.id}`,
+    blockTap: () => scroll.moved,
   });
+
   return item;
 }
 
 function buildCheckMark(): PIXI.Container {
   const check = new PIXI.Container();
+  check.visible = false;
   check.addChild(makePanel({
     width: 36, height: 36, radius: 18,
     bg: COLORS.btnSuccessBg, border: COLORS.btnSuccessBorder, borderWidth: 2,

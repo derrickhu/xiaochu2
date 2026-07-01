@@ -203,8 +203,8 @@ export function applyDmgRenderStyle(
   text.style.fontFamily = RS.fontFamily;
   text.style.fontSize = RS.fontSize * S;
   text.style.fontWeight = '900' as PIXI.TextStyleFontWeight;
-  text.style.fill = [palette.fillTop || RS.fillTop, palette.fillBottom || RS.fillBottom];
-  text.style.fillGradientType = PIXI.TEXT_GRADIENT.LINEAR_VERTICAL;
+  // 微信真机 Canvas Text 渐变 fill 会崩，用纯色
+  text.style.fill = palette.fillTop || RS.fillTop;
   text.style.stroke = RS.strokeColor;
   text.style.strokeThickness = RS.stroke * S;
   text.style.dropShadow = true;

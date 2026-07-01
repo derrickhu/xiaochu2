@@ -2,6 +2,7 @@ import * as PIXI from 'pixi.js';
 import { ObjectPool } from '@/core/ObjectPool';
 import { Ease, TweenManager } from '@/core/TweenManager';
 import { UI } from '@/balance/ui';
+import { minigameFallback, once } from '@/core/animationGuard';
 import type { OrbType } from '@/balance/combat';
 import type { Cell, FallMove, MatchGroup } from './BoardModel';
 
@@ -30,6 +31,13 @@ export function playBoardClear(ctx: BoardAnimationContext, group: MatchGroup): P
         done();
         continue;
       }
+      const complete = once(() => {
+        TweenManager.cancelTarget(sp);
+        TweenManager.cancelTarget(sp.scale);
+        ctx.pool.release(sp);
+        done();
+      });
+      minigameFallback(UI.anim.orbClear, complete);
       TweenManager.to({
         target: sp.scale, props: { x: sp.scale.x * 1.25, y: sp.scale.y * 1.25 },
         duration: UI.anim.orbClear * 0.3, ease: Ease.easeOutQuad,
@@ -41,10 +49,7 @@ export function playBoardClear(ctx: BoardAnimationContext, group: MatchGroup): P
           TweenManager.to({
             target: sp, props: { alpha: 0 },
             duration: UI.anim.orbClear * 0.7,
-            onComplete: () => {
-              ctx.pool.release(sp);
-              done();
-            },
+            onComplete: complete,
           });
         },
       });
@@ -81,13 +86,17 @@ export function playBoardFall(ctx: BoardAnimationContext, moves: FallMove[]): Pr
       const targetY = ctx.cellCenterY(m.toRow);
       const dist = Math.abs(targetY - sp.y) / ctx.cell;
       const dur = UI.anim.orbFall * (0.5 + 0.5 * Math.min(dist / 3, 1));
+      const complete = once(() => {
+        TweenManager.cancelTarget(sp);
+        sp.y = targetY;
+        done();
+        if (remain <= 0) ctx.refreshOrbStates();
+      });
+      minigameFallback(dur, complete);
       TweenManager.to({
         target: sp, props: { y: targetY },
         duration: dur, ease: Ease.easeOutBounce,
-        onComplete: () => {
-          done();
-          if (remain <= 0) ctx.refreshOrbStates();
-        },
+        onComplete: complete,
       });
     }
   });
@@ -117,6 +126,16 @@ export function playBoardConvert(
         continue;
       }
       TweenManager.cancelTarget(sp.scale);
+      const complete = once(() => {
+        TweenManager.cancelTarget(sp);
+        TweenManager.cancelTarget(sp.scale);
+        ctx.applyOrbTexture(sp, to);
+        sp.width = size;
+        sp.height = size;
+        done();
+        if (remain <= 0) ctx.refreshOrbStates();
+      });
+      minigameFallback(UI.anim.orbSwap * 4, complete);
       TweenManager.to({
         target: sp, props: { width: size * 0.1, height: size * 0.1 },
         duration: UI.anim.orbSwap * 1.5, ease: Ease.easeInQuad,
@@ -127,10 +146,7 @@ export function playBoardConvert(
           TweenManager.to({
             target: sp, props: { width: size, height: size },
             duration: UI.anim.orbSwap * 2.5, ease: Ease.easeOutBack,
-            onComplete: () => {
-              done();
-              if (remain <= 0) ctx.refreshOrbStates();
-            },
+            onComplete: complete,
           });
         },
       });

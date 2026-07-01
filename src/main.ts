@@ -1,7 +1,6 @@
 /**
  * 灵宠消消塔 2 - 游戏入口
  */
-// unsafe-eval patch 必须最先导入，在 new PIXI.Application() 之前执行
 import '@/core/pixiUnsafeEvalPatch';
 import { Game } from '@/core/Game';
 import { SceneManager } from '@/core/SceneManager';
@@ -23,10 +22,8 @@ import { ShopScene } from '@/scenes/ShopScene';
 
 declare const GameGlobal: any;
 
-// 尽早接管 share-bootstrap 注册的回调（与 xiao_chu main 内注释一致：勿重复晚注册）
 configureWechatShare();
 
-// 全局错误捕获——确保真机上所有异常可见
 if (typeof GameGlobal !== 'undefined') {
   GameGlobal.onError = (msg: string) => {
     console.error('[GlobalError]', msg);
@@ -37,18 +34,22 @@ if (typeof GameGlobal !== 'undefined') {
 }
 
 async function main(): Promise<void> {
-  // 小游戏环境下 canvas 由 adapter 挂在 GameGlobal 上
-  const canvas = typeof GameGlobal !== 'undefined' ? GameGlobal.canvas : null;
+  const canvas = GameGlobal?.canvas ?? null;
   if (!canvas) {
-    console.error('[main] 找不到 canvas，无法启动');
+    GameGlobal.__bootError = 'no canvas';
+    console.error('[main] 找不到 canvas');
     return;
   }
 
-  Game.init(canvas);
-  console.log('[main] Game.init 完成');
+  Game.init(canvas as any);
+  if (!(Game.app?.renderer)) {
+    GameGlobal.__bootError = 'renderer init failed';
+    console.error('[main] 渲染器初始化失败');
+    return;
+  }
 
   await TextureCache.preload([...MAIN_PRELOAD_IMAGES]);
-  console.log(`[main] 主包预加载完成，纹理数: ${TextureCache.size}`);
+  console.log(`[main] 纹理数: ${TextureCache.size}`);
 
   SceneManager.register(new TitleScene());
   SceneManager.register(new BattleScene());
@@ -58,6 +59,9 @@ async function main(): Promise<void> {
   SceneManager.register(new GachaScene());
   SceneManager.register(new ShopScene());
   SceneManager.switchTo('title');
+
+  await Game.runPostSceneWarmup();
+
   BootDiag.attachProbe();
   BootDiag.startWatchdog();
   warmupCommonSubpackages();
@@ -69,5 +73,8 @@ async function main(): Promise<void> {
 }
 
 main().catch((e) => {
+  try {
+    GameGlobal.__bootError = String((e as Error)?.message || e);
+  } catch (_) { /* */ }
   console.error('[main] 启动失败:', e);
 });

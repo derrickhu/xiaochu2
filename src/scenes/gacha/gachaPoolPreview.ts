@@ -5,9 +5,13 @@ import * as PIXI from 'pixi.js';
 import { PET_MAP } from '@/balance/pets';
 import { ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
+import { Game } from '@/core/Game';
+import { Platform } from '@/core/PlatformService';
+import { clientEventToDesign, designPointToLocal } from '@/utils/clientEventToDesign';
 import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { PlayerData } from '@/game/PlayerData';
+import { bindCanvasPointerBridge, type CanvasPointerBridge } from '@/utils/canvasPointerBridge';
 import { COLORS, FONT_SIZE, makePanel, makeText } from '@/ui';
 
 const ICON = 48;
@@ -37,31 +41,62 @@ function attachHorizontalScroll(
     content.x = Math.max(minX, Math.min(0, content.x));
   };
 
-  const onDown = (e: PIXI.FederatedPointerEvent): void => {
-    dragging = true;
-    lastX = e.global.x;
+  const inViewport = (dx: number, dy: number): boolean => {
+    const local = designPointToLocal(viewport, dx, dy);
+    return local.x >= 0 && local.x <= viewportW && local.y >= 0 && local.y <= ROW_H;
   };
-  const onMove = (e: PIXI.FederatedPointerEvent): void => {
+
+  const onDown = (e: unknown): void => {
+    if (contentW <= viewportW) return;
+    const stage = clientEventToDesign(e);
+    if (!inViewport(stage.x, stage.y)) return;
+    dragging = true;
+    lastX = stage.x;
+  };
+
+  const onMove = (e: unknown): void => {
     if (!dragging) return;
-    content.x += e.global.x - lastX;
-    lastX = e.global.x;
+    const stage = clientEventToDesign(e);
+    content.x += stage.x - lastX;
+    lastX = stage.x;
     clamp();
   };
+
   const onUp = (): void => {
     dragging = false;
   };
 
   viewport.eventMode = 'static';
   viewport.cursor = contentW > viewportW ? 'grab' : 'default';
-  viewport.on('pointerdown', onDown);
-  viewport.on('pointermove', onMove);
+
+  let bridge: CanvasPointerBridge | null = null;
+
+  if (Platform.isMinigame && !Platform.isDevtools) {
+    bridge = bindCanvasPointerBridge({ onDown, onMove, onUp });
+    return () => bridge?.destroy();
+  }
+
+  const onPixiDown = (e: PIXI.FederatedPointerEvent): void => {
+    if (contentW <= viewportW) return;
+    dragging = true;
+    lastX = e.global.x;
+  };
+  const onPixiMove = (e: PIXI.FederatedPointerEvent): void => {
+    if (!dragging) return;
+    content.x += e.global.x - lastX;
+    lastX = e.global.x;
+    clamp();
+  };
+
+  viewport.on('pointerdown', onPixiDown);
+  viewport.on('pointermove', onPixiMove);
   viewport.on('pointerup', onUp);
   viewport.on('pointerupoutside', onUp);
   viewport.on('pointercancel', onUp);
 
   return () => {
-    viewport.off('pointerdown', onDown);
-    viewport.off('pointermove', onMove);
+    viewport.off('pointerdown', onPixiDown);
+    viewport.off('pointermove', onPixiMove);
     viewport.off('pointerup', onUp);
     viewport.off('pointerupoutside', onUp);
     viewport.off('pointercancel', onUp);

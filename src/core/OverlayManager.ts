@@ -52,12 +52,8 @@ class OverlayManagerClass {
   closeAllPanels(): void {
     if (!this._container) return;
 
-    console.log(`[OverlayManager] closeAllPanels: 子元素数=${this._container.children.length}`);
     for (const child of this._container.children) {
-      const name = (child as any).constructor?.name || 'unknown';
-      console.log(`[OverlayManager]   child: ${name}, visible=${child.visible}, hasClose=${typeof (child as any).close === 'function'}, _isOpen=${(child as any)._isOpen}`);
       if (child.visible && typeof (child as any).close === 'function') {
-        console.log(`[OverlayManager]   → 强制关闭: ${name}`);
         // 取消该面板及其子元素上的所有动画
         TweenManager.cancelTarget(child);
         for (const sub of (child as PIXI.Container).children || []) {

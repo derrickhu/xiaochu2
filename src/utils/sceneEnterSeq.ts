@@ -5,6 +5,7 @@
  * 过期的 async _enter 不得再 addChild / _build，否则 Pixi 报 _parentID null。
  */
 import { SceneManager } from '@/core/SceneManager';
+import { Game } from '@/core/Game';
 import { deferNextFrame } from './deferAfterPointer';
 
 export class SceneEnterSeq {
@@ -36,5 +37,6 @@ export function deferSceneBuild(
     if (!seq.stillValid(token)) return;
     if (SceneManager.current?.name !== sceneName) return;
     build();
+    void Game.warmSceneCompositor();
   });
 }

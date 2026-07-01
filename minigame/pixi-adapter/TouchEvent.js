@@ -1,6 +1,6 @@
 /**
- * 触摸事件适配
- * 将小游戏触摸事件转换为 PixiJS 所需的标准 DOM 事件格式
+ * 触摸事件适配（对齐 game2D_huahua）
+ * wx touch → canvas touch/pointer + window pointer（Pixi EventSystem 依赖后者收 move/up）
  */
 
 const platform = require('./platform');
@@ -27,7 +27,6 @@ class TouchEvent {
   stopPropagation() {}
 }
 
-// 将小游戏触摸坐标转换为 canvas 坐标
 function convertTouches(rawTouches) {
   if (!rawTouches) return [];
   return Array.prototype.map.call(rawTouches, (touch) => ({
@@ -57,6 +56,8 @@ function createPointerEvent(type, touch, buttons) {
     y: touch.clientY,
     offsetX: touch.clientX,
     offsetY: touch.clientY,
+    movementX: 0,
+    movementY: 0,
     width: 1,
     height: 1,
     pressure: buttons ? 0.5 : 0,
@@ -74,11 +75,9 @@ function createPointerEvent(type, touch, buttons) {
   };
 }
 
-// 注册触摸事件监听桥接
 function registerTouchEvents() {
   const _listeners = {};
 
-  // 给 canvas 挂上 addEventListener / removeEventListener
   canvas.addEventListener = function(type, handler, options) {
     if (!_listeners[type]) _listeners[type] = [];
     _listeners[type].push(handler);
@@ -90,7 +89,6 @@ function registerTouchEvents() {
     if (idx !== -1) _listeners[type].splice(idx, 1);
   };
 
-  // 分发事件到 canvas 上的监听器
   function dispatch(type, rawEvent) {
     const touches = convertTouches(rawEvent.touches || rawEvent.changedTouches);
     const event = new TouchEvent(type, touches);
@@ -98,29 +96,31 @@ function registerTouchEvents() {
 
     const queue = _listeners[type];
     if (queue) {
-      queue.forEach(handler => {
+      queue.forEach(function(handler) {
         try { handler(event); } catch (e) { console.error('[TouchEvent]', type, e); }
       });
     }
   }
 
-  // pointer 事件映射（PixiJS 7 优先使用 pointer 事件）
   function dispatchPointer(pointerType, rawEvent) {
     const touches = rawEvent.changedTouches || rawEvent.touches || [];
     if (!touches.length) return;
     const touch = touches[0];
 
-    const pointerEvent = createPointerEvent(pointerType, touch, pointerType === 'pointerup' ? 0 : 1);
+    const pointerEvent = createPointerEvent(
+      pointerType,
+      touch,
+      pointerType === 'pointerup' || pointerType === 'pointercancel' ? 0 : 1,
+    );
 
     const queue = _listeners[pointerType];
     if (queue) {
-      queue.forEach(handler => {
+      queue.forEach(function(handler) {
         try { handler(pointerEvent); } catch (e) { console.error('[PointerEvent]', pointerType, e); }
       });
     }
   }
 
-  // 分发 window 上的全局事件（PixiJS EventSystem 在 window 上也注册了 pointermove/pointerup）
   function dispatchToWindow(type, event) {
     if (typeof GameGlobal !== 'undefined' && GameGlobal.__windowDispatchEvent) {
       try {
@@ -131,14 +131,9 @@ function registerTouchEvents() {
     }
   }
 
-  // 诊断：3秒后输出已注册的 canvas 事件监听器类型
-  setTimeout(function() {
-    console.log('[TouchEvent] canvas listeners:', Object.keys(_listeners).join(', ') || '(空)');
-  }, 3000);
-
   var _touchLogCount = 0;
 
-  platform.onTouchStart((e) => {
+  platform.onTouchStart(function(e) {
     _touchLogCount++;
     if (_touchLogCount <= 5) {
       var t = (e.changedTouches || e.touches || [])[0];
@@ -148,16 +143,15 @@ function registerTouchEvents() {
     }
     dispatch('touchstart', e);
     dispatchPointer('pointerdown', e);
-    // window 上也需要收到 pointerdown
     var touches = e.changedTouches || e.touches || [];
     if (touches.length) {
-      var t = touches[0];
-      dispatchToWindow('pointerdown', createPointerEvent('pointerdown', t, 1));
+      dispatchToWindow('pointerdown', createPointerEvent('pointerdown', touches[0], 1));
     }
   });
 
   var _moveLogCount = 0;
-  platform.onTouchMove((e) => {
+
+  platform.onTouchMove(function(e) {
     dispatch('touchmove', e);
     dispatchPointer('pointermove', e);
     var touches = e.changedTouches || e.touches || [];
@@ -173,28 +167,24 @@ function registerTouchEvents() {
     }
   });
 
-  platform.onTouchEnd((e) => {
+  platform.onTouchEnd(function(e) {
     dispatch('touchend', e);
     dispatchPointer('pointerup', e);
     var touches = e.changedTouches || [];
     if (touches.length) {
-      var t = touches[0];
-      dispatchToWindow('pointerup', createPointerEvent('pointerup', t, 0));
+      dispatchToWindow('pointerup', createPointerEvent('pointerup', touches[0], 0));
     }
   });
 
-  platform.onTouchCancel((e) => {
+  platform.onTouchCancel(function(e) {
     dispatch('touchcancel', e);
     dispatchPointer('pointercancel', e);
     var touches = e.changedTouches || [];
     if (touches.length) {
-      var t = touches[0];
-      dispatchToWindow('pointercancel', createPointerEvent('pointercancel', t, 0));
+      dispatchToWindow('pointercancel', createPointerEvent('pointercancel', touches[0], 0));
     }
   });
 
-  // canvas.getBoundingClientRect - PixiJS 用来计算事件坐标
-  // 必须返回逻辑像素尺寸（与触摸事件 clientX/clientY 一致），否则坐标偏移
   var sysInfo = platform.getSystemInfoSync();
   var screenW = sysInfo.screenWidth || sysInfo.windowWidth || 375;
   var screenH = sysInfo.screenHeight || sysInfo.windowHeight || 667;
@@ -214,13 +204,11 @@ function registerTouchEvents() {
     };
   } catch (e) {}
 
-  // clientWidth/clientHeight 也需返回逻辑像素
   try {
     Object.defineProperty(canvas, 'clientWidth', { get: function() { return screenW; }, configurable: true });
     Object.defineProperty(canvas, 'clientHeight', { get: function() { return screenH; }, configurable: true });
   } catch (e) {}
 
-  // PixiJS 会检查 canvas.style（微信 canvas 部分属性可能只读）
   try {
     if (!canvas.style) canvas.style = {};
     canvas.style.touchAction = '';
@@ -230,11 +218,8 @@ function registerTouchEvents() {
     canvas.style.height = screenH + 'px';
   } catch (e) {}
 
-  // PixiJS 检查 focus
   if (!canvas.focus) canvas.focus = function() {};
 
-  // PixiJS EventSystem 需要 canvas.parentElement 来 addEventListener
-  // 不能设为 null，设为一个带事件能力的虚拟节点
   var _parentListeners = {};
   var fakeParent = {
     addEventListener: function(type, handler, options) {
@@ -254,9 +239,13 @@ function registerTouchEvents() {
     try { Object.defineProperty(canvas, 'parentNode', { value: fakeParent, configurable: true, writable: true }); } catch (e2) {}
   }
 
-  // 诊断：确认 parentElement 是否设置成功
   console.log('[TouchEvent] canvas.parentElement set:', !!canvas.parentElement,
     ', getBoundingClientRect:', typeof canvas.getBoundingClientRect);
+
+  setTimeout(function() {
+    console.log('[TouchEvent] canvas listeners:', Object.keys(_listeners).join(', ') || '(空)',
+      'canvasId:', canvas.__diagId || '?');
+  }, 3000);
 }
 
 module.exports = { TouchEvent, registerTouchEvents };

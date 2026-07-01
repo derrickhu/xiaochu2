@@ -8,6 +8,7 @@ import { TextureCache } from '@/core/TextureCache';
 import { COLORS } from './theme';
 import { makeText } from './text';
 import { pressFeedback } from './motion';
+import { bindPointerTap } from '@/utils/bindPointerTap';
 
 export interface IconButtonOpts {
   /** 图标贴图路径（Assets 常量），可空 */
@@ -60,7 +61,14 @@ export function makeIconButton(opts: IconButtonOpts): PIXI.Container {
 
   btn.eventMode = 'static';
   btn.cursor = 'pointer';
-  btn.on('pointertap', opts.onTap);
+  const bounds = btn.getLocalBounds();
+  const pad = 10;
+  btn.hitArea = new PIXI.Rectangle(
+    bounds.x - pad, bounds.y - pad,
+    bounds.width + pad * 2, bounds.height + pad * 2,
+  );
+  btn.interactiveChildren = false;
+  bindPointerTap(btn, opts.onTap);
   pressFeedback(btn);
   return btn;
 }

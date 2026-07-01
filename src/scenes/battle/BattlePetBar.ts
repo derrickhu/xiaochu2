@@ -7,6 +7,7 @@
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
+import { Platform } from '@/core/PlatformService';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
@@ -21,6 +22,8 @@ import {
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BattleLayout } from './BattleLayout';
 import { showPetSkillPreview, TAP_SLOP, type PetSkillPreviewHandle } from './PetSkillPreviewBubble';
+import { bindCanvasPointerBridge, type CanvasPointerBridge } from '@/utils/canvasPointerBridge';
+import { clientEventToDesign, designPointToLocal } from '@/utils/clientEventToDesign';
 
 interface PetBarHooks {
   /** 上滑达阈值 → 请求对该槽位施法 */
@@ -37,8 +40,7 @@ export class BattlePetBar {
   private _slotWasReady: boolean[] = [];
   private _slotBaseY: number[] = [];
   private _petPointer: { index: number; startX: number; startY: number; triggered: boolean; canCast: boolean } | null = null;
-  private _petSwipeMove: ((e: unknown) => void) | null = null;
-  private _petSwipeUp: ((e: unknown) => void) | null = null;
+  private _petSwipeBridge: CanvasPointerBridge | null = null;
   private _previewLayer: PIXI.Container | null = null;
   private _skillPreview: PetSkillPreviewHandle | null = null;
   private _hooks!: PetBarHooks;
@@ -141,7 +143,9 @@ export class BattlePetBar {
 
       slot.eventMode = 'static';
       slot.cursor = 'pointer';
-      slot.on('pointerdown', (e: PIXI.FederatedPointerEvent) => this._onPetSlotDown(i, e));
+      if (!Platform.isMinigame || Platform.isDevtools) {
+        slot.on('pointerdown', (e: PIXI.FederatedPointerEvent) => this._onPetSlotDown(i, e));
+      }
 
       parent.addChild(slot);
       return slot;
@@ -231,39 +235,39 @@ export class BattlePetBar {
 
   // ════════════ 手势输入 ════════════
 
-  /** 原生 pointer 坐标 → 设计坐标（与 BoardView 一致，兼容小游戏） */
+  /** 原生 touch/pointer → 设计坐标 */
   private _rawToDesign(e: unknown): { x: number; y: number } {
-    const ev = e as {
-      clientX?: number; clientY?: number; x?: number; y?: number;
-      touches?: Array<{ clientX?: number; clientY?: number }>;
-      changedTouches?: Array<{ clientX?: number; clientY?: number }>;
-    };
-    const t0 = ev.touches?.[0] ?? ev.changedTouches?.[0];
-    const cx = ev.clientX ?? t0?.clientX ?? ev.x ?? 0;
-    const cy = ev.clientY ?? t0?.clientY ?? ev.y ?? 0;
-    const k = Game.designWidth / Game.screenWidth;
-    return { x: cx * k, y: cy * k };
+    return clientEventToDesign(e);
+  }
+
+  private _onCanvasPetDown(e: unknown): void {
+    if (this._hooks.isBusy()) return;
+    const design = clientEventToDesign(e);
+    const half = UI.battle.petSize / 2;
+    for (let i = 0; i < this._slots.length; i++) {
+      const slot = this._slots[i];
+      const local = designPointToLocal(slot, design.x, design.y);
+      if (local.x >= -half && local.x <= half && local.y >= -half && local.y <= half) {
+        this._onPetSlotDown(i, e);
+        return;
+      }
+    }
   }
 
   private _installPetSwipeInput(): void {
     this._teardownPetSwipeInput();
-    const canvas = Game.app.view as unknown as HTMLElement;
-    this._petSwipeMove = (e) => this._onPetSwipeMove(e);
-    this._petSwipeUp = (e) => this._cancelPetPointer(true, e);
-    canvas.addEventListener('pointermove', this._petSwipeMove);
-    canvas.addEventListener('pointerup', this._petSwipeUp);
-    canvas.addEventListener('pointercancel', this._petSwipeUp);
+    this._petSwipeBridge = bindCanvasPointerBridge({
+      onDown: Platform.isMinigame && !Platform.isDevtools
+        ? (e) => this._onCanvasPetDown(e)
+        : undefined,
+      onMove: (e) => this._onPetSwipeMove(e),
+      onUp: (e) => this._cancelPetPointer(true, e),
+    });
   }
 
   private _teardownPetSwipeInput(): void {
-    const canvas = Game.app.view as unknown as HTMLElement;
-    if (this._petSwipeMove) canvas.removeEventListener('pointermove', this._petSwipeMove);
-    if (this._petSwipeUp) {
-      canvas.removeEventListener('pointerup', this._petSwipeUp);
-      canvas.removeEventListener('pointercancel', this._petSwipeUp);
-    }
-    this._petSwipeMove = null;
-    this._petSwipeUp = null;
+    this._petSwipeBridge?.destroy();
+    this._petSwipeBridge = null;
     this._petPointer = null;
   }
 
@@ -272,10 +276,9 @@ export class BattlePetBar {
     this._skillPreview = null;
   }
 
-  private _onPetSlotDown(petIndex: number, e: PIXI.FederatedPointerEvent): void {
+  private _onPetSlotDown(petIndex: number, e: unknown): void {
     if (this._hooks.isBusy()) return;
-    const native = (e.nativeEvent ?? e) as unknown;
-    const p = this._rawToDesign(native);
+    const p = this._rawToDesign(e);
     this._hideSkillPreview();
     const canCast = this._ctrl.canCastSkill(petIndex);
     this._petPointer = { index: petIndex, startX: p.x, startY: p.y, triggered: false, canCast };

@@ -8,27 +8,40 @@ import { TextureCache } from '@/core/TextureCache';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { CHAPTERS, CHAPTER_NAME, stagesOfChapter, stageWaveCount } from '@/balance/stages';
 import { getChapterGoal } from '@/balance/chapterGoal';
-import { ensurePetAvatars } from '@/config/assetPreload';
 import { getStageType } from '@/balance/stageTypes';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
 import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
+import { ensurePetAvatars } from '@/config/assetPreload';
 import {
   COLORS, FONT_SIZE, RADIUS,
   makeText, makePanel, makeIconButton, makeCoverBackground, makeCurrencyRow, staggerIn, popIn,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
+import { Platform } from '@/core/PlatformService';
 import type { TeamEnterData } from './TeamScene';
 import type { PetDetailEnterData } from './PetDetailScene';
-import { deferAfterPointerEvent } from '@/utils/deferAfterPointer';
+import { bindPointerTap } from '@/utils/bindPointerTap';
 import {
   buildChapterGoalCard, CHAPTER_GOAL_CARD_H, CHAPTER_GOAL_CARD_W,
 } from './chapterGoalCard';
 import { BootDiag } from '@/core/BootDiag';
 
+declare const GameGlobal: any;
+
+function iosMinigame(): boolean {
+  try {
+    return Platform.isMinigame && Platform.api?.getSystemInfoSync?.()?.platform === 'ios';
+  } catch {
+    return false;
+  }
+}
+
 export interface TitleEnterData {
   /** 进入时选中的章节（默认最新已解锁章） */
   chapter?: number;
+  /** 排除法：对齐 L7 手写路径，或逐级加回 TitleScene 特性 */
+  minimalStrip?: 'l7like' | 'withAnim' | 'full';
 }
 
 export class TitleScene implements Scene {
@@ -43,19 +56,46 @@ export class TitleScene implements Scene {
   private static readonly GOAL_LIST_GAP = 18;
 
   private _chapter = 1;
+  private _minimalStrip: TitleEnterData['minimalStrip'];
   private _scroll = new ScrollListController();
   private _stageContent: PIXI.Container | null = null;
   private _stageMask: PIXI.Graphics | null = null;
 
   onEnter(data?: unknown): void {
-    Game.setMaxFPS(UI.fps.idle);
-    PlayerData.load();
     const enter = data as TitleEnterData | undefined;
+    this._minimalStrip = enter?.minimalStrip;
+    if (this._minimalStrip !== 'l7like') {
+      const applyIdleFps = (): void => { Game.setMaxFPS(UI.fps.idle); };
+      try {
+        if (typeof GameGlobal !== 'undefined' && GameGlobal.__minimalBoot) {
+          // 首屏 compositor 同步后再降帧，避免 iOS main2d 卡在红块探针
+          GameGlobal.__deferredIdleFps = applyIdleFps;
+        } else {
+          applyIdleFps();
+        }
+      } catch {
+        applyIdleFps();
+      }
+    }
+    PlayerData.load();
     this._chapter = enter?.chapter ?? this._latestUnlockedChapter();
-    this._rebuild();
+    void this._preloadGoalAvatarAndBuild();
   }
 
-  /** 立刻渲染 UI；收录怪头像后台加载，避免分包卡住导致整屏黑 */
+  private async _preloadGoalAvatarAndBuild(): Promise<void> {
+    const goal = getChapterGoal(this._chapter);
+    if (goal) {
+      try {
+        await ensurePetAvatars([{ petId: goal.petId, star: 1 }]);
+      } catch (e) {
+        console.warn('[TitleScene] chapter goal avatar preload fail:', e);
+      }
+    }
+    if (SceneManager.current?.name !== 'title') return;
+    this._rebuild();
+    await Game.warmSceneCompositor();
+  }
+
   private _rebuild(): void {
     this._scroll.detach();
     this._stageContent = null;
@@ -65,17 +105,6 @@ export class TitleScene implements Scene {
     }
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
     this._build();
-    void this._preloadGoalAvatar();
-  }
-
-  private async _preloadGoalAvatar(): Promise<void> {
-    const goal = getChapterGoal(this._chapter);
-    if (!goal) return;
-    try {
-      await ensurePetAvatars([{ petId: goal.petId, star: 1 }]);
-    } catch (e) {
-      console.warn('[TitleScene] 章节收录头像加载失败（不影响首屏）:', e);
-    }
   }
 
   private _latestUnlockedChapter(): number {
@@ -172,9 +201,9 @@ export class TitleScene implements Scene {
       if (enabled) {
         arrow.eventMode = 'static';
         arrow.cursor = 'pointer';
-        arrow.on('pointertap', () => {
+        bindPointerTap(arrow, () => {
           this._chapter = targetChapter!;
-          deferAfterPointerEvent(() => { this._rebuild(); });
+          this._rebuild();
         });
       }
       this.container.addChild(arrow);
@@ -203,7 +232,9 @@ export class TitleScene implements Scene {
     });
     wrap.addChild(card);
     this.container.addChild(wrap);
-    popIn(wrap, { fromScale: 0.94 });
+    if (this._minimalStrip !== 'l7like') {
+      popIn(wrap, { fromScale: 0.94 });
+    }
 
     return topY + CHAPTER_GOAL_CARD_H;
   }
@@ -295,10 +326,9 @@ export class TitleScene implements Scene {
       if (unlocked) {
         item.eventMode = 'static';
         item.cursor = 'pointer';
-        item.on('pointertap', () => {
-          if (this._scroll.moved) return;
+        bindPointerTap(item, () => {
           SceneManager.switchTo('team', { stageId: stage.id } satisfies TeamEnterData);
-        });
+        }, { guard: () => !this._scroll.moved });
       }
 
       content.addChild(item);
@@ -306,20 +336,34 @@ export class TitleScene implements Scene {
       maxBottom = Math.max(maxBottom, y + itemH);
     });
 
-    staggerIn(items, { stepDelay: 0.04, offsetY: 16 });
+    if (this._minimalStrip !== 'l7like') {
+      staggerIn(items, { stepDelay: 0.04, offsetY: 16 });
+    }
 
     const viewportH = listBottom - listTop;
     const contentH = maxBottom + gap;
     const scrollMin = Math.min(listTop, listTop - Math.max(0, contentH - viewportH));
 
+    if (this._minimalStrip === 'l7like' || this._minimalStrip === 'withAnim') {
+      return;
+    }
+
     if (contentH > viewportH) {
+      const usePixiMask = !iosMinigame();
       const mask = new PIXI.Graphics();
       mask.beginFill(0xffffff);
       mask.drawRect(0, listTop, w, viewportH);
       mask.endFill();
-      this.container.addChild(mask);
-      this._stageMask = mask;
-      content.mask = mask;
+      if (usePixiMask) {
+        this.container.addChild(mask);
+        this._stageMask = mask;
+        content.mask = mask;
+      } else {
+        mask.destroy();
+        this._stageMask = null;
+        content.mask = null;
+        BootDiag.log('TitleScene.mask', 'iOS 真机禁用 Pixi mask（避开微信 WebGL stencil/mask 黑屏）');
+      }
 
       this._scroll.attach({
         content: () => this._stageContent,

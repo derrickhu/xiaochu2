@@ -12,6 +12,7 @@ import * as PIXI from 'pixi.js';
 import { COLORS, RADIUS } from './theme';
 import { makeText } from './text';
 import { pressFeedback } from './motion';
+import { bindPointerTap } from '@/utils/bindPointerTap';
 
 export type ButtonVariant = 'primary' | 'success' | 'danger' | 'recruit' | 'ghost';
 
@@ -82,9 +83,9 @@ export function makeButton(opts: ButtonOpts): ButtonHandle {
     text.text = v;
   };
 
-  btn.on('pointertap', () => {
-    if (enabled) onTap();
-  });
+  bindPointerTap(btn, onTap, { guard: () => enabled });
+  btn.hitArea = new PIXI.Rectangle(-width / 2, -height / 2, width, height);
+  btn.interactiveChildren = false;
   // 全局按下缩放反馈（禁用态不触发交互，故反馈也不会触发）
   pressFeedback(btn);
   btn.setEnabled(enabled);

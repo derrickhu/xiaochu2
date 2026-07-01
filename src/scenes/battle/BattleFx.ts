@@ -7,6 +7,7 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { TweenManager, Ease } from '@/core/TweenManager';
+import { guardedTween, minigameFallback, once } from '@/core/animationGuard';
 import { TextureCache } from '@/core/TextureCache';
 import { ObjectPool } from '@/core/ObjectPool';
 import { FxLayer, type BurstOptions } from '@/core/FxLayer';
@@ -44,6 +45,8 @@ export interface PetDamageFloatOpts {
   lane?: 'main' | 'minorUpper' | 'minorLower';
 }
 
+type ScopedPetDamageRuntime = PetDamageFloatRuntime & { scopeId: number };
+
 export class BattleFx {
   private _fx!: FxLayer;
   private _shake!: ScreenShake;
@@ -51,7 +54,11 @@ export class BattleFx {
   private _floatLayer!: PIXI.Container;
   private _floatPool!: ObjectPool<PIXI.Text>;
   private _petDmgPool!: ObjectPool<PIXI.Text>;
-  private _petDmgRuntimes: PetDamageFloatRuntime[] = [];
+  private _petDmgRuntimes: ScopedPetDamageRuntime[] = [];
+  private _scopeId = 0;
+  private readonly _activeFloats = new Map<PIXI.Text, number>();
+  private readonly _scopeChildren = new Map<PIXI.Container, number>();
+  private readonly _projectiles = new Map<PIXI.Sprite, number>();
 
   /** 创建并按 z 序加入父容器：粒子层（最底）→ 飘字层 → 全屏闪光（最顶）。 */
   build(parent: PIXI.Container, w: number, h: number): void {
@@ -114,7 +121,7 @@ export class BattleFx {
     this._shake.update(dt);
     for (let i = this._petDmgRuntimes.length - 1; i >= 0; i--) {
       const rt = this._petDmgRuntimes[i];
-      if (rt.update(dt)) {
+      if (rt.scopeId !== this._scopeId || rt.update(dt)) {
         this._petDmgPool.release(rt.text);
         this._petDmgRuntimes.splice(i, 1);
       }
@@ -123,11 +130,56 @@ export class BattleFx {
 
   destroy(): void {
     this._petDmgRuntimes.length = 0;
+    for (const p of this._projectiles.keys()) {
+      TweenManager.cancelTarget(p);
+      if (!p.destroyed) p.destroy();
+    }
+    this._projectiles.clear();
     this._floatPool?.clear();
     this._petDmgPool?.clear();
     this._fx?.destroy();
     this._flash?.destroy();
     this._shake?.reset();
+  }
+
+  /** 开始一段新的临时特效作用域；旧作用域全部失效。 */
+  beginTransientScope(): number {
+    this._scopeId++;
+    this.clearTransient(this._scopeId - 1);
+    return this._scopeId;
+  }
+
+  /** 回合/战斗收尾：清理某个 scope 内所有不应跨回合残留的表现层对象。 */
+  clearTransient(scopeId = this._scopeId): void {
+    for (const rt of this._petDmgRuntimes) {
+      if (rt.scopeId === scopeId) this._petDmgPool.release(rt.text);
+    }
+    this._petDmgRuntimes = this._petDmgRuntimes.filter(rt => rt.scopeId !== scopeId);
+
+    for (const [p, pScope] of Array.from(this._projectiles.entries())) {
+      if (pScope !== scopeId) continue;
+      TweenManager.cancelTarget(p);
+      if (!p.destroyed) p.destroy();
+      this._projectiles.delete(p);
+    }
+
+    for (const [t, tScope] of Array.from(this._activeFloats.entries())) {
+      if (tScope !== scopeId) continue;
+      this._activeFloats.delete(t);
+      this._floatPool.release(t);
+    }
+
+    for (const [child, childScope] of Array.from(this._scopeChildren.entries())) {
+      if (childScope !== scopeId) continue;
+      this._scopeChildren.delete(child);
+      TweenManager.cancelTarget(child);
+      TweenManager.cancelTarget(child.scale);
+      if (!child.destroyed) child.destroy({ children: true });
+    }
+
+    this._fx.clear();
+    this._flash.clear();
+    this._shake.reset();
   }
 
   // ── 基础表现 ──
@@ -146,11 +198,13 @@ export class BattleFx {
 
   /** 把外部构造的临时显示对象挂到飘字层（如开场推荐解法横幅） */
   addFloatChild(obj: PIXI.Container): void {
+    this._scopeChildren.set(obj, this._scopeId);
     this._floatLayer.addChild(obj);
   }
 
   /** 通用飘字（回血 / 受击等） */
   spawnFloat(text: string, x: number, y: number, color: number, scale = 1): void {
+    const scopeId = this._scopeId;
     const t = this._floatPool.get();
     t.text = text;
     t.style.fill = color;
@@ -158,11 +212,16 @@ export class BattleFx {
     t.style.strokeThickness = 5;
     t.position.set(x, y);
     t.scale.set(scale);
+    this._activeFloats.set(t, scopeId);
     this._floatLayer.addChild(t);
     TweenManager.to({
       target: t, props: { y: y - 70, alpha: 0 },
       duration: UI.anim.damageFloat, ease: Ease.easeOutQuad,
-      onComplete: () => this._floatPool.release(t),
+      onComplete: () => {
+        if (this._activeFloats.get(t) !== scopeId) return;
+        this._activeFloats.delete(t);
+        this._floatPool.release(t);
+      },
     });
   }
 
@@ -191,7 +250,8 @@ export class BattleFx {
       ? orderIdx * 3
       : Math.max(0, orderIdx) * PET_FLOAT_CFG.normalAtk.delayStep;
 
-    this._petDmgRuntimes.push(createPetDamageFloatRuntime({
+    this._petDmgRuntimes.push({
+      ...createPetDamageFloatRuntime({
       text: t,
       baseX: x,
       baseY: y,
@@ -199,7 +259,9 @@ export class BattleFx {
       styleKey,
       motion,
       delayFrames,
-    }));
+      }),
+      scopeId: this._scopeId,
+    });
 
     if (isCrit && !minor) this.shakeLight();
   }
@@ -225,9 +287,25 @@ export class BattleFx {
       p.height = size;
       if (!tex) p.tint = color;
       p.position.set(fromX, fromY);
+      const scopeId = this._scopeId;
+      this._projectiles.set(p, scopeId);
       this._fx.container.addChild(p);
 
       let frame = 0;
+      const complete = once(() => {
+        TweenManager.cancelTarget(p);
+        this._fx.burst({
+          x: toX, y: toY, color,
+          count: heavy ? 10 : 6,
+          speed: heavy ? 320 : 240,
+          size: heavy ? 16 : 12,
+          life: 0.35,
+        });
+        this._projectiles.delete(p);
+        p.destroy();
+        resolve();
+      });
+      minigameFallback(duration, complete, 100);
       TweenManager.to({
         target: p, props: { x: toX, y: toY },
         duration, ease: Ease.easeInQuad,
@@ -244,17 +322,7 @@ export class BattleFx {
             });
           }
         },
-        onComplete: () => {
-          this._fx.burst({
-            x: toX, y: toY, color,
-            count: heavy ? 10 : 6,
-            speed: heavy ? 320 : 240,
-            size: heavy ? 16 : 12,
-            life: 0.35,
-          });
-          p.destroy();
-          resolve();
-        },
+        onComplete: complete,
       });
     });
   }
@@ -271,24 +339,36 @@ export class BattleFx {
       t.scale.set(1.8);
       t.alpha = 0;
       this._floatLayer.addChild(t);
+      const scopeId = this._scopeId;
+      this._scopeChildren.set(t, scopeId);
+      const finish = once(() => {
+        if (this._scopeChildren.get(t) === scopeId) this._scopeChildren.delete(t);
+        if (!t.destroyed) t.destroy();
+        resolve();
+      });
       TweenManager.to({
         target: t, props: { alpha: 1 },
         duration: UI.anim.comboPop,
       });
-      TweenManager.to({
+      void guardedTween({
         target: t.scale, props: { x: 1, y: 1 },
         duration: UI.anim.comboPop, ease: Ease.easeOutBack,
         onComplete: () => {
-          TweenManager.to({
+          void guardedTween({
             target: t, props: { alpha: 0, y: t.y - 40 },
             duration: UI.anim.skillBanner * 0.4, delay: UI.anim.skillBanner * 0.35,
             ease: Ease.easeOutQuad,
             onComplete: () => {
-              t.destroy();
-              resolve();
+              finish();
             },
+          }, {
+            fallbackSec: UI.anim.skillBanner * 0.75,
+            onFallback: finish,
           });
         },
+      }, {
+        fallbackSec: UI.anim.comboPop,
+        onFallback: finish,
       });
     });
   }

@@ -23,6 +23,7 @@ import {
   staggerIn,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
+import { bindPointerTap } from '@/utils/bindPointerTap';
 import { Platform } from '@/core/PlatformService';
 import type { PetDetailEnterData } from './PetDetailScene';
 import { buildLockedCodexCard, buildOwnedCodexCard } from './codexCards';
@@ -91,6 +92,7 @@ export class CodexScene implements Scene {
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'codex') return;
     this._buildPetList(Game.safeTop + 136);
+    await Game.warmSceneCompositor();
   }
 
   onExit(): void {
@@ -211,7 +213,9 @@ export class CodexScene implements Scene {
       item.interactiveChildren = false;
       item.cursor = 'pointer';
       item.hitArea = new PIXI.Rectangle(0, 0, cardW, cardH);
-      item.on('pointertap', () => { if (!this._scroll.moved) this._onPetTap(pet, state); });
+      bindPointerTap(item, () => this._onPetTap(pet, state), {
+        blockTap: () => this._scroll.moved,
+      });
       content.addChild(item);
       items.push(item);
     });
