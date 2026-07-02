@@ -205,7 +205,17 @@ class GameClass {
     return this.screenHeight / this.screenWidth * this.designWidth;
   }
 
+  /**
+   * 帧率上限（仅浏览器环境生效）。
+   *
+   * 小游戏真机上禁用：Pixi Ticker.maxFPS 的节流检查依赖
+   * `rAF 时间戳` 与 `performance.now()` 同源，而微信 iOS 上两个时钟
+   * 基准不一致（社区已知坑），`_lastFrame` 一旦被污染成未来值，
+   * `delta` 恒为负 → ticker 永久静默（Tween/render 全停，点屏才有画面）。
+   * game2D_huahua 从不设 maxFPS，同机型稳定 —— 与其对齐。
+   */
   setMaxFPS(fps: number): void {
+    if (Platform.isMinigame) return;
     try { this.ticker.maxFPS = fps; } catch (_) { /* */ }
   }
 

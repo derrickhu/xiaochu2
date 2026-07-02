@@ -15,31 +15,34 @@ export function presentMinigameFrame(): void {
 }
 
 /**
- * 战斗结算等 async 演出期间持续推进动画并 present（真机专用）。
- *
- * iOS 微信真机 touch 结束后，Pixi ticker 偶发低频/停顿；如果只用 timer
- * 兜底 Promise，逻辑会继续跑，但 Tween/粒子/Combo 不更新，最后直接跳结果。
- * 返回 stop 函数，必须在 finally 中调用。
+ * 战斗结算 async 演出期间：补帧 present + 在 ticker 停滞时推进 Tween。
+ * 不 pause ticker（与 huahua 单时钟一致）；ticker 正常时避免重复 TweenManager.update。
  */
 export function startMinigamePresentLoop(opts?: {
   onUpdate?: (dt: number) => void;
   fps?: number;
+  /** @deprecated 禁止 pause，会导致真机 await 挂死或双时钟 */
   pauseTicker?: boolean;
 }): () => void {
   if (!Platform.isMinigame || Platform.isDevtools) return () => {};
+  if (opts?.pauseTicker) {
+    console.warn('[animationGuard] pauseTicker 已禁用');
+  }
   let stopped = false;
   let last = Date.now();
+  let lastTickerTime = Game.ticker?.lastTime ?? -1;
   const frameMs = 1000 / (opts?.fps ?? 60);
-  const tickerWasStarted = Game.ticker?.started;
-  if (opts?.pauseTicker && tickerWasStarted) {
-    try { Game.ticker.stop(); } catch { /* */ }
-  }
   const tick = (): void => {
     if (stopped) return;
     const now = Date.now();
     const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
     last = now;
-    TweenManager.update(dt);
+    const tickerTime = Game.ticker?.lastTime ?? -1;
+    const tickerAdvancing = tickerTime !== lastTickerTime;
+    lastTickerTime = tickerTime;
+    if (!tickerAdvancing) {
+      TweenManager.update(dt);
+    }
     opts?.onUpdate?.(dt);
     for (const listener of frameListeners) listener(dt);
     presentMinigameFrame();
@@ -48,9 +51,6 @@ export function startMinigamePresentLoop(opts?: {
   tick();
   return () => {
     stopped = true;
-    if (opts?.pauseTicker && tickerWasStarted) {
-      try { Game.ticker.start(); } catch { /* */ }
-    }
     presentMinigameFrame();
   };
 }

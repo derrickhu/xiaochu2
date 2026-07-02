@@ -72,7 +72,6 @@ export class BattleScene implements Scene {
   private readonly _enterSeq = new SceneEnterSeq();
 
   onEnter(data?: unknown): void {
-    Game.setMaxFPS(UI.fps.battle);
     PlayerData.load();
 
     const stageId = (data as BattleEnterData | undefined)?.stageId ?? STAGES[0].id;
@@ -235,7 +234,6 @@ export class BattleScene implements Scene {
 
     const stopPresent = startMinigamePresentLoop({
       onUpdate: (dt) => this._update(dt),
-      pauseTicker: true,
     });
     try {
       await (resolveTimeout

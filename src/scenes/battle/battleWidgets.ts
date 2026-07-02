@@ -27,7 +27,7 @@ export function makeButton(
   return btn;
 }
 
-/** 基于补间时钟的延时（与场景动画同一时间轴，暂停/销毁自动失效） */
+/** 延时：真机走 frameDelay（带 setTimeout 兜底），避免 touch 后 Tween onComplete 不回调挂死 */
 export function delay(sec: number): Promise<void> {
   return new Promise((resolve) => {
     if (Platform.isMinigame) {
