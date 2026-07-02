@@ -20,6 +20,19 @@ export const PET_SKILL_IDS = {
   woodBigHeal: 'pet_wood_big_heal',
   earthConvertRow: 'pet_earth_convert_row',
   earthHeal: 'pet_earth_heal',
+  // ── 目标十三：技能唯一化（消灭复用，30 宠 30 独占技） ──
+  thunderCrit: 'pet_thunder_crit',
+  shadowPurify: 'pet_shadow_purify',
+  starCross: 'pet_star_cross',
+  chaosHaste: 'pet_chaos_haste',
+  abyssDelay: 'pet_abyss_delay',
+  voidResonance: 'pet_void_resonance',
+  skyfallGravity: 'pet_skyfall_gravity',
+  riftShield: 'pet_rift_shield',
+  earthTime: 'pet_earth_time',
+  frostGuard: 'pet_frost_guard',
+  goldenCleanse: 'pet_golden_cleanse',
+  abyssBulwark: 'pet_abyss_bulwark',
 } as const;
 
 export const ENEMY_SKILL_IDS = {
@@ -29,4 +42,11 @@ export const ENEMY_SKILL_IDS = {
   lionCharge: 'enemy_lion_charge',
   pandaGuard: 'enemy_panda_guard',
   pandaHeal: 'enemy_panda_heal',
+  // ── 目标十三：新敌人技能池（章节机制载体） ──
+  sealOrbs: 'enemy_seal_orbs',
+  poisonTeam: 'enemy_poison_team',
+  timeSqueeze: 'enemy_time_squeeze',
+  healBlock: 'enemy_heal_block',
+  enrage: 'enemy_enrage',
+  skillSeal: 'enemy_skill_seal',
 } as const;

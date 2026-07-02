@@ -78,6 +78,33 @@ export const MECHANICS: Readonly<Record<string, MechanicDef>> = {
     uiHint: '敌人减伤又自疗：克制+爆发+续航缺一不可',
   },
 
+  // ── enemy 轴（目标十三：逐章解锁的新敌人机制，载体为章末 Boss 技能组） ──
+  enemy_seal_cast: {
+    id: 'enemy_seal_cast', axis: 'enemy', name: '战中封珠',
+    desc: '敌人战斗中周期性封印珠子，持续压缩可用盘面（Ch4 首教）。',
+    uiHint: '敌人会封印珠子：净化技或相邻消除解封',
+  },
+  enemy_poison: {
+    id: 'enemy_poison', axis: 'enemy', name: '剧毒',
+    desc: '敌人对我方施加中毒 DoT，每回合掉血（Ch5 首教）。',
+    uiHint: '敌人会下毒：带净化/驱散技解毒',
+  },
+  enemy_time_squeeze: {
+    id: 'enemy_time_squeeze', axis: 'enemy', name: '时间压缩',
+    desc: '敌人压缩转珠时限，操作窗口骤减（Ch6 首教）。',
+    uiHint: '敌人会压缩转珠时间：加时技对抗',
+  },
+  enemy_heal_block: {
+    id: 'enemy_heal_block', axis: 'enemy', name: '禁疗',
+    desc: '敌人封锁心珠回复，续航依赖护盾（Ch7 首教）。',
+    uiHint: '敌人会禁疗：靠护盾减伤扛过',
+  },
+  enemy_skill_seal_enrage: {
+    id: 'enemy_skill_seal_enrage', axis: 'enemy', name: '技能封印+狂暴',
+    desc: '敌人封印宠物主动技，低血后狂暴强化攻击（Ch8 终章复合）。',
+    uiHint: '敌人会封技能且低血狂暴：速杀或重力爆发',
+  },
+
   // ── rule 轴 ──
   rule_multi_wave: {
     id: 'rule_multi_wave', axis: 'rule', name: '多波',

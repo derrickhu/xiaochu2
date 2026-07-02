@@ -37,8 +37,6 @@ import {
 import { addTeamPetAvatar, buildTeamPetList } from './teamPetList';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
-import { touchDiag } from '@/utils/touchDiag';
-
 /** 战前编队：传入 stageId 时展示本关敌人，确认后进入战斗；缺省为自由编队 */
 export interface TeamEnterData {
   stageId?: string;
@@ -318,7 +316,6 @@ export class TeamScene implements Scene {
   }
 
   private _togglePet(petId: string): void {
-    touchDiag('team.toggle', petId);
     if (PlayerData.isInTeam(petId)) {
       if (!PlayerData.removeFromTeam(petId)) {
         Platform.showToast('至少保留 1 只灵宠');
@@ -360,7 +357,7 @@ export class TeamScene implements Scene {
         slot.interactiveChildren = false;
         slot.eventMode = 'static';
         slot.cursor = 'pointer';
-        bindPointerTap(slot, () => this._togglePet(pet.id), { label: `team-slot-${i}` });
+        bindPointerTap(slot, () => this._togglePet(pet.id));
         if (this._prevTeam[i] !== petId) fadeIn(slot, { duration: 0.24 });
       } else {
         slot.addChild(makePanel({
@@ -376,7 +373,7 @@ export class TeamScene implements Scene {
         slot.interactiveChildren = false;
         slot.eventMode = 'static';
         slot.cursor = 'pointer';
-        bindPointerTap(slot, () => Platform.showToast('请从下方列表选择灵宠上阵'), { label: `team-empty-${i}` });
+        bindPointerTap(slot, () => Platform.showToast('请从下方列表选择灵宠上阵'));
       }
       this._slotArea.addChild(slot);
     }

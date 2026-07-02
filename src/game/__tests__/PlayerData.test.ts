@@ -122,4 +122,27 @@ describe('里程碑与货币', () => {
   it('spendCoins 不足返回 false', () => {
     expect(PlayerData.spendCoins(PlayerData.coins + 1)).toBe(false);
   });
+
+  it('图鉴收录里程碑：每收录满 codexEvery 只发一次灵玉，且不重复发', () => {
+    const every = ECONOMY.milestone.codexEvery;
+    // 先对账当前进度（吞掉历史差额，保证后续断言干净）
+    PlayerData.claimCodexMilestones();
+
+    const undiscovered = PETS.filter((p) => !PlayerData.isDiscovered(p.id)).map((p) => p.id);
+    expect(undiscovered.length).toBeGreaterThanOrEqual(every);
+
+    const start = PlayerData.codexMilestoneProgress.count;
+    const need = (Math.floor(start / every) + 1) * every - start;
+    // 收录到里程碑前一只：不发
+    for (let i = 0; i < need - 1; i++) PlayerData.discover(undiscovered[i]);
+    expect(PlayerData.claimCodexMilestones()).toBe(0);
+    // 跨过里程碑：发一次
+    PlayerData.discover(undiscovered[need - 1]);
+    const before = PlayerData.lingyu;
+    const granted = PlayerData.claimCodexMilestones();
+    expect(granted).toBe(ECONOMY.milestone.codexLingyu);
+    expect(PlayerData.lingyu).toBe(before + granted);
+    // 重复结算不再发
+    expect(PlayerData.claimCodexMilestones()).toBe(0);
+  });
 });

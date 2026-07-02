@@ -163,14 +163,3 @@ export const MAIN_PRELOAD_IMAGES: readonly string[] = [
   ...Object.values(PET_FRAME_IMAGES),
   ...Object.values(ORB_IMAGES),
 ];
-
-/** @deprecated 兼容旧名 */
-export const PRELOAD_IMAGES = MAIN_PRELOAD_IMAGES;
-
-/** @deprecated 使用 assetPreload，保留常量名避免旧引用编译失败 */
-export const BATTLE_PRELOAD_IMAGES: readonly string[] = [];
-export const CODEX_PRELOAD_IMAGES: readonly string[] = [];
-export const TEAM_PRELOAD_IMAGES: readonly string[] = [];
-export const GACHA_PRELOAD_IMAGES: readonly string[] = [];
-export const SHOP_PRELOAD_IMAGES: readonly string[] = [];
-export const PET_DETAIL_PRELOAD_IMAGES: readonly string[] = [];

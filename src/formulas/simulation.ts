@@ -119,12 +119,14 @@ export function simulateBattle(
   // 用持有对象而非散落 let：闭包内外读写统一为属性访问，避免 TS 把闭包内赋值的
   // let 在外层窄化为 never（运行期逻辑不变，纯类型修正）。
   let enemyStun = 0;
+  let enemyEnraged = false;
   const st: {
     dmgBuff: { mult: number; turnsLeft: number } | null;
     enemyDefBreak: { pct: number; turnsLeft: number } | null;
     enemyDot: { amount: number; turnsLeft: number } | null;
     heroDot: { amount: number; turnsLeft: number } | null;
-  } = { dmgBuff: null, enemyDefBreak: null, enemyDot: null, heroDot: null };
+    healBlock: { mult: number; turnsLeft: number } | null;
+  } = { dmgBuff: null, enemyDefBreak: null, enemyDot: null, heroDot: null, healBlock: null };
   const effEnemyDef = (): number =>
     st.enemyDefBreak ? Math.floor(enemy.def_ * (1 - st.enemyDefBreak.pct)) : enemy.def_;
 
@@ -181,7 +183,9 @@ export function simulateBattle(
     // 持续伤害（点燃）：每回合对敌人结算
     if (st.enemyDot) dmgToEnemy += st.enemyDot.amount;
     const heartOrbs = mech.noHeartHeal ? 0 : groupsPerType * model.matchCount;
-    healThisTurn += calcHeal(rcvTotal, heartOrbs, model.combo, teamHealBonus);
+    // 禁疗 debuff：心珠回复按乘区打折（镜像 battleTurnResolution.heartHealMult）
+    healThisTurn += calcHeal(rcvTotal, heartOrbs, model.combo, teamHealBonus)
+      * (st.healBlock?.mult ?? 1);
 
     heroHp = Math.min(heroMaxHp, heroHp + healThisTurn);
     enemy.hp = Math.max(0, enemy.hp - Math.floor(dmgToEnemy));
@@ -245,6 +249,10 @@ export function simulateBattle(
       st.heroDot.turnsLeft--;
       if (st.heroDot.turnsLeft <= 0) st.heroDot = null;
     }
+    if (st.healBlock) {
+      st.healBlock.turnsLeft--;
+      if (st.healBlock.turnsLeft <= 0) st.healBlock = null;
+    }
   }
 
   function runtimeContext(): SkillRuntimeContext {
@@ -263,6 +271,10 @@ export function simulateBattle(
       teamDamageBuffMult: (st.dmgBuff?.mult ?? 1) * teamDamageMult,
       enemyDamageReduction: enemy.dmgReduction?.reduction ?? 0,
       teamHealBonus,
+      enemyEnraged,
+      teamSize: team.length,
+      // 模拟器确定性：技能封印固定选第 0 只
+      rng: () => 0,
     };
   }
 
@@ -309,10 +321,37 @@ export function simulateBattle(
         enemyStun = Math.max(enemyStun, event.turns ?? 0);
       } else if (event.status === 'enemyDefenseBreak') {
         st.enemyDefBreak = { pct: Math.max(st.enemyDefBreak?.pct ?? 0, event.value), turnsLeft: event.turns ?? 0 };
+      } else if (event.status === 'healBlock') {
+        st.healBlock = { mult: event.value, turnsLeft: event.turns ?? 0 };
+      } else if (event.status === 'enrage') {
+        if (!enemyEnraged) {
+          enemyEnraged = true;
+          enemy.atk = Math.floor(enemy.atk * event.value);
+        }
       }
+      // extraDragTime / guaranteedCrit / elementDamageBuff / timeSqueeze / skillSeal：
+      // 模拟器按期望消珠建模（不掷暴击、不模拟拖珠时长与单宠 CD 封锁），暂不镜像。
+    }
+
+    // haste：全队 CD 减少（施法者此刻 CD 为 0，天然不受影响）
+    if (result.teamCdDelta && result.teamCdDelta > 0) {
+      for (const p of team) {
+        if (p.skillCdLeft > 0) p.skillCdLeft = Math.max(0, p.skillCdLeft - result.teamCdDelta);
+      }
+    }
+    // purify：清除我方 debuff（镜像 cleanseTeamDebuffs）
+    if (result.cleanseTeam) {
+      st.heroDot = null;
+      st.healBlock = null;
+    }
+    // 威吓：敌人普攻推迟
+    if (result.enemyAttackDelay && result.enemyAttackDelay > 0) {
+      enemy.attackCountdown += result.enemyAttackDelay;
     }
 
     for (const req of result.boardRequests) {
+      // 封珠/解封仅影响操作难度，模拟器的 combo 模型不建模
+      if (req.type !== 'convertOrbs') continue;
       // 近似：转出的珠当回合即转化为伤害/回血（shape 仅近似为 count 颗）
       if (req.to === 'heart') {
         healThisTurn += calcHeal(rcvTotal, req.count, model.combo, teamHealBonus);

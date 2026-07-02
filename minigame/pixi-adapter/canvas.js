@@ -8,7 +8,6 @@ const platform = require('./platform');
 let canvas;
 try {
   canvas = platform.createCanvas();
-  if (canvas) canvas.__diagId = 'pixi-primary';
 
   // iOS 26+：禁用 webgl2，让 Pixi 走 WebGL1（勿在此处 getContext('webgl')，会锁死 canvas）
   if (platform.getSystemInfoSync().platform === 'ios' && canvas && typeof canvas.getContext === 'function') {
@@ -17,7 +16,6 @@ try {
       if (type === 'webgl2') return null;
       return origGetContext(type, opts);
     };
-    console.log('[canvas] iOS: webgl2 已禁用');
   }
 } catch (e) {
   console.error('[canvas] createCanvas 失败:', e);

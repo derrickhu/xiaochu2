@@ -15,6 +15,12 @@ export interface ResolvePlayerTurnOptions {
   teamDamageMult: number;
   /** 全队治疗强化（治疗招牌属性），放大心珠回复；默认 0 */
   teamHealBonus: number;
+  /** 必暴击 buff（guaranteedCrit 状态）：本回合全部出手强制暴击 */
+  guaranteedCrit: boolean;
+  /** 心珠回复乘区（禁疗 debuff，无则 1） */
+  heartHealMult: number;
+  /** 单属性增伤乘区（elementDamageBuff 状态，无则 1） */
+  elementBuffMult: (element: Element) => number;
   rng: () => number;
   elementTraitDamageMult: (pet: TeamPet, defender: Element) => number;
   counterRelation: (attacker: Element, defender: Element) => 1 | 0 | -1;
@@ -36,8 +42,8 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
     const petIndex = opts.team.findIndex((p) => p.def.element === element);
     if (petIndex < 0) continue;
     const pet = opts.team[petIndex];
-    // 暴击为「个体属性」：用出手宠自身的暴击率掷骰、暴击伤害结算
-    const isCrit = opts.rng() < pet.critRate;
+    // 暴击为「个体属性」：用出手宠自身的暴击率掷骰、暴击伤害结算；必暴击 buff 强制暴击
+    const isCrit = opts.guaranteedCrit || opts.rng() < pet.critRate;
     const raw = calcDamage({
       atk: pet.atk,
       matchCount: group.cells.length,
@@ -47,7 +53,7 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
       defenderDef: opts.enemyDefEffective,
       isCrit,
       critDamage: pet.critDamage,
-      buffMult: opts.teamDamageMult,
+      buffMult: opts.teamDamageMult * opts.elementBuffMult(element),
     }) * opts.elementTraitDamageMult(pet, opts.enemy.def.element);
     const damage = Math.max(
       1,
@@ -63,7 +69,7 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
   }
 
   const heartHeal = (healOrbs > 0 && !opts.noHeartHeal)
-    ? calcHeal(opts.teamRcvTotal, healOrbs, combo, opts.teamHealBonus)
+    ? Math.floor(calcHeal(opts.teamRcvTotal, healOrbs, combo, opts.teamHealBonus) * opts.heartHealMult)
     : 0;
   return {
     combo,

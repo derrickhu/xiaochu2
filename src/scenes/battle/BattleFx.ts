@@ -15,7 +15,7 @@ import { ScreenShake } from '@/core/ScreenShake';
 import { FlashOverlay } from '@/core/FlashOverlay';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
-import { ORB_IMAGES } from '@/config/Assets';
+import { ORB_IMAGES, UI_FX_IMAGES } from '@/config/Assets';
 import {
   applyDmgRenderStyle,
   buildPetDmgLabel,
@@ -225,10 +225,10 @@ export class BattleFx {
     });
   }
 
-  /** 宠物槽位伤害飘字 — 样式/运动对齐 xiao_chu slotDamageMain / slotDamageCrit */
+  /** 宠物槽位伤害飘字 — 样式/运动对齐 xiao_chu slotDamageMain / slotDamageCrit；克制伤害加「克」角标 + 更亮 glow */
   spawnPetDamageFloat(opts: PetDamageFloatOpts): void {
     const {
-      slotX, slotY, element, damage, isCrit = false,
+      slotX, slotY, element, damage, isCrit = false, counter = 0,
       orderIdx = 0, skill = false, minor = false,
       lane = minor ? (orderIdx === 0 ? 'minorUpper' : 'minorLower') : 'main',
     } = opts;
@@ -240,10 +240,16 @@ export class BattleFx {
     const anchor = petSlotDamageAnchor(slotX, slotY, lane);
     const x = anchor.x + (minor ? (orderIdx - 0.5) * PET_FLOAT_CFG.multiHit.xStep : 0);
     const y = anchor.y;
+    const isCounter = counter === 1 && !minor;
 
     const t = this._petDmgPool.get();
     t.text = buildPetDmgLabel(element, damage);
     applyDmgRenderStyle(t, styleKey, palette);
+    if (isCounter) {
+      // 克制命中：glow 提亮 + 数字略白热化
+      t.style.dropShadowBlur = (t.style.dropShadowBlur as number) * 1.8;
+      t.style.fill = 0xffffff;
+    }
     this._floatLayer.addChild(t);
 
     const delayFrames = minor
@@ -262,6 +268,27 @@ export class BattleFx {
       }),
       scopeId: this._scopeId,
     });
+
+    if (isCounter) {
+      // 「克」角标：跟随主数字右上角，同生命周期（minor 运动曲线）
+      const mark = this._petDmgPool.get();
+      mark.text = '克';
+      applyDmgRenderStyle(mark, 'slotDamageMinor', palette);
+      mark.style.fill = palette.glowColor;
+      this._floatLayer.addChild(mark);
+      this._petDmgRuntimes.push({
+        ...createPetDamageFloatRuntime({
+          text: mark,
+          baseX: x + t.width / 2 + 12,
+          baseY: y - 16,
+          baseScale,
+          styleKey: 'slotDamageMinor',
+          motion: DMG_MOTION[styleKey],
+          delayFrames,
+        }),
+        scopeId: this._scopeId,
+      });
+    }
 
     if (isCrit && !minor) this.shakeLight();
   }
@@ -325,6 +352,75 @@ export class BattleFx {
         onComplete: complete,
       });
     });
+  }
+
+  /**
+   * 星爆命中（pkg-fx starburst，ADD 混合）：UR 招牌技命中的高光反馈。
+   * 贴图未加载（分包懒加载中 / 低端真机跳过）时降级为大号白色粒子 burst。
+   */
+  spawnStarburst(x: number, y: number, color: number): void {
+    const tex = TextureCache.get(UI_FX_IMAGES.starburst);
+    if (!tex) {
+      this.burst({ x, y, color: 0xffffff, count: 14, speed: 480, size: 18, life: 0.5 });
+      this.burst({ x, y, color, count: 10, speed: 360, size: 14, life: 0.45 });
+      return;
+    }
+    const sp = new PIXI.Sprite(tex);
+    sp.anchor.set(0.5);
+    sp.blendMode = PIXI.BLEND_MODES.ADD;
+    sp.tint = color;
+    sp.position.set(x, y);
+    sp.scale.set(0.25);
+    sp.alpha = 1;
+    this._scopeChildren.set(sp, this._scopeId);
+    this._fx.container.addChild(sp);
+    const cleanup = once(() => {
+      this._scopeChildren.delete(sp);
+      if (!sp.destroyed) sp.destroy();
+    });
+    void guardedTween({
+      target: sp.scale, props: { x: 1.5, y: 1.5 },
+      duration: 0.4, ease: Ease.easeOutCubic,
+    }, { onFallback: cleanup });
+    void guardedTween({
+      target: sp, props: { alpha: 0, rotation: 0.5 },
+      duration: 0.45, ease: Ease.easeOutQuad,
+      onComplete: cleanup,
+    }, { onFallback: cleanup });
+  }
+
+  /**
+   * 光环扩散（pkg-fx aura_ring，ADD 混合）：buff / 治疗 / 护盾类技能的我方反馈。
+   * 贴图未加载时降级为上升粒子 burst。
+   */
+  spawnAuraRing(x: number, y: number, color: number): void {
+    const tex = TextureCache.get(UI_FX_IMAGES.auraRing);
+    if (!tex) {
+      this.burst({ x, y, color, count: 12, speed: 280, gravity: -200, size: 14, life: 0.55 });
+      return;
+    }
+    const sp = new PIXI.Sprite(tex);
+    sp.anchor.set(0.5);
+    sp.blendMode = PIXI.BLEND_MODES.ADD;
+    sp.tint = color;
+    sp.position.set(x, y);
+    sp.scale.set(0.3);
+    sp.alpha = 0.95;
+    this._scopeChildren.set(sp, this._scopeId);
+    this._fx.container.addChild(sp);
+    const cleanup = once(() => {
+      this._scopeChildren.delete(sp);
+      if (!sp.destroyed) sp.destroy();
+    });
+    void guardedTween({
+      target: sp.scale, props: { x: 1.9, y: 1.9 },
+      duration: 0.5, ease: Ease.easeOutCubic,
+    }, { onFallback: cleanup });
+    void guardedTween({
+      target: sp, props: { alpha: 0 },
+      duration: 0.55, ease: Ease.easeInQuad,
+      onComplete: cleanup,
+    }, { onFallback: cleanup });
   }
 
   /** 技能名横幅：放大弹入 → 短暂停留 → 淡出 */

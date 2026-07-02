@@ -28,7 +28,6 @@ class PlatformServiceClass {
       this._api = null;
       this.name = 'unknown';
     }
-    console.log(`[Platform] 当前平台: ${this.name}`);
   }
 
   /** 是否在小游戏环境中 */

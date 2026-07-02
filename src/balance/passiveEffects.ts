@@ -248,15 +248,6 @@ export function computePetCombatAttribs(role: PetRole, rarity: Rarity, star: num
   };
 }
 
-/** @deprecated 兼容旧 import；请用 computePetCombatAttribs */
-export function petCombatAttribs(
-  pet: { role: PetRole; rarity: Rarity },
-  _level: number,
-  star: number,
-): CombatAttribBlock {
-  return computePetCombatAttribs(pet.role, pet.rarity, star);
-}
-
 function expandL0Signature(role: PetRole, rarity: Rarity): PassiveEffect[] {
   return [l0EffectToPassive(ROLE_PASSIVE_L0[role] ?? ROLE_PASSIVE_L0.attacker, rarity)];
 }

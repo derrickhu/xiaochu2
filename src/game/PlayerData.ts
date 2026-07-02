@@ -305,6 +305,39 @@ class PlayerDataClass {
     return this.ownedPets.length;
   }
 
+  /** 图鉴里程碑进度（CodexScene 进度条用） */
+  get codexMilestoneProgress(): { count: number; next: number; every: number; lingyu: number } {
+    const every = ECONOMY.milestone.codexEvery;
+    const count = this._data.discovered.length;
+    return {
+      count,
+      next: (Math.floor(count / every) + 1) * every,
+      every,
+      lingyu: ECONOMY.milestone.codexLingyu,
+    };
+  }
+
+  /**
+   * 结算图鉴收录里程碑：每收录 codexEvery 只发一次灵玉。
+   * 战斗结算在 discover 后调用；不追溯初始 R 池。
+   * @returns 本次发放的灵玉总额（无新里程碑为 0）
+   */
+  claimCodexMilestones(): number {
+    const every = ECONOMY.milestone.codexEvery;
+    const total = this._data.discovered.length;
+    const claimedFloor = Math.floor(this._data.codexRewarded / every);
+    const nowFloor = Math.floor(total / every);
+    this._data.codexRewarded = total;
+    if (nowFloor <= claimedFloor) {
+      this._save();
+      return 0;
+    }
+    const lingyu = (nowFloor - claimedFloor) * ECONOMY.milestone.codexLingyu;
+    addLingyuToSave(this._data, lingyu);
+    this._save();
+    return lingyu;
+  }
+
   // ═══════════ 编队 ═══════════
 
   get team(): readonly string[] {

@@ -143,9 +143,11 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(6, { t2Skills: [E.golemGuard] }),
   },
   {
+    // 钥匙宠（Ch6 收录）：加时对抗 Ch6 时间压缩
+    // 怪物面 = 第 6 章 Boss：首教「时间压缩」机制
     id: 'pet_010', name: '厚土娘娘', element: 'earth', rarity: 3, role: 'healer',
-    skillId: PET_SKILL_IDS.earthHeal,
-    monster: monsterPair(8, { t2Skills: [E.pandaGuard, E.pandaHeal] }),
+    skillId: PET_SKILL_IDS.earthTime,
+    monster: monsterPair(8, { t1Skills: [E.timeSqueeze], t2Skills: [E.timeSqueeze, E.pandaGuard, E.pandaHeal] }),
   },
 
   // ══════════════════════════════════════════════════════════════
@@ -153,9 +155,11 @@ export const CREATURES: readonly CreatureDef[] = [
   // ══════════════════════════════════════════════════════════════
   // ── 金 ──
   {
+    // 钥匙宠（Ch5 收录）：直伤 + 驱散，应对 Ch5 剧毒/禁疗
+    // 怪物面 = 第 5 章 Boss：首教「剧毒」机制
     id: 'pet_011', name: '金羽仙鹤', element: 'metal', rarity: 3, role: 'attacker',
-    skillId: PET_SKILL_IDS.metalSlash,
-    monster: monsterPair(11, { t2Skills: [E.bladeCharge] }),
+    skillId: PET_SKILL_IDS.goldenCleanse,
+    monster: monsterPair(11, { t1Skills: [E.poisonTeam], t2Skills: [E.poisonTeam, E.bladeCharge] }),
   },
   {
     id: 'pet_012', name: '潮汐魔鳐', element: 'metal', rarity: 2, role: 'support',
@@ -164,13 +168,15 @@ export const CREATURES: readonly CreatureDef[] = [
   },
   {
     id: 'pet_013', name: '雷纹玉蝉', element: 'metal', rarity: 4, role: 'attacker',
-    skillId: PET_SKILL_IDS.metalMultiHit,
+    skillId: PET_SKILL_IDS.thunderCrit,
     monster: monsterPair(17, { t2Skills: [E.bladeCharge, E.golemGuard] }),
   },
   {
+    // 钥匙宠（Ch4 收录）：净化技解 Ch4/Ch5 的封珠与毒
+    // 怪物面 = 第 4 章 Boss：首教「敌人中途封珠」机制（tier1 铺垫、tier2 技能组）
     id: 'pet_014', name: '玄影天鹏', element: 'metal', rarity: 4, role: 'support',
-    skillId: PET_SKILL_IDS.metalDefBreak,
-    monster: monsterPair(21, { t2Skills: [E.bladeCharge, E.pandaGuard] }),
+    skillId: PET_SKILL_IDS.shadowPurify,
+    monster: monsterPair(21, { t1Skills: [E.sealOrbs], t2Skills: [E.sealOrbs, E.bladeCharge, E.pandaGuard] }),
   },
   // ── 木 ──
   {
@@ -185,12 +191,12 @@ export const CREATURES: readonly CreatureDef[] = [
   },
   {
     id: 'pet_017', name: '星辉灵鹿', element: 'wood', rarity: 2, role: 'attacker',
-    skillId: PET_SKILL_IDS.woodMultiHit,
+    skillId: PET_SKILL_IDS.starCross,
     monster: monsterPair(16, { t2Skills: [E.lionCharge] }),
   },
   {
     id: 'pet_018', name: '混沌骨狐', element: 'wood', rarity: 4, role: 'healer',
-    skillId: PET_SKILL_IDS.woodBigHeal,
+    skillId: PET_SKILL_IDS.chaosHaste,
     monster: monsterPair(20, { t2Skills: [E.pandaGuard, E.pandaHeal] }),
   },
   // ── 水 ──
@@ -201,12 +207,12 @@ export const CREATURES: readonly CreatureDef[] = [
   },
   {
     id: 'pet_020', name: '深渊水母', element: 'water', rarity: 3, role: 'support',
-    skillId: PET_SKILL_IDS.waterStun,
+    skillId: PET_SKILL_IDS.abyssDelay,
     monster: monsterPair(13, { t2Skills: [E.serpentHeal] }),
   },
   {
     id: 'pet_021', name: '霜鳍海豹', element: 'water', rarity: 2, role: 'support',
-    skillId: PET_SKILL_IDS.waterShield,
+    skillId: PET_SKILL_IDS.frostGuard,
     monster: monsterPair(13, { t2Skills: [E.serpentHeal] }),
   },
   {
@@ -216,7 +222,7 @@ export const CREATURES: readonly CreatureDef[] = [
   },
   {
     id: 'pet_023', name: '虚空魔眼', element: 'water', rarity: 4, role: 'attacker',
-    skillId: PET_SKILL_IDS.waterMultiHit,
+    skillId: PET_SKILL_IDS.voidResonance,
     monster: monsterPair(19, { t2Skills: [E.golemGuard, E.bladeCharge] }),
   },
   // ── 火 ──
@@ -231,9 +237,11 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(18, { t2Skills: [E.lionCharge, E.pandaGuard] }),
   },
   {
+    // 钥匙宠（Ch8 收录）：重力 + 爆发，速杀 Ch8 狂暴 Boss
+    // 怪物面 = 第 8 章 Boss：首教「技能封印 + 狂暴」复合机制（终章压轴）
     id: 'pet_026', name: '天外魔君', element: 'fire', rarity: 4, role: 'attacker',
-    skillId: PET_SKILL_IDS.fireDotUr,
-    monster: monsterPair(22, { t2Skills: [E.lionCharge, E.pandaGuard, E.pandaHeal] }),
+    skillId: PET_SKILL_IDS.skyfallGravity,
+    monster: monsterPair(22, { t1Skills: [E.enrage], t2Skills: [E.skillSeal, E.enrage, E.lionCharge] }),
   },
   // ── 土 ──
   {
@@ -242,8 +250,9 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(11, { t2Skills: [E.golemGuard] }),
   },
   {
+    // 钥匙宠（Ch3 收录）：大护盾扛 Ch4 敌人封珠期的输出真空
     id: 'pet_028', name: '归墟玄龟', element: 'earth', rarity: 3, role: 'tank',
-    skillId: PET_SKILL_IDS.earthShield,
+    skillId: PET_SKILL_IDS.abyssBulwark,
     monster: monsterPair(14, { t2Skills: [E.golemGuard, E.serpentHeal] }),
   },
   {
@@ -252,9 +261,11 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(17, { t2Skills: [E.golemGuard] }),
   },
   {
+    // 钥匙宠（Ch7 收录）：护盾+威吓，应对 Ch7 禁疗环境（回不了血就少掉血）
+    // 怪物面 = 第 7 章 Boss：首教「禁疗」机制（与禁心规则复合）
     id: 'pet_030', name: '裂隙甲虫', element: 'earth', rarity: 4, role: 'tank',
-    skillId: PET_SKILL_IDS.earthConvertRow,
-    monster: monsterPair(20, { t2Skills: [E.golemGuard, E.bladeCharge] }),
+    skillId: PET_SKILL_IDS.riftShield,
+    monster: monsterPair(20, { t1Skills: [E.healBlock], t2Skills: [E.healBlock, E.golemGuard, E.bladeCharge] }),
   },
 ];
 

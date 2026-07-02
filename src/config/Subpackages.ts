@@ -73,7 +73,6 @@ export function loadSubpackage(name: SubpackageName): Promise<void> {
       name: WX_SUBPACKAGE_NAME[name],
       success: () => {
         loaded.add(name);
-        console.log(`[Subpackage] 已加载 ${WX_SUBPACKAGE_NAME[name]}`);
         finish(resolve);
       },
       fail: (err) => {

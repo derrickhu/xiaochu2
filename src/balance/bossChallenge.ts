@@ -161,28 +161,30 @@ export function bossChallengeConfig(
     case 'boardRock':
       return {
         prepMob: 'enemy_golem_earth',
-        mechanics: ['orb_rock'],
-        hintTags: ['BOSS', '顽石封印', '收录'],
-        hintText: '顽石封印 + 炽土试炼：解封后击败焚天魔将高级形态收录',
+        mechanics: ['orb_rock', 'enemy_seal_cast'],
+        hintTags: ['BOSS', '顽石封印', '战中封珠', '收录'],
+        hintText: 'Boss 战中会封印珠子：推荐带归墟玄龟（第3章收录）护盾扛压，击败玄影天鹏高级形态收录其净化技',
       };
     case 'selfHeal':
       return {
         prepMob: 'enemy_serpent_water',
-        hintTags: ['BOSS', '自疗', '收录'],
-        hintText: '寒潭幼蛟自愈拖战：爆发抢血，击败归墟玄龟高级形态收录',
+        mechanics: ['enemy_poison'],
+        hintTags: ['BOSS', '剧毒', '收录'],
+        hintText: 'Boss 会下毒持续掉血：推荐带玄影天鹏（第4章收录）净化解毒，击败金羽仙鹤高级形态收录',
       };
     case 'chargeHit':
       return {
         prepMob: 'enemy_scorpion_metal',
-        hintTags: ['BOSS', '蓄力重击', '收录'],
-        hintText: '晶甲蝎蓄力重击：护盾扛击，击败星河烛龙高级形态收录',
+        mechanics: ['enemy_time_squeeze'],
+        hintTags: ['BOSS', '时间压缩', '收录'],
+        hintText: 'Boss 会压缩转珠时间：稳住节奏速战，击败厚土娘娘高级形态收录其加时技',
       };
     case 'noHeart':
       return {
         prepMob: 'enemy_thunderlord_boss_wood',
-        mechanics: ['rule_no_heal'],
-        hintTags: ['BOSS', '禁心', '收录'],
-        hintText: '禁心关：心珠不回血，击败裂隙甲虫高级形态收录',
+        mechanics: ['rule_no_heal', 'enemy_heal_block'],
+        hintTags: ['BOSS', '禁心', '禁疗', '收录'],
+        hintText: '禁心+禁疗双重压制：推荐带归墟玄龟/护盾宠减少掉血，击败裂隙甲虫高级形态收录',
       };
     case 'highAttack':
       return {
@@ -195,9 +197,9 @@ export function bossChallengeConfig(
       const hint = banHint(el);
       return {
         prepMob: 'enemy_bat_fire',
-        mechanics: banMechanics(el),
-        hintTags: ['BOSS', ...hint.tags, '收录'],
-        hintText: `${hint.text}，击败 Boss 高级形态收录`,
+        mechanics: [...banMechanics(el), 'enemy_skill_seal_enrage'],
+        hintTags: ['BOSS', ...hint.tags, '技能封印', '狂暴', '收录'],
+        hintText: `${hint.text}；Boss 会封印技能且低血狂暴，推荐高爆发速杀，击败天外魔君高级形态收录其重力技`,
       };
     }
   }

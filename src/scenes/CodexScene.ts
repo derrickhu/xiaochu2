@@ -91,7 +91,7 @@ export class CodexScene implements Scene {
     await ensurePetAvatars(codexPetAvatarEntries());
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'codex') return;
-    this._buildPetList(Game.safeTop + 136);
+    this._buildPetList(Game.safeTop + 192);
     await Game.warmScenePresent();
   }
 
@@ -140,6 +140,36 @@ export class CodexScene implements Scene {
     );
     countText.position.set(w / 2, Game.safeTop + 118);
     this.container.addChild(countText);
+
+    this._buildMilestoneBar(w, Game.safeTop + 148);
+  }
+
+  /** 图鉴里程碑进度条：每收录 codexEvery 只发灵玉（强化捉宠目标感） */
+  private _buildMilestoneBar(w: number, y: number): void {
+    const { count, next, every, lingyu } = PlayerData.codexMilestoneProgress;
+    const barW = Math.min(420, w * 0.7);
+    const barH = 14;
+    const x = (w - barW) / 2;
+    const inCycle = count % every;
+    const ratio = inCycle / every;
+
+    const g = new PIXI.Graphics();
+    g.beginFill(0x1a1126, 0.75);
+    g.drawRoundedRect(x, y, barW, barH, barH / 2);
+    g.endFill();
+    if (ratio > 0.001) {
+      g.beginFill(0xffd76a);
+      g.drawRoundedRect(x, y, Math.max(barW * ratio, barH), barH, barH / 2);
+      g.endFill();
+    }
+    this.container.addChild(g);
+
+    const label = makeText(
+      `收录里程碑 ${inCycle}/${every} · 集满 ${next} 只奖励灵玉 ×${lingyu}`,
+      { size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: 0.5 },
+    );
+    label.position.set(w / 2, y + barH + 14);
+    this.container.addChild(label);
   }
 
   private _buildTitlePlaque(w: number, centerY: number): void {

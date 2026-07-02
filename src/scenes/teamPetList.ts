@@ -200,7 +200,6 @@ function buildListItem(
 
   // 点击统一走 bindPointerTap / canvasTapRouter；ScrollList 只负责滚动
   bindPointerTap(item, () => onToggle(pet.id), {
-    label: `team-pet-${pet.id}`,
     blockTap: () => scroll.moved,
   });
 

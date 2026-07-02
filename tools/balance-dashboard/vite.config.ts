@@ -10,8 +10,9 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',
     port: 5174,
-    open: true,
+    strictPort: true,
   },
   build: {
     outDir: path.resolve(__dirname, 'dist'),

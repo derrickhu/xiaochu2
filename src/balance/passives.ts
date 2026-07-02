@@ -122,6 +122,3 @@ export function describeSkillTrait(t: {
       return '';
   }
 }
-
-/** @deprecated 由 passiveEffects.describeTrait 替代；保留别名 */
-export const describeTrait = describeSkillTrait;

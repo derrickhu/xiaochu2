@@ -11,7 +11,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "balance:dashboard": "vite --config tools/balance-dashboard/vite.config.ts",
-    "balance:dashboard:build": "vite build --config tools/balance-dashboard/vite.config.ts"
+    "balance:dashboard:build": "vite build --config tools/balance-dashboard/vite.config.ts",
+    "balance:dashboard:start": "./tools/balance-dashboard/start.sh start",
+    "balance:dashboard:stop": "./tools/balance-dashboard/start.sh stop",
+    "balance:dashboard:status": "./tools/balance-dashboard/start.sh status",
+    "balance:dashboard:install": "./tools/balance-dashboard/start.sh install"
   },
   "dependencies": {
     "@pixi/unsafe-eval": "^7.3.2",

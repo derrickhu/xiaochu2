@@ -22,7 +22,7 @@ import {
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BattleLayout } from './BattleLayout';
 import { showPetSkillPreview, TAP_SLOP, type PetSkillPreviewHandle } from './PetSkillPreviewBubble';
-import { bindCanvasPointerBridge, type CanvasPointerBridge } from '@/utils/canvasPointerBridge';
+import { bindCanvasPointerMove, type CanvasPointerMoveHandle } from '@/minigame/canvasInteraction';
 import { clientEventToDesign, designPointToLocal } from '@/utils/clientEventToDesign';
 
 interface PetBarHooks {
@@ -40,7 +40,7 @@ export class BattlePetBar {
   private _slotWasReady: boolean[] = [];
   private _slotBaseY: number[] = [];
   private _petPointer: { index: number; startX: number; startY: number; triggered: boolean; canCast: boolean } | null = null;
-  private _petSwipeBridge: CanvasPointerBridge | null = null;
+  private _petSwipeBridge: CanvasPointerMoveHandle | null = null;
   private _previewLayer: PIXI.Container | null = null;
   private _skillPreview: PetSkillPreviewHandle | null = null;
   private _hooks!: PetBarHooks;
@@ -256,7 +256,7 @@ export class BattlePetBar {
 
   private _installPetSwipeInput(): void {
     this._teardownPetSwipeInput();
-    this._petSwipeBridge = bindCanvasPointerBridge({
+    this._petSwipeBridge = bindCanvasPointerMove({
       onDown: Platform.isMinigame && !Platform.isDevtools
         ? (e) => this._onCanvasPetDown(e)
         : undefined,
@@ -292,6 +292,7 @@ export class BattlePetBar {
     const p = this._rawToDesign(e);
     const dy = ptr.startY - p.y;
     const slot = this._slots[ptr.index];
+    if (!slot || slot.destroyed) return;
     const baseY = this._slotBaseY[ptr.index];
     const { skillSwipeThreshold, skillSwipeLiftMax } = UI.battle;
     const lift = Math.min(Math.max(0, dy) * 0.55, skillSwipeLiftMax);
@@ -317,6 +318,10 @@ export class BattlePetBar {
     }
 
     const slot = this._slots[ptr.index];
+    if (!slot || slot.destroyed) {
+      this._petPointer = null;
+      return;
+    }
     const baseY = this._slotBaseY[ptr.index];
     let isTap = true;
     if (endEvent) {

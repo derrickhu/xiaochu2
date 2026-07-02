@@ -49,6 +49,4 @@
       return resolvePayload('menu', 'timeline');
     });
   }
-
-  try { console.log('[Share] share-bootstrap 已注册'); } catch (_) {}
 })();

@@ -23,16 +23,6 @@ function _safeCall(fn, fallback) {
 
 const noop = function() {};
 
-function _safeLogValue(v) {
-  if (v == null) return '';
-  try { return String(v); } catch (_) { return '[unstringifiable]'; }
-}
-
-function _shortUrl(url) {
-  const s = _safeLogValue(url);
-  return s.length > 220 ? s.slice(0, 220) + '...' : s;
-}
-
 function _sanitizeRequestOptions(opts) {
   const out = {
     url: String(opts && opts.url || ''),
@@ -73,11 +63,7 @@ const platform = {
 
   request: (opts) => {
     if (!_api) return null;
-    const clean = _sanitizeRequestOptions(opts || {});
-    try {
-      console.log('[platform.request]', clean.method, _shortUrl(clean.url), 'responseType=' + (clean.responseType || ''), 'dataType=' + (clean.dataType || ''));
-    } catch (_) {}
-    return _api.request(clean);
+    return _api.request(_sanitizeRequestOptions(opts || {}));
   },
   downloadFile: (opts) => {
     if (!_api || !_api.downloadFile) return null;
@@ -93,7 +79,6 @@ const platform = {
     }
     if (opts && typeof opts.complete === 'function') clean.complete = opts.complete;
     if (opts && opts.timeout) clean.timeout = Number(opts.timeout);
-    try { console.log('[platform.downloadFile]', _shortUrl(clean.url)); } catch (_) {}
     return _api.downloadFile(clean);
   },
   getFileSystemManager: () => _api && _api.getFileSystemManager ? _api.getFileSystemManager() : null,

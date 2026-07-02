@@ -29,8 +29,6 @@ if (_isOHOS) {
   _userAgent = 'Mozilla/5.0 (MiniGame; ' + _platform + ') PixiJS/7';
 }
 
-console.log('[navigator] platform:', _platform, ', system:', _system, ', isOHOS:', _isOHOS);
-
 const navigator = {
   platform: _isOHOS ? 'Linux armv8l' : (_sysInfo.platform || 'unknown'),  // 鸿蒙伪装 Linux ARM
   language: _sysInfo.language || 'zh_CN',

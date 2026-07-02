@@ -11,7 +11,6 @@ import { configureWechatShare } from '@/core/ShareService';
 import { MAIN_PRELOAD_IMAGES } from '@/config/Assets';
 import { ensureAudioSubpackage } from '@/config/Subpackages';
 import { warmupCommonSubpackages } from '@/config/SubpackageWarmup';
-import { BootDiag } from '@/core/BootDiag';
 import { TitleScene } from '@/scenes/TitleScene';
 import { BattleScene } from '@/scenes/BattleScene';
 import { TeamScene } from '@/scenes/TeamScene';
@@ -36,20 +35,17 @@ if (typeof GameGlobal !== 'undefined') {
 async function main(): Promise<void> {
   const canvas = GameGlobal?.canvas ?? null;
   if (!canvas) {
-    GameGlobal.__bootError = 'no canvas';
     console.error('[main] 找不到 canvas');
     return;
   }
 
   Game.init(canvas as any);
   if (!(Game.app?.renderer)) {
-    GameGlobal.__bootError = 'renderer init failed';
     console.error('[main] 渲染器初始化失败');
     return;
   }
 
   await TextureCache.preload([...MAIN_PRELOAD_IMAGES]);
-  console.log(`[main] 纹理数: ${TextureCache.size}`);
 
   SceneManager.register(new TitleScene());
   SceneManager.register(new BattleScene());
@@ -60,10 +56,8 @@ async function main(): Promise<void> {
   SceneManager.register(new ShopScene());
   SceneManager.switchTo('title');
 
-  await Game.runPostSceneWarmup();
+  await Game.warmScenePresent();
 
-  BootDiag.attachProbe();
-  BootDiag.startWatchdog();
   warmupCommonSubpackages();
 
   await ensureAudioSubpackage();
@@ -73,8 +67,5 @@ async function main(): Promise<void> {
 }
 
 main().catch((e) => {
-  try {
-    GameGlobal.__bootError = String((e as Error)?.message || e);
-  } catch (_) { /* */ }
   console.error('[main] 启动失败:', e);
 });

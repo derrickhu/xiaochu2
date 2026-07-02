@@ -15,7 +15,7 @@ import { guardedTween } from '@/core/animationGuard';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
 import { enemyImage, battleBgImage, ORB_IMAGES } from '@/config/Assets';
-import type { BattleController } from '@/game/battle/BattleController';
+import type { BattleController, EnemyActResult } from '@/game/battle/BattleController';
 import type { BoardView } from '@/game/board/BoardView';
 import { delay } from './battleWidgets';
 import type { BattleLayout } from './BattleLayout';
@@ -498,6 +498,7 @@ export class BattleHud {
   /** 受击三件套：闪白 + 击退回弹 + 属性色粒子飞溅；大伤害附加震屏 */
   playEnemyHit(fx: BattleFx, element: Element, damage: number, forceStrong = false): void {
     const c = this._enemyContainer;
+    if (!c || c.destroyed) return;
     const { enemyCenterX, enemyCenterY } = this._layout;
     TweenManager.cancelTarget(c);
     c.x = enemyCenterX;
@@ -688,5 +689,153 @@ export class BattleHud {
     fx.spawnFloat('减伤护壁！', enemyCenterX, enemyCenterY - 50, 0xb0c4de, 1.2);
     this.refreshEnemyCd();
     await delay(0.45);
+  }
+
+  /**
+   * 敌人对我方施加 debuff（封珠/中毒/时间压缩/禁疗/技能封印）：
+   * 敌人侧技能名 + 紫色施法粒子 → 英雄区 debuff 飘字 + 暗紫闪屏
+   */
+  async playEnemyDebuff(fx: BattleFx, result: EnemyActResult, text: string): Promise<void> {
+    const { enemyCenterX, enemyCenterY, heroBarY } = this._layout;
+    if (result.skillName) {
+      fx.spawnFloat(result.skillName, enemyCenterX, enemyCenterY - 60, 0xc06cf0, 1.25);
+    }
+    fx.burst({
+      x: enemyCenterX, y: enemyCenterY,
+      color: 0xc06cf0, count: 12, speed: 240, gravity: -180, size: 14, life: 0.5,
+    });
+    Platform.vibrateShort('medium');
+    const debuffGap = Platform.isMinigame && !Platform.isDevtools ? 0.2 : 0.35;
+    const debuffTail = Platform.isMinigame && !Platform.isDevtools ? 0.22 : 0.4;
+    await delay(debuffGap);
+    fx.flash(0x7a3cb8, 0.24, 0.3);
+    fx.spawnFloat(text, Game.logicWidth / 2, heroBarY - 28, 0xc06cf0, 1.2);
+    fx.burst({
+      x: Game.logicWidth / 2, y: heroBarY,
+      color: 0xc06cf0, count: 10, speed: 260, size: 13, life: 0.45,
+    });
+    await delay(debuffTail);
+  }
+
+  /** 眩晕跳过回合：头顶旋转星星 + 「眩晕中」飘字（真机用 delay 避免 rotation tween 挂死） */
+  async playEnemyStunned(fx: BattleFx): Promise<void> {
+    const { enemyCenterX, enemyCenterY } = this._layout;
+    const headY = enemyCenterY - UI.battle.enemySize / 2 - 16;
+    fx.spawnFloat('眩晕中', enemyCenterX, headY - 34, 0xffd54f, 1.2);
+    fx.burst({
+      x: enemyCenterX, y: headY,
+      color: 0xffd54f, count: 8, speed: 160, gravity: -100, size: 12, life: 0.5,
+    });
+    if (Platform.isMinigame && !Platform.isDevtools) {
+      await delay(0.42);
+      return;
+    }
+
+    const ring = new PIXI.Container();
+    ring.position.set(enemyCenterX, headY);
+    const radius = 34;
+    for (let i = 0; i < 3; i++) {
+      const star = new PIXI.Text('✦', { fontSize: 26, fill: 0xffd54f, fontWeight: 'bold' });
+      star.anchor.set(0.5);
+      const a = (i / 3) * Math.PI * 2;
+      star.position.set(Math.cos(a) * radius, Math.sin(a) * radius * 0.4);
+      ring.addChild(star);
+    }
+    fx.addFloatChild(ring);
+    fx.burst({
+      x: enemyCenterX, y: headY,
+      color: 0xffd54f, count: 8, speed: 160, gravity: -100, size: 12, life: 0.5,
+    });
+    await guardedTween({
+      target: ring, props: { rotation: Math.PI * 3, alpha: 0 },
+      duration: 0.85, ease: Ease.easeOutQuad,
+    }, {
+      onFallback: () => {
+        ring.alpha = 0;
+      },
+    });
+    if (!ring.destroyed) ring.destroy({ children: true });
+  }
+
+  /** 敌人 DoT tick：属性色飘字「灼烧 -N」+ 小 burst + 立绘 tint 脉冲 + 血条刷新 */
+  async playEnemyDotTick(fx: BattleFx, amount: number): Promise<void> {
+    const { enemyCenterX, enemyCenterY } = this._layout;
+    const color = 0xff7a5c;
+    fx.spawnFloat(`灼烧 -${amount}`, enemyCenterX, enemyCenterY - 40, color, 1.1);
+    fx.burst({
+      x: enemyCenterX, y: enemyCenterY,
+      color, count: 8, speed: 220, gravity: -120, size: 12, life: 0.4,
+    });
+    // 立绘 tint 脉冲（真机安全：直接置色再复原，不依赖 filter）
+    const sprite = this._enemySprite;
+    sprite.tint = color;
+    this.refreshEnemyHp();
+    await delay(0.32);
+    if (!sprite.destroyed) sprite.tint = 0xffffff;
+  }
+
+  /** 我方 DoT tick（中毒）：英雄血条紫色飘字 + burst + 血条刷新 */
+  async playHeroDotTick(fx: BattleFx, amount: number): Promise<void> {
+    const { heroBarY } = this._layout;
+    const x = Game.logicWidth / 2;
+    fx.spawnFloat(`中毒 -${amount}`, x, heroBarY - 28, 0xc06cf0, 1.15);
+    fx.burst({
+      x, y: heroBarY,
+      color: 0xc06cf0, count: 8, speed: 220, size: 12, life: 0.4,
+    });
+    Platform.vibrateShort('light');
+    this.refreshHeroHp();
+    await delay(0.32);
+  }
+
+  /** 重力技命中：敌人立绘被压扁下沉再弹回（配合暗色闪屏与重震由调用方触发） */
+  async playEnemyGravityCrush(fx: BattleFx): Promise<void> {
+    const { enemyCenterX, enemyCenterY } = this._layout;
+    fx.burst({
+      x: enemyCenterX, y: enemyCenterY - 60,
+      color: 0x9575cd, count: 16, speed: 300, gravity: 500, size: 15, life: 0.5,
+    });
+    const c = this._enemyContainer;
+    const s = c.scale;
+    TweenManager.cancelTarget(s);
+    TweenManager.cancelTarget(c);
+    await guardedTween({
+      target: s, props: { x: 1.08, y: 0.78 },
+      duration: 0.16, ease: Ease.easeOutQuad,
+    });
+    await guardedTween({
+      target: s, props: { x: 1, y: 1 },
+      duration: 0.22, ease: Ease.easeOutBack,
+    }, {
+      onFallback: () => {
+        s.set(1);
+      },
+    });
+  }
+
+  /** 敌人狂暴：红色爆发粒子 + 立绘膨胀脉冲 + 红闪 + 「狂暴」飘字 */
+  async playEnemyEnrage(fx: BattleFx, atkMult: number): Promise<void> {
+    const { enemyCenterX, enemyCenterY } = this._layout;
+    fx.flash(0xff2d2d, 0.3, 0.4);
+    fx.burst({
+      x: enemyCenterX, y: enemyCenterY,
+      color: 0xff3030, count: 18, speed: 360, gravity: -120, size: 17, life: 0.6,
+    });
+    fx.spawnFloat(`狂暴！攻击 ×${atkMult}`, enemyCenterX, enemyCenterY - 60, 0xff5252, 1.4);
+    fx.shakeMedium();
+    Platform.vibrateLong();
+    const s = this._enemyContainer.scale;
+    await guardedTween({
+      target: s, props: { x: 1.18, y: 1.18 },
+      duration: 0.16, ease: Ease.easeOutQuad,
+    });
+    await guardedTween({
+      target: s, props: { x: 1, y: 1 },
+      duration: 0.2, ease: Ease.easeInQuad,
+    }, {
+      onFallback: () => {
+        s.set(1);
+      },
+    });
   }
 }

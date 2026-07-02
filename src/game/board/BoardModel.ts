@@ -247,16 +247,33 @@ export class BoardModel {
     return moves;
   }
 
+  /** 解除全部封印珠（净化技），返回被解封的格子 */
+  unsealAll(): Cell[] {
+    const cells: Cell[] = [];
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this._locked[r][c]) {
+          this._locked[r][c] = false;
+          cells.push({ r, c });
+        }
+      }
+    }
+    return cells;
+  }
+
   /**
    * 转珠技能：随机把 count 颗非目标色珠转为 to。
+   * 指定 from 时只转该颜色珠（定向转珠，策略性更强）。
    * 返回实际转换的格子（可能少于 count，盘面同色不足时）。
    */
-  convertRandom(to: OrbType, count: number): Cell[] {
+  convertRandom(to: OrbType, count: number, from?: OrbType): Cell[] {
     const candidates: Cell[] = [];
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         const orb = this.grid[r][c];
-        if (orb && orb !== to && !this._locked[r][c]) candidates.push({ r, c });
+        if (!orb || orb === to || this._locked[r][c]) continue;
+        if (from && orb !== from) continue;
+        candidates.push({ r, c });
       }
     }
     // Fisher-Yates 局部洗牌取前 count 个
@@ -280,6 +297,19 @@ export class BoardModel {
   /** 转化整列（随机一列内全部非锁定珠）为 to，返回受影响格 */
   convertCol(to: OrbType): Cell[] {
     return this._convertLine('col', to);
+  }
+
+  /** 十字转珠：选可转珠最多的行+列组合，整行整列转为 to，返回受影响格 */
+  convertCross(to: OrbType): Cell[] {
+    const rowCells = this._convertLine('row', to);
+    const colCells = this._convertLine('col', to);
+    // 去重（行列交叉格只记一次；_convertLine 已跳过 to 色，列转换不会重复行内格）
+    const seen = new Set(rowCells.map(({ r, c }) => r * this.cols + c));
+    const merged = [...rowCells];
+    for (const cell of colCells) {
+      if (!seen.has(cell.r * this.cols + cell.c)) merged.push(cell);
+    }
+    return merged;
   }
 
   private _convertLine(kind: 'row' | 'col', to: OrbType): Cell[] {

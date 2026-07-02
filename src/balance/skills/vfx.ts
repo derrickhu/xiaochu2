@@ -13,8 +13,13 @@ export const CATEGORY_DEFAULT_VFX: Readonly<Record<SkillCategory, SkillVfxId>> =
   buff: 'damageBoost',
   convert: 'convertOrbs',
   charge: 'enemyCharge',
+  gravity: 'gravity',
+  haste: 'haste',
+  purify: 'purify',
+  utility: 'extraTime',
   enemyGuard: 'enemyShield',
   enemyHeal: 'enemyHeal',
+  enemyDebuff: 'enemySeal',
 };
 
 /** 解析技能最终使用的表现 id（显式 vfx 优先，否则按分类兜底） */

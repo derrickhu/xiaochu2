@@ -6,9 +6,7 @@
  */
 import type { PetDef } from '@/balance/pets';
 import { resolvePetPassiveBundle, type PassiveDisplayLine } from '@/balance/passiveEffects';
-import { describeTrait } from '@/balance/passives';
 
-export { describeTrait };
 export type { PassiveDisplayLine };
 
 /**
@@ -17,9 +15,4 @@ export type { PassiveDisplayLine };
  */
 export function passiveDisplayLines(pet: PetDef, star = 1): PassiveDisplayLine[] {
   return [...resolvePetPassiveBundle(pet.role, pet.rarity, star, { includeStarInDisplay: true }).displayLines];
-}
-
-/** @deprecated 由 passiveDisplayLines 统一；保留供旧调用 */
-export function traitLines(pet: PetDef, star = 1): string[] {
-  return passiveDisplayLines(pet, star).map((l) => l.text);
 }

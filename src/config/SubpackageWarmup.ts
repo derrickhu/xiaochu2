@@ -25,5 +25,4 @@ export function warmupCommonSubpackages(): void {
       console.warn(`[Warmup] 分包 ${name} 预热失败`, err);
     });
   }
-  console.log('[Warmup] 已开始后台预热常用分包');
 }

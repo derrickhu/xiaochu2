@@ -1,5 +1,5 @@
 import type { SkillResult } from './SkillEngine';
-import type { StatusInstance } from './BattleStatus';
+import type { StatusInstance, StatusKind } from './BattleStatus';
 import type { SkillVfxId } from '@/balance/skills';
 import type { SkillCastResult } from './battleTypes';
 
@@ -12,6 +12,14 @@ export interface BattleSkillApplyContext {
   addStatus: (status: StatusInstance) => void;
   setEnemyCharge: (charge: { mult: number; skillId: string; releaseVfx: SkillVfxId }) => void;
   syncEnemyStatusMirrors: () => void;
+  /** haste：全队其他宠物技能 CD -amount（exceptIndex = 施法者） */
+  reducePetCds: (amount: number, exceptIndex?: number) => void;
+  /** purify：清除我方全部 debuff，返回被清除的状态 */
+  cleanseTeamDebuffs: () => StatusInstance[];
+  /** delayEnemyAttack：敌人普攻倒计时 +turns */
+  delayEnemyAttack: (turns: number) => void;
+  /** enrage：敌人攻击永久 ×mult（每场一次，与 enrage 状态同时落地） */
+  applyEnrage: (mult: number) => void;
 }
 
 export function applySkillResult(
@@ -43,8 +51,20 @@ export function applySkillResult(
       });
       continue;
     }
-    const status = statusFromEvent(result, event);
-    if (status) ctx.addStatus(status);
+    if (event.status === 'enrage') {
+      ctx.applyEnrage(event.value);
+    }
+    ctx.addStatus(statusFromEvent(result, event));
+  }
+
+  if (result.teamCdDelta && result.teamCdDelta > 0) {
+    ctx.reducePetCds(result.teamCdDelta, result.caster.petIndex);
+  }
+  if (result.cleanseTeam) {
+    ctx.cleanseTeamDebuffs();
+  }
+  if (result.enemyAttackDelay && result.enemyAttackDelay > 0) {
+    ctx.delayEnemyAttack(result.enemyAttackDelay);
   }
 
   ctx.syncEnemyStatusMirrors();
@@ -63,17 +83,24 @@ export function buildPetSkillCastResult(
   const dot = result.statusEvents.find((e) => e.status === 'dot');
   const stun = result.statusEvents.find((e) => e.status === 'stun');
   const defBreak = result.statusEvents.find((e) => e.status === 'enemyDefenseBreak');
-  const board = result.boardRequests[0];
+  const extraTime = result.statusEvents.find((e) => e.status === 'extraDragTime');
+  const critBoost = result.statusEvents.find((e) => e.status === 'guaranteedCrit');
+  const elementBuff = result.statusEvents.find((e) => e.status === 'elementDamageBuff');
+  const board = result.boardRequests.find(
+    (b): b is Extract<SkillResult['boardRequests'][number], { type: 'convertOrbs' }> =>
+      b.type === 'convertOrbs',
+  );
 
   return {
     ...result,
     type: result.action,
-    element: result.caster.element,
+    element: elementBuff?.element ?? result.caster.element,
     damage,
     healed: heal,
-    mult: buff?.value,
-    turns: buff?.turns ?? dot?.turns ?? stun?.turns ?? defBreak?.turns,
-    value: shieldEvent ? shield : (dot?.value ?? defBreak?.value),
+    mult: buff?.value ?? elementBuff?.value,
+    turns: buff?.turns ?? dot?.turns ?? stun?.turns ?? defBreak?.turns
+      ?? extraTime?.turns ?? critBoost?.turns ?? elementBuff?.turns,
+    value: shieldEvent ? shield : (dot?.value ?? defBreak?.value ?? extraTime?.value),
     to: board?.to,
     count: board?.count,
     shape: board?.shape,
@@ -81,74 +108,30 @@ export function buildPetSkillCastResult(
   };
 }
 
+/** owner+kind → 稳定实例 id（同 owner 同 kind 单实例，叠加策略见 BattleStatusStore.add） */
+function statusId(owner: 'team' | 'enemy', kind: StatusKind): string {
+  return `${owner}_${kind}`;
+}
+
 function statusFromEvent(
   result: SkillResult,
   event: SkillResult['statusEvents'][number],
-): StatusInstance | null {
-  if (event.status === 'shield') {
-    return {
-      id: 'team_shield',
-      kind: 'shield',
-      owner: 'team',
-      value: event.value,
-      sourceSkillId: result.skill.id,
-      stack: event.stack,
-    };
-  }
-  if (event.status === 'teamDamageBuff') {
-    return {
-      id: 'team_damage_buff',
-      kind: 'teamDamageBuff',
-      owner: 'team',
-      value: event.value,
-      turnsLeft: event.turns,
-      sourceSkillId: result.skill.id,
-      stack: event.stack,
-    };
-  }
-  if (event.status === 'enemyDamageReduction') {
-    return {
-      id: 'enemy_damage_reduction',
-      kind: 'enemyDamageReduction',
-      owner: 'enemy',
-      value: event.value,
-      turnsLeft: event.turns,
-      sourceSkillId: result.skill.id,
-      stack: event.stack,
-    };
-  }
-  if (event.status === 'dot') {
-    return {
-      id: event.target === 'enemy' ? 'enemy_dot' : 'team_dot',
-      kind: 'dot',
-      owner: event.target === 'enemy' ? 'enemy' : 'team',
-      value: event.value,
-      turnsLeft: event.turns,
-      sourceSkillId: result.skill.id,
-      stack: event.stack,
-    };
-  }
-  if (event.status === 'stun') {
-    return {
-      id: 'enemy_stun',
-      kind: 'stun',
-      owner: 'enemy',
-      value: event.value,
-      turnsLeft: event.turns,
-      sourceSkillId: result.skill.id,
-      stack: event.stack,
-    };
-  }
-  if (event.status === 'enemyDefenseBreak') {
-    return {
-      id: 'enemy_def_break',
-      kind: 'enemyDefenseBreak',
-      owner: 'enemy',
-      value: event.value,
-      turnsLeft: event.turns,
-      sourceSkillId: result.skill.id,
-      stack: event.stack,
-    };
-  }
-  return null;
+): StatusInstance {
+  const kind = event.status as StatusKind;
+  // 状态归属：事件带 target；敌方专属状态强制 owner=enemy
+  const owner: 'team' | 'enemy' =
+    kind === 'enemyDamageReduction' || kind === 'stun'
+      || kind === 'enemyDefenseBreak' || kind === 'enrage'
+      ? 'enemy'
+      : event.target;
+  return {
+    id: statusId(owner, kind),
+    kind,
+    owner,
+    value: event.value,
+    turnsLeft: event.turns,
+    sourceSkillId: result.skill.id,
+    stack: event.stack,
+    element: event.element,
+  };
 }

@@ -83,15 +83,42 @@ function applyEnemySkillResult(ctx: EnemyTurnContext, result: SkillResult): Enem
   }
 
   ctx.applySkillResult(result);
+  const base = { damage: 0, absorbed: 0, heroDead: false, healed: 0, skillName: result.skill.name };
 
   const heal = result.healEvents.find((e) => e.target === 'enemy');
-  if (heal) return { action: 'heal', damage: 0, absorbed: 0, heroDead: false, healed: heal.amount };
+  if (heal) return { ...base, action: 'heal', healed: heal.amount };
 
   if (result.statusEvents.find((e) => e.status === 'charge')) {
-    return { action: 'charge', damage: 0, absorbed: 0, heroDead: false, healed: 0 };
+    return { ...base, action: 'charge' };
   }
   if (result.statusEvents.find((e) => e.status === 'enemyDamageReduction')) {
-    return { action: 'shield', damage: 0, absorbed: 0, heroDead: false, healed: 0 };
+    return { ...base, action: 'shield' };
+  }
+
+  // ── 目标十三新增敌人技能行动映射 ──
+  const sealReq = result.boardRequests.find((b) => b.type === 'sealRandom');
+  if (sealReq && sealReq.type === 'sealRandom') {
+    return { ...base, action: 'sealOrbs', boardSealCount: sealReq.count };
+  }
+  const poison = result.statusEvents.find((e) => e.status === 'dot' && e.target === 'team');
+  if (poison) {
+    return { ...base, action: 'poison', value: poison.value, turns: poison.turns };
+  }
+  const squeeze = result.statusEvents.find((e) => e.status === 'timeSqueeze');
+  if (squeeze) {
+    return { ...base, action: 'timeSqueeze', value: squeeze.value, turns: squeeze.turns };
+  }
+  const healBlock = result.statusEvents.find((e) => e.status === 'healBlock');
+  if (healBlock) {
+    return { ...base, action: 'healBlock', value: healBlock.value, turns: healBlock.turns };
+  }
+  const enrage = result.statusEvents.find((e) => e.status === 'enrage');
+  if (enrage) {
+    return { ...base, action: 'enrage', value: enrage.value };
+  }
+  const skillSeal = result.statusEvents.find((e) => e.status === 'skillSeal');
+  if (skillSeal) {
+    return { ...base, action: 'skillSeal', sealedPetIndex: skillSeal.value, turns: skillSeal.turns };
   }
   return idle();
 }

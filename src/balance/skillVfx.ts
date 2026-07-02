@@ -17,7 +17,13 @@ export type SkillVfxKind =
   | 'buffFloat'
   | 'orbConvert'
   | 'enemyWarn'
-  | 'enemySelf';
+  | 'enemySelf'
+  // ── 目标十三新增 ──
+  | 'gravityCrush'
+  | 'hasteGlow'
+  | 'purifyWave'
+  | 'timeExtend'
+  | 'teamDebuff';
 
 export interface SkillVfxDef {
   id: SkillVfxId;
@@ -39,10 +45,26 @@ export const SKILL_VFX: readonly SkillVfxDef[] = [
   { id: 'shield', kind: 'shieldBurst', flashAlpha: 0.25, flashDuration: 0.2 },
   { id: 'damageBoost', kind: 'buffFloat', flashAlpha: 0.22, flashDuration: 0.2 },
   { id: 'convertOrbs', kind: 'orbConvert', flashAlpha: 0.22, flashDuration: 0.18 },
+  // ── 目标十三新增（宠物侧） ──
+  { id: 'gravity', kind: 'gravityCrush', flashAlpha: 0.5, flashDuration: 0.3, floatText: '重压' },
+  { id: 'haste', kind: 'hasteGlow', flashAlpha: 0.28, flashDuration: 0.22, floatText: '连携' },
+  { id: 'purify', kind: 'purifyWave', flashAlpha: 0.35, flashDuration: 0.28, floatText: '净化' },
+  { id: 'extraTime', kind: 'timeExtend', flashAlpha: 0.25, flashDuration: 0.2, floatText: '时间延长' },
+  { id: 'critBoost', kind: 'buffFloat', flashAlpha: 0.25, flashDuration: 0.2, floatText: '必暴击' },
+  { id: 'elementBuff', kind: 'buffFloat', flashAlpha: 0.25, flashDuration: 0.2, floatText: '属性强化' },
+  { id: 'delayAttack', kind: 'buffFloat', flashAlpha: 0.25, flashDuration: 0.2, floatText: '威吓' },
+  // ── 敌人侧 ──
   { id: 'enemyCharge', kind: 'enemyWarn', floatText: '蓄力中' },
   { id: 'enemyAttack', kind: 'projectile', projectileFrom: 'enemy' },
   { id: 'enemyHeal', kind: 'enemySelf', floatText: '回复' },
   { id: 'enemyShield', kind: 'enemySelf', floatText: '减伤' },
+  // ── 目标十三新增（敌人对我方 debuff） ──
+  { id: 'enemySeal', kind: 'teamDebuff', floatText: '封珠' },
+  { id: 'enemyPoison', kind: 'teamDebuff', floatText: '中毒' },
+  { id: 'enemySqueeze', kind: 'teamDebuff', floatText: '时间压缩' },
+  { id: 'enemyHealBlock', kind: 'teamDebuff', floatText: '禁疗' },
+  { id: 'enemyEnrage', kind: 'enemyWarn', floatText: '狂暴' },
+  { id: 'enemySkillSeal', kind: 'teamDebuff', floatText: '技能封印' },
 ];
 
 export const SKILL_VFX_MAP: ReadonlyMap<SkillVfxId, SkillVfxDef> =

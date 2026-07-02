@@ -25,7 +25,6 @@ import { bindPointerTap } from '@/utils/bindPointerTap';
 import {
   buildChapterGoalCard, CHAPTER_GOAL_CARD_H, CHAPTER_GOAL_CARD_W,
 } from './chapterGoalCard';
-import { BootDiag } from '@/core/BootDiag';
 
 declare const GameGlobal: any;
 
@@ -146,13 +145,6 @@ export class TitleScene implements Scene {
     const listBottom = h - TitleScene.BOTTOM_RESERVE - 12;
     this._buildStageList(w, listTop, listBottom);
     this._buildBottomNav(w, h);
-
-    const homeTex = TextureCache.get(BACKGROUND_IMAGES.home);
-    BootDiag.log(
-      'TitleScene._build',
-      `children=${this.container.children.length} `
-      + `homeTex=${!!homeTex} logoTex=${!!logoTex} chapter=${this._chapter}`,
-    );
   }
 
   private _buildBackground(w: number, h: number): void {
@@ -352,7 +344,6 @@ export class TitleScene implements Scene {
         mask.destroy();
         this._stageMask = null;
         content.mask = null;
-        BootDiag.log('TitleScene.mask', 'iOS 真机禁用 Pixi mask（避开微信 WebGL stencil/mask 黑屏）');
       }
 
       this._scroll.attach({

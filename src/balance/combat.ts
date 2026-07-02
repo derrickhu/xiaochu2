@@ -51,6 +51,10 @@ export const COMBAT = {
   /** 拖珠限时（秒） */
   dragTimeLimit: 12,
 
+  /** 拖珠限时下限/上限（秒）：加时 buff / 时间压缩 debuff 叠加后的夹取范围 */
+  dragTimeMin: 5,
+  dragTimeMax: 20,
+
   /** 最小消除数 */
   minMatch: 3,
 

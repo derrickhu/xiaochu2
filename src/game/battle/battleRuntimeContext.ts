@@ -12,6 +12,10 @@ export function makeSkillRuntimeContext(params: {
   /** 合并后的被动全队增伤乘区（ladder + 招牌/星级 teamDamageBonus） */
   teamDamageMult: number;
   teamHealBonus: number;
+  /** 敌人是否已狂暴（enrage 每场一次） */
+  enemyEnraged?: boolean;
+  /** 随机源（敌方技能封印选目标） */
+  rng?: () => number;
 }): SkillRuntimeContext {
   return {
     enemy: {
@@ -28,6 +32,9 @@ export function makeSkillRuntimeContext(params: {
     teamDamageBuffMult: params.teamDamageBuffMult * params.teamDamageMult,
     enemyDamageReduction: params.enemy.dmgReduction?.reduction ?? 0,
     teamHealBonus: params.teamHealBonus,
+    enemyEnraged: params.enemyEnraged ?? false,
+    teamSize: params.team.length,
+    rng: params.rng,
   };
 }
 

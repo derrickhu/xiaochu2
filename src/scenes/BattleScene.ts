@@ -16,6 +16,7 @@ import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
 import { battlePreloadImages, battlePetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
+import { UI_FX_IMAGES } from '@/config/Assets';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
@@ -28,6 +29,7 @@ import { makeButton, delay } from './battle/battleWidgets';
 import { computeBattleLayout, type BattleLayout } from './battle/BattleLayout';
 import { BattleFx } from './battle/BattleFx';
 import { BattleHud } from './battle/BattleHud';
+import { BattleStatusIcons } from './battle/BattleStatusIcons';
 import { BattlePetBar } from './battle/BattlePetBar';
 import { BattleResultOverlay } from './battle/BattleResultOverlay';
 import { presentSkillCast, type SkillCastDeps } from './battle/battleSkillPresenter';
@@ -64,10 +66,13 @@ export class BattleScene implements Scene {
   private _layout!: BattleLayout;
   private _fx!: BattleFx;
   private _hud!: BattleHud;
+  private _statusIcons!: BattleStatusIcons;
   private _petBar!: BattlePetBar;
   private _overlay!: BattleResultOverlay;
 
   private _busy = false;
+  /** 拖珠结算代次：场景退出或强制收敛时递增，陈旧 async 演出立即短路 */
+  private _resolveSeq = 0;
   private _tickerCb = (): void => this._update();
   private readonly _enterSeq = new SceneEnterSeq();
 
@@ -86,6 +91,7 @@ export class BattleScene implements Scene {
     this._layout = computeBattleLayout();
     this._fx = new BattleFx();
     this._hud = new BattleHud(this._ctrl, this._layout);
+    this._statusIcons = new BattleStatusIcons(this._ctrl, this._layout);
     this._petBar = new BattlePetBar(this._ctrl, this._layout);
     this._overlay = new BattleResultOverlay();
 
@@ -96,6 +102,10 @@ export class BattleScene implements Scene {
     const stageId = this._ctrl.stage.id;
     await ensureAssets(battlePreloadImages(stageId, PlayerData.team));
     await ensurePetAvatars(battlePetAvatarEntries(stageId, PlayerData.team));
+    // pkg-fx 特效贴图懒加载：不阻塞进场；失败/加载中时演出自动降级为纯白粒子
+    void ensureAssets([
+      UI_FX_IMAGES.starburst, UI_FX_IMAGES.auraRing, UI_FX_IMAGES.particleSpark,
+    ]).catch(() => { /* 降级路径：BattleFx 内按贴图缺失回退粒子 */ });
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'battle', () => {
       this._build();
@@ -106,11 +116,13 @@ export class BattleScene implements Scene {
   }
 
   onExit(): void {
+    this._resolveSeq++;
     this._enterSeq.cancel();
     Game.ticker.remove(this._tickerCb);
     this._boardView?.cancelDrag();
     this._boardView?.destroy();
     this._boardView = null;
+    this._statusIcons?.destroy();
     this._petBar?.teardownInput();
     this._fx?.destroy();
     TweenManager.cancelTarget(this.container);
@@ -171,6 +183,7 @@ export class BattleScene implements Scene {
       isBusy: () => this._busy,
     });
     this._hud.buildStatus(this.container);
+    this._statusIcons.build(this.container);
 
     // 拖珠倒计时条
     this._hud.buildDragBar(this.container);
@@ -185,7 +198,7 @@ export class BattleScene implements Scene {
         void this._onDragEnd(didMove);
       },
       isOrbActive: (orb) => orb === 'heart' || this._ctrl.teamElementSet.has(orb as Element),
-      whyCantDrag: () => `busy=${this._busy} state=${this._ctrl.state}`,
+      dragTimeLimit: () => this._ctrl.dragTimeLimit,
     });
     this._boardView.container.position.set(this._layout.boardX, this._layout.boardY);
     this.container.addChild(this._boardView.container);
@@ -210,10 +223,11 @@ export class BattleScene implements Scene {
     this._hud.updateCombo(dt);
   }
 
-  /** 刷新槽位技能 CD + buff 状态行（队伍栏 + HUD 协同） */
+  /** 刷新槽位技能 CD + buff 状态行 + 状态图标行（队伍栏 + HUD 协同） */
   private _refreshSkillUi(): void {
     this._petBar.refreshCooldowns();
     this._hud.refreshStatus();
+    this._statusIcons.refresh();
   }
 
   // ════════════ 回合演出序列 ════════════
@@ -225,25 +239,20 @@ export class BattleScene implements Scene {
     this._busy = true;
     this._ctrl.beginResolve();
     const visualScope = this._fx.beginTransientScope();
-
-    const resolveTimeout = Platform.isMinigame
-      ? new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('resolve timeout 8s')), 8000);
-      })
-      : null;
+    const seq = ++this._resolveSeq;
+    const isStale = (): boolean => seq !== this._resolveSeq;
 
     const stopPresent = startMinigamePresentLoop({
       onUpdate: (dt) => this._update(dt),
     });
     try {
-      await (resolveTimeout
-        ? Promise.race([this._resolveAfterDrag(), resolveTimeout])
-        : this._resolveAfterDrag());
+      await this._resolveAfterDrag(isStale);
     } catch (e) {
-      console.error('[BattleScene] _onDragEnd', e);
+      if (!isStale()) console.error('[BattleScene] _onDragEnd', e);
     } finally {
-      this._settleBattleVisuals(visualScope);
       stopPresent();
+      if (isStale()) return;
+      this._settleBattleVisuals(visualScope);
       this._busy = false;
       if (!this._ctrl.isFinished && this._ctrl.state !== 'playerTurn') {
         this._ctrl.beginPlayerTurn();
@@ -251,13 +260,16 @@ export class BattleScene implements Scene {
     }
   }
 
-  private async _resolveAfterDrag(): Promise<void> {
+  private async _resolveAfterDrag(isStale: () => boolean): Promise<void> {
+    if (isStale()) return;
     try {
       const allGroups: MatchGroup[] = [];
       for (;;) {
+        if (isStale()) return;
         const groups = this._board.findMatches();
         if (groups.length === 0) break;
         for (const group of groups) {
+          if (isStale()) return;
           allGroups.push(group);
           this._board.clearCells(group.cells);
           this._burstGroup(group);
@@ -265,12 +277,16 @@ export class BattleScene implements Scene {
           Platform.vibrateShort(allGroups.length >= 7 ? 'medium' : 'light');
           if (allGroups.length >= 7) this._fx.shakeLight();
           await this._boardView!.playClear(group);
+          if (isStale()) return;
           await delay(UI.anim.groupClearGap);
         }
+        if (isStale()) return;
         const moves = this._board.collapse();
         await this._boardView!.playFall(moves);
         this._boardView!.refreshOrbStates();
       }
+
+      if (isStale()) return;
 
       if (allGroups.length >= 7) {
         this._fx.flash(0xfff3c8, 0.22, 0.35);
@@ -279,20 +295,20 @@ export class BattleScene implements Scene {
       }
 
       if (allGroups.length === 0) {
-        await this._enemyPhase();
+        await this._enemyPhase(isStale);
         return;
       }
 
       const resolution = this._ctrl.resolveTurn(allGroups);
-      await this._playPetPhase(resolution);
+      await this._playPetPhase(resolution, isStale);
 
-      if (this._ctrl.isFinished) {
+      if (isStale() || this._ctrl.isFinished) {
         return;
       }
 
-      await this._enemyPhase();
+      await this._enemyPhase(isStale);
     } catch (e) {
-      throw e;
+      if (!isStale()) throw e;
     }
   }
 
@@ -313,7 +329,7 @@ export class BattleScene implements Scene {
     }
   }
 
-  private async _playPetPhase(res: TurnResolution): Promise<void> {
+  private async _playPetPhase(res: TurnResolution, isStale: () => boolean): Promise<void> {
     // 回血先行
     if (res.heal > 0) {
       const healed = this._ctrl.applyHeal(res.heal);
@@ -321,23 +337,29 @@ export class BattleScene implements Scene {
         this._hud.refreshHeroHp();
         this._fx.spawnFloat(`+${healed}`, Game.logicWidth / 2, this._layout.heroBarY - 24, 0x6fd86a);
         await delay(UI.anim.attackGap);
+        if (isStale()) return;
       }
     }
 
     for (let i = 0; i < res.attacks.length; i++) {
+      if (isStale()) return;
       const attack = res.attacks[i];
-      await this._playPetAttack(attack, i);
+      await this._playPetAttack(attack, i, isStale);
+      if (isStale()) return;
       const { enemyDead } = this._ctrl.applyPetAttack(attack);
       this._hud.refreshEnemyHp();
-      if (enemyDead && await this._handleEnemyDefeat()) return;
+      if (enemyDead && await this._handleEnemyDefeat(isStale)) return;
       await delay(UI.anim.attackGap);
     }
+    if (isStale()) return;
     this._ctrl.beginEnemyTurn();
   }
 
   /** 敌人死亡处理：死亡演出 → 下一波入场 / 胜利结算。返回 true = 战斗已结束 */
-  private async _handleEnemyDefeat(): Promise<boolean> {
+  private async _handleEnemyDefeat(isStale: () => boolean): Promise<boolean> {
+    if (isStale()) return true;
     await this._hud.playEnemyDeath(this._fx);
+    if (isStale()) return true;
     if (this._ctrl.hasNextWave()) {
       this._ctrl.nextWave();
       await this._hud.playWaveEnter();
@@ -357,7 +379,8 @@ export class BattleScene implements Scene {
     Game.app?.renderer?.render(Game.stage);
   }
 
-  private async _enemyPhase(): Promise<void> {
+  private async _enemyPhase(isStale: () => boolean): Promise<void> {
+    if (isStale()) return;
     const result = this._ctrl.enemyAct();
     this._hud.refreshEnemyCd();
     switch (result.action) {
@@ -368,6 +391,7 @@ export class BattleScene implements Scene {
           this._fx, result.damage, result.absorbed, heavy,
           () => this._playHeroHit(this._ctrl.enemy.def.element, result.damage, result.absorbed, heavy),
         );
+        if (isStale()) return;
         if (result.heroDead) {
           this._overlay.show(this._ctrl, false);
           await delay(0.3);
@@ -384,18 +408,68 @@ export class BattleScene implements Scene {
       case 'shield':
         await this._hud.playEnemyShield(this._fx);
         break;
+      case 'sealOrbs': {
+        const sealed = this._board.sealRandom(result.boardSealCount ?? 0);
+        this._boardView?.refreshOrbStates();
+        await this._hud.playEnemyDebuff(this._fx, result, `封印 ${sealed.length} 颗珠子！`);
+        break;
+      }
+      case 'poison':
+        await this._hud.playEnemyDebuff(this._fx, result, `中毒 ${result.value ?? 0}/回合 ×${result.turns ?? 0}`);
+        break;
+      case 'timeSqueeze':
+        await this._hud.playEnemyDebuff(this._fx, result, `转珠时间 -${result.value ?? 0} 秒 ×${result.turns ?? 0}`);
+        break;
+      case 'healBlock':
+        await this._hud.playEnemyDebuff(this._fx, result, `禁疗！回复减半 ×${result.turns ?? 0}`);
+        break;
+      case 'enrage':
+        await this._hud.playEnemyEnrage(this._fx, result.value ?? 1);
+        break;
+      case 'skillSeal': {
+        const petName = this._ctrl.team[result.sealedPetIndex ?? 0]?.def.name ?? '';
+        await this._hud.playEnemyDebuff(this._fx, result, `${petName} 技能被封印 ×${result.turns ?? 0}`);
+        break;
+      }
       default:
-        await delay(0.2);
+        if (result.stunnedSkip) {
+          await this._hud.playEnemyStunned(this._fx);
+        } else {
+          await delay(0.2);
+        }
     }
+
+    if (isStale()) return;
+
+    for (const tick of result.dotTicks ?? []) {
+      if (isStale()) return;
+      if (tick.amount <= 0) continue;
+      if (tick.owner === 'enemy') {
+        await this._hud.playEnemyDotTick(this._fx, tick.amount);
+      } else {
+        await this._hud.playHeroDotTick(this._fx, tick.amount);
+      }
+    }
+    if (isStale()) return;
+    if (result.heroDead) {
+      this._overlay.show(this._ctrl, false);
+      await delay(0.3);
+      return;
+    }
+    if (this._ctrl.enemy.hp <= 0 && await this._handleEnemyDefeat(isStale)) return;
+
     this._ctrl.beginPlayerTurn();
     this._refreshSkillUi();
   }
 
   /** 单只宠物冲刺 → 属性弹道飞向敌人 → 命中瞬间受击反馈 + 飘字 → 回位 */
-  private async _playPetAttack(attack: PetAttack, orderIdx: number): Promise<void> {
+  private async _playPetAttack(attack: PetAttack, orderIdx: number, isStale: () => boolean): Promise<void> {
+    if (isStale()) return;
     const slot = this._petBar.slotAt(attack.petIndex);
+    if (!slot || slot.destroyed) return;
     const baseY = slot.y;
     const finishHit = once(() => {
+      if (isStale() || slot.destroyed) return;
       TweenManager.cancelTarget(slot);
       slot.y = baseY;
       this._hud.playEnemyHit(this._fx, attack.element, attack.damage, attack.isCrit);
@@ -405,33 +479,37 @@ export class BattleScene implements Scene {
     minigameFallback(UI.anim.petDash + UI.anim.projectile + 0.35, finishHit);
 
     if (Platform.isMinigame) {
-      // 真机上 Tween onComplete 偶发不回调；战斗状态机不能 await 表现层 Tween。
       slot.y = baseY - 46;
       await delay(UI.anim.petDash);
+      if (isStale() || slot.destroyed) return;
       slot.y = baseY;
     } else {
       await guardedTween({
         target: slot, props: { y: baseY - 46 },
         duration: UI.anim.petDash, ease: Ease.easeOutQuad,
       });
+      if (isStale() || slot.destroyed) return;
       void guardedTween({
         target: slot, props: { y: baseY },
         duration: UI.anim.petReturn, ease: Ease.easeInQuad,
       });
     }
 
+    if (isStale()) return;
     await guardedPromise(
       this._fx.fireProjectileBetween(
         slot.x, slot.y - 60, this._layout.enemyCenterX, this._layout.enemyCenterY, attack.element,
       ),
       UI.anim.projectile + 0.12,
     );
+    if (isStale() || slot.destroyed) return;
     finishHit();
   }
 
   /** 伤害数字：从出手宠物槽位弹出，属性色 + 克制/暴击标记 */
   private _spawnDamageFloat(attack: PetAttack, orderIdx: number): void {
     const slot = this._petBar.slotAt(attack.petIndex);
+    if (!slot || slot.destroyed) return;
     this._fx.spawnPetDamageFloat({
       slotX: slot.x,
       slotY: slot.y,
@@ -521,7 +599,7 @@ export class BattleScene implements Scene {
       boardView: this._boardView!,
       layout: this._layout,
       refreshSkillUi: () => this._refreshSkillUi(),
-      handleEnemyDefeat: () => this._handleEnemyDefeat(),
+      handleEnemyDefeat: () => this._handleEnemyDefeat(() => false),
     };
     const battleEnded = await presentSkillCast(deps, petIndex);
     if (battleEnded) return; // 战斗已结束，保持 busy 拦截输入

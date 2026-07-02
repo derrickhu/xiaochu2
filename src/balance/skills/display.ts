@@ -33,6 +33,30 @@ function describeEffect(e: SkillEffectDef): string {
       return `眩晕 ${e.turns}回合`;
     case 'defenseBreak':
       return `破防 ${pct(e.pct)} ${e.turns}回合`;
+    case 'gravity':
+      return `重力 敌当前HP×${pct(e.pct)}`;
+    case 'haste':
+      return `队友CD -${e.amount}`;
+    case 'purify':
+      return `净化${e.unsealBoard ? ' 解封' : ''}${e.cleanseTeam ? ' 驱散' : ''}`;
+    case 'delayEnemyAttack':
+      return `威吓 敌普攻+${e.turns}回合`;
+    case 'extraDragTime':
+      return `加时 +${e.seconds}s ${e.turns}回合`;
+    case 'guaranteedCrit':
+      return `必暴击 ${e.turns}回合`;
+    case 'elementDamageBuff':
+      return `${ELEMENT_NAME[e.element]}伤 ×${e.mult} ${e.turns}回合`;
+    case 'sealOrbs':
+      return `封珠 ×${e.count}`;
+    case 'timeSqueeze':
+      return `时间压缩 -${e.seconds}s ${e.turns}回合`;
+    case 'healBlock':
+      return `禁疗 回复×${e.mult} ${e.turns}回合`;
+    case 'enrage':
+      return `狂暴 HP<${pct(e.threshold)}时攻击×${e.atkMult}`;
+    case 'skillSeal':
+      return `技能封印 ${e.turns}回合`;
   }
 }
 

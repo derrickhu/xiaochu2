@@ -8,25 +8,22 @@
  * 因此真机需要挂到 globalThis / global 上。
  */
 
-console.log('[pixi-adapter] 开始加载子模块...');
-
 var platform, noop, Image, canvas, location, document, navigator, localStorage, XMLHttpRequest, registerTouchEvents;
 var Element, HTMLCanvasElement, HTMLImageElement, HTMLVideoElement;
 
-try { platform = require('./platform'); console.log('[pixi-adapter] ✓ platform'); } catch(e) { console.error('[pixi-adapter] ✗ platform:', e); }
-try { noop = require('./util').noop; console.log('[pixi-adapter] ✓ util'); } catch(e) { console.error('[pixi-adapter] ✗ util:', e); noop = function(){}; }
-try { Image = require('./Image'); console.log('[pixi-adapter] ✓ Image'); } catch(e) { console.error('[pixi-adapter] ✗ Image:', e); }
-try { canvas = require('./canvas').canvas; console.log('[pixi-adapter] ✓ canvas'); } catch(e) { console.error('[pixi-adapter] ✗ canvas:', e); }
-try { location = require('./location'); console.log('[pixi-adapter] ✓ location'); } catch(e) { console.error('[pixi-adapter] ✗ location:', e); location = {}; }
-try { document = require('./document'); console.log('[pixi-adapter] ✓ document'); } catch(e) { console.error('[pixi-adapter] ✗ document:', e); }
-try { navigator = require('./navigator'); console.log('[pixi-adapter] ✓ navigator'); } catch(e) { console.error('[pixi-adapter] ✗ navigator:', e); navigator = {}; }
-try { localStorage = require('./localStorage'); console.log('[pixi-adapter] ✓ localStorage'); } catch(e) { console.error('[pixi-adapter] ✗ localStorage:', e); localStorage = {}; }
-try { XMLHttpRequest = require('./XMLHttpRequest'); console.log('[pixi-adapter] ✓ XMLHttpRequest'); } catch(e) { console.error('[pixi-adapter] ✗ XMLHttpRequest:', e); }
+try { platform = require('./platform'); } catch(e) { console.error('[pixi-adapter] ✗ platform:', e); }
+try { noop = require('./util').noop; } catch(e) { console.error('[pixi-adapter] ✗ util:', e); noop = function(){}; }
+try { Image = require('./Image'); } catch(e) { console.error('[pixi-adapter] ✗ Image:', e); }
+try { canvas = require('./canvas').canvas; } catch(e) { console.error('[pixi-adapter] ✗ canvas:', e); }
+try { location = require('./location'); } catch(e) { console.error('[pixi-adapter] ✗ location:', e); location = {}; }
+try { document = require('./document'); } catch(e) { console.error('[pixi-adapter] ✗ document:', e); }
+try { navigator = require('./navigator'); } catch(e) { console.error('[pixi-adapter] ✗ navigator:', e); navigator = {}; }
+try { localStorage = require('./localStorage'); } catch(e) { console.error('[pixi-adapter] ✗ localStorage:', e); localStorage = {}; }
+try { XMLHttpRequest = require('./XMLHttpRequest'); } catch(e) { console.error('[pixi-adapter] ✗ XMLHttpRequest:', e); }
 try {
   var _touchMod = require('./TouchEvent');
   registerTouchEvents = _touchMod.registerTouchEvents;
   var AdapterTouchEvent = _touchMod.TouchEvent;
-  console.log('[pixi-adapter] ✓ TouchEvent');
 } catch(e) { console.error('[pixi-adapter] ✗ TouchEvent:', e); registerTouchEvents = function(){}; AdapterTouchEvent = function(){}; }
 try {
   var _elem = require('./element');
@@ -34,7 +31,6 @@ try {
   HTMLCanvasElement = _elem.HTMLCanvasElement;
   HTMLImageElement = _elem.HTMLImageElement;
   HTMLVideoElement = _elem.HTMLVideoElement;
-  console.log('[pixi-adapter] ✓ element');
 } catch(e) {
   console.error('[pixi-adapter] ✗ element:', e);
   Element = function() {};
@@ -42,9 +38,6 @@ try {
   HTMLImageElement = Element;
   HTMLVideoElement = Element;
 }
-
-console.log('[pixi-adapter] 子模块加载完成');
-console.log('[pixi-adapter] XHR patch version: 2026-04-28-force-global-v2');
 
 // ======== 获取真正的 JS 全局对象 ========
 // 优先 globalThis（ES2020+），其次 global（Node/V8），最后 GameGlobal
@@ -61,18 +54,6 @@ function _forceInstallGlobal(name, value, targets) {
     } catch (e) {
       try { target[name] = value; } catch (_) {}
     }
-  }
-}
-
-function _logXhrInstall(label, targets) {
-  try {
-    console.log('[pixi-adapter] XHR install check ' + label,
-      'real=', !!(_realGlobal && _realGlobal.XMLHttpRequest === XMLHttpRequest),
-      'window=', typeof window !== 'undefined' && window.XMLHttpRequest === XMLHttpRequest,
-      'GameGlobal=', typeof GameGlobal !== 'undefined' && GameGlobal.XMLHttpRequest === XMLHttpRequest,
-      'ctor=', XMLHttpRequest && XMLHttpRequest.name);
-  } catch (e) {
-    console.warn('[pixi-adapter] XHR install check failed:', e);
   }
 }
 
@@ -133,7 +114,6 @@ if (typeof GameGlobal !== 'undefined') {
 let _WebGLRenderingContext = {};
 try {
   const _tmpCanvas = platform.createCanvas();
-  console.log('[pixi-adapter] WebGL: tmpCanvas created, type:', typeof _tmpCanvas);
   if (_tmpCanvas && typeof _tmpCanvas.getContext === 'function') {
     var _tmpGl = _tmpCanvas.getContext('webgl', {
       stencil: true,
@@ -144,7 +124,6 @@ try {
     });
     if (_tmpGl) {
       _WebGLRenderingContext = _tmpGl.constructor || {};
-      console.log('[pixi-adapter] WebGL context 获取成功');
 
       try {
         var _origGetCtxAttr = _tmpGl.getContextAttributes;
@@ -162,7 +141,6 @@ try {
               }
               return attr;
             };
-            console.log('[pixi-adapter] WebGL getContextAttributes 已 patch（布尔化）');
           }
         }
       } catch (e3) {
@@ -195,7 +173,6 @@ try {
     const _tmpCtx = _tmpCanvas2.getContext('2d');
     if (_tmpCtx) {
       _CanvasRenderingContext2D = _tmpCtx.constructor || {};
-      console.log('[pixi-adapter] Canvas2D context 获取成功');
     } else {
       console.warn('[pixi-adapter] Canvas2D context 获取失败');
     }
@@ -218,14 +195,9 @@ const _performance = typeof performance !== 'undefined' ? performance : {
 
 // ======== window 事件系统 ========
 const _windowListeners = {};
-var _winEvtLogCount = 0;
 function _windowAddEventListener(type, handler, options) {
   if (!_windowListeners[type]) _windowListeners[type] = [];
   _windowListeners[type].push(handler);
-  _winEvtLogCount++;
-  if (_winEvtLogCount <= 20) {
-    console.log('[pixi-adapter] globalThis.addEventListener 注册:', type, '(共' + _windowListeners[type].length + '个)');
-  }
 }
 function _windowRemoveEventListener(type, handler) {
   if (!_windowListeners[type]) return;
@@ -291,7 +263,6 @@ if (isDevtools) {
   const _win = typeof window !== 'undefined' ? window : GameGlobal;
   const _forceDevtoolsOverwrite = ['XMLHttpRequest'];
   _forceInstallGlobal('XMLHttpRequest', XMLHttpRequest, [_win, _realGlobal, typeof GameGlobal !== 'undefined' ? GameGlobal : null]);
-  _logXhrInstall('devtools-before-loop');
 
   for (const key in _allGlobals) {
     if (key === 'window' || key === 'self') continue;
@@ -311,7 +282,6 @@ if (isDevtools) {
     } catch (_) {}
   }
   _forceInstallGlobal('XMLHttpRequest', XMLHttpRequest, [_win, _realGlobal, typeof GameGlobal !== 'undefined' ? GameGlobal : null]);
-  _logXhrInstall('devtools-after-loop');
 
   // 关键修复：包装 window.addEventListener / removeEventListener
   // PixiJS EventSystem 在 globalThis(window) 上注册 pointermove / pointerup，
@@ -355,7 +325,6 @@ if (isDevtools) {
     _origDefineProperty.call(Object, _win, 'removeEventListener', {
       value: _wrappedRemove, configurable: true, writable: true
     });
-    console.log('[pixi-adapter] window.addEventListener 已包装');
   } catch (e) {
     console.warn('[pixi-adapter] 包装 window.addEventListener 失败:', e);
   }
@@ -410,12 +379,6 @@ if (isDevtools) {
     }
   }
   _forceInstallGlobal('XMLHttpRequest', XMLHttpRequest, [_realGlobal, typeof GameGlobal !== 'undefined' ? GameGlobal : null]);
-  _logXhrInstall('device-after-loop');
-
-  // 确认事件系统已正确挂载
-  console.log('[pixi-adapter] 真机事件系统检查:',
-    'globalThis.addEventListener === _windowAddEventListener:', _realGlobal.addEventListener === _windowAddEventListener,
-    ', self.addEventListener === _windowAddEventListener:', (_realGlobal.self && _realGlobal.self.addEventListener === _windowAddEventListener));
 }
 
 // ======== 全局 canvas（对齐 game2D_huahua）========
@@ -437,8 +400,3 @@ try {
 
 // ======== 注册触摸事件 ========
 registerTouchEvents();
-
-console.log('[pixi-adapter] 初始化完成, 平台:', platform.name, ', 环境:', isDevtools ? '模拟器' : '真机');
-console.log('[pixi-adapter] _realGlobal === GameGlobal:', _realGlobal === GameGlobal,
-  ', typeof document:', typeof _realGlobal.document,
-  ', typeof window:', typeof _realGlobal.window);

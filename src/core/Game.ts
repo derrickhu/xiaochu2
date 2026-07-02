@@ -5,7 +5,6 @@
  */
 import * as PIXI from 'pixi.js';
 import { TweenManager } from './TweenManager';
-import { BootDiag } from './BootDiag';
 import { iosPlatform } from './webglContextPatch';
 import { Platform } from './PlatformService';
 import { UPDATE_PRIORITY } from '@pixi/ticker';
@@ -37,7 +36,6 @@ class GameClass {
   safeTop = 0;
 
   private _initialized = false;
-  readonly _uid = Math.random().toString(36).slice(2, 8);
 
   constructor() {
     this.stage = new PIXI.Container();
@@ -84,14 +82,12 @@ class GameClass {
         console.error('[Game] new PIXI.Application 失败:', e);
       }
       if (a?.stage && a?.ticker && a?.renderer) {
-        console.log('[Game] 方式1: PIXI.Application 创建成功');
         return { app: a, renderer: a.renderer };
       }
       if (a?.renderer) r = a.renderer;
       if (!r) {
         try {
           r = new PIXI.Renderer({ view, width: realWidth, height: realHeight, ...RENDERER_OPTS } as any);
-          console.log('[Game] 方式2: new PIXI.Renderer 创建成功');
         } catch (e2) {
           console.error('[Game] new PIXI.Renderer 失败:', e2);
         }
@@ -99,7 +95,6 @@ class GameClass {
       if (!r) {
         try {
           r = PIXI.autoDetectRenderer({ view, width: realWidth, height: realHeight, ...RENDERER_OPTS } as any);
-          console.log('[Game] 方式3: autoDetectRenderer 创建成功');
         } catch (e3) {
           console.error('[Game] autoDetectRenderer 失败:', e3);
         }
@@ -142,18 +137,11 @@ class GameClass {
       TweenManager.update(this.ticker.deltaMS / 1000);
     }, this, UPDATE_PRIORITY.HIGH);
 
-    console.log(`[Game] render mode=direct-webgl canvas=${canvas.width}x${canvas.height}`);
-    BootDiag.log('Game.init', 'renderMode=direct-webgl');
-
     try {
       if (!this.ticker.started) this.ticker.start();
-      BootDiag.log('Game.init', `ticker.started=${this.ticker.started}`);
     } catch (e) {
-      BootDiag.log('Game.init', `ticker.start 异常: ${e}`);
+      console.error('[Game] ticker.start 异常:', e);
     }
-
-    BootDiag.logRendererOnInit();
-    BootDiag.hookTickerOnce();
 
     try {
       const evtSys = (this.app.renderer as any).events;
@@ -169,12 +157,10 @@ class GameClass {
           point.x = ((x - (rect.left || 0)) * (dom.width / rect.width)) * resMul;
           point.y = ((y - (rect.top || 0)) * (dom.height / rect.height)) * resMul;
         };
-        console.log('[Game] EventSystem.mapPositionToPoint 已修复');
       }
     } catch (e) { console.warn('[Game] EventSystem patch 失败:', e); }
 
     this._initialized = true;
-    console.log(`[Game] 初始化完成: ${realWidth}x${realHeight}, scale=${this.scale.toFixed(2)}, dpr=${this.dpr}`);
   }
 
   pointerEventToStageLocal(e: unknown): PIXI.Point {
@@ -232,16 +218,6 @@ class GameClass {
     if (!Platform.isMinigame || Platform.isDevtools || !iosPlatform()) return;
     await this._waitPresentFrames(2);
     this.syncFrameToScreen();
-  }
-
-  /** @deprecated 保留旧名，内部转 warmScenePresent */
-  async warmSceneCompositor(): Promise<void> {
-    return this.warmScenePresent();
-  }
-
-  /** 场景挂载后：首帧 present（iOS 真机） */
-  async runPostSceneWarmup(): Promise<void> {
-    await this.warmScenePresent();
   }
 
   private _waitPresentFrames(count: number): Promise<void> {

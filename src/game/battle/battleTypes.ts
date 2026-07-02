@@ -36,7 +36,7 @@ export type SkillCastResult = SkillResult & {
   value?: number;
   to?: OrbType;
   count?: number;
-  shape?: 'random' | 'row' | 'col';
+  shape?: 'random' | 'row' | 'col' | 'cross';
   enemyDead?: boolean;
 };
 
@@ -58,12 +58,39 @@ export interface EnemyUnit {
 
 /** 敌人回合行动结果（场景据此播放演出） */
 export interface EnemyActResult {
-  action: 'idle' | 'attack' | 'charge' | 'chargedAttack' | 'heal' | 'shield';
+  action:
+    | 'idle'
+    | 'attack'
+    | 'charge'
+    | 'chargedAttack'
+    | 'heal'
+    | 'shield'
+    // ── 目标十三新增敌人技能行动 ──
+    | 'sealOrbs'
+    | 'poison'
+    | 'timeSqueeze'
+    | 'healBlock'
+    | 'enrage'
+    | 'skillSeal';
   damage: number;
   absorbed: number;
   heroDead: boolean;
   /** healSelf 的回复量 */
   healed: number;
+  /** 技能名（新敌人技能演出用） */
+  skillName?: string;
+  /** sealOrbs：请求封印的珠数（场景落地到 BoardModel） */
+  boardSealCount?: number;
+  /** skillSeal：被封印主动技的宠物 index */
+  sealedPetIndex?: number;
+  /** poison=每回合伤害；timeSqueeze=秒数；healBlock=回复乘区；enrage=攻击乘区 */
+  value?: number;
+  /** 状态持续回合 */
+  turns?: number;
+  /** 敌人因眩晕跳过了本回合（表现层播「眩晕中」） */
+  stunnedSkip?: boolean;
+  /** 回合结束 DoT 结算明细（owner = 承伤方，表现层播 tick 反馈） */
+  dotTicks?: { owner: 'team' | 'enemy'; amount: number }[];
 }
 
 /** 一次宠物出手（已含本回合 Combo/克制/暴击） */

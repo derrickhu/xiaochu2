@@ -11,7 +11,7 @@ import { clientEventToDesign, designPointToLocal } from '@/utils/clientEventToDe
 import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { PlayerData } from '@/game/PlayerData';
-import { bindCanvasPointerBridge, type CanvasPointerBridge } from '@/utils/canvasPointerBridge';
+import { bindCanvasPointerMove, type CanvasPointerMoveHandle } from '@/minigame/canvasInteraction';
 import { COLORS, FONT_SIZE, makePanel, makeText } from '@/ui';
 
 const ICON = 48;
@@ -69,10 +69,10 @@ function attachHorizontalScroll(
   viewport.eventMode = 'static';
   viewport.cursor = contentW > viewportW ? 'grab' : 'default';
 
-  let bridge: CanvasPointerBridge | null = null;
+  let bridge: CanvasPointerMoveHandle | null = null;
 
   if (Platform.isMinigame && !Platform.isDevtools) {
-    bridge = bindCanvasPointerBridge({ onDown, onMove, onUp });
+    bridge = bindCanvasPointerMove({ onDown, onMove, onUp });
     return () => bridge?.destroy();
   }
 

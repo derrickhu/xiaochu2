@@ -131,16 +131,7 @@ function registerTouchEvents() {
     }
   }
 
-  var _touchLogCount = 0;
-
   platform.onTouchStart(function(e) {
-    _touchLogCount++;
-    if (_touchLogCount <= 5) {
-      var t = (e.changedTouches || e.touches || [])[0];
-      console.log('[Touch] down #' + _touchLogCount,
-        'x:', t && t.clientX, 'y:', t && t.clientY,
-        'canvasListeners:', Object.keys(_listeners).join(','));
-    }
     dispatch('touchstart', e);
     dispatchPointer('pointerdown', e);
     var touches = e.changedTouches || e.touches || [];
@@ -149,21 +140,12 @@ function registerTouchEvents() {
     }
   });
 
-  var _moveLogCount = 0;
-
   platform.onTouchMove(function(e) {
     dispatch('touchmove', e);
     dispatchPointer('pointermove', e);
     var touches = e.changedTouches || e.touches || [];
     if (touches.length) {
-      var t = touches[0];
-      _moveLogCount++;
-      if (_moveLogCount <= 3) {
-        console.log('[Touch] move #' + _moveLogCount,
-          'x:', t.clientX, 'y:', t.clientY,
-          'windowListeners(pointermove):', typeof GameGlobal.__windowDispatchEvent);
-      }
-      dispatchToWindow('pointermove', createPointerEvent('pointermove', t, 1));
+      dispatchToWindow('pointermove', createPointerEvent('pointermove', touches[0], 1));
     }
   });
 
@@ -239,13 +221,6 @@ function registerTouchEvents() {
     try { Object.defineProperty(canvas, 'parentNode', { value: fakeParent, configurable: true, writable: true }); } catch (e2) {}
   }
 
-  console.log('[TouchEvent] canvas.parentElement set:', !!canvas.parentElement,
-    ', getBoundingClientRect:', typeof canvas.getBoundingClientRect);
-
-  setTimeout(function() {
-    console.log('[TouchEvent] canvas listeners:', Object.keys(_listeners).join(', ') || '(空)',
-      'canvasId:', canvas.__diagId || '?');
-  }, 3000);
 }
 
 module.exports = { TouchEvent, registerTouchEvents };

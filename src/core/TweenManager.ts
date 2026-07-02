@@ -54,14 +54,22 @@ class TweenManagerClass {
       (typeof (tgt as { destroyed?: boolean }).destroyed === 'boolean' &&
         (tgt as { destroyed: boolean }).destroyed)
     ) {
+      queueMicrotask(() => config.onComplete?.());
       return {
         config, startValues: {}, elapsed: config.duration, delayRemaining: 0,
       };
     }
 
     const startValues: Record<string, number> = {};
-    for (const key in config.props) {
-      startValues[key] = config.target[key] ?? 0;
+    try {
+      for (const key in config.props) {
+        startValues[key] = config.target[key] ?? 0;
+      }
+    } catch {
+      queueMicrotask(() => config.onComplete?.());
+      return {
+        config, startValues: {}, elapsed: config.duration, delayRemaining: 0,
+      };
     }
 
     const tween: ActiveTween = {

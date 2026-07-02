@@ -33,21 +33,10 @@ export function iosMajorVersion(): number {
   }
 }
 
-/** iOS 真机：与 caizhu-rosa 一致，默认 drawImage 合成；readPixels 仅作 drawImage 失败时的兜底 */
-export function iosNeedsReadPixelsCompositor(): boolean {
-  return false;
-}
-
-/** @deprecated 单 canvas 已全局启用；保留仅供诊断 */
-export function iosNeedsDirectWebGL(): boolean {
-  return true;
-}
-
-/** Pixi 创建 Renderer 前调用 */
+/** iOS 真机：与 caizhu-rosa 一致，默认 drawImage 合成 */
 export function configurePixiWebGLEnvForPlatform(platform: string): void {
   if (platform !== 'ios') return;
   settings.PREFER_ENV = ENV.WEBGL;
-  console.log('[webglPatch] iOS: PREFER_ENV=WEBGL（强制 WebGL1 路径）');
 }
 
 /** 主屏 / 离屏 canvas：webgl2 请求返回 null，让 Pixi 正确降级 */
@@ -80,5 +69,4 @@ export function installBlockWebGL2OnPlatform(): void {
     blockWebGL2OnCanvas(c);
     return c;
   };
-  console.log('[webglPatch] iOS: createCanvas 已 patch（webgl2→null）');
 }

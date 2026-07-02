@@ -65,6 +65,9 @@ export const ECONOMY = {
     firstClearLingyu: 20,
     /** Boss 关首通灵玉 */
     bossFirstClearLingyu: 60,
+    /** 图鉴收录里程碑：每收录 codexEvery 只发一次灵玉（强化捉宠目标感） */
+    codexEvery: 5,
+    codexLingyu: 100,
   },
 
   /** ── 战斗失败兜底（避免死局）：按理论经验产出的比例返还 ── */

@@ -9,7 +9,7 @@ import type { SkillDef, SkillEffectDef, SkillVfxId, ConvertShape } from '@/balan
 import { getSkill, resolveSkillVfx, getSkillTierBonus, getSkillStarOverride } from '@/balance/skills';
 import { getStarProfile } from '@/balance/growth';
 import { getRaritySkillPower } from '@/balance/rarity';
-import type { StatusStackPolicy } from './BattleStatus';
+import type { StatusKind, StatusStackPolicy } from './BattleStatus';
 import { defenseReduction, expectedCritFactor } from '@/formulas/damage';
 
 export interface SkillCaster {
@@ -42,6 +42,12 @@ export interface SkillRuntimeContext {
   enemyDamageReduction: number;
   /** 全队治疗强化（治疗招牌属性），放大对全队的回复事件；默认 0 */
   teamHealBonus: number;
+  /** 敌人是否已狂暴（enrage 每场只触发一次）；默认 false */
+  enemyEnraged?: boolean;
+  /** 队伍人数（敌方技能封印随机选目标用）；默认 0 */
+  teamSize?: number;
+  /** 随机源（敌方技能封印选目标）；默认 Math.random */
+  rng?: () => number;
 }
 
 export interface DamageEvent {
@@ -59,20 +65,35 @@ export interface HealEvent {
 
 export interface StatusEvent {
   target: 'team' | 'enemy';
-  status: 'shield' | 'teamDamageBuff' | 'enemyDamageReduction' | 'charge' | 'dot' | 'stun' | 'enemyDefenseBreak';
+  status: Exclude<StatusKind, 'shield'> | 'shield' | 'charge';
   value: number;
   turns?: number;
   stack: StatusStackPolicy;
   vfx: SkillVfxId;
+  /** elementDamageBuff 的目标属性 */
+  element?: Element;
 }
 
-export interface BoardRequest {
-  type: 'convertOrbs';
-  to: OrbType;
-  count: number;
-  shape: ConvertShape;
-  vfx: SkillVfxId;
-}
+export type BoardRequest =
+  | {
+      type: 'convertOrbs';
+      to: OrbType;
+      count: number;
+      shape: ConvertShape;
+      from?: OrbType;
+      vfx: SkillVfxId;
+    }
+  | {
+      /** 敌方扰盘：随机封印 count 颗珠 */
+      type: 'sealRandom';
+      count: number;
+      vfx: SkillVfxId;
+    }
+  | {
+      /** 净化：解除全部封印珠 */
+      type: 'unsealAll';
+      vfx: SkillVfxId;
+    };
 
 export interface SkillResult {
   skill: SkillDef;
@@ -91,12 +112,32 @@ export interface SkillResult {
     | 'charge'
     | 'chargedAttack'
     | 'heal'
-    | 'enemyShield';
+    | 'enemyShield'
+    // ── 目标十三新增 ──
+    | 'gravity'
+    | 'haste'
+    | 'purify'
+    | 'delayAttack'
+    | 'extraTime'
+    | 'critBoost'
+    | 'elementBuff'
+    | 'sealOrbs'
+    | 'poison'
+    | 'timeSqueeze'
+    | 'healBlock'
+    | 'enrage'
+    | 'skillSeal';
   vfxEvents: readonly SkillVfxId[];
   damageEvents: DamageEvent[];
   healEvents: HealEvent[];
   statusEvents: StatusEvent[];
   boardRequests: BoardRequest[];
+  /** haste：全队其他宠物技能 CD 减少量 */
+  teamCdDelta?: number;
+  /** purify：是否清除我方 debuff */
+  cleanseTeam?: boolean;
+  /** delayEnemyAttack：敌人普攻倒计时 +N */
+  enemyAttackDelay?: number;
 }
 
 export function skillForPet(pet: PetDef, star = 1): SkillDef {
@@ -142,6 +183,13 @@ export function applyPetSkillModifiers(skill: SkillDef, pet: PetDef, skillTier =
     }
     if (effect.kind === 'convertOrbs') {
       return { ...effect, count: effect.count + convertCountBonus };
+    }
+    // 重力按敌人当前 HP 百分比结算，随星级/稀有度放大但封顶（避免斩杀失衡）
+    if (effect.kind === 'gravity') {
+      return { ...effect, pct: Math.min(0.5, effect.pct * effectMult) };
+    }
+    if (effect.kind === 'elementDamageBuff') {
+      return { ...effect, mult: 1 + (effect.mult - 1) * effectMult };
     }
     return effect;
   });
@@ -214,6 +262,30 @@ function inferAction(skill: SkillDef): SkillResult['action'] {
       return 'convertOrbs';
     case 'charge':
       return 'charge';
+    case 'gravity':
+      return 'gravity';
+    case 'haste':
+      return 'haste';
+    case 'purify':
+      return 'purify';
+    case 'delayEnemyAttack':
+      return 'delayAttack';
+    case 'extraDragTime':
+      return 'extraTime';
+    case 'guaranteedCrit':
+      return 'critBoost';
+    case 'elementDamageBuff':
+      return 'elementBuff';
+    case 'sealOrbs':
+      return 'sealOrbs';
+    case 'timeSqueeze':
+      return 'timeSqueeze';
+    case 'healBlock':
+      return 'healBlock';
+    case 'enrage':
+      return 'enrage';
+    case 'skillSeal':
+      return 'skillSeal';
   }
 }
 
@@ -373,6 +445,7 @@ const EFFECT_HANDLERS: { [K in SkillEffectDef['kind']]: EffectHandler<K> } = {
       to: effect.to,
       count: effect.count,
       shape: effect.shape ?? 'random',
+      from: effect.from,
       vfx,
     });
     return true;
@@ -385,6 +458,129 @@ const EFFECT_HANDLERS: { [K in SkillEffectDef['kind']]: EffectHandler<K> } = {
       value: effect.multiplier,
       stack: 'replace',
       vfx: effect.releaseVfx,
+    });
+    return true;
+  },
+
+  // ── 目标十三新增（宠物侧） ──
+
+  gravity: (effect, { vfx, ctx, result }) => {
+    // 按敌人当前 HP 百分比结算，无视防御/减伤（PAD「重力」），不暴击
+    const amount = Math.max(1, Math.floor(ctx.enemy.hp * effect.pct));
+    result.damageEvents.push({ target: 'enemy', amount, vfx });
+    return true;
+  },
+
+  haste: (effect, { result }) => {
+    result.teamCdDelta = (result.teamCdDelta ?? 0) + effect.amount;
+    return true;
+  },
+
+  purify: (effect, { vfx, result }) => {
+    if (effect.unsealBoard) result.boardRequests.push({ type: 'unsealAll', vfx });
+    if (effect.cleanseTeam) result.cleanseTeam = true;
+    return true;
+  },
+
+  delayEnemyAttack: (effect, { result }) => {
+    result.enemyAttackDelay = (result.enemyAttackDelay ?? 0) + effect.turns;
+    return true;
+  },
+
+  extraDragTime: (effect, { vfx, result }) => {
+    result.statusEvents.push({
+      target: 'team',
+      status: 'extraDragTime',
+      value: effect.seconds,
+      turns: effect.turns,
+      stack: 'max',
+      vfx,
+    });
+    return true;
+  },
+
+  guaranteedCrit: (effect, { vfx, result }) => {
+    result.statusEvents.push({
+      target: 'team',
+      status: 'guaranteedCrit',
+      value: 1,
+      turns: effect.turns,
+      stack: 'max',
+      vfx,
+    });
+    return true;
+  },
+
+  elementDamageBuff: (effect, { vfx, result }) => {
+    result.statusEvents.push({
+      target: 'team',
+      status: 'elementDamageBuff',
+      value: effect.mult,
+      turns: effect.turns,
+      stack: 'replace',
+      vfx,
+      element: effect.element,
+    });
+    return true;
+  },
+
+  // ── 目标十三新增（敌人侧） ──
+
+  sealOrbs: (effect, { vfx, result }) => {
+    result.boardRequests.push({ type: 'sealRandom', count: effect.count, vfx });
+    return true;
+  },
+
+  timeSqueeze: (effect, { vfx, result }) => {
+    result.statusEvents.push({
+      target: 'team',
+      status: 'timeSqueeze',
+      value: effect.seconds,
+      turns: effect.turns,
+      stack: 'max',
+      vfx,
+    });
+    return true;
+  },
+
+  healBlock: (effect, { vfx, result }) => {
+    result.statusEvents.push({
+      target: 'team',
+      status: 'healBlock',
+      value: effect.mult,
+      turns: effect.turns,
+      stack: 'replace',
+      vfx,
+    });
+    return true;
+  },
+
+  enrage: (effect, { vfx, ctx, result }) => {
+    // 每场只触发一次，且仅在 HP 低于阈值时进入狂暴
+    if (ctx.enemyEnraged) return false;
+    if (ctx.enemy.hp > ctx.enemy.maxHp * effect.threshold) return false;
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'enrage',
+      value: effect.atkMult,
+      stack: 'ignoreIfPresent',
+      vfx,
+    });
+    return true;
+  },
+
+  skillSeal: (effect, { vfx, ctx, result }) => {
+    const teamSize = ctx.teamSize ?? 0;
+    if (teamSize <= 0) return false;
+    const rng = ctx.rng ?? Math.random;
+    const petIndex = Math.min(teamSize - 1, Math.floor(rng() * teamSize));
+    result.statusEvents.push({
+      target: 'team',
+      status: 'skillSeal',
+      value: petIndex,
+      turns: effect.turns,
+      stack: 'replace',
+      vfx,
     });
     return true;
   },

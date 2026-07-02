@@ -24,3 +24,5 @@ project.private.config.json
 # Misc
 *.log
 *.tmp
+run/
+logs/

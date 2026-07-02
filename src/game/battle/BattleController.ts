@@ -7,7 +7,7 @@
  *
  * 所有数值只走 formulas + balance，本层禁止 magic number。
  */
-import { ELEMENT_COUNTERS, type Element, type OrbType } from '@/balance/combat';
+import { COMBAT, ELEMENT_COUNTERS, type Element, type OrbType } from '@/balance/combat';
 import {
   PET_MAP, DEFAULT_TEAM, INITIAL_PET_LEVEL, INITIAL_PET_STAR,
   type PetDef,
@@ -20,7 +20,7 @@ import { stageDrops } from '@/formulas/economyOutput';
 import { teamMaxHp, teamRcv, teamElements, petAtkInTeam, teamEffectAggregate, petSelfCombatProfile, type TeamMember } from '@/formulas/team';
 import { applyDamageReduction } from '@/formulas/damage';
 import type { MatchGroup } from '@/game/board/BoardModel';
-import { BattleStatusStore } from './BattleStatus';
+import { BattleStatusStore, type StatusInstance } from './BattleStatus';
 import {
   runSkill,
   skillCdForPet,
@@ -175,6 +175,22 @@ export class BattleController {
     return { mult: s.value, turnsLeft: s.turnsLeft ?? 0 };
   }
 
+  /** 全部持续状态（HUD 状态图标行读取） */
+  get statuses(): readonly StatusInstance[] {
+    return this._statuses.all;
+  }
+
+  /** 当前拖珠时限（秒）：基础 ± 加时/时间压缩，夹在 [dragTimeMin, dragTimeMax] */
+  get dragTimeLimit(): number {
+    const t = COMBAT.dragTimeLimit + this._statuses.dragTimeDelta();
+    return Math.min(COMBAT.dragTimeMax, Math.max(COMBAT.dragTimeMin, t));
+  }
+
+  /** 被封印主动技的宠物 index（技能封印 debuff，无则 null） */
+  get sealedPetIndex(): number | null {
+    return this._statuses.sealedPetIndex();
+  }
+
   get totalWaves(): number {
     return this._waves.length;
   }
@@ -212,6 +228,9 @@ export class BattleController {
       passiveRegenPerTurn: this.passiveRegenPerTurn,
       teamDamageMult: (this.dmgBuff?.mult ?? 1.0) * this.teamDamageMult,
       teamHealBonus: this.teamHealBonus,
+      guaranteedCrit: this._statuses.hasGuaranteedCrit(),
+      heartHealMult: this._statuses.heartHealMult(),
+      elementBuffMult: (el) => this._statuses.elementBuffMult(el),
       rng: this._rng,
       elementTraitDamageMult: (pet, defender) => this._elementTraitDamageMult(pet.def, defender),
       counterRelation: (attacker, defender) => this._counterRelation(attacker, defender),
@@ -257,7 +276,9 @@ export class BattleController {
    * 伤害先被护盾吸收，溢出部分才扣 HP。
    */
   enemyAct(): EnemyActResult {
+    const stunnedBefore = this._statuses.isStunned('enemy') && !this.enemy.charging;
     const result = this._enemyTurnAction();
+    if (stunnedBefore && result.action === 'idle') result.stunnedSkip = true;
     const dotTicks = this._statuses.tickTurnEnd();
     for (const tick of dotTicks) {
       if (tick.owner === 'enemy') {
@@ -267,6 +288,7 @@ export class BattleController {
         if (tick.amount > 0) this.tookDamage = true;
       }
     }
+    if (dotTicks.length > 0) result.dotTicks = dotTicks;
     this._syncEnemyStatusMirrors();
     if (this.heroHp <= 0) result.heroDead = true;
     return result;
@@ -304,10 +326,13 @@ export class BattleController {
 
   // ════════════ 宠物主动技 ════════════
 
-  /** 技能是否可释放（玩家回合 + CD 就绪） */
+  /** 技能是否可释放（玩家回合 + CD 就绪 + 未被技能封印） */
   canCastSkill(petIndex: number): boolean {
     const pet = this.team[petIndex];
-    return !!pet && this.state === 'playerTurn' && pet.skillCdLeft <= 0;
+    return !!pet
+      && this.state === 'playerTurn'
+      && pet.skillCdLeft <= 0
+      && this._statuses.sealedPetIndex() !== petIndex;
   }
 
   /**
@@ -342,6 +367,20 @@ export class BattleController {
       addStatus: (status) => this._statuses.add(status),
       setEnemyCharge: (charge) => { this.enemy.charging = charge; },
       syncEnemyStatusMirrors: () => this._syncEnemyStatusMirrors(),
+      reducePetCds: (amount, exceptIndex) => {
+        for (let i = 0; i < this.team.length; i++) {
+          if (i === exceptIndex) continue;
+          const pet = this.team[i];
+          if (pet.skillCdLeft > 0) pet.skillCdLeft = Math.max(0, pet.skillCdLeft - amount);
+        }
+      },
+      cleanseTeamDebuffs: () => this._statuses.cleanseTeamDebuffs(),
+      delayEnemyAttack: (turns) => {
+        this.enemy.attackCountdown += turns;
+      },
+      applyEnrage: (mult) => {
+        this.enemy.atk = Math.floor(this.enemy.atk * mult);
+      },
     }, result);
   }
 
@@ -362,6 +401,8 @@ export class BattleController {
       teamDamageBuffMult: this.dmgBuff?.mult ?? 1,
       teamDamageMult: this.teamDamageMult,
       teamHealBonus: this.teamHealBonus,
+      enemyEnraged: !!this._statuses.get('enemy', 'enrage'),
+      rng: this._rng,
     });
   }
   private _syncEnemyStatusMirrors(): void {

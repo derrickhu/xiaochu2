@@ -5,7 +5,7 @@ import { TweenManager, type TweenConfig } from './TweenManager';
 const frameListeners = new Set<(dt: number) => void>();
 
 /** iOS 真机 direct-webgl：touch 结束后 ticker 偶发不上屏，需手动 render（与 BoardView 拖动一致） */
-export function presentMinigameFrame(): void {
+function presentMinigameFrame(): void {
   if (!Platform.isMinigame || Platform.isDevtools) return;
   try {
     Game.app?.renderer?.render(Game.stage);
@@ -21,13 +21,8 @@ export function presentMinigameFrame(): void {
 export function startMinigamePresentLoop(opts?: {
   onUpdate?: (dt: number) => void;
   fps?: number;
-  /** @deprecated 禁止 pause，会导致真机 await 挂死或双时钟 */
-  pauseTicker?: boolean;
 }): () => void {
   if (!Platform.isMinigame || Platform.isDevtools) return () => {};
-  if (opts?.pauseTicker) {
-    console.warn('[animationGuard] pauseTicker 已禁用');
-  }
   let stopped = false;
   let last = Date.now();
   let lastTickerTime = Game.ticker?.lastTime ?? -1;
@@ -101,6 +96,16 @@ export function guardedTween(
   },
 ): Promise<void> {
   return new Promise((resolve) => {
+    const tgt = config.target;
+    const invalid = tgt == null
+      || (typeof (tgt as { destroyed?: boolean }).destroyed === 'boolean'
+        && (tgt as { destroyed: boolean }).destroyed);
+    if (invalid) {
+      opts?.onFallback?.();
+      resolve();
+      return;
+    }
+
     let finished = false;
     const finish = (kind: 'complete' | 'fallback'): void => {
       if (finished) return;

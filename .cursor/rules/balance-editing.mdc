@@ -1,0 +1,31 @@
+---
+description: 调整 xiaochu2 游戏数值 balance 表时的规范
+globs:
+  - src/balance/**
+  - src/formulas/**
+---
+
+# 数值调参规范
+
+改游戏平衡数据时遵守以下规则：
+
+1. **真源在 `src/balance/`**：禁止在 `game/`、`scenes/` 写 magic number 替代表数据。
+2. **改完必须跑** `npm test`；涉及关卡难度意图时再确认 `simulation.test.ts`。
+3. **被动**：只改 `passives.ts` 的 role 阶梯，不在 `creatures.ts` 为单宠加专属被动。
+4. **怪物面**：`creatures.ts` 中 `monsterPair(rank)` 的 rank 是代码参数，调 HP/ATK 可改 rank 或 tier 覆盖。
+5. **历练关/掉落**：部分由 `buildTrialChapter` / `drops.ts` 程序化生成，改表时注意收录总数仍为 25。
+
+## AI Prompt 格式（与数值面板一致）
+
+```
+[balance] 文件:字段 | 当前 值 → 目标值 | 原因：
+```
+
+示例：`[balance] stages.ts:stage_1_5 | 当前 difficulty=1.45 → 1.35 | 首章收录 Boss 过难`
+
+## 数值面板
+
+- 后台常驻（局域网 `0.0.0.0:5174`）：`./tools/balance-dashboard/start.sh start`
+- 登录自启 + 崩溃保活：`./tools/balance-dashboard/start.sh install`
+- 状态 / 停止：`status` / `stop`
+- 临时本机前台：`npm run balance:dashboard`（关终端会停，只读不写回 TS）

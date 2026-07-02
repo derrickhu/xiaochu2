@@ -2,7 +2,6 @@ import * as PIXI from 'pixi.js';
 import { Platform } from '@/core/PlatformService';
 import { clientEventToDesign } from '@/utils/clientEventToDesign';
 import { getTouchCanvas } from '@/utils/touchCanvas';
-import { touchDiag } from '@/utils/touchDiag';
 
 export interface ScrollListConfig {
   /** 被滚动的内容容器；返回 null 时忽略手势 */
@@ -68,7 +67,6 @@ export class ScrollListController {
       if (!wasDragging || moved || !cfgNow?.onTap) return;
       const p = clientEventToDesign(e);
       if (!this._inViewport(p.y)) return;
-      touchDiag('scroll.tap', `@${Math.round(p.x)},${Math.round(p.y)}`);
       cfgNow.onTap(p.x, p.y);
     };
 

@@ -45,6 +45,8 @@ export interface SaveData {
   recruitedCount: number;
   /** 已收录生物 id；R 档开局即入召唤池，SR+ 由章节 Boss 收录扩展。 */
   discovered: string[];
+  /** 图鉴里程碑已结算到的收录数（每 ECONOMY.milestone.codexEvery 只发灵玉） */
+  codexRewarded: number;
 }
 
 /** 招募结果 */
@@ -77,6 +79,8 @@ export function initialData(): SaveData {
     pendingShards: {},
     recruitedCount: 0,
     discovered: [...DEFAULT_SUMMON_POOL_R_IDS],
+    // 初始收录池（R 档赠送）不计入里程碑，从后续收录开始累计
+    codexRewarded: DEFAULT_SUMMON_POOL_R_IDS.length,
   };
 }
 
@@ -84,6 +88,7 @@ export function initialData(): SaveData {
 export function parseSaveData(parsed: Partial<SaveData>): SaveData {
   const migrated = migratePetIdsInPartialSave(parsed);
   const owned = sanitizeOwned(migrated.ownedPets);
+  const discovered = sanitizeDiscovered(migrated.discovered, owned);
   return {
     version: SAVE_VERSION,
     coins: typeof migrated.coins === 'number' ? migrated.coins : 0,
@@ -98,7 +103,11 @@ export function parseSaveData(parsed: Partial<SaveData>): SaveData {
     recruitedCount: typeof migrated.recruitedCount === 'number'
       ? migrated.recruitedCount
       : countNonInitial(owned),
-    discovered: sanitizeDiscovered(migrated.discovered, owned),
+    discovered,
+    // 旧档无此字段：从当前收录数起算，不追溯补发
+    codexRewarded: typeof migrated.codexRewarded === 'number'
+      ? migrated.codexRewarded
+      : discovered.length,
   };
 }
 

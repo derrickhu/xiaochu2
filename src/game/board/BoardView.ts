@@ -28,8 +28,8 @@ export interface BoardViewCallbacks {
   onDragEnd: (didMove: boolean) => void;
   /** 有效珠判定（队伍属性覆盖）：返回 false 的珠子降饱和显示，提示消除无伤害 */
   isOrbActive?: (orb: OrbType) => boolean;
-  /** 诊断：canStart=false 时输出 busy/state 等 */
-  whyCantDrag?: () => string;
+  /** 拖珠限时（秒）：加时/时间压缩状态动态调整；缺省 COMBAT.dragTimeLimit */
+  dragTimeLimit?: () => number;
 }
 
 /** 无效珠：降饱和 + 半透明（仍可拖消，仅无伤害） */
@@ -134,10 +134,15 @@ export class BoardView {
     return this._dragging;
   }
 
+  /** 当前拖珠限时（秒），支持加时/时间压缩状态动态调整 */
+  private get _dragTimeLimit(): number {
+    return this._cb.dragTimeLimit?.() ?? COMBAT.dragTimeLimit;
+  }
+
   /** 拖珠剩余时间比例 1→0（未拖动时为 1） */
   get dragTimeLeft(): number {
     if (!this._dragging) return 1;
-    return Math.max(0, 1 - this._dragTimer / COMBAT.dragTimeLimit);
+    return Math.max(0, 1 - this._dragTimer / this._dragTimeLimit);
   }
 
   /** 每帧驱动：拖珠限时 + 路径交换 tween */
@@ -145,7 +150,7 @@ export class BoardView {
     this._advanceSwapAnim();
     if (!this._dragging) return;
     this._dragTimer += dt;
-    if (this._dragTimer >= COMBAT.dragTimeLimit) {
+    if (this._dragTimer >= this._dragTimeLimit) {
       this._endDrag();
     }
   }
@@ -192,11 +197,6 @@ export class BoardView {
         }
       }
     }
-  }
-
-  /** @deprecated 兼容旧调用，等同 refreshOrbStates */
-  refreshLocks(): void {
-    this.refreshOrbStates();
   }
 
   /** 播放一组消除动画（缩放消失），结束后从池回收 */
@@ -268,7 +268,7 @@ export class BoardView {
     canvas.addEventListener('pointercancel', onUp);
 
     this._detachCanvasMove = () => {
-      if (!this.container.destroyed) {
+      if (this.container && !this.container.destroyed) {
         this.container.off('pointerdown', onPixiDown);
       }
       if (canvas?.removeEventListener) {

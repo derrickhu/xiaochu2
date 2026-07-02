@@ -25,17 +25,6 @@ export interface TeamEffectBundle {
   regenPct: number;
 }
 
-function perPetTeamDamageBonusFromLadder(role: PetDef['role'], rarity: PetDef['rarity']): number {
-  const bundle = resolvePetPassiveBundle(role, rarity, 1);
-  let sum = 0;
-  for (const e of bundle.effects) {
-    if (e.kind === 'teamDamageBonus' && e.source === 'ladder' && e.unlocked) {
-      sum += e.value;
-    }
-  }
-  return sum;
-}
-
 /** 队伍级被动效果聚合 */
 export function teamEffectAggregate(members: readonly TeamMember[]): TeamEffectBundle {
   let drSum = 0;
@@ -135,9 +124,4 @@ export function selfStatMultiplier(pet: PetDef, star: number, stat: StatKey): nu
     mult *= 1 + e.value;
   }
   return mult;
-}
-
-/** @deprecated Phase A 对照用 */
-export function perPetLadderTeamDamageBonus(role: PetDef['role'], rarity: PetDef['rarity']): number {
-  return perPetTeamDamageBonusFromLadder(role, rarity);
 }
