@@ -70,8 +70,10 @@ export const UI = {
     petReturn: 0.22,
     enemyHitFlash: 0.12,
     damageFloat: 0.6,
-    /** 多组攻击的间隔节奏 */
-    attackGap: 0.12,
+    /** 多组攻击的间隔节奏（略拉长便于读伤害） */
+    attackGap: 0.22,
+    /** 最后一击飘字落定后再出总伤害（秒） */
+    turnTotalLeadIn: 0.55,
     /** 波次切换敌人入场 */
     waveEnter: 0.35,
     /** ── 阶段二：手感强化 ── */

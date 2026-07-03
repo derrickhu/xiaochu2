@@ -20,13 +20,17 @@ import {
   applyDmgRenderStyle,
   buildPetDmgLabel,
   createPetDamageFloatRuntime,
+  dmgFloatScale,
   DMG_MOTION,
+  enemyDamageAnchor,
+  formatDmgNumber,
   PET_FLOAT_CFG,
   petSlotDamageAnchor,
+  resolveEnemyDmgStyleKey,
   resolvePetDmgStyleKey,
+  resolveTurnTotalTier,
   SLOT_ATTR_PALETTE,
   type PetDamageFloatRuntime,
-  type PetDmgStyleKey,
 } from './damageFloatStyle';
 
 export interface PetDamageFloatOpts {
@@ -45,7 +49,31 @@ export interface PetDamageFloatOpts {
   lane?: 'main' | 'minorUpper' | 'minorLower';
 }
 
-type ScopedPetDamageRuntime = PetDamageFloatRuntime & { scopeId: number };
+/** 打在敌人身上的单段伤害飘字 */
+export interface EnemyHitDamageOpts {
+  enemyX: number;
+  enemyY: number;
+  element: Element;
+  damage: number;
+  isCrit?: boolean;
+  counter?: 1 | 0 | -1;
+  orderIdx?: number;
+  /** 本回合总出手段数，用于错位 */
+  hitCount?: number;
+  minor?: boolean;
+  skill?: boolean;
+}
+
+export interface TurnTotalDamageOpts {
+  total: number;
+  combo: number;
+  hitCount: number;
+  x: number;
+  y: number;
+  enemyMaxHp: number;
+}
+
+type ScopedPetDamageRuntime = PetDamageFloatRuntime & { scopeId: number; onDone?: () => void };
 
 export class BattleFx {
   private _fx!: FxLayer;
@@ -123,10 +151,12 @@ export class BattleFx {
       const rt = this._petDmgRuntimes[i];
       if (!displayAlive(rt.text) || rt.scopeId !== this._scopeId) {
         if (displayAlive(rt.text)) this._petDmgPool.release(rt.text);
+        rt.onDone?.();
         this._petDmgRuntimes.splice(i, 1);
         continue;
       }
       if (rt.update(dt)) {
+        rt.onDone?.();
         this._petDmgPool.release(rt.text);
         this._petDmgRuntimes.splice(i, 1);
       }
@@ -157,7 +187,10 @@ export class BattleFx {
   /** 回合/战斗收尾：清理某个 scope 内所有不应跨回合残留的表现层对象。 */
   clearTransient(scopeId = this._scopeId): void {
     for (const rt of this._petDmgRuntimes) {
-      if (rt.scopeId === scopeId) this._petDmgPool.release(rt.text);
+      if (rt.scopeId === scopeId) {
+        this._petDmgPool.release(rt.text);
+        rt.onDone?.();
+      }
     }
     this._petDmgRuntimes = this._petDmgRuntimes.filter(rt => rt.scopeId !== scopeId);
 
@@ -233,30 +266,142 @@ export class BattleFx {
     });
   }
 
-  /** 宠物槽位伤害飘字 — 样式/运动对齐 xiao_chu slotDamageMain / slotDamageCrit；克制伤害加「克」角标 + 更亮 glow */
+  /** 宠物槽位伤害飘字（兼容旧路径） */
   spawnPetDamageFloat(opts: PetDamageFloatOpts): void {
     const {
       slotX, slotY, element, damage, isCrit = false, counter = 0,
       orderIdx = 0, skill = false, minor = false,
       lane = minor ? (orderIdx === 0 ? 'minorUpper' : 'minorLower') : 'main',
     } = opts;
+    const anchor = petSlotDamageAnchor(slotX, slotY, lane);
+    const x = anchor.x + (minor ? (orderIdx - 0.5) * PET_FLOAT_CFG.multiHit.xStep : 0);
+    this._pushDamageFloat({
+      x,
+      y: anchor.y,
+      element,
+      damage,
+      isCrit,
+      counter,
+      orderIdx,
+      skill,
+      minor,
+      onEnemy: false,
+    });
+  }
 
-    const styleKey: PetDmgStyleKey = resolvePetDmgStyleKey(isCrit && !minor, minor);
+  /** 命中敌人时的伤害数字（主路径） */
+  spawnEnemyHitDamage(opts: EnemyHitDamageOpts): void {
+    if (opts.damage <= 0) return;
+    const hitCount = opts.hitCount ?? 1;
+    const orderIdx = opts.orderIdx ?? 0;
+    const anchor = enemyDamageAnchor(opts.enemyX, opts.enemyY, orderIdx, hitCount);
+    this._pushDamageFloat({
+      x: anchor.x,
+      y: anchor.y,
+      element: opts.element,
+      damage: opts.damage,
+      isCrit: opts.isCrit ?? false,
+      counter: opts.counter ?? 0,
+      orderIdx,
+      skill: opts.skill ?? false,
+      minor: opts.minor ?? false,
+      onEnemy: true,
+    });
+  }
+
+  /**
+   * 本回合总伤害：与单段伤害同款飘字动画，上方保留「总伤害」说明文字。
+   */
+  showTurnTotalDamage(opts: TurnTotalDamageOpts): Promise<void> {
+    const { total, combo, hitCount, x, y, enemyMaxHp } = opts;
+    if (total <= 0) return Promise.resolve();
+
+    const tier = resolveTurnTotalTier(total, combo, hitCount, enemyMaxHp);
+    const isCritStyle = tier === 'mega' || tier === 'high';
+    const styleKey = isCritStyle ? 'enemyHitCrit' : 'enemyHitMain';
+    const palette = SLOT_ATTR_PALETTE.metal;
+    const motion = DMG_MOTION[styleKey];
+    const baseScale = PET_FLOAT_CFG.normalAtk.scale;
+    const S = dmgFloatScale();
+    const caption = hitCount > 1 ? `${hitCount} 连击 · 总伤害` : '总伤害';
+    const captionY = y - 40 * S;
+
+    return new Promise((resolve) => {
+      let pending = 2;
+      const done = (): void => {
+        pending -= 1;
+        if (pending <= 0) resolve();
+      };
+
+      const captionText = this._petDmgPool.get();
+      captionText.text = caption;
+      applyDmgRenderStyle(captionText, 'slotDamageMinor', palette);
+      captionText.style.fontSize = (captionText.style.fontSize as number) * 1.45;
+      captionText.style.fill = 0xffe082;
+      this._floatLayer.addChild(captionText);
+
+      const numText = this._petDmgPool.get();
+      numText.text = formatDmgNumber(total);
+      applyDmgRenderStyle(numText, styleKey, palette);
+      numText.style.fontSize = (numText.style.fontSize as number) * 1.08;
+      this._floatLayer.addChild(numText);
+
+      if (isCritStyle) this.shakeLight();
+
+      const floatOpts = { baseX: x, baseScale, styleKey, motion };
+      this._petDmgRuntimes.push({
+        ...createPetDamageFloatRuntime({
+          ...floatOpts,
+          text: captionText,
+          baseY: captionY,
+        }),
+        scopeId: this._scopeId,
+        onDone: done,
+      });
+      this._petDmgRuntimes.push({
+        ...createPetDamageFloatRuntime({
+          ...floatOpts,
+          text: numText,
+          baseY: y,
+        }),
+        scopeId: this._scopeId,
+        onDone: done,
+      });
+    });
+  }
+
+  private _pushDamageFloat(opts: {
+    x: number;
+    y: number;
+    element: Element;
+    damage: number;
+    isCrit: boolean;
+    counter: 1 | 0 | -1;
+    orderIdx: number;
+    skill: boolean;
+    minor: boolean;
+    onEnemy: boolean;
+  }): void {
+    const {
+      x, y, element, damage, isCrit, counter, orderIdx, skill, minor, onEnemy,
+    } = opts;
+    const styleKey = onEnemy
+      ? resolveEnemyDmgStyleKey(isCrit && !minor, minor)
+      : resolvePetDmgStyleKey(isCrit && !minor, minor);
     const palette = SLOT_ATTR_PALETTE[element];
     const motion = DMG_MOTION[styleKey];
     const baseScale = skill ? PET_FLOAT_CFG.skill.scale : PET_FLOAT_CFG.normalAtk.scale;
-    const anchor = petSlotDamageAnchor(slotX, slotY, lane);
-    const x = anchor.x + (minor ? (orderIdx - 0.5) * PET_FLOAT_CFG.multiHit.xStep : 0);
-    const y = anchor.y;
     const isCounter = counter === 1 && !minor;
 
     const t = this._petDmgPool.get();
     t.text = buildPetDmgLabel(element, damage);
     applyDmgRenderStyle(t, styleKey, palette);
     if (isCounter) {
-      // 克制命中：glow 提亮 + 数字略白热化
       t.style.dropShadowBlur = (t.style.dropShadowBlur as number) * 1.8;
       t.style.fill = 0xffffff;
+    }
+    if (onEnemy && !minor) {
+      t.style.fontSize = (t.style.fontSize as number) * 1.08;
     }
     this._floatLayer.addChild(t);
 
@@ -266,19 +411,18 @@ export class BattleFx {
 
     this._petDmgRuntimes.push({
       ...createPetDamageFloatRuntime({
-      text: t,
-      baseX: x,
-      baseY: y,
-      baseScale,
-      styleKey,
-      motion,
-      delayFrames,
+        text: t,
+        baseX: x,
+        baseY: y,
+        baseScale,
+        styleKey,
+        motion,
+        delayFrames,
       }),
       scopeId: this._scopeId,
     });
 
     if (isCounter) {
-      // 「克」角标：跟随主数字右上角，同生命周期（minor 运动曲线）
       const mark = this._petDmgPool.get();
       mark.text = '克';
       applyDmgRenderStyle(mark, 'slotDamageMinor', palette);

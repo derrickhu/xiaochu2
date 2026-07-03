@@ -19,6 +19,7 @@ import {
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
 import { Platform } from '@/core/PlatformService';
+import { GMManager } from '@/core/GMManager';
 import type { TeamEnterData } from './TeamScene';
 import type { PetDetailEnterData } from './PetDetailScene';
 import { bindPointerTap } from '@/utils/bindPointerTap';
@@ -171,6 +172,10 @@ export class TitleScene implements Scene {
       bold: true, anchor: 0.5,
     });
     label.position.set(w / 2, y);
+    if (GMManager.isRuntimeAllowed) {
+      label.eventMode = 'static';
+      bindPointerTap(label, () => GMManager.onTitleTap());
+    }
     this.container.addChild(label);
 
     const mkArrow = (text: string, x: number, targetChapter: number | null): void => {

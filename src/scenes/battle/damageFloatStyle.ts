@@ -113,11 +113,11 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     returnTo: -7,
     reboundFrames: 9,
     reboundTo: 4,
-    holdFrames: 24,
-    driftFrames: 12,
-    driftDist: 5,
-    lifeFrames: 80,
-    fadeStart: 62,
+    holdFrames: 42,
+    driftFrames: 14,
+    driftDist: 6,
+    lifeFrames: 118,
+    fadeStart: 96,
   },
   slotDamageCrit: {
     startScale: 0.68,
@@ -132,11 +132,11 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     returnTo: -9,
     reboundFrames: 10,
     reboundTo: 4.5,
-    holdFrames: 30,
-    driftFrames: 13,
-    driftDist: 6,
-    lifeFrames: 94,
-    fadeStart: 72,
+    holdFrames: 52,
+    driftFrames: 15,
+    driftDist: 7,
+    lifeFrames: 132,
+    fadeStart: 108,
     shakeDur: 13,
     shakeAmp: 4.8,
     jitterFrames: 16,
@@ -152,9 +152,52 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     riseDist: 10,
     returnFrames: 7,
     returnTo: 1,
-    holdFrames: 12,
-    lifeFrames: 28,
-    fadeStart: 21,
+    holdFrames: 18,
+    lifeFrames: 42,
+    fadeStart: 32,
+  },
+  /** 打在敌人身上的单段伤害（比槽位版更醒目、停更久） */
+  enemyHitMain: {
+    startScale: 0.58,
+    peakScale: 1.48,
+    settleScale: 1.08,
+    popFrames: 5,
+    settleFrames: 16,
+    startYOffset: 8,
+    riseFrames: 13,
+    riseDist: 48,
+    returnFrames: 11,
+    returnTo: -6,
+    reboundFrames: 9,
+    reboundTo: 3,
+    holdFrames: 48,
+    driftFrames: 16,
+    driftDist: 4,
+    lifeFrames: 125,
+    fadeStart: 102,
+  },
+  enemyHitCrit: {
+    startScale: 0.62,
+    peakScale: 1.72,
+    settleScale: 1.14,
+    popFrames: 5,
+    settleFrames: 18,
+    startYOffset: 10,
+    riseFrames: 14,
+    riseDist: 58,
+    returnFrames: 11,
+    returnTo: -8,
+    reboundFrames: 10,
+    reboundTo: 4,
+    holdFrames: 56,
+    driftFrames: 17,
+    driftDist: 5,
+    lifeFrames: 138,
+    fadeStart: 112,
+    shakeDur: 14,
+    shakeAmp: 5.2,
+    jitterFrames: 18,
+    jitterAmp: 3.6,
   },
 };
 
@@ -166,6 +209,45 @@ export const PET_FLOAT_CFG = {
 } as const;
 
 export type PetDmgStyleKey = 'slotDamageMain' | 'slotDamageCrit' | 'slotDamageMinor';
+
+export type EnemyDmgStyleKey = 'enemyHitMain' | 'enemyHitCrit';
+
+export function resolveEnemyDmgStyleKey(isCrit: boolean, minor: boolean): EnemyDmgStyleKey | 'slotDamageMinor' {
+  if (minor) return 'slotDamageMinor';
+  return isCrit ? 'enemyHitCrit' : 'enemyHitMain';
+}
+
+export type TurnTotalTier = 'normal' | 'mid' | 'high' | 'mega';
+
+export function resolveTurnTotalTier(
+  total: number,
+  combo: number,
+  hitCount: number,
+  enemyMaxHp: number,
+): TurnTotalTier {
+  if (total >= enemyMaxHp * 0.35 || combo >= 10) return 'mega';
+  if (total >= enemyMaxHp * 0.18 || combo >= 7 || hitCount >= 4) return 'high';
+  if (hitCount >= 2 || combo >= 4 || total >= enemyMaxHp * 0.08) return 'mid';
+  return 'normal';
+}
+
+/** 多段命中时在敌人立绘上的错位，避免数字重叠 */
+export function enemyDamageAnchor(
+  centerX: number,
+  centerY: number,
+  orderIdx: number,
+  hitCount: number,
+): { x: number; y: number } {
+  const S = dmgFloatScale();
+  const cols = Math.min(3, Math.max(1, hitCount));
+  const col = orderIdx % cols;
+  const row = Math.floor(orderIdx / cols);
+  const spreadX = 56 * S;
+  const spreadY = 40 * S;
+  const xOff = (col - (cols - 1) / 2) * spreadX;
+  const yOff = -24 * S - row * spreadY;
+  return { x: centerX + xOff, y: centerY + yOff };
+}
 
 export function resolvePetDmgStyleKey(isCrit: boolean, minor: boolean): PetDmgStyleKey {
   if (minor) return 'slotDamageMinor';
@@ -196,11 +278,16 @@ export function petSlotDamageAnchor(slotX: number, slotY: number, lane: 'main' |
 
 export function applyDmgRenderStyle(
   text: PIXI.Text,
-  styleKey: PetDmgStyleKey,
+  styleKey: PetDmgStyleKey | EnemyDmgStyleKey,
   palette: SlotAttrPalette,
 ): void {
+  const renderKey: PetDmgStyleKey = styleKey === 'enemyHitMain'
+    ? 'slotDamageMain'
+    : styleKey === 'enemyHitCrit'
+      ? 'slotDamageCrit'
+      : styleKey;
   const S = dmgFloatScale();
-  const RS = DMG_RENDER_STYLES[styleKey];
+  const RS = DMG_RENDER_STYLES[renderKey];
   text.style.fontFamily = RS.fontFamily;
   text.style.fontSize = RS.fontSize * S;
   text.style.fontWeight = '900' as PIXI.TextStyleFontWeight;
@@ -236,7 +323,7 @@ export function createPetDamageFloatRuntime(opts: {
   baseX: number;
   baseY: number;
   baseScale: number;
-  styleKey: PetDmgStyleKey;
+  styleKey: PetDmgStyleKey | EnemyDmgStyleKey;
   motion: DmgMotionPreset;
   delayFrames?: number;
 }): PetDamageFloatRuntime {
@@ -322,7 +409,11 @@ export function createPetDamageFloatRuntime(opts: {
       }
 
       let shakeOffset = 0;
-      if (styleKey === 'slotDamageCrit' && (motion.shakeDur ?? 0) > 0 && t <= (motion.shakeDur ?? 0)) {
+      if (
+        (styleKey === 'slotDamageCrit' || styleKey === 'enemyHitCrit')
+        && (motion.shakeDur ?? 0) > 0
+        && t <= (motion.shakeDur ?? 0)
+      ) {
         shakeOffset += Math.sin(t * 3.5) * (motion.shakeAmp ?? 0) * S * (1 - t / (motion.shakeDur ?? 1));
       }
       if ((motion.jitterFrames ?? 0) > 0 && t <= (motion.jitterFrames ?? 0)) {

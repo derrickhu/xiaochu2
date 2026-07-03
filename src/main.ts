@@ -18,6 +18,10 @@ import { PetDetailScene } from '@/scenes/PetDetailScene';
 import { CodexScene } from '@/scenes/CodexScene';
 import { GachaScene } from '@/scenes/GachaScene';
 import { ShopScene } from '@/scenes/ShopScene';
+import { GMManager } from '@/core/GMManager';
+import { OverlayManager } from '@/core/OverlayManager';
+import { GMPanel } from '@/ui/GMPanel';
+import { GMEntryButton } from '@/ui/GMEntryButton';
 
 declare const GameGlobal: any;
 
@@ -55,6 +59,11 @@ async function main(): Promise<void> {
   SceneManager.register(new GachaScene());
   SceneManager.register(new ShopScene());
   SceneManager.switchTo('title');
+
+  if (GMManager.isRuntimeAllowed) {
+    OverlayManager.container.addChild(new GMPanel());
+    OverlayManager.container.addChild(new GMEntryButton());
+  }
 
   await Game.warmScenePresent();
 

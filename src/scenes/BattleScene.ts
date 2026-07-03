@@ -15,6 +15,7 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
+import { GMManager } from '@/core/GMManager';
 import { battlePreloadImages, battlePetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { UI_FX_IMAGES } from '@/config/Assets';
 import { ensureAssets } from '@/config/Subpackages';
@@ -79,6 +80,7 @@ export class BattleScene implements Scene {
   private _stopPresent: (() => void) | null = null;
   private _tickerCb = (): void => this._update();
   private readonly _enterSeq = new SceneEnterSeq();
+  private readonly _gmInstantClear = (): string => this._executeGmInstantClear();
 
   onEnter(data?: unknown): void {
     PlayerData.load();
@@ -114,6 +116,7 @@ export class BattleScene implements Scene {
     deferSceneBuild(token, this._enterSeq, 'battle', () => {
       this._build();
       this._alive = true;
+      GMManager.registerInstantClearHandler(this._gmInstantClear);
       this._hud.refreshEnemy(false);
       this._hud.refreshHeroHp();
       Game.ticker.add(this._tickerCb);
@@ -122,6 +125,7 @@ export class BattleScene implements Scene {
 
   onExit(): void {
     this._alive = false;
+    GMManager.unregisterInstantClearHandler();
     this._resolveSeq++;
     this._stopPresent?.();
     this._stopPresent = null;
@@ -178,6 +182,14 @@ export class BattleScene implements Scene {
     stageText.anchor.set(0.5);
     stageText.position.set(w / 2, headerY);
     this.container.addChild(stageText);
+
+    if (GMManager.isEnabled) {
+      const gmSkip = makeButton('GM跳过', 120, 48, 0xc81e3c, () => {
+        GMManager.executeCommand('instant_clear');
+      });
+      gmSkip.position.set(220, headerY);
+      this.container.addChild(gmSkip);
+    }
 
     // 敌人区（尽早 refresh，避免后续组件构建异常时立绘/背景未挂上）
     this._hud.buildEnemyArea(this.container);
@@ -358,7 +370,7 @@ export class BattleScene implements Scene {
     for (let i = 0; i < res.attacks.length; i++) {
       if (isStale()) return;
       const attack = res.attacks[i];
-      await this._playPetAttack(attack, i, isStale);
+      await this._playPetAttack(attack, i, res.attacks.length, isStale);
       if (isStale()) return;
       const { enemyDead } = this._ctrl.applyPetAttack(attack);
       this._hud.refreshEnemyHp();
@@ -366,7 +378,39 @@ export class BattleScene implements Scene {
       await delay(UI.anim.attackGap);
     }
     if (isStale()) return;
+
+    const turnTotal = res.attacks.reduce((sum, a) => sum + a.damage, 0);
+    if (turnTotal > 0 && res.attacks.length > 0) {
+      await delay(UI.anim.turnTotalLeadIn);
+      if (isStale()) return;
+      await this._fx.showTurnTotalDamage({
+        total: turnTotal,
+        combo: res.combo,
+        hitCount: res.attacks.length,
+        x: this._layout.enemyCenterX,
+        y: this._layout.enemyCenterY,
+        enemyMaxHp: this._ctrl.enemy.maxHp,
+      });
+      if (isStale()) return;
+    }
+
     this._ctrl.beginEnemyTurn();
+  }
+
+  /** GM：立即通关当前关卡（跳过剩余波次与演出） */
+  private _executeGmInstantClear(): string {
+    if (!this._alive || this._ctrl.isFinished) return '战斗已结束';
+    this._resolveSeq++;
+    this._stopPresent?.();
+    this._stopPresent = null;
+    this._busy = false;
+    this._boardView?.cancelDrag();
+    if (this._ctrl.turnsUsed === 0) this._ctrl.turnsUsed = 1;
+    while (this._ctrl.hasNextWave()) this._ctrl.nextWave();
+    this._ctrl.enemy.hp = 0;
+    this._settleBattleVisuals();
+    this._overlay.show(this._ctrl, true);
+    return `已通关：${this._ctrl.stage.name}`;
   }
 
   /** 敌人死亡处理：死亡演出 → 下一波入场 / 胜利结算。返回 true = 战斗已结束 */
@@ -477,7 +521,12 @@ export class BattleScene implements Scene {
   }
 
   /** 单只宠物冲刺 → 属性弹道飞向敌人 → 命中瞬间受击反馈 + 飘字 → 回位 */
-  private async _playPetAttack(attack: PetAttack, orderIdx: number, isStale: () => boolean): Promise<void> {
+  private async _playPetAttack(
+    attack: PetAttack,
+    orderIdx: number,
+    hitCount: number,
+    isStale: () => boolean,
+  ): Promise<void> {
     if (isStale()) return;
     const slot = this._petBar.slotAt(attack.petIndex);
     if (!slot || slot.destroyed) return;
@@ -487,7 +536,7 @@ export class BattleScene implements Scene {
       TweenManager.cancelTarget(slot);
       slot.y = baseY;
       this._hud.playEnemyHit(this._fx, attack.element, attack.damage, attack.isCrit);
-      this._spawnDamageFloat(attack, orderIdx);
+      this._spawnDamageFloat(attack, orderIdx, hitCount);
     });
 
     minigameFallback(UI.anim.petDash + UI.anim.projectile + 0.35, finishHit);
@@ -520,18 +569,17 @@ export class BattleScene implements Scene {
     finishHit();
   }
 
-  /** 伤害数字：从出手宠物槽位弹出，属性色 + 克制/暴击标记 */
-  private _spawnDamageFloat(attack: PetAttack, orderIdx: number): void {
-    const slot = this._petBar.slotAt(attack.petIndex);
-    if (!slot || slot.destroyed) return;
-    this._fx.spawnPetDamageFloat({
-      slotX: slot.x,
-      slotY: slot.y,
+  /** 伤害数字：命中敌人立绘，属性色 + 克制/暴击标记 */
+  private _spawnDamageFloat(attack: PetAttack, orderIdx: number, hitCount: number): void {
+    this._fx.spawnEnemyHitDamage({
+      enemyX: this._layout.enemyCenterX,
+      enemyY: this._layout.enemyCenterY,
       element: attack.element,
       damage: attack.damage,
       isCrit: attack.isCrit,
       counter: attack.counter,
       orderIdx,
+      hitCount,
     });
   }
 
