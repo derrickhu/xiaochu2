@@ -1,6 +1,70 @@
+import type { Container, ObservablePoint } from 'pixi.js';
 import { Game } from './Game';
 import { Platform } from './PlatformService';
 import { TweenManager, type TweenConfig } from './TweenManager';
+
+/** Pixi 节点是否仍可用于读写 transform（destroy 后 .scale getter 可能抛错） */
+export function displayAlive(obj: unknown): obj is Container {
+  if (obj == null) return false;
+  const d = obj as { destroyed?: boolean };
+  return typeof d.destroyed !== 'boolean' || !d.destroyed;
+}
+
+export function readScale(obj: Container): ObservablePoint | null {
+  if (!displayAlive(obj)) return null;
+  try {
+    return obj.scale;
+  } catch {
+    return null;
+  }
+}
+
+export function resetScale(obj: Container, v = 1): boolean {
+  const s = readScale(obj);
+  if (!s) return false;
+  try {
+    s.set(v);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 安全写 scale；失败时返回 false（节点已 destroy / transform 为空） */
+export function setScaleSafe(obj: Container, x: number, y?: number): boolean {
+  const s = readScale(obj);
+  if (!s) return false;
+  try {
+    if (y === undefined) s.set(x);
+    else s.set(x, y);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function cancelDisplayTweens(obj: Container): void {
+  if (!displayAlive(obj)) return;
+  TweenManager.cancelTarget(obj);
+  const s = readScale(obj);
+  if (s) TweenManager.cancelTarget(s);
+}
+
+/** 安全读取 container.scale 再 guardedTween，避免调用点直接访问 .scale getter */
+export function tweenScale(
+  container: Container,
+  props: { x: number; y: number },
+  config: Omit<TweenConfig, 'target' | 'props'>,
+  opts?: {
+    fallbackSec?: number;
+    bufferMs?: number;
+    onFallback?: () => void;
+  },
+): Promise<void> {
+  const scale = readScale(container);
+  if (!scale) return Promise.resolve();
+  return guardedTween({ ...config, target: scale, props }, opts);
+}
 
 const frameListeners = new Set<(dt: number) => void>();
 

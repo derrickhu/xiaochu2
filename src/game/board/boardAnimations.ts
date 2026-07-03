@@ -2,7 +2,7 @@ import * as PIXI from 'pixi.js';
 import { ObjectPool } from '@/core/ObjectPool';
 import { Ease, TweenManager } from '@/core/TweenManager';
 import { UI } from '@/balance/ui';
-import { minigameFallback, once } from '@/core/animationGuard';
+import { minigameFallback, once, displayAlive, readScale } from '@/core/animationGuard';
 import type { OrbType } from '@/balance/combat';
 import type { Cell, FallMove, MatchGroup } from './BoardModel';
 
@@ -31,19 +31,29 @@ export function playBoardClear(ctx: BoardAnimationContext, group: MatchGroup): P
         done();
         continue;
       }
+      if (!sp || !displayAlive(sp)) {
+        done();
+        continue;
+      }
+      const spScale = readScale(sp);
+      if (!spScale) {
+        ctx.pool.release(sp);
+        done();
+        continue;
+      }
       const complete = once(() => {
         TweenManager.cancelTarget(sp);
-        TweenManager.cancelTarget(sp.scale);
+        TweenManager.cancelTarget(spScale);
         ctx.pool.release(sp);
         done();
       });
       minigameFallback(UI.anim.orbClear, complete);
       TweenManager.to({
-        target: sp.scale, props: { x: sp.scale.x * 1.25, y: sp.scale.y * 1.25 },
+        target: spScale, props: { x: spScale.x * 1.25, y: spScale.y * 1.25 },
         duration: UI.anim.orbClear * 0.3, ease: Ease.easeOutQuad,
         onComplete: () => {
           TweenManager.to({
-            target: sp.scale, props: { x: 0.01, y: 0.01 },
+            target: spScale, props: { x: 0.01, y: 0.01 },
             duration: UI.anim.orbClear * 0.7, ease: Ease.easeInQuad,
           });
           TweenManager.to({
@@ -121,17 +131,20 @@ export function playBoardConvert(
     const size = ctx.cell * UI.board.orbScale;
     for (const { r, c } of cells) {
       const sp = ctx.sprites[r][c];
-      if (!sp) {
+      if (!sp || !displayAlive(sp)) {
         done();
         continue;
       }
-      TweenManager.cancelTarget(sp.scale);
+      const spScale = readScale(sp);
+      if (spScale) TweenManager.cancelTarget(spScale);
       const complete = once(() => {
-        TweenManager.cancelTarget(sp);
-        TweenManager.cancelTarget(sp.scale);
-        ctx.applyOrbTexture(sp, to);
-        sp.width = size;
-        sp.height = size;
+        if (displayAlive(sp)) {
+          TweenManager.cancelTarget(sp);
+          if (spScale) TweenManager.cancelTarget(spScale);
+          ctx.applyOrbTexture(sp, to);
+          sp.width = size;
+          sp.height = size;
+        }
         done();
         if (remain <= 0) ctx.refreshOrbStates();
       });

@@ -7,7 +7,7 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { TweenManager, Ease } from '@/core/TweenManager';
-import { guardedTween, minigameFallback, once } from '@/core/animationGuard';
+import { guardedTween, minigameFallback, once, displayAlive, readScale, setScaleSafe, tweenScale } from '@/core/animationGuard';
 import { TextureCache } from '@/core/TextureCache';
 import { ObjectPool } from '@/core/ObjectPool';
 import { FxLayer, type BurstOptions } from '@/core/FxLayer';
@@ -85,7 +85,7 @@ export class BattleFx {
       onGet: (t) => {
         t.visible = true;
         t.alpha = 1;
-        t.scale.set(1);
+        setScaleSafe(t, 1);
       },
       onRelease: (t) => {
         TweenManager.cancelTarget(t);
@@ -105,7 +105,7 @@ export class BattleFx {
       onGet: (t) => {
         t.visible = true;
         t.alpha = 1;
-        t.scale.set(1);
+        setScaleSafe(t, 1);
       },
       onRelease: (t) => {
         t.visible = false;
@@ -121,7 +121,12 @@ export class BattleFx {
     this._shake.update(dt);
     for (let i = this._petDmgRuntimes.length - 1; i >= 0; i--) {
       const rt = this._petDmgRuntimes[i];
-      if (rt.scopeId !== this._scopeId || rt.update(dt)) {
+      if (!displayAlive(rt.text) || rt.scopeId !== this._scopeId) {
+        if (displayAlive(rt.text)) this._petDmgPool.release(rt.text);
+        this._petDmgRuntimes.splice(i, 1);
+        continue;
+      }
+      if (rt.update(dt)) {
         this._petDmgPool.release(rt.text);
         this._petDmgRuntimes.splice(i, 1);
       }
@@ -172,9 +177,12 @@ export class BattleFx {
     for (const [child, childScope] of Array.from(this._scopeChildren.entries())) {
       if (childScope !== scopeId) continue;
       this._scopeChildren.delete(child);
-      TweenManager.cancelTarget(child);
-      TweenManager.cancelTarget(child.scale);
-      if (!child.destroyed) child.destroy({ children: true });
+      if (displayAlive(child)) {
+        TweenManager.cancelTarget(child);
+        const childScale = readScale(child);
+        if (childScale) TweenManager.cancelTarget(childScale);
+        child.destroy({ children: true });
+      }
     }
 
     this._fx.clear();
@@ -211,7 +219,7 @@ export class BattleFx {
     t.style.fontSize = 36;
     t.style.strokeThickness = 5;
     t.position.set(x, y);
-    t.scale.set(scale);
+    setScaleSafe(t, scale);
     this._activeFloats.set(t, scopeId);
     this._floatLayer.addChild(t);
     TweenManager.to({
@@ -370,16 +378,15 @@ export class BattleFx {
     sp.blendMode = PIXI.BLEND_MODES.ADD;
     sp.tint = color;
     sp.position.set(x, y);
-    sp.scale.set(0.25);
+    setScaleSafe(sp, 0.25);
     sp.alpha = 1;
     this._scopeChildren.set(sp, this._scopeId);
     this._fx.container.addChild(sp);
     const cleanup = once(() => {
       this._scopeChildren.delete(sp);
-      if (!sp.destroyed) sp.destroy();
+      if (displayAlive(sp)) sp.destroy();
     });
-    void guardedTween({
-      target: sp.scale, props: { x: 1.5, y: 1.5 },
+    void tweenScale(sp, { x: 1.5, y: 1.5 }, {
       duration: 0.4, ease: Ease.easeOutCubic,
     }, { onFallback: cleanup });
     void guardedTween({
@@ -404,16 +411,15 @@ export class BattleFx {
     sp.blendMode = PIXI.BLEND_MODES.ADD;
     sp.tint = color;
     sp.position.set(x, y);
-    sp.scale.set(0.3);
+    setScaleSafe(sp, 0.3);
     sp.alpha = 0.95;
     this._scopeChildren.set(sp, this._scopeId);
     this._fx.container.addChild(sp);
     const cleanup = once(() => {
       this._scopeChildren.delete(sp);
-      if (!sp.destroyed) sp.destroy();
+      if (displayAlive(sp)) sp.destroy();
     });
-    void guardedTween({
-      target: sp.scale, props: { x: 1.9, y: 1.9 },
+    void tweenScale(sp, { x: 1.9, y: 1.9 }, {
       duration: 0.5, ease: Ease.easeOutCubic,
     }, { onFallback: cleanup });
     void guardedTween({
@@ -432,22 +438,21 @@ export class BattleFx {
       });
       t.anchor.set(0.5);
       t.position.set(Game.logicWidth / 2, Game.logicHeight * 0.42);
-      t.scale.set(1.8);
+      setScaleSafe(t, 1.8);
       t.alpha = 0;
       this._floatLayer.addChild(t);
       const scopeId = this._scopeId;
       this._scopeChildren.set(t, scopeId);
       const finish = once(() => {
         if (this._scopeChildren.get(t) === scopeId) this._scopeChildren.delete(t);
-        if (!t.destroyed) t.destroy();
+        if (displayAlive(t)) t.destroy();
         resolve();
       });
       TweenManager.to({
         target: t, props: { alpha: 1 },
         duration: UI.anim.comboPop,
       });
-      void guardedTween({
-        target: t.scale, props: { x: 1, y: 1 },
+      void tweenScale(t, { x: 1, y: 1 }, {
         duration: UI.anim.comboPop, ease: Ease.easeOutBack,
         onComplete: () => {
           void guardedTween({

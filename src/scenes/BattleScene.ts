@@ -71,8 +71,12 @@ export class BattleScene implements Scene {
   private _overlay!: BattleResultOverlay;
 
   private _busy = false;
+  /** 场景是否仍处于可更新/可演出状态（onExit 后置 false） */
+  private _alive = false;
   /** 拖珠结算代次：场景退出或强制收敛时递增，陈旧 async 演出立即短路 */
   private _resolveSeq = 0;
+  /** 真机结算 present 循环句柄，onExit 时必须立即停止 */
+  private _stopPresent: (() => void) | null = null;
   private _tickerCb = (): void => this._update();
   private readonly _enterSeq = new SceneEnterSeq();
 
@@ -109,6 +113,7 @@ export class BattleScene implements Scene {
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'battle', () => {
       this._build();
+      this._alive = true;
       this._hud.refreshEnemy(false);
       this._hud.refreshHeroHp();
       Game.ticker.add(this._tickerCb);
@@ -116,7 +121,10 @@ export class BattleScene implements Scene {
   }
 
   onExit(): void {
+    this._alive = false;
     this._resolveSeq++;
+    this._stopPresent?.();
+    this._stopPresent = null;
     this._enterSeq.cancel();
     Game.ticker.remove(this._tickerCb);
     this._boardView?.cancelDrag();
@@ -215,6 +223,7 @@ export class BattleScene implements Scene {
   // ════════════ 每帧 ════════════
 
   private _update(dt = Game.ticker.deltaMS / 1000): void {
+    if (!this._alive) return;
     this._boardView?.update(dt);
     this._fx.update(dt);
     this._petBar.update(dt);
@@ -242,15 +251,20 @@ export class BattleScene implements Scene {
     const seq = ++this._resolveSeq;
     const isStale = (): boolean => seq !== this._resolveSeq;
 
-    const stopPresent = startMinigamePresentLoop({
-      onUpdate: (dt) => this._update(dt),
+    this._stopPresent?.();
+    this._stopPresent = startMinigamePresentLoop({
+      onUpdate: (dt) => {
+        if (!this._alive || isStale()) return;
+        this._update(dt);
+      },
     });
     try {
       await this._resolveAfterDrag(isStale);
     } catch (e) {
       if (!isStale()) console.error('[BattleScene] _onDragEnd', e);
     } finally {
-      stopPresent();
+      this._stopPresent?.();
+      this._stopPresent = null;
       if (isStale()) return;
       this._settleBattleVisuals(visualScope);
       this._busy = false;

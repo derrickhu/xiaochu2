@@ -24,6 +24,7 @@ import type { BattleLayout } from './BattleLayout';
 import { showPetSkillPreview, TAP_SLOP, type PetSkillPreviewHandle } from './PetSkillPreviewBubble';
 import { bindCanvasPointerMove, type CanvasPointerMoveHandle } from '@/minigame/canvasInteraction';
 import { clientEventToDesign, designPointToLocal } from '@/utils/clientEventToDesign';
+import { displayAlive, readScale } from '@/core/animationGuard';
 
 interface PetBarHooks {
   /** 上滑达阈值 → 请求对该槽位施法 */
@@ -200,7 +201,7 @@ export class BattlePetBar {
         petSize,
         canAct,
         true,
-        canAct ? this._slots[i].scale : undefined,
+        canAct && displayAlive(this._slots[i]) ? readScale(this._slots[i]) ?? undefined : undefined,
       );
     });
   }
@@ -298,13 +299,14 @@ export class BattlePetBar {
     const lift = Math.min(Math.max(0, dy) * 0.55, skillSwipeLiftMax);
 
     slot.y = baseY - lift;
-    slot.scale.set(1 + Math.min(dy / skillSwipeThreshold, 1) * 0.1);
+    const slotScale = readScale(slot);
+    slotScale?.set(1 + Math.min(dy / skillSwipeThreshold, 1) * 0.1);
     this._slotReadyFx[ptr.index].root.visible = false;
 
     if (dy >= skillSwipeThreshold) {
       ptr.triggered = true;
       slot.y = baseY;
-      slot.scale.set(1);
+      readScale(slot)?.set(1);
       this._petPointer = null;
       this._hooks.onSkillCast(ptr.index);
     }
@@ -335,7 +337,7 @@ export class BattlePetBar {
 
     if (!animateBack) {
       slot.y = baseY;
-      slot.scale.set(1);
+      readScale(slot)?.set(1);
     } else {
       TweenManager.cancelTarget(slot);
       TweenManager.to({
@@ -344,12 +346,15 @@ export class BattlePetBar {
         duration: 0.12,
         ease: Ease.easeOutQuad,
       });
-      TweenManager.to({
-        target: slot.scale,
-        props: { x: 1, y: 1 },
-        duration: 0.12,
-        ease: Ease.easeOutQuad,
-      });
+      const slotScale = readScale(slot);
+      if (slotScale) {
+        TweenManager.to({
+          target: slotScale,
+          props: { x: 1, y: 1 },
+          duration: 0.12,
+          ease: Ease.easeOutQuad,
+        });
+      }
     }
 
     if (isTap) this._showSkillPreview(index);

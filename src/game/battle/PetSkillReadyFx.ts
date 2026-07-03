@@ -4,6 +4,7 @@
  * 性能：Graphics 仅在创建时绘制一次，运行时只改 transform / alpha，不做 clear/redraw。
  */
 import * as PIXI from 'pixi.js';
+import { setScaleSafe } from '@/core/animationGuard';
 
 const FLASH_DURATION = 0.25;
 
@@ -178,9 +179,9 @@ export function updatePetSkillReadyFx(
     const rfP = fx.flashT / FLASH_DURATION;
     fx.flash.visible = true;
     fx.flash.alpha = rfP * 0.7;
-    fx.flash.scale.set(0.5 + (1 - rfP) * 0.8);
+    setScaleSafe(fx.flash, 0.5 + (1 - rfP) * 0.8);
   } else {
     fx.flash.visible = false;
-    fx.flash.scale.set(1);
+    setScaleSafe(fx.flash, 1);
   }
 }

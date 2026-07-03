@@ -11,7 +11,7 @@ import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
 import { flashWhite } from '@/core/FxLayer';
 import { Platform } from '@/core/PlatformService';
-import { guardedTween } from '@/core/animationGuard';
+import { guardedTween, displayAlive, readScale, resetScale, cancelDisplayTweens, tweenScale, setScaleSafe } from '@/core/animationGuard';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
 import { enemyImage, battleBgImage, ORB_IMAGES } from '@/config/Assets';
@@ -292,10 +292,13 @@ export class BattleHud {
   refreshEnemy(switchWave: boolean): void {
     const enemy = this._ctrl.enemy;
     const tex = TextureCache.get(enemy.def.image ?? enemyImage(enemy.def.id));
-    if (tex) {
+    if (tex && displayAlive(this._enemySprite)) {
       this._enemySprite.texture = tex;
-      const scale = UI.battle.enemySize / Math.max(tex.width, tex.height);
-      this._enemySprite.scale.set(scale);
+      const s = readScale(this._enemySprite);
+      if (s) {
+        const v = UI.battle.enemySize / Math.max(tex.width, tex.height);
+        s.set(v);
+      }
     }
     if (!switchWave) this._enemyContainer.alpha = 1;
     const ratio = enemy.maxHp > 0 ? enemy.hp / enemy.maxHp : 0;
@@ -326,7 +329,9 @@ export class BattleHud {
     const areaH = this._enemyAreaBottom - this._enemyAreaTop;
     const fitW = w / tex.width;
     const fitH = areaH / tex.height;
-    this._enemyBgSprite.scale.set(Math.max(fitW, fitH));
+    if (displayAlive(this._enemyBgSprite)) {
+      setScaleSafe(this._enemyBgSprite, Math.max(fitW, fitH));
+    }
   }
 
   /** 敌人属性克制提示：弱点珠 / 抵抗珠（对齐 xiao_chu） */
@@ -408,12 +413,15 @@ export class BattleHud {
     if (enemy.charging) {
       parts.push(`⚠ 蓄力中！下回合重击 ×${enemy.charging.mult}`);
       this._enemyCdText.style.fill = 0xff5252;
-      TweenManager.cancelTarget(this._enemyCdText.scale);
-      this._enemyCdText.scale.set(1.25);
-      TweenManager.to({
-        target: this._enemyCdText.scale, props: { x: 1, y: 1 },
-        duration: UI.anim.chargeWarn, ease: Ease.easeOutQuad,
-      });
+      const cdScale = readScale(this._enemyCdText);
+      if (cdScale) {
+        TweenManager.cancelTarget(cdScale);
+        cdScale.set(1.25);
+        TweenManager.to({
+          target: cdScale, props: { x: 1, y: 1 },
+          duration: UI.anim.chargeWarn, ease: Ease.easeOutQuad,
+        });
+      }
     } else {
       parts.push(`${enemy.attackCountdown} 回合后攻击`);
       this._enemyCdText.style.fill = 0xffb74d;
@@ -482,11 +490,13 @@ export class BattleHud {
 
   /** 英雄血条数字受击跳动 */
   pulseHeroHpText(heavy: boolean): void {
-    TweenManager.cancelTarget(this._heroHpText.scale);
+    const hpScale = readScale(this._heroHpText);
+    if (!hpScale) return;
+    TweenManager.cancelTarget(hpScale);
     const s = heavy ? 1.38 : 1.22;
-    this._heroHpText.scale.set(s);
+    hpScale.set(s);
     TweenManager.to({
-      target: this._heroHpText.scale,
+      target: hpScale,
       props: { x: 1, y: 1 },
       duration: 0.28,
       ease: Ease.easeOutBack,
@@ -527,8 +537,10 @@ export class BattleHud {
 
   /** 敌人死亡：闪白 + 碎裂粒子 + 缩小淡出 */
   playEnemyDeath(fx: BattleFx): Promise<void> {
+    const c = this._enemyContainer;
+    if (!displayAlive(c)) return Promise.resolve();
     const { enemyCenterX, enemyCenterY } = this._layout;
-    flashWhite(this._enemySprite, 0.16, 0.95);
+    if (displayAlive(this._enemySprite)) flashWhite(this._enemySprite, 0.16, 0.95);
     const color = ORB_COLOR[this._ctrl.enemy.def.element];
     fx.burst({
       x: enemyCenterX, y: enemyCenterY,
@@ -540,33 +552,42 @@ export class BattleHud {
     });
     fx.shakeMedium();
     Platform.vibrateShort('heavy');
-    void guardedTween({
-      target: this._enemyContainer.scale, props: { x: 0.7, y: 0.7 },
-      duration: UI.anim.enemyDeath, ease: Ease.easeInCubic,
-    });
-    return guardedTween({
-        target: this._enemyContainer, props: { alpha: 0 },
+    cancelDisplayTweens(c);
+    return Promise.all([
+      tweenScale(c, { x: 0.7, y: 0.7 }, {
+        duration: UI.anim.enemyDeath, ease: Ease.easeInCubic,
+      }),
+      guardedTween({
+        target: c, props: { alpha: 0 },
         duration: UI.anim.enemyDeath, ease: Ease.easeInQuad,
-    });
+      }),
+    ]).then(() => {});
   }
 
   playWaveEnter(): Promise<void> {
     this.refreshEnemy(true);
+    const c = this._enemyContainer;
+    if (!displayAlive(c)) return Promise.resolve();
+    cancelDisplayTweens(c);
     const { enemyCenterX } = this._layout;
-    this._enemyContainer.alpha = 0;
-    this._enemyContainer.scale.set(1);
-    this._enemyContainer.x = enemyCenterX + 160;
+    c.alpha = 0;
+    resetScale(c, 1);
+    c.x = enemyCenterX + 160;
     return guardedTween({
-      target: this._enemyContainer, props: { alpha: 1, x: enemyCenterX },
+      target: c, props: { alpha: 1, x: enemyCenterX },
       duration: UI.anim.waveEnter, ease: Ease.easeOutQuad,
       onComplete: () => {
-        this._enemyContainer.alpha = 1;
-        this._enemyContainer.x = enemyCenterX;
+        if (!displayAlive(c)) return;
+        c.alpha = 1;
+        c.x = enemyCenterX;
+        resetScale(c, 1);
       },
     }, {
       onFallback: () => {
-        this._enemyContainer.alpha = 1;
-        this._enemyContainer.x = enemyCenterX;
+        if (!displayAlive(c)) return;
+        c.alpha = 1;
+        c.x = enemyCenterX;
+        resetScale(c, 1);
       },
     });
   }
@@ -588,11 +609,21 @@ export class BattleHud {
     const { enemyCenterX, enemyCenterY, heroBarY } = this._layout;
     const toX = Game.logicWidth / 2;
     const toY = heroBarY;
-    const baseScale = this._enemySprite.scale.x;
+    const sprite = this._enemySprite;
+    if (!displayAlive(sprite)) {
+      onHeroHit();
+      return;
+    }
+    const spriteScale = readScale(sprite);
+    if (!spriteScale) {
+      onHeroHit();
+      return;
+    }
+    const baseScale = spriteScale.x;
 
-    TweenManager.cancelTarget(this._enemySprite.scale);
+    TweenManager.cancelTarget(spriteScale);
     await guardedTween({
-      target: this._enemySprite.scale,
+      target: spriteScale,
       props: {
         x: baseScale * (heavy ? 1.14 : 1.08),
         y: baseScale * (heavy ? 1.14 : 1.08),
@@ -609,7 +640,7 @@ export class BattleHud {
       },
     );
     void guardedTween({
-      target: this._enemySprite.scale,
+      target: spriteScale,
       props: { x: baseScale, y: baseScale },
       duration: 0.12,
       ease: Ease.easeOutQuad,
@@ -654,17 +685,16 @@ export class BattleHud {
     });
     fx.spawnFloat('蓄力中！', enemyCenterX, enemyCenterY - 60, 0xff5252, 1.3);
     Platform.vibrateShort('medium');
-    const s = this._enemyContainer.scale;
-    await guardedTween({
-      target: s, props: { x: 1.12, y: 1.12 },
+    const c = this._enemyContainer;
+    if (!displayAlive(c)) return;
+    await tweenScale(c, { x: 1.12, y: 1.12 }, {
       duration: UI.anim.chargeWarn / 2, ease: Ease.easeOutQuad,
     });
-    await guardedTween({
-      target: s, props: { x: 1, y: 1 },
+    await tweenScale(c, { x: 1, y: 1 }, {
       duration: UI.anim.chargeWarn / 2, ease: Ease.easeInQuad,
     }, {
       onFallback: () => {
-        s.set(1);
+        resetScale(c, 1);
       },
     });
   }
@@ -796,19 +826,16 @@ export class BattleHud {
       color: 0x9575cd, count: 16, speed: 300, gravity: 500, size: 15, life: 0.5,
     });
     const c = this._enemyContainer;
-    const s = c.scale;
-    TweenManager.cancelTarget(s);
-    TweenManager.cancelTarget(c);
-    await guardedTween({
-      target: s, props: { x: 1.08, y: 0.78 },
+    if (!displayAlive(c)) return;
+    cancelDisplayTweens(c);
+    await tweenScale(c, { x: 1.08, y: 0.78 }, {
       duration: 0.16, ease: Ease.easeOutQuad,
     });
-    await guardedTween({
-      target: s, props: { x: 1, y: 1 },
+    await tweenScale(c, { x: 1, y: 1 }, {
       duration: 0.22, ease: Ease.easeOutBack,
     }, {
       onFallback: () => {
-        s.set(1);
+        resetScale(c, 1);
       },
     });
   }
@@ -824,17 +851,17 @@ export class BattleHud {
     fx.spawnFloat(`狂暴！攻击 ×${atkMult}`, enemyCenterX, enemyCenterY - 60, 0xff5252, 1.4);
     fx.shakeMedium();
     Platform.vibrateLong();
-    const s = this._enemyContainer.scale;
-    await guardedTween({
-      target: s, props: { x: 1.18, y: 1.18 },
+    const c = this._enemyContainer;
+    if (!displayAlive(c)) return;
+    cancelDisplayTweens(c);
+    await tweenScale(c, { x: 1.18, y: 1.18 }, {
       duration: 0.16, ease: Ease.easeOutQuad,
     });
-    await guardedTween({
-      target: s, props: { x: 1, y: 1 },
+    await tweenScale(c, { x: 1, y: 1 }, {
       duration: 0.2, ease: Ease.easeInQuad,
     }, {
       onFallback: () => {
-        s.set(1);
+        resetScale(c, 1);
       },
     });
   }

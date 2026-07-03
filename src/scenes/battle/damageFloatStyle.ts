@@ -5,6 +5,7 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import type { Element } from '@/balance/combat';
 import { UI } from '@/balance/ui';
+import { displayAlive, setScaleSafe } from '@/core/animationGuard';
 
 /** xiao_chu main.js: S = W / 375 */
 export function dmgFloatScale(): number {
@@ -248,13 +249,18 @@ export function createPetDamageFloatRuntime(opts: {
   const startScale = motion.startScale ?? 0.78;
 
   text.position.set(baseX, baseY);
-  text.scale.set(baseScale * startScale);
+  if (!setScaleSafe(text, baseScale * startScale)) {
+    return { text, update: () => true };
+  }
   text.alpha = delay > 0 ? 0 : 1;
 
   return {
     text,
     update(dt: number): boolean {
-      if (dead) return true;
+      if (dead || !displayAlive(text)) {
+        dead = true;
+        return true;
+      }
       const fps = UI.fps.battle;
       if (delay > 0) {
         delay -= dt * fps;
@@ -283,7 +289,10 @@ export function createPetDamageFloatRuntime(opts: {
       } else {
         motionScale = settleScale;
       }
-      text.scale.set(baseScale * motionScale);
+      if (!setScaleSafe(text, baseScale * motionScale)) {
+        dead = true;
+        return true;
+      }
 
       const startYOffset = (motion.startYOffset ?? 0) * S;
       const riseDist = (motion.riseDist ?? 0) * S;

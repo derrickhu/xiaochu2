@@ -9,6 +9,7 @@ import { comboMultiplier } from '@/formulas/damage';
 import type { BattleLayout } from './BattleLayout';
 import type { BattleFx } from './BattleFx';
 import { dmgFloatScale } from './damageFloatStyle';
+import { displayAlive, readScale } from '@/core/animationGuard';
 
 const COMBO_FONT = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
 
@@ -253,7 +254,7 @@ export class ComboDisplay {
 
   /** 每组消除 +1 时调用（xiao_chu：combo≥2 才显示文字，VFX 每连都播） */
   show(combo: number, fx: BattleFx): void {
-    if (combo <= 0) return;
+    if (combo <= 0 || !displayAlive(this._root)) return;
     this._spawnVfx(combo, fx);
 
     if (combo < 2) {
@@ -271,7 +272,7 @@ export class ComboDisplay {
     const initScale = isComboMilestone(combo) ? (style.tier >= 4 ? 4.0 : 2.9) : 2.9;
     this._anim = { combo, timer: 0, initScale };
     this._layoutTexts(combo, style);
-    this._root.scale.set(initScale);
+    readScale(this._root)?.set(initScale);
     this._root.alpha = style.isLow ? 0.5 : 1;
   }
 
@@ -287,7 +288,7 @@ export class ComboDisplay {
   }
 
   update(dt: number): void {
-    if (!this._anim || !this._root.visible) return;
+    if (!this._anim || !displayAlive(this._root) || !this._root.visible) return;
 
     const S = dmgFloatScale();
     const POP_END = 16;
@@ -330,7 +331,7 @@ export class ComboDisplay {
     }
 
     const style = comboStyle(this._anim.combo);
-    this._root.scale.set(scale);
+    readScale(this._root)?.set(scale);
     this._root.alpha = alpha * (style.isLow ? 0.5 : 1);
     this._root.position.set(Game.logicWidth / 2, this._anchorY + offsetY);
     this._drawRing(this._anim.combo, style, t);

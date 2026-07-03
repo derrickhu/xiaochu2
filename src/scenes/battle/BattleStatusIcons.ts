@@ -9,6 +9,7 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { UI } from '@/balance/ui';
+import { displayAlive, readScale, cancelDisplayTweens } from '@/core/animationGuard';
 import type { StatusInstance, StatusKind, StatusOwner } from '@/game/battle/BattleStatus';
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BattleLayout } from './BattleLayout';
@@ -103,8 +104,9 @@ export class BattleStatusIcons {
 
   destroy(): void {
     for (const entry of this._icons.values()) {
-      TweenManager.cancelTarget(entry.container);
-      TweenManager.cancelTarget(entry.container.scale);
+      if (displayAlive(entry.container)) {
+        cancelDisplayTweens(entry.container);
+      }
     }
     this._icons.clear();
   }
@@ -126,11 +128,14 @@ export class BattleStatusIcons {
         entry = this._makeIcon(style);
         this._icons.set(key, entry);
         row.addChild(entry.container);
-        entry.container.scale.set(0.2);
-        TweenManager.to({
-          target: entry.container.scale, props: { x: 1, y: 1 },
-          duration: 0.25, ease: Ease.easeOutBack,
-        });
+        const iconScale = readScale(entry.container);
+        if (iconScale) {
+          iconScale.set(0.2);
+          TweenManager.to({
+            target: iconScale, props: { x: 1, y: 1 },
+            duration: 0.25, ease: Ease.easeOutBack,
+          });
+        }
       }
       entry.container.position.set(startX + i * step, 0);
       const turns = s.turnsLeft ?? null;
@@ -171,8 +176,8 @@ export class BattleStatusIcons {
 
   /** 到期：短促闪烁后淡出销毁 */
   private _fadeOut(c: PIXI.Container): void {
-    TweenManager.cancelTarget(c);
-    TweenManager.cancelTarget(c.scale);
+    if (!displayAlive(c)) return;
+    cancelDisplayTweens(c);
     TweenManager.to({
       target: c, props: { alpha: 0 },
       duration: 0.3, ease: Ease.easeInQuad,

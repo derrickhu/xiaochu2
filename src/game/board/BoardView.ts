@@ -11,6 +11,7 @@ import { Game } from '@/core/Game';
 import { ObjectPool } from '@/core/ObjectPool';
 import { TextureCache } from '@/core/TextureCache';
 import { TweenManager } from '@/core/TweenManager';
+import { setScaleSafe, readScale } from '@/core/animationGuard';
 import { Platform } from '@/core/PlatformService';
 import { UI } from '@/balance/ui';
 import { COMBAT, type OrbType } from '@/balance/combat';
@@ -97,11 +98,12 @@ export class BoardView {
       onGet: (sp) => {
         sp.visible = true;
         sp.alpha = 1;
-        sp.scale.set(1);
+        setScaleSafe(sp, 1);
       },
       onRelease: (sp) => {
         TweenManager.cancelTarget(sp);
-        TweenManager.cancelTarget(sp.scale);
+        const spScale = readScale(sp);
+        if (spScale) TweenManager.cancelTarget(spScale);
         sp.visible = false;
         if (sp.parent) sp.parent.removeChild(sp);
       },
