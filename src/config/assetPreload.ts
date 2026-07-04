@@ -164,6 +164,13 @@ export function petDetailAvatarEntry(petId: string): PetAvatarPreloadEntry | nul
   return { petId, star: PlayerData.petStar(petId) };
 }
 
+/** 主界面：预加载编队队长头像（地图「从这里出发」标记） */
+export function titleLeadPetAvatarEntry(): PetAvatarPreloadEntry | null {
+  const lead = PlayerData.team[0];
+  if (!lead) return null;
+  return { petId: lead, star: PlayerData.petStar(lead) };
+}
+
 /** 预加载灵宠头像（含 ID 迁移 fallback + 限并发） */
 export async function ensurePetAvatars(entries: readonly PetAvatarPreloadEntry[]): Promise<void> {
   if (entries.length === 0) return;

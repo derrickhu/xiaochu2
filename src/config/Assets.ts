@@ -100,9 +100,18 @@ export function creatureMonsterImage(creatureId: string, tier: 'tier1' | 'tier2'
     : `${root}/${creatureId}.png`;
 }
 
+/** 章节路径地图 UI（主包） */
+export const MAP_UI_IMAGES = {
+  nodesSheet: `${IMG}/ui/map/nodes_sheet.png`,
+} as const;
+
 /** 场景背景 */
 export const BACKGROUND_IMAGES = {
   home: `${IMG}/bg/scene_home.jpg`,
+  /** 首屏全屏背景（9:16，含顶栏区域 + 章节路径） */
+  titleScreen: `${IMG}/bg/title_screen.jpg`,
+  /** 与 titleScreen 同源 */
+  chapterMap: `${IMG}/bg/title_screen.jpg`,
   petDetail: `${PKG.scene}/images/bg/scene_pet_detail.jpg`,
   petPool: `${PKG.scene}/images/bg/scene_pet_pool.jpg`,
 } as const;
@@ -158,6 +167,8 @@ export const MAIN_PRELOAD_IMAGES: readonly string[] = [
   BOARD_IMAGES.dark,
   BOARD_IMAGES.light,
   BACKGROUND_IMAGES.home,
+  BACKGROUND_IMAGES.titleScreen,
+  ...Object.values(MAP_UI_IMAGES),
   ...Object.values(UI_IMAGES),
   ...Object.values(UI_PANEL_IMAGES),
   ...Object.values(PET_FRAME_IMAGES),

@@ -1,0 +1,28 @@
+Mobile game chapter world map background, STRICT top-down bird's-eye orthographic view looking straight down at the ground.
+
+CRITICAL perspective rules:
+- The ENTIRE image is land terrain seen from above. NO sky, NO horizon line, NO gradient sky band at the top.
+- NO side-scrolling ground perspective, NO tilted camera, NO 3/4 isometric view.
+- Like a printed tabletop map or satellite cartoon view: grass fills the whole canvas edge to edge.
+
+Art style (match reference mobile RPG chapter map):
+- Bright cheerful 2D cartoon, clean shapes, soft cel shading
+- Lush green meadows with subtle rolling-hill color variation (lighter/darker green patches)
+- Scattered tree clusters as round green canopies seen from above
+- Small grey-brown rock clusters, tiny wildflower dots
+- Optional: narrow turquoise river or pond streak on the LEFT edge only, still top-down
+- Small thatched hut rooftops (yellow-brown circles) tucked near trees, very small scale
+- Sandy beige patches near water edge if river present
+
+Composition for vertical scroll:
+- Portrait tall layout, terrain continues naturally from bottom to top
+- Center area kept relatively open (lighter grass) for gameplay path overlay
+- Decorative details mainly on left/right margins, not blocking center
+
+MUST NOT include:
+- NO dirt road, NO path, NO yellow trail, NO lines connecting anything
+- NO level nodes, NO shields, NO characters, NO UI
+- NO text, NO labels, NO captions, NO writing anywhere
+- NO clouds covering the map (optional tiny white cloud puff only at extreme top-right corner, max 5% of image)
+
+Output: single seamless-feeling game background plate only.

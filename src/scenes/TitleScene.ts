@@ -1,41 +1,29 @@
 /**
- * 标题场景：水墨主视觉 + 灵宠币/经验 + 章节关卡列表 + 底部导航（灵宠/招募/编队）
+ * 标题场景：全屏修仙背景 + 资源条 + 章节路径节点 + 底部导航
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
-import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
-import { CHAPTERS, CHAPTER_NAME, stagesOfChapter, stageWaveCount } from '@/balance/stages';
-import { getChapterGoal } from '@/balance/chapterGoal';
-import { getStageType } from '@/balance/stageTypes';
+import { UI } from '@/balance/ui';
+import { CHAPTERS, CHAPTER_NAME, stagesOfChapter } from '@/balance/stages';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
-import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
-import { ensurePetAvatars } from '@/config/assetPreload';
+import { UI_IMAGES } from '@/config/Assets';
 import {
-  COLORS, FONT_SIZE, RADIUS,
-  makeText, makePanel, makeIconButton, makeCoverBackground, makeCurrencyRow, staggerIn, popIn,
+  COLORS, FONT_SIZE,
+  makeText, makeIconButton, makeCurrencyRow, makeChapterNavArrow,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
-import { Platform } from '@/core/PlatformService';
 import { GMManager } from '@/core/GMManager';
+import { EventBus } from '@/core/EventBus';
 import type { TeamEnterData } from './TeamScene';
-import type { PetDetailEnterData } from './PetDetailScene';
 import { bindPointerTap } from '@/utils/bindPointerTap';
-import {
-  buildChapterGoalCard, CHAPTER_GOAL_CARD_H, CHAPTER_GOAL_CARD_W,
-} from './chapterGoalCard';
+import { buildTitleScreenWorld } from './chapterMapView';
+import { attachChapterMapEditor } from './chapterMapEditor';
+import { ensurePetAvatars, titleLeadPetAvatarEntry } from '@/config/assetPreload';
 
 declare const GameGlobal: any;
-
-function iosMinigame(): boolean {
-  try {
-    return Platform.isMinigame && Platform.api?.getSystemInfoSync?.()?.platform === 'ios';
-  } catch {
-    return false;
-  }
-}
 
 export interface TitleEnterData {
   /** 进入时选中的章节（默认最新已解锁章） */
@@ -50,18 +38,22 @@ export class TitleScene implements Scene {
 
   /** 底部导航区高度（紫祥云底栏 + 三图标 + 文字标签） */
   private static readonly BOTTOM_RESERVE = 128;
-  private static readonly STAGE_ITEM_H = 86;
-  private static readonly STAGE_GAP = 12;
-  private static readonly GOAL_AFTER_NAV = 28;
-  private static readonly GOAL_LIST_GAP = 18;
+  private static readonly CHAPTER_NAV_H = 44;
 
   private _chapter = 1;
   private _minimalStrip: TitleEnterData['minimalStrip'];
   private _scroll = new ScrollListController();
-  private _stageContent: PIXI.Container | null = null;
-  private _stageMask: PIXI.Graphics | null = null;
+  private _worldRoot: PIXI.Container | null = null;
+  private _mapEditMode = false;
+  private _editorTeardown: (() => void) | null = null;
+  private _onMapEditToggle = (): void => {
+    if (!GMManager.isEnabled) return;
+    this._mapEditMode = !this._mapEditMode;
+    this._rebuild();
+  };
 
   onEnter(data?: unknown): void {
+    EventBus.on('gm:mapEditToggle', this._onMapEditToggle);
     const enter = data as TitleEnterData | undefined;
     this._minimalStrip = enter?.minimalStrip;
     if (this._minimalStrip !== 'l7like') {
@@ -69,30 +61,18 @@ export class TitleScene implements Scene {
     }
     PlayerData.load();
     this._chapter = enter?.chapter ?? this._latestUnlockedChapter();
-    void this._preloadGoalAvatarAndBuild();
-  }
-
-  private async _preloadGoalAvatarAndBuild(): Promise<void> {
-    const goal = getChapterGoal(this._chapter);
-    if (goal) {
-      try {
-        await ensurePetAvatars([{ petId: goal.petId, star: 1 }]);
-      } catch (e) {
-        console.warn('[TitleScene] chapter goal avatar preload fail:', e);
-      }
-    }
     if (SceneManager.current?.name !== 'title') return;
     this._rebuild();
-    await Game.warmScenePresent();
+    const leadEntry = titleLeadPetAvatarEntry();
+    if (leadEntry) void ensurePetAvatars([leadEntry]);
+    void Game.warmScenePresent();
   }
 
   private _rebuild(): void {
+    this._editorTeardown?.();
+    this._editorTeardown = null;
     this._scroll.detach();
-    this._stageContent = null;
-    if (this._stageMask) {
-      this._stageMask.destroy();
-      this._stageMask = null;
-    }
+    this._worldRoot = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
     this._build();
   }
@@ -106,12 +86,12 @@ export class TitleScene implements Scene {
   }
 
   onExit(): void {
+    EventBus.off('gm:mapEditToggle', this._onMapEditToggle);
+    this._editorTeardown?.();
+    this._editorTeardown = null;
+    this._mapEditMode = false;
     this._scroll.detach();
-    this._stageContent = null;
-    if (this._stageMask) {
-      this._stageMask.destroy();
-      this._stageMask = null;
-    }
+    this._worldRoot = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
   }
 
@@ -119,37 +99,44 @@ export class TitleScene implements Scene {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
 
-    this._buildBackground(w, h);
-    this._buildResourceBar(w, Game.safeTop + 36);
+    const stages = stagesOfChapter(this._chapter);
+    const mapEditMode = GMManager.isEnabled && this._mapEditMode;
+    const mapWorld = buildTitleScreenWorld({
+      chapter: this._chapter,
+      stages,
+      screenW: w,
+      screenH: h,
+      scroll: this._scroll,
+      mapEditMode,
+      onStageTap: (stageId) => {
+        if (mapEditMode) return;
+        SceneManager.switchTo('team', { stageId } satisfies TeamEnterData);
+      },
+    });
+    this._worldRoot = mapWorld.world;
+    this.container.addChild(mapWorld.world);
 
-    const logoTex = TextureCache.get(UI_IMAGES.titleLogo);
-    const logoY = Game.safeTop + 168;
-    if (logoTex) {
-      const logo = new PIXI.Sprite(logoTex);
-      logo.anchor.set(0.5);
-      const logoW = 340;
-      logo.scale.set(logoW / logoTex.width);
-      logo.position.set(w / 2, logoY);
-      this.container.addChild(logo);
-    } else {
-      const title = makeText('灵宠消消塔', { size: FONT_SIZE.xl, fill: COLORS.textTitle, bold: true, anchor: 0.5 });
-      title.position.set(w / 2, logoY);
-      this.container.addChild(title);
+    if (mapEditMode) {
+      const editor = attachChapterMapEditor({
+        screenW: w,
+        chapter: this._chapter,
+        designLayer: mapWorld.designLayer,
+        nodes: mapWorld.nodes,
+        marker: mapWorld.marker,
+        activeIndex: mapWorld.activeIndex,
+        stageCount: stages.length,
+        onEditingChange: (editing) => {
+          this._mapEditMode = editing;
+        },
+        onRefresh: () => this._rebuild(),
+      });
+      this._editorTeardown = editor.teardown;
+      this.container.addChild(editor.toolbar);
     }
 
-    const navY = Game.safeTop + 268;
-    this._buildChapterNav(w, navY);
-
-    const goalTop = navY + TitleScene.GOAL_AFTER_NAV;
-    const goalBottom = this._buildChapterGoal(w, goalTop);
-    const listTop = goalBottom + TitleScene.GOAL_LIST_GAP;
-    const listBottom = h - TitleScene.BOTTOM_RESERVE - 12;
-    this._buildStageList(w, listTop, listBottom);
+    this._buildResourceBar(w, Game.safeTop + 36);
+    this._buildChapterNav(w, Game.safeTop + 120);
     this._buildBottomNav(w, h);
-  }
-
-  private _buildBackground(w: number, h: number): void {
-    this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.home, w, h));
   }
 
   private _buildResourceBar(w: number, y: number): void {
@@ -163,13 +150,15 @@ export class TitleScene implements Scene {
   }
 
   private _buildChapterNav(w: number, y: number): void {
-    const chapterUnlocked = PlayerData.isChapterUnlocked(this._chapter);
+    const gmEditAll = GMManager.isEnabled && this._mapEditMode;
+    const chapterUnlocked = gmEditAll || PlayerData.isChapterUnlocked(this._chapter);
     const name = CHAPTER_NAME[this._chapter] ?? `第${this._chapter}章`;
     const idx = CHAPTERS.indexOf(this._chapter);
 
     const label = makeText(`— ${name} —`, {
       size: FONT_SIZE.md, fill: chapterUnlocked ? COLORS.textTitle : COLORS.textDisabled,
       bold: true, anchor: 0.5,
+      strokeColor: 0xfdf3df, strokeWidth: 3,
     });
     label.position.set(w / 2, y);
     if (GMManager.isRuntimeAllowed) {
@@ -178,188 +167,22 @@ export class TitleScene implements Scene {
     }
     this.container.addChild(label);
 
-    const mkArrow = (text: string, x: number, targetChapter: number | null): void => {
-      const enabled = targetChapter !== null && PlayerData.isChapterUnlocked(targetChapter);
-      const arrow = makeText(text, {
-        size: FONT_SIZE.lg, fill: enabled ? COLORS.accent : COLORS.panelBorderSoft,
-        bold: true, anchor: 0.5,
-      });
-      arrow.position.set(x, y);
-      if (enabled) {
-        arrow.eventMode = 'static';
-        arrow.cursor = 'pointer';
-        bindPointerTap(arrow, () => {
+    const mkArrow = (direction: 'left' | 'right', x: number, targetChapter: number | null): void => {
+      const enabled = targetChapter !== null
+        && (gmEditAll || PlayerData.isChapterUnlocked(targetChapter));
+      const arrow = makeChapterNavArrow({
+        direction,
+        enabled,
+        onTap: () => {
           this._chapter = targetChapter!;
           this._rebuild();
-        });
-      }
+        },
+      });
+      arrow.position.set(x, y);
       this.container.addChild(arrow);
     };
-    mkArrow('◀', w / 2 - 220, idx > 0 ? CHAPTERS[idx - 1] : null);
-    mkArrow('▶', w / 2 + 220, idx < CHAPTERS.length - 1 ? CHAPTERS[idx + 1] : null);
-  }
-
-  /** @returns 卡片底边 Y（设计坐标） */
-  private _buildChapterGoal(w: number, topY: number): number {
-    const goal = getChapterGoal(this._chapter);
-    if (!goal) return topY;
-
-    const wrap = new PIXI.Container();
-    wrap.position.set(w / 2, topY + CHAPTER_GOAL_CARD_H / 2);
-    const card = buildChapterGoalCard(goal, {
-      width: CHAPTER_GOAL_CARD_W,
-      onTap: () => {
-        SceneManager.switchTo('petDetail', {
-          petId: goal.petId,
-          backScene: 'title',
-          backData: { chapter: this._chapter } satisfies TitleEnterData,
-          preview: true,
-        } satisfies PetDetailEnterData);
-      },
-    });
-    wrap.addChild(card);
-    this.container.addChild(wrap);
-    if (this._minimalStrip !== 'l7like') {
-      popIn(wrap, { fromScale: 0.94 });
-    }
-
-    return topY + CHAPTER_GOAL_CARD_H;
-  }
-
-  private _buildStageList(w: number, listTop: number, listBottom: number): void {
-    this._scroll.detach();
-    if (this._stageMask) {
-      this.container.removeChild(this._stageMask);
-      this._stageMask.destroy();
-      this._stageMask = null;
-    }
-    if (this._stageContent) {
-      this._stageContent.destroy({ children: true });
-      this._stageContent = null;
-    }
-
-    const stages = stagesOfChapter(this._chapter);
-    const itemW = CHAPTER_GOAL_CARD_W;
-    const itemH = TitleScene.STAGE_ITEM_H;
-    const gap = TitleScene.STAGE_GAP;
-    const content = new PIXI.Container();
-    content.position.set(0, listTop);
-    this._stageContent = content;
-    this.container.addChild(content);
-
-    const items: PIXI.Container[] = [];
-    let maxBottom = 0;
-
-    stages.forEach((stage, i) => {
-      const unlocked = PlayerData.isUnlocked(stage);
-      const stars = PlayerData.starsOf(stage.id);
-      const typeDef = getStageType(stage.type);
-      const y = i * (itemH + gap);
-
-      const item = new PIXI.Container();
-      item.position.set(w / 2, y + itemH / 2);
-
-      const itemBg = makePanel({
-        width: itemW, height: itemH, radius: RADIUS.card,
-        bg: unlocked ? COLORS.panelBg : COLORS.panelBgAlt,
-        bgAlpha: unlocked ? 0.96 : 0.82,
-        border: unlocked ? ORB_COLOR[stage.element] : COLORS.panelBorderSoft,
-        borderAlpha: unlocked ? 1 : 0.6,
-      });
-      item.addChild(itemBg);
-
-      const nameText = makeText(`${stage.chapter}-${stage.index}  ${stage.name}`, {
-        size: FONT_SIZE.md, fill: unlocked ? COLORS.textMain : COLORS.textDisabled,
-        bold: true, anchor: [0, 0.5],
-      });
-      nameText.position.set(-itemW / 2 + 28, -14);
-      item.addChild(nameText);
-
-      if (stage.isBoss) {
-        const capBadge = makeText('收录', {
-          size: FONT_SIZE.xs, fill: COLORS.accent, bold: true, anchor: [0, 0.5],
-        });
-        capBadge.position.set(-itemW / 2 + 28 + nameText.width + 14, -14);
-        item.addChild(capBadge);
-      } else if (stage.type !== 'normal') {
-        const badge = makeText(typeDef.name, {
-          size: FONT_SIZE.xs, fill: unlocked ? typeDef.color : COLORS.textDisabled, bold: true, anchor: [0, 0.5],
-        });
-        badge.position.set(-itemW / 2 + 28 + nameText.width + 14, -14);
-        item.addChild(badge);
-      }
-
-      const tagSuffix = stage.hintTags && stage.hintTags.length > 0
-        ? ` · ${stage.hintTags.join('·')}`
-        : '';
-      const subText = makeText(
-        unlocked
-          ? `${ELEMENT_NAME[stage.element]} · ${stageWaveCount(stage)}波${tagSuffix}`
-          : (stage.index === 1 ? '通关上一章 Boss 解锁' : '通关上一关解锁'),
-        { size: FONT_SIZE.xs, fill: unlocked ? COLORS.textSub : COLORS.textDisabled, anchor: [0, 0.5] },
-      );
-      subText.position.set(-itemW / 2 + 28, 18);
-      item.addChild(subText);
-
-      const rightText = makeText(
-        unlocked ? '★'.repeat(stars) + '☆'.repeat(3 - stars) : '未解锁',
-        unlocked
-          ? { size: FONT_SIZE.lg, fill: COLORS.accent, anchor: [1, 0.5] }
-          : { size: FONT_SIZE.sm, fill: COLORS.textDisabled, anchor: [1, 0.5] },
-      );
-      rightText.position.set(itemW / 2 - 24, 0);
-      item.addChild(rightText);
-
-      if (unlocked) {
-        item.eventMode = 'static';
-        item.cursor = 'pointer';
-        bindPointerTap(item, () => {
-          SceneManager.switchTo('team', { stageId: stage.id } satisfies TeamEnterData);
-        }, { guard: () => !this._scroll.moved });
-      }
-
-      content.addChild(item);
-      items.push(item);
-      maxBottom = Math.max(maxBottom, y + itemH);
-    });
-
-    if (this._minimalStrip !== 'l7like') {
-      staggerIn(items, { stepDelay: 0.04, offsetY: 16 });
-    }
-
-    const viewportH = listBottom - listTop;
-    const contentH = maxBottom + gap;
-    const scrollMin = Math.min(listTop, listTop - Math.max(0, contentH - viewportH));
-
-    if (this._minimalStrip === 'l7like' || this._minimalStrip === 'withAnim') {
-      return;
-    }
-
-    if (contentH > viewportH) {
-      const usePixiMask = !iosMinigame();
-      const mask = new PIXI.Graphics();
-      mask.beginFill(0xffffff);
-      mask.drawRect(0, listTop, w, viewportH);
-      mask.endFill();
-      if (usePixiMask) {
-        this.container.addChild(mask);
-        this._stageMask = mask;
-        content.mask = mask;
-      } else {
-        mask.destroy();
-        this._stageMask = null;
-        content.mask = null;
-      }
-
-      this._scroll.attach({
-        content: () => this._stageContent,
-        viewportTop: listTop,
-        viewportH,
-        scrollMin,
-        listTop,
-        moveThreshold: 2,
-      });
-    }
+    mkArrow('left', w / 2 - 220, idx > 0 ? CHAPTERS[idx - 1] : null);
+    mkArrow('right', w / 2 + 220, idx < CHAPTERS.length - 1 ? CHAPTERS[idx + 1] : null);
   }
 
   private _buildBottomNav(w: number, h: number): void {
@@ -401,9 +224,5 @@ export class TitleScene implements Scene {
       btn.position.set(s.x, btnY);
       this.container.addChild(btn);
     }
-  }
-
-  private _refresh(): void {
-    this._rebuild();
   }
 }

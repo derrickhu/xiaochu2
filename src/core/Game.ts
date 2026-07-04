@@ -34,6 +34,10 @@ class GameClass {
   scale = 1;
   dpr = 1;
   safeTop = 0;
+  /** 微信胶囊左缘（设计稿坐标）；无胶囊时为 designWidth */
+  safeCapsuleLeft = 750;
+  safeCapsuleTop = 0;
+  safeCapsuleBottom = 32;
 
   private _initialized = false;
 
@@ -55,16 +59,31 @@ class GameClass {
     }
 
     let safeTopPx = 0;
+    const ratio = this.designWidth / this.screenWidth;
+    this.safeCapsuleLeft = this.designWidth;
+    this.safeCapsuleTop = 0;
+    this.safeCapsuleBottom = Math.round(32 * ratio);
     try {
       const capsule = _api?.getMenuButtonBoundingClientRect?.();
       if (capsule && capsule.top) {
         safeTopPx = capsule.top;
+        if (capsule.left > 0) {
+          this.safeCapsuleLeft = Math.round(capsule.left * ratio);
+          this.safeCapsuleTop = Math.round(capsule.top * ratio);
+          this.safeCapsuleBottom = Math.round(
+            (capsule.bottom ?? capsule.top + (capsule.height ?? 32)) * ratio,
+          );
+        }
       } else if (sysInfo?.statusBarHeight) {
         safeTopPx = sysInfo.statusBarHeight + 6;
       }
     } catch (_) { /* */ }
     if (safeTopPx <= 0) safeTopPx = 40;
-    this.safeTop = Math.round(safeTopPx * (this.designWidth / this.screenWidth));
+    this.safeTop = Math.round(safeTopPx * ratio);
+    if (this.safeCapsuleTop <= 0) {
+      this.safeCapsuleTop = this.safeTop;
+      this.safeCapsuleBottom = this.safeTop + Math.round(32 * ratio);
+    }
 
     this.scale = this.screenWidth / this.designWidth * this.dpr;
     const realWidth = this.screenWidth * this.dpr;

@@ -4,17 +4,9 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 
-/** 设计坐标 → 容器本地（对齐 huahua：手动减 parent 链偏移，避免 toLocal 触发整棵 transform 树更新） */
+/** 设计坐标 → 容器本地（含父级 scale/pivot，地图 cover 缩放后点击才准） */
 export function designPointToContainerLocal(target: PIXI.Container, dx: number, dy: number): PIXI.Point {
-  let ox = 0;
-  let oy = 0;
-  let cur: PIXI.Container | null = target;
-  while (cur && cur !== Game.stage) {
-    ox += cur.x;
-    oy += cur.y;
-    cur = cur.parent;
-  }
-  return new PIXI.Point(dx - ox, dy - oy);
+  return target.toLocal(new PIXI.Point(dx, dy), Game.stage);
 }
 
 export function containsDesignPoint(target: PIXI.Container, dx: number, dy: number): boolean {

@@ -1,0 +1,22 @@
+Mobile game level selection map background plate.
+
+CRITICAL OUTPUT FORMAT:
+- Portrait orientation ONLY, aspect ratio exactly 9:16 (width:height = 9:16, TALL vertical image like a phone screen).
+- NOT landscape, NOT square, NOT 16:9.
+
+Visual style:
+- Bright cartoon casual mobile puzzle game, forest fantasy theme.
+- High-angle view of continuous green meadow ground filling entire frame.
+- NO sky band, NO horizon line at top — only land and distant glow.
+- Central winding S-curve cream-yellow dirt path painted into the terrain.
+- Path is wider at bottom, narrower toward top center with soft golden glow.
+- Red spot mushrooms, gray rocks, colorful flowers on left/right margins.
+- Faint circular lighter grass pads along path for level buttons.
+- Soft god rays from top center.
+
+MUST NOT include:
+- NO level nodes, shields, numbers, UI, text, labels.
+
+Reference composition similar to underwater level map: winding path from bottom to top, decorations on sides.
+
+NO TEXT anywhere in the image.

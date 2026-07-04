@@ -6,6 +6,7 @@
  */
 import { EventBus } from '@/core/EventBus';
 import { Platform } from '@/core/PlatformService';
+import { ChapterMapLayoutStore } from '@/game/chapterMapLayoutStore';
 
 const GM_STORAGE_KEY = 'xiaochu2_gm';
 
@@ -106,6 +107,39 @@ class GMManagerClass {
   }
 
   private _registerCommands(): void {
+    this._commands.push({
+      id: 'toggle_map_edit',
+      group: '主界面',
+      name: '编辑关卡位置',
+      desc: '切换主界面关卡节点拖拽编辑（左右切换章节均可编辑）',
+      execute: () => {
+        EventBus.emit('gm:mapEditToggle');
+        EventBus.emit('gm:close');
+        return '已进入关卡位置编辑（再点一次可退出）';
+      },
+    });
+    this._commands.push({
+      id: 'export_map_layout',
+      group: '主界面',
+      name: '导出关卡布局',
+      desc: '控制台一条日志输出 JSON + bundled TS',
+      execute: () => {
+        const counts = ChapterMapLayoutStore.listSavedCounts();
+        if (!counts.length) {
+          Platform.showModal('导出关卡布局', '暂无已保存布局。\n请先进入编辑模式，拖好节点后点「保存布局」。');
+          Platform.showToast('暂无已保存布局', 'none');
+          return '暂无已保存布局，请先保存后再导出';
+        }
+        const report = ChapterMapLayoutStore.exportReport();
+        console.warn('[GM] 关卡地图布局导出\n', report);
+        Platform.showModal(
+          '导出成功',
+          `已保存 ${counts.join(' / ')} 关布局。\n控制台已输出一条合并日志，复制 TS 段落到 chapterMapBundledLayouts.ts。`,
+        );
+        Platform.showToast(`已导出 ${counts.length} 套布局`, 'success');
+        return `已导出 ${counts.join('/')} 关布局，见控制台一条合并日志`;
+      },
+    });
     this._commands.push({
       id: 'instant_clear',
       group: '战斗',

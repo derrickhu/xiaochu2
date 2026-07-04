@@ -38,7 +38,18 @@ export class GMEntryButton extends PIXI.Container {
     this.cursor = 'pointer';
     bindPointerTap(this, () => GMManager.openPanel());
 
-    this.position.set(Game.logicWidth - w - 12, Game.safeTop + 6);
+    this._layout();
+  }
+
+  private _layout(): void {
+    const w = 56;
+    const h = 32;
+    const pad = 10;
+    // 避开微信右上角胶囊：放在胶囊左侧、垂直居中
+    const x = Math.max(pad, Game.safeCapsuleLeft - w - pad);
+    const capH = Math.max(28, Game.safeCapsuleBottom - Game.safeCapsuleTop);
+    const y = Game.safeCapsuleTop + Math.round((capH - h) / 2);
+    this.position.set(x, y);
   }
 
   private _syncVisible(): void {

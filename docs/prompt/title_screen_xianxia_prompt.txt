@@ -1,0 +1,27 @@
+Mobile game TITLE SCREEN background plate, portrait 9:16 (750x1334 proportions).
+
+CRITICAL — LOCK ART STYLE (match previously approved Q版 chibi xianxia level map, DO NOT change style):
+- Pastel cute mobile game illustration: soft cel-shading, thin outlines, rounded chibi shapes
+- Same look as before: mint/cream sky, purple-lavender bottom clouds, bamboo, small stone pavilion, glowing spirit rocks, tiny fox ears, floating spirit wisps
+- NOT scene_pet_pool pond layout, NOT minimal ink-wash, NOT underwater, NOT realistic mountains
+- DO NOT switch to a different composition or color mood — keep the approved Q版修仙 style
+
+PATH (most important — clear START and END):
+- S-shaped cobblestone trail with moss edges and ~12 EMPTY circular stone pads (subtle gold rim) baked along the path
+- PATH START (bottom-left): obvious wider stone entrance platform at y≈88~90%, x≈18~28%, emerging from purple/mint cloud bank — visually distinct trail head, NO text label
+- PATH END (top-right): obvious final wider stone platform at y≈24~28%, x≈68~78%, fading into misty sky — visually distinct trail destination, NO text label
+- Middle: smooth S-curve through center, one small wooden bridge on a bend
+- Path centerline stays open for level icon overlay
+
+SKY: evenly bright cream-to-mint — NO dark top band, NO vignette, NO shadow gradient
+
+DECORATION (moderate — same style family, do not overcrowd path):
+- 2 bamboo clusters at margins, 1 small Q pavilion bottom-right, 2 glowing spirit stones, 1 fox peeking, few sparkles
+- Bottom 20%: purple-lavender stylized cloud bank (blend with nav bar)
+- Optional: 1-2 pastel spirit mushrooms far from path only
+
+MUST NOT include:
+- NO UI, NO text, NO numbers, NO shields, NO buttons, NO words (especially NO "START" or "END" text)
+- NO pond-as-main-focus layout, NO style change from approved Q版 map
+
+NO TEXT anywhere in the image.

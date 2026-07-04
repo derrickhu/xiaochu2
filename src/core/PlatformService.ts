@@ -131,6 +131,12 @@ class PlatformServiceClass {
     } catch (_) {}
   }
 
+  showModal(title: string, content: string): void {
+    try {
+      this._api?.showModal?.({ title, content, showCancel: false });
+    } catch (_) {}
+  }
+
   // ═══════════════ 分享 ═══════════════
 
   showShareMenu(opts?: { withShareTicket?: boolean; menus?: string[] }): void {
