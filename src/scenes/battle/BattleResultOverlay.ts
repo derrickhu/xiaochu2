@@ -61,7 +61,6 @@ export class BattleResultOverlay {
   show(ctrl: BattleController, win: boolean): void {
     const result = ctrl.finish(win);
     let milestoneLingyu = 0;
-    let codexLingyu = 0;
     let defeatRefund = 0;
     const newlyDiscovered: string[] = [];
     if (win) {
@@ -70,9 +69,6 @@ export class BattleResultOverlay {
       for (const s of result.shards) PlayerData.addShards(s.petId, s.count);
       for (const cid of result.discoveredCreatures) {
         if (PlayerData.discover(cid)) newlyDiscovered.push(cid);
-      }
-      if (newlyDiscovered.length > 0) {
-        codexLingyu = PlayerData.claimCodexMilestones();
       }
       BattleResultOverlay._failCounts.delete(ctrl.stage.id);
     } else {
@@ -99,7 +95,7 @@ export class BattleResultOverlay {
     );
     const btnCount = (win && nextStage ? 1 : 0) + 2;
     const rewardRowCount = win
-      ? 2 + result.shards.length + (milestoneLingyu > 0 ? 1 : 0) + (codexLingyu > 0 ? 1 : 0)
+      ? 2 + result.shards.length + (milestoneLingyu > 0 ? 1 : 0)
       : 0;
     const progressHintText = win
       ? battleProgressHint(ctrl.stage.id, milestoneLingyu > 0)
@@ -118,7 +114,7 @@ export class BattleResultOverlay {
 
     if (win && winLayout) {
       this._buildWinContent(
-        panel, ctrl, result, milestoneLingyu, codexLingyu, newlyDiscovered, progressHintText, winLayout,
+        panel, ctrl, result, milestoneLingyu, newlyDiscovered, progressHintText, winLayout,
       );
       this._buildNavButtons(panel, ctrl, win, winLayout.buttonYs);
     } else {
@@ -175,12 +171,12 @@ export class BattleResultOverlay {
     const lastRewardY = rewardYs.length > 0
       ? rewardYs[rewardYs.length - 1]
       : detail;
-    let tailY = lastRewardY;
-    if (opts.hasDiscover) tailY += WIN_GAP_REWARDS_DISCOVER + 28;
-    const discover = opts.hasDiscover ? lastRewardY + WIN_GAP_REWARDS_DISCOVER + 28 : lastRewardY;
-    if (opts.hasDiscover) tailY = discover;
+    const discover = opts.hasDiscover
+      ? lastRewardY + WIN_GAP_REWARDS_DISCOVER + 24
+      : lastRewardY;
+    const tailY = opts.hasDiscover ? discover + 52 : lastRewardY;
     const progressHint = opts.hasProgressHint
-      ? tailY + (opts.hasDiscover ? 56 : WIN_GAP_REWARDS_DISCOVER + 28)
+      ? tailY + (opts.hasDiscover ? 16 : WIN_GAP_REWARDS_DISCOVER + 28)
       : tailY;
 
     return { title, stars, detail, rewardYs, discover, progressHint, buttonYs };
@@ -226,7 +222,6 @@ export class BattleResultOverlay {
     ctrl: BattleController,
     result: ReturnType<BattleController['finish']>,
     milestoneLingyu: number,
-    codexLingyu: number,
     newlyDiscovered: string[],
     progressHintText: string | null,
     layout: WinLayout,
@@ -330,33 +325,12 @@ export class BattleResultOverlay {
       this._placeIconRow(panel, lingyuRow, nextRewardY());
     }
 
-    if (codexLingyu > 0) {
-      const codexRow = makeIconLabel({
-        iconPath: UI_IMAGES.iconLingyu,
-        iconSize: REWARD_ICON_SIZE,
-        caption: '图鉴里程碑',
-        captionFill: COLORS.textSub,
-        text: `+${codexLingyu}`,
-        size: 24,
-        fill: COLORS.accentDeep,
-      });
-      this._placeIconRow(panel, codexRow, nextRewardY());
-    }
-
     if (newlyDiscovered.length > 0) {
-      const discoverTitle = new PIXI.Text('收录成功 · 已进入召唤池', {
-        fontSize: 22, fill: COLORS.accentDeep, align: 'center', fontWeight: 'bold',
-      });
-      discoverTitle.anchor.set(0.5);
-      discoverTitle.position.set(0, layout.discover - 16);
-      discoverTitle.alpha = 0;
-      panel.addChild(discoverTitle);
-
       const iconSize = 48;
       const gap = 10;
       const rowW = newlyDiscovered.length * iconSize + (newlyDiscovered.length - 1) * gap;
       let ix = -rowW / 2 + iconSize / 2;
-      const rowY = layout.discover + 20;
+      const rowY = layout.discover;
       for (const cid of newlyDiscovered) {
         const tex = getPetAvatarTexture(cid, 1);
         if (tex) {
@@ -370,28 +344,24 @@ export class BattleResultOverlay {
           panel.addChild(sp);
           TweenManager.to({
             target: sp, props: { alpha: 1 },
-            duration: 0.35, delay: 0.65, ease: Ease.easeOutCubic,
+            duration: 0.35, delay: 0.55, ease: Ease.easeOutCubic,
           });
         }
         ix += iconSize + gap;
       }
 
       const names = newlyDiscovered.map((cid) => PET_MAP.get(cid)?.name ?? cid).join('、');
-      const discoverSub = new PIXI.Text(`${names}\n可在「召唤 / 商店」中获取`, {
-        fontSize: 18, fill: COLORS.textSub, align: 'center', lineHeight: 24,
+      const discoverLine = new PIXI.Text(`${names} · 已进召唤池`, {
+        fontSize: 20, fill: COLORS.accentDeep, align: 'center', fontWeight: 'bold',
       });
-      discoverSub.anchor.set(0.5);
-      discoverSub.position.set(0, rowY + iconSize / 2 + 36);
-      discoverSub.alpha = 0;
-      panel.addChild(discoverSub);
+      discoverLine.anchor.set(0.5);
+      discoverLine.position.set(0, rowY + iconSize / 2 + 18);
+      discoverLine.alpha = 0;
+      panel.addChild(discoverLine);
 
       TweenManager.to({
-        target: discoverTitle, props: { alpha: 1 },
-        duration: 0.35, delay: 0.55, ease: Ease.easeOutCubic,
-      });
-      TweenManager.to({
-        target: discoverSub, props: { alpha: 1 },
-        duration: 0.35, delay: 0.75, ease: Ease.easeOutCubic,
+        target: discoverLine, props: { alpha: 1 },
+        duration: 0.35, delay: 0.65, ease: Ease.easeOutCubic,
       });
     }
 

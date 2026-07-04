@@ -34,8 +34,8 @@ export interface StageDrops {
 }
 
 /**
- * 关卡掉落结算：经验/碎片按 章节成长 × 关卡类型倍率 × (1 + 星数加成) 放大。
- * 经验为升级燃料（跨宠共享）；碎片仅精英/Boss/资源关等产出，常规关不掉碎片。
+ * 关卡掉落结算：经验按 章节成长 × 关卡类型倍率 × (1 + 星数加成) 放大。
+ * 关卡战斗不掉碎片（防无限刷）；碎片来源：抽卡重复、商店兑换。
  */
 export function stageDrops(
   dropTableId: string | undefined,
@@ -51,9 +51,5 @@ export function stageDrops(
   const starBonus = 1 + stars * ECONOMY.coin.perStarBonus;
 
   const exp = Math.floor(table.expBase * st.expMult * chapterMult * starBonus);
-  const shards = type === 'normal' ? [] : table.shards.map((s) => ({
-    petId: s.petId,
-    count: Math.max(1, Math.floor(s.amount * st.shardMult * starBonus)),
-  }));
-  return { exp, shards };
+  return { exp, shards: [] };
 }

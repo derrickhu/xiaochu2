@@ -186,12 +186,12 @@ describe('stageDrops 产出公式', () => {
     expect(drops.shards).toEqual([]);
   });
 
-  it('Boss 类型碎片倍率高于精英', () => {
-    const elite = stageDrops('dt_forest_elite', 1, 1, 'elite');
-    const boss = stageDrops('dt_forest_boss', 1, 1, 'boss');
-    const eSum = elite.shards.reduce((a, s) => a + s.count, 0);
-    const bSum = boss.shards.reduce((a, s) => a + s.count, 0);
-    expect(bSum).toBeGreaterThan(eSum);
+  it('所有关卡类型不掉碎片（防无限刷）', () => {
+    const types = ['normal', 'elite', 'boss', 'dailyResource', 'event'] as const;
+    for (const type of types) {
+      expect(stageDrops('dt_forest_boss', 1, 3, type).shards).toEqual([]);
+      expect(stageDrops('dt_daily_shard', 1, 3, type).shards).toEqual([]);
+    }
   });
 
   it('关卡类型表覆盖所有引用类型', () => {

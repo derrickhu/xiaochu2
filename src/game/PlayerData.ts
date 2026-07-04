@@ -305,21 +305,34 @@ class PlayerDataClass {
     return this.ownedPets.length;
   }
 
-  /** 图鉴里程碑进度（CodexScene 进度条用） */
-  get codexMilestoneProgress(): { count: number; next: number; every: number; lingyu: number } {
+  /** 图鉴里程碑进度（CodexScene 进度条用；自上次领取后累计） */
+  get codexMilestoneProgress(): {
+    count: number;
+    inCycle: number;
+    next: number;
+    every: number;
+    lingyu: number;
+    pendingLingyu: number;
+  } {
     const every = ECONOMY.milestone.codexEvery;
-    const count = this._data.discovered.length;
+    const total = this._data.discovered.length;
+    const claimedFloor = Math.floor(this._data.codexRewarded / every);
+    const nowFloor = Math.floor(total / every);
+    const pendingTiers = nowFloor - claimedFloor;
+    const inCycle = total - claimedFloor * every;
     return {
-      count,
-      next: (Math.floor(count / every) + 1) * every,
+      count: total,
+      inCycle: pendingTiers > 0 ? every : inCycle,
+      next: (claimedFloor + 1) * every,
       every,
       lingyu: ECONOMY.milestone.codexLingyu,
+      pendingLingyu: pendingTiers * ECONOMY.milestone.codexLingyu,
     };
   }
 
   /**
-   * 结算图鉴收录里程碑：每收录 codexEvery 只发一次灵玉。
-   * 战斗结算在 discover 后调用；不追溯初始 R 池。
+   * 领取图鉴收录里程碑：每收录 codexEvery 只发一次灵玉（仅在图鉴页调用）。
+   * 战斗收录只更新 discovered，不在这里发奖；不追溯初始 R 池。
    * @returns 本次发放的灵玉总额（无新里程碑为 0）
    */
   claimCodexMilestones(): number {

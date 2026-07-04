@@ -74,6 +74,10 @@ export class CodexScene implements Scene {
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
+    const codexLingyu = PlayerData.claimCodexMilestones();
+    if (codexLingyu > 0) {
+      Platform.showToast(`收录里程碑达成 · 灵玉 +${codexLingyu}`);
+    }
     void this._enter(this._enterSeq.next());
   }
 
@@ -144,13 +148,12 @@ export class CodexScene implements Scene {
     this._buildMilestoneBar(w, Game.safeTop + 148);
   }
 
-  /** 图鉴里程碑进度条：每收录 codexEvery 只发灵玉（强化捉宠目标感） */
+  /** 图鉴里程碑进度条：收录进度与灵玉奖励均在图鉴页结算 */
   private _buildMilestoneBar(w: number, y: number): void {
-    const { count, next, every, lingyu } = PlayerData.codexMilestoneProgress;
+    const { inCycle, next, every, lingyu } = PlayerData.codexMilestoneProgress;
     const barW = Math.min(420, w * 0.7);
     const barH = 14;
     const x = (w - barW) / 2;
-    const inCycle = count % every;
     const ratio = inCycle / every;
 
     const g = new PIXI.Graphics();
