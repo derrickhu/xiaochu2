@@ -291,15 +291,11 @@ export function applyDmgRenderStyle(
   text.style.fontFamily = RS.fontFamily;
   text.style.fontSize = RS.fontSize * S;
   text.style.fontWeight = '900' as PIXI.TextStyleFontWeight;
-  // 微信真机 Canvas Text 渐变 fill 会崩，用纯色
+  // 微信真机 Canvas Text 渐变 fill 会崩，用纯色；dropShadow 在真机会出现块状底色
   text.style.fill = palette.fillTop || RS.fillTop;
   text.style.stroke = RS.strokeColor;
   text.style.strokeThickness = RS.stroke * S;
-  text.style.dropShadow = true;
-  text.style.dropShadowColor = palette.glowColor;
-  text.style.dropShadowBlur = RS.glow * S;
-  text.style.dropShadowDistance = 0;
-  text.style.dropShadowAlpha = 1;
+  text.style.dropShadow = false;
   text.style.align = 'center';
 }
 

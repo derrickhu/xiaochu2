@@ -113,6 +113,7 @@ export class BattleFx {
       onGet: (t) => {
         t.visible = true;
         t.alpha = 1;
+        t.style.dropShadow = false;
         setScaleSafe(t, 1);
       },
       onRelease: (t) => {
@@ -133,6 +134,7 @@ export class BattleFx {
       onGet: (t) => {
         t.visible = true;
         t.alpha = 1;
+        t.style.dropShadow = false;
         setScaleSafe(t, 1);
       },
       onRelease: (t) => {
@@ -318,7 +320,7 @@ export class BattleFx {
 
     const tier = resolveTurnTotalTier(total, combo, hitCount, enemyMaxHp);
     const isCritStyle = tier === 'mega' || tier === 'high';
-    const styleKey = isCritStyle ? 'enemyHitCrit' : 'enemyHitMain';
+    const styleKey = (isCritStyle ? 'enemyHitCrit' : 'enemyHitMain') as 'enemyHitCrit' | 'enemyHitMain';
     const palette = SLOT_ATTR_PALETTE.metal;
     const motion = DMG_MOTION[styleKey];
     const baseScale = PET_FLOAT_CFG.normalAtk.scale;
@@ -397,7 +399,7 @@ export class BattleFx {
     t.text = buildPetDmgLabel(element, damage);
     applyDmgRenderStyle(t, styleKey, palette);
     if (isCounter) {
-      t.style.dropShadowBlur = (t.style.dropShadowBlur as number) * 1.8;
+      t.style.strokeThickness = (t.style.strokeThickness as number) * 1.2;
       t.style.fill = 0xffffff;
     }
     if (onEnemy && !minor) {
