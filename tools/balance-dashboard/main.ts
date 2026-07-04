@@ -7,6 +7,7 @@ import { renderSkillsView } from './views/SkillTableView';
 import { renderGlobalsView } from './views/GlobalConstantsView';
 import { renderPassivesView } from './views/PassivesView';
 import { renderSimulationView } from './views/SimulationView';
+import { installHoverTipPortal } from './components/HoverTip';
 
 type TabId =
   | 'overview'
@@ -69,5 +70,6 @@ function showTab(id: TabId): void {
 }
 
 const initial = (location.hash.replace('#', '') as TabId) || 'overview';
+installHoverTipPortal();
 showTab(TABS.some((t) => t.id === initial) ? initial : 'overview');
 renderMeta();

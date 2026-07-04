@@ -2,8 +2,6 @@ import { SKILLS, SKILL_MAP } from '@/balance/skills';
 import { PETS } from '@/balance/pets';
 import { mountDataTable } from '../components/DataTable';
 import { aiPromptChip, panelTitle } from '../components/AiPromptChip';
-import { getRaritySkillPower, RARITIES } from '@/balance/rarity';
-import { formatBasePower, describeSkillBudget } from '@/balance/skills/display';
 
 interface SkillRow {
   id: string;
@@ -11,7 +9,6 @@ interface SkillRow {
   owner: string;
   category: string;
   cd: number;
-  basePower: number;
   desc: string;
   kind: 'pet' | 'enemy';
 }
@@ -23,19 +20,13 @@ function buildSkillRows(): SkillRow[] {
     owner: s.owner,
     category: s.category,
     cd: s.cd,
-    basePower: s.basePower,
     desc: s.desc,
     kind: s.owner === 'enemy' ? 'enemy' : 'pet',
   }));
 }
 
-function rarityPowerLegend(): string {
-  return RARITIES.map((r) => `${r === 4 ? 'UR' : r === 3 ? 'SSR' : r === 2 ? 'SR' : 'R'}×${getRaritySkillPower(r)}`).join(' · ');
-}
-
 export function renderSkillsView(container: HTMLElement): void {
-  container.innerHTML = `<section class="panel">${panelTitle('技能表', 'registry.ts · basePower 为 R 预算指数，战斗叠乘 effect 字段')}
-      <p class="sub">稀有度倍率：${rarityPowerLegend()} · basePower 用于跨技能横向比较，非战斗直读</p>
+  container.innerHTML = `<section class="panel">${panelTitle('技能表', 'skills/registry.ts · 战斗结算读 effect 字段')}
     </section>`;
   const panel = container.querySelector('.panel') as HTMLElement;
 
@@ -56,19 +47,11 @@ export function renderSkillsView(container: HTMLElement): void {
         },
       },
       { key: 'cd', label: 'CD', sortValue: (s) => s.cd, render: (s) => String(s.cd) },
-      {
-        key: 'bp', label: '强度预算', sortValue: (s) => s.basePower,
-        render: (s) => {
-          const sk = SKILL_MAP.get(s.id)!;
-          const tip = describeSkillBudget(sk).replace(/"/g, '&quot;');
-          return `<span title="${tip}">${formatBasePower(s.basePower)}</span>`;
-        },
-      },
       { key: 'fx', label: '效果说明', render: (s) => `<span class="sub">${s.desc}</span>` },
       {
         key: 'ai', label: 'AI', render: (s) => {
           const sk = SKILL_MAP.get(s.id);
-          const hint = sk ? `${sk.desc.slice(0, 40)}… cd=${sk.cd} bp=${formatBasePower(sk.basePower)}` : s.id;
+          const hint = sk ? `${sk.desc.slice(0, 40)}… cd=${sk.cd}` : s.id;
           return aiPromptChip('skills/registry.ts', s.id, hint, '调整技能');
         },
       },

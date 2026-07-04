@@ -8,7 +8,8 @@ import { petStatPreviews, formatStatPreview, creatureMonsterSummary } from '../l
 import { mountDataTable } from '../components/DataTable';
 import { elementBadge, rarityBadge } from '../components/StatBadge';
 import { aiPromptChip, panelTitle } from '../components/AiPromptChip';
-import { fmtProfile } from '../lib/format';
+import { hoverTip } from '../components/HoverTip';
+import { escapeHtml, fmtProfile } from '../lib/format';
 import { getSkill } from '@/balance/skills';
 
 export function renderPetsView(container: HTMLElement): void {
@@ -47,9 +48,12 @@ export function renderPetsView(container: HTMLElement): void {
       {
         key: 'skill', label: '技能', render: (p) => {
           const sk = getSkill(p.skillId);
-          if (!sk) return p.skillId;
-          const brief = sk.desc.length > 36 ? `${sk.desc.slice(0, 36)}…` : sk.desc;
-          return `<span title="${sk.desc.replace(/"/g, '&quot;')}">${sk.name} CD${sk.cd}<br><span class="sub">${brief}</span></span>`;
+          if (!sk) return escapeHtml(p.skillId);
+          const headline = `${sk.name} · CD${sk.cd}`;
+          const brief = sk.desc.length > 42 ? `${sk.desc.slice(0, 42)}…` : sk.desc;
+          const tip = `${headline}\n${sk.desc}`;
+          const body = `${escapeHtml(headline)}<br><span class="sub skill-cell__brief">${escapeHtml(brief)}</span>`;
+          return hoverTip(tip, body);
         },
       },
       {

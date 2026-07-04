@@ -171,3 +171,32 @@ details.row-detail summary { cursor: pointer; color: var(--accent); }
 
 .verify-ok { color: var(--ok); }
 .verify-bad { color: var(--bad); }
+
+.hover-tip {
+  cursor: help;
+  display: inline-block;
+  max-width: 220px;
+}
+.skill-cell__brief {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 210px;
+}
+
+.hover-tip-layer {
+  position: fixed;
+  z-index: 9999;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #2a2418;
+  color: #fffdf8;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  border: 1px solid #4a4030;
+  pointer-events: none;
+}
