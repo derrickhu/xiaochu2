@@ -15,6 +15,7 @@ import { guardedTween, displayAlive, readScale, resetScale, cancelDisplayTweens,
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
 import { enemyImage, battleBgImage, ORB_IMAGES } from '@/config/Assets';
+import { formatStageBattleHeader } from '@/balance/stages';
 import type { BattleController, EnemyActResult } from '@/game/battle/BattleController';
 import type { BoardView } from '@/game/board/BoardView';
 import { delay } from './battleWidgets';
@@ -23,6 +24,7 @@ import type { BattleFx } from './BattleFx';
 import { ComboDisplay } from './ComboDisplay';
 
 export class BattleHud {
+  private _stageHeaderText!: PIXI.Text;
   private _waveText!: PIXI.Text;
   private _enemySprite!: PIXI.Sprite;
   private _enemyBgSprite!: PIXI.Sprite;
@@ -82,6 +84,23 @@ export class BattleHud {
     ));
 
     parent.addChild(layer);
+  }
+
+  /** 顶栏关卡信息（置于最上层，避免被敌人区背景遮住） */
+  buildStageHeader(parent: PIXI.Container): void {
+    const w = Game.logicWidth;
+    this._stageHeaderText = new PIXI.Text(formatStageBattleHeader(this._ctrl.stage), {
+      fontSize: 28,
+      fill: 0xf0e0c0,
+      fontWeight: 'bold',
+      dropShadow: true,
+      dropShadowColor: 0x000000,
+      dropShadowBlur: 4,
+      dropShadowDistance: 2,
+    });
+    this._stageHeaderText.anchor.set(0.5);
+    this._stageHeaderText.position.set(w / 2, this._layout.headerY);
+    parent.addChild(this._stageHeaderText);
   }
 
   /** 敌人区：波次文字 + 立绘容器 + 名字 + 属性克制行 + 血条 + 倒计时 */

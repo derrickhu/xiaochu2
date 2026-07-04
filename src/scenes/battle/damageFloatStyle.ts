@@ -85,11 +85,11 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     returnTo: -7,
     reboundFrames: 9,
     reboundTo: 4,
-    holdFrames: 42,
+    holdFrames: 72,
     driftFrames: 14,
     driftDist: 6,
-    lifeFrames: 118,
-    fadeStart: 96,
+    lifeFrames: 168,
+    fadeStart: 142,
   },
   slotDamageCrit: {
     startScale: 0.68,
@@ -104,11 +104,11 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     returnTo: -9,
     reboundFrames: 10,
     reboundTo: 4.5,
-    holdFrames: 52,
+    holdFrames: 84,
     driftFrames: 15,
     driftDist: 7,
-    lifeFrames: 132,
-    fadeStart: 108,
+    lifeFrames: 186,
+    fadeStart: 158,
     shakeDur: 13,
     shakeAmp: 4.8,
     jitterFrames: 16,
@@ -175,7 +175,7 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
 
 /** xiao_chu FLOAT_CFG 宠物伤害缩放 / 延迟 */
 export const PET_FLOAT_CFG = {
-  normalAtk: { slotYRatio: 0.6, scale: 1.03, delayStep: 3 },
+  normalAtk: { slotYRatio: 0.6, scale: 1.06, delayStep: 3 },
   skill: { slotYRatio: 0.6, scale: 1.04 },
   multiHit: { upperYRatio: 0.5, lowerYRatio: 0.78, xStep: 8, scale: 1.03 },
 } as const;

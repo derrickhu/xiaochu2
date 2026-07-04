@@ -41,7 +41,7 @@ export const UI = {
     enemySize: 260,
     /** 敌人血条 */
     enemyHpBarWidth: 360,
-    enemyHpBarHeight: 14,
+    enemyHpBarHeight: 22,
     /** 队伍栏头像尺寸与间距 */
     petSize: 110,
     petGap: 16,
@@ -52,7 +52,7 @@ export const UI = {
     /** 拖珠倒计时条 */
     dragBarHeight: 10,
     /** 英雄血条 */
-    heroHpBarHeight: 18,
+    heroHpBarHeight: 26,
     /** 宠物上滑放技能阈值（设计像素，向上位移） */
     skillSwipeThreshold: 40,
     /** 上滑预览最大位移 */
@@ -66,14 +66,14 @@ export const UI = {
     orbSwapLogicLock: 2 / 60,
     orbClear: 0.25,
     orbFall: 0.3,
-    petDash: 0.18,
-    petReturn: 0.22,
+    petDash: 0.20,
+    petReturn: 0.24,
     enemyHitFlash: 0.12,
     damageFloat: 0.6,
-    /** 多组攻击的间隔节奏（略拉长便于读伤害） */
-    attackGap: 0.22,
+    /** 多组攻击的间隔节奏 */
+    attackGap: 0.30,
     /** 最后一击飘字落定后再出总伤害（秒） */
-    turnTotalLeadIn: 0.55,
+    turnTotalLeadIn: 0.60,
     /** 波次切换敌人入场 */
     waveEnter: 0.35,
     /** ── 阶段二：手感强化 ── */
@@ -87,7 +87,7 @@ export const UI = {
     comboFadeDelay: 0.5,
     comboFade: 0.4,
     /** 属性弹道飞行（宠物 → 敌人） */
-    projectile: 0.22,
+    projectile: 0.24,
     /** 敌人弹道飞行（略慢，便于看清来向） */
     enemyProjectile: 0.26,
     enemyProjectileHeavy: 0.34,
@@ -114,7 +114,7 @@ export const UI = {
    * - normal：单段普通命中（含 minor 多段、槽位飘字）
    * - crit：暴击单段（字号/动效另配，颜色独立）
    * - total：回合总伤害数字
-   * - totalCaption：总伤害说明文案（「总伤害」「N 连击 · 总伤害」）
+   * - totalCaption：总伤害说明文案
    * - counterMark：克制标记「克」（数字仍用 normal + 加粗描边，不另设主色）
    */
   damageFloat: {

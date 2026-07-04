@@ -17,7 +17,7 @@ import {
   type PetDef,
 } from '@/balance/pets';
 import { formatEnemyAbility, resolveEncounter } from '@/balance/enemies';
-import { STAGE_MAP, type StageDef } from '@/balance/stages';
+import { STAGE_MAP, formatStageShortLabel, type StageDef } from '@/balance/stages';
 import type { TeamMember } from '@/formulas/team';
 import {
   BACKGROUND_IMAGES, UI_IMAGES, enemyImage,
@@ -115,7 +115,7 @@ export class TeamScene implements Scene {
 
     const hint = makeText(
       prep && this._prepStage
-        ? `${this._prepStage.chapter}-${this._prepStage.index} ${this._prepStage.name}`
+        ? formatStageShortLabel(this._prepStage)
         : '点击卡片或空槽调整上阵',
       { size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: 0.5 },
     );

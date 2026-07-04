@@ -323,7 +323,7 @@ export class BattleFx {
     const motion = DMG_MOTION[styleKey];
     const baseScale = PET_FLOAT_CFG.normalAtk.scale;
     const S = dmgFloatScale();
-    const caption = hitCount > 1 ? `${hitCount} 连击 · 总伤害` : '总伤害';
+    const caption = '总伤害';
     const captionY = y - 40 * S;
 
     return new Promise((resolve) => {

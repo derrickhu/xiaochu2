@@ -353,6 +353,17 @@ export function stagesOfChapter(chapter: number): readonly StageDef[] {
   return STAGES.filter((s) => s.chapter === chapter);
 }
 
+/** 短标签：1-1 青苔林边（编队 / 战斗顶栏） */
+export function formatStageShortLabel(stage: Pick<StageDef, 'chapter' | 'index' | 'name'>): string {
+  return `${stage.chapter}-${stage.index} ${stage.name}`;
+}
+
+/** 战斗顶栏：章节关卡号 + 名称，Boss 关附加标记 */
+export function formatStageBattleHeader(stage: StageDef): string {
+  const base = formatStageShortLabel(stage);
+  return stage.isBoss ? `${base} · BOSS` : base;
+}
+
 export const CHAPTER_NAME: Readonly<Record<number, string>> = {
   1: '第一章 · 灵兽森林',
   2: '第二章 · 幽晶溶洞',

@@ -172,17 +172,6 @@ export class BattleScene implements Scene {
     backBtn.position.set(85, headerY);
     this.container.addChild(backBtn);
 
-    const stageText = new PIXI.Text(
-      `${this._ctrl.stage.name}${this._ctrl.stage.isBoss ? ' · BOSS' : ''}`,
-      {
-        fontSize: 30, fill: 0xf0e0c0, fontWeight: 'bold',
-        dropShadow: true, dropShadowColor: 0x000000, dropShadowBlur: 4, dropShadowDistance: 2,
-      },
-    );
-    stageText.anchor.set(0.5);
-    stageText.position.set(w / 2, headerY);
-    this.container.addChild(stageText);
-
     if (GMManager.isEnabled) {
       const gmSkip = makeButton('GM跳过', 120, 48, 0xc81e3c, () => {
         GMManager.executeCommand('instant_clear');
@@ -225,6 +214,9 @@ export class BattleScene implements Scene {
 
     // Combo 大字（棋盘中央，叠在珠盘与粒子之上）
     this._hud.buildCombo(this.container);
+
+    // 关卡号顶栏（最后绘制，保证不被敌人区背景遮挡）
+    this._hud.buildStageHeader(this.container);
 
     this._overlay.build(this.container);
 
@@ -569,17 +561,18 @@ export class BattleScene implements Scene {
     finishHit();
   }
 
-  /** 伤害数字：命中敌人立绘，属性色 + 克制/暴击标记 */
-  private _spawnDamageFloat(attack: PetAttack, orderIdx: number, hitCount: number): void {
-    this._fx.spawnEnemyHitDamage({
-      enemyX: this._layout.enemyCenterX,
-      enemyY: this._layout.enemyCenterY,
+  /** 伤害数字：显示在出手宠物槽位上方，便于对应哪只宠物打了多少 */
+  private _spawnDamageFloat(attack: PetAttack, orderIdx: number, _hitCount: number): void {
+    const slot = this._petBar.slotAt(attack.petIndex);
+    if (!slot || slot.destroyed) return;
+    this._fx.spawnPetDamageFloat({
+      slotX: slot.x,
+      slotY: slot.y,
       element: attack.element,
       damage: attack.damage,
       isCrit: attack.isCrit,
       counter: attack.counter,
       orderIdx,
-      hitCount,
     });
   }
 
