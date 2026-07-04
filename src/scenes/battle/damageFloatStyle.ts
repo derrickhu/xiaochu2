@@ -12,28 +12,12 @@ export function dmgFloatScale(): number {
   return Game.logicWidth / 375;
 }
 
-/** xiao_chu SLOT_ATTR_PALETTE */
-export interface SlotAttrPalette {
-  fillTop: string;
-  fillBottom: string;
-  glowColor: string;
-}
-
-export const SLOT_ATTR_PALETTE: Readonly<Record<Element, SlotAttrPalette>> = {
-  metal: { fillTop: '#fff7a8', fillBottom: '#ffd63d', glowColor: '#ffe14d' },
-  wood: { fillTop: '#d8ff8d', fillBottom: '#6ef235', glowColor: '#90ff57' },
-  water: { fillTop: '#b8fdff', fillBottom: '#44d7ff', glowColor: '#61efff' },
-  fire: { fillTop: '#ffd0b8', fillBottom: '#ff7a58', glowColor: '#ff9668' },
-  earth: { fillTop: '#fff7d8', fillBottom: '#ffd76a', glowColor: '#ffe89a' },
-};
+/** 伤害飘字语义色（策划调数值见 balance/ui.ts → UI.damageFloat） */
+export type DamageFloatColorKind = 'normal' | 'crit' | 'total' | 'totalCaption' | 'counterMark';
 
 export interface DmgRenderStyle {
   fontSize: number;
   stroke: number;
-  strokeColor: string;
-  glow: number;
-  fillTop: string;
-  fillBottom: string;
   fontWeight: number | string;
   fontFamily: string;
 }
@@ -45,30 +29,18 @@ export const DMG_RENDER_STYLES: Readonly<Record<string, DmgRenderStyle>> = {
   slotDamageMain: {
     fontSize: 21,
     stroke: 5,
-    strokeColor: '#101010',
-    glow: 10,
-    fillTop: '#fff8ca',
-    fillBottom: '#ffd84c',
     fontWeight: 900,
     fontFamily: DMG_FONT,
   },
   slotDamageCrit: {
     fontSize: 29,
     stroke: 6.8,
-    strokeColor: '#120d08',
-    glow: 24,
-    fillTop: '#ffffff',
-    fillBottom: '#ffe56c',
     fontWeight: 900,
     fontFamily: DMG_FONT,
   },
   slotDamageMinor: {
     fontSize: 13,
     stroke: 3.2,
-    strokeColor: '#101010',
-    glow: 6,
-    fillTop: '#fff7b8',
-    fillBottom: '#ffd43c',
     fontWeight: 900,
     fontFamily: DMG_FONT,
   },
@@ -276,25 +248,37 @@ export function petSlotDamageAnchor(slotX: number, slotY: number, lane: 'main' |
   return { x: slotX, y: frameTop + frameH * ratio };
 }
 
+export function resolveDamageFloatColor(
+  styleKey: PetDmgStyleKey | EnemyDmgStyleKey,
+  colorKind?: DamageFloatColorKind,
+): DamageFloatColorKind {
+  if (colorKind) return colorKind;
+  if (styleKey === 'slotDamageCrit' || styleKey === 'enemyHitCrit') return 'crit';
+  return 'normal';
+}
+
 export function applyDmgRenderStyle(
   text: PIXI.Text,
   styleKey: PetDmgStyleKey | EnemyDmgStyleKey,
-  palette: SlotAttrPalette,
+  colorKind?: DamageFloatColorKind,
+  opts?: { counter?: boolean },
 ): void {
   const renderKey: PetDmgStyleKey = styleKey === 'enemyHitMain'
     ? 'slotDamageMain'
     : styleKey === 'enemyHitCrit'
       ? 'slotDamageCrit'
       : styleKey;
+  const semantic = resolveDamageFloatColor(styleKey, colorKind);
+  const colors = UI.damageFloat[semantic];
   const S = dmgFloatScale();
   const RS = DMG_RENDER_STYLES[renderKey];
   text.style.fontFamily = RS.fontFamily;
   text.style.fontSize = RS.fontSize * S;
   text.style.fontWeight = '900' as PIXI.TextStyleFontWeight;
   // 微信真机 Canvas Text 渐变 fill 会崩，用纯色；dropShadow 在真机会出现块状底色
-  text.style.fill = palette.fillTop || RS.fillTop;
-  text.style.stroke = RS.strokeColor;
-  text.style.strokeThickness = RS.stroke * S;
+  text.style.fill = colors.fill;
+  text.style.stroke = colors.stroke;
+  text.style.strokeThickness = RS.stroke * S * (opts?.counter ? UI.damageFloat.counterStrokeMul : 1);
   text.style.dropShadow = false;
   text.style.align = 'center';
 }

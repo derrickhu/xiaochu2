@@ -108,6 +108,25 @@ export const UI = {
     chargeWarn: 0.5,
   },
 
+  /**
+   * 战斗伤害飘字语义色（与五行/珠子色解耦）
+   *
+   * - normal：单段普通命中（含 minor 多段、槽位飘字）
+   * - crit：暴击单段（字号/动效另配，颜色独立）
+   * - total：回合总伤害数字
+   * - totalCaption：总伤害说明文案（「总伤害」「N 连击 · 总伤害」）
+   * - counterMark：克制标记「克」（数字仍用 normal + 加粗描边，不另设主色）
+   */
+  damageFloat: {
+    normal: { fill: '#fff8ca', stroke: '#101010' },
+    crit: { fill: '#fffef0', stroke: '#120d08' },
+    total: { fill: '#ffd84c', stroke: '#101010' },
+    totalCaption: { fill: '#ffe082', stroke: '#101010' },
+    counterMark: { fill: '#ffe14d', stroke: '#101010' },
+    /** 克制命中时 normal 描边倍率（仅描边，不改 fill） */
+    counterStrokeMul: 1.2,
+  },
+
   /** ── Combo 反馈分级（次数下限 → 字号/颜色） ── */
   comboTiers: [
     { from: 10, fontSize: 64, color: 0xff5252 },

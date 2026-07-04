@@ -29,7 +29,6 @@ import {
   resolveEnemyDmgStyleKey,
   resolvePetDmgStyleKey,
   resolveTurnTotalTier,
-  SLOT_ATTR_PALETTE,
   type PetDamageFloatRuntime,
 } from './damageFloatStyle';
 
@@ -319,9 +318,8 @@ export class BattleFx {
     if (total <= 0) return Promise.resolve();
 
     const tier = resolveTurnTotalTier(total, combo, hitCount, enemyMaxHp);
-    const isCritStyle = tier === 'mega' || tier === 'high';
-    const styleKey = (isCritStyle ? 'enemyHitCrit' : 'enemyHitMain') as 'enemyHitCrit' | 'enemyHitMain';
-    const palette = SLOT_ATTR_PALETTE.metal;
+    const isHighTier = tier === 'mega' || tier === 'high';
+    const styleKey = (isHighTier ? 'enemyHitCrit' : 'enemyHitMain') as 'enemyHitCrit' | 'enemyHitMain';
     const motion = DMG_MOTION[styleKey];
     const baseScale = PET_FLOAT_CFG.normalAtk.scale;
     const S = dmgFloatScale();
@@ -337,18 +335,17 @@ export class BattleFx {
 
       const captionText = this._petDmgPool.get();
       captionText.text = caption;
-      applyDmgRenderStyle(captionText, 'slotDamageMinor', palette);
+      applyDmgRenderStyle(captionText, 'slotDamageMinor', 'totalCaption');
       captionText.style.fontSize = (captionText.style.fontSize as number) * 1.45;
-      captionText.style.fill = 0xffe082;
       this._floatLayer.addChild(captionText);
 
       const numText = this._petDmgPool.get();
       numText.text = formatDmgNumber(total);
-      applyDmgRenderStyle(numText, styleKey, palette);
+      applyDmgRenderStyle(numText, styleKey, 'total');
       numText.style.fontSize = (numText.style.fontSize as number) * 1.08;
       this._floatLayer.addChild(numText);
 
-      if (isCritStyle) this.shakeLight();
+      if (isHighTier) this.shakeLight();
 
       const floatOpts = { baseX: x, baseScale, styleKey, motion };
       this._petDmgRuntimes.push({
@@ -390,18 +387,13 @@ export class BattleFx {
     const styleKey = onEnemy
       ? resolveEnemyDmgStyleKey(isCrit && !minor, minor)
       : resolvePetDmgStyleKey(isCrit && !minor, minor);
-    const palette = SLOT_ATTR_PALETTE[element];
     const motion = DMG_MOTION[styleKey];
     const baseScale = skill ? PET_FLOAT_CFG.skill.scale : PET_FLOAT_CFG.normalAtk.scale;
     const isCounter = counter === 1 && !minor;
 
     const t = this._petDmgPool.get();
     t.text = buildPetDmgLabel(element, damage);
-    applyDmgRenderStyle(t, styleKey, palette);
-    if (isCounter) {
-      t.style.strokeThickness = (t.style.strokeThickness as number) * 1.2;
-      t.style.fill = 0xffffff;
-    }
+    applyDmgRenderStyle(t, styleKey, undefined, { counter: isCounter });
     if (onEnemy && !minor) {
       t.style.fontSize = (t.style.fontSize as number) * 1.08;
     }
@@ -427,8 +419,7 @@ export class BattleFx {
     if (isCounter) {
       const mark = this._petDmgPool.get();
       mark.text = '克';
-      applyDmgRenderStyle(mark, 'slotDamageMinor', palette);
-      mark.style.fill = palette.glowColor;
+      applyDmgRenderStyle(mark, 'slotDamageMinor', 'counterMark');
       this._floatLayer.addChild(mark);
       this._petDmgRuntimes.push({
         ...createPetDamageFloatRuntime({
