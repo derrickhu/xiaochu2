@@ -70,6 +70,16 @@ export interface TurnTotalDamageOpts {
   x: number;
   y: number;
   enemyMaxHp: number;
+  /** 本回合各宠物累计伤害（总伤害出现时同步常驻于槽位） */
+  petSummaries?: readonly TurnPetDamageSummary[];
+}
+
+export interface TurnPetDamageSummary {
+  slotX: number;
+  slotY: number;
+  element: Element;
+  damage: number;
+  isCrit?: boolean;
 }
 
 type ScopedPetDamageRuntime = PetDamageFloatRuntime & { scopeId: number; onDone?: () => void };
@@ -311,11 +321,13 @@ export class BattleFx {
   }
 
   /**
-   * 本回合总伤害：与单段伤害同款飘字动画，上方保留「总伤害」说明文字。
+   * 本回合总伤害：敌人处总伤害 + 各宠物槽位累计伤害同步停留。
    */
   showTurnTotalDamage(opts: TurnTotalDamageOpts): Promise<void> {
-    const { total, combo, hitCount, x, y, enemyMaxHp } = opts;
+    const { total, combo, hitCount, x, y, enemyMaxHp, petSummaries = [] } = opts;
     if (total <= 0) return Promise.resolve();
+
+    this._clearScopePetDamageFloats();
 
     const tier = resolveTurnTotalTier(total, combo, hitCount, enemyMaxHp);
     const isHighTier = tier === 'mega' || tier === 'high';
@@ -327,11 +339,15 @@ export class BattleFx {
     const captionY = y - 40 * S;
 
     return new Promise((resolve) => {
-      let pending = 2;
+      let pending = 2 + petSummaries.length;
       const done = (): void => {
         pending -= 1;
         if (pending <= 0) resolve();
       };
+
+      for (const pet of petSummaries) {
+        this._pushTurnRecapFloat(pet, done);
+      }
 
       const captionText = this._petDmgPool.get();
       captionText.text = caption;
@@ -366,6 +382,41 @@ export class BattleFx {
         scopeId: this._scopeId,
         onDone: done,
       });
+    });
+  }
+
+  /** 清除当前 scope 内已有槽位/总伤飘字，为回合汇总让路 */
+  private _clearScopePetDamageFloats(): void {
+    for (let i = this._petDmgRuntimes.length - 1; i >= 0; i--) {
+      const rt = this._petDmgRuntimes[i];
+      if (rt.scopeId !== this._scopeId) continue;
+      this._petDmgPool.release(rt.text);
+      rt.onDone?.();
+      this._petDmgRuntimes.splice(i, 1);
+    }
+  }
+
+  /** 回合末：单只宠物本回合累计伤害（槽位常驻） */
+  private _pushTurnRecapFloat(pet: TurnPetDamageSummary, onDone: () => void): void {
+    const anchor = petSlotDamageAnchor(pet.slotX, pet.slotY, 'main');
+    const styleKey = pet.isCrit ? 'slotDamageCrit' : 'slotDamageRecap';
+    const motion = DMG_MOTION[styleKey === 'slotDamageCrit' ? 'slotDamageCrit' : 'slotDamageRecap'];
+    const baseScale = PET_FLOAT_CFG.normalAtk.scale * 1.04;
+    const t = this._petDmgPool.get();
+    t.text = buildPetDmgLabel(pet.element, pet.damage);
+    applyDmgRenderStyle(t, styleKey);
+    this._floatLayer.addChild(t);
+    this._petDmgRuntimes.push({
+      ...createPetDamageFloatRuntime({
+        text: t,
+        baseX: anchor.x,
+        baseY: anchor.y,
+        baseScale,
+        styleKey,
+        motion,
+      }),
+      scopeId: this._scopeId,
+      onDone,
     });
   }
 

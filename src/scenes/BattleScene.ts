@@ -28,7 +28,7 @@ import { BattleController, type PetAttack, type TurnResolution } from '@/game/ba
 import { PlayerData } from '@/game/PlayerData';
 import { makeButton, delay } from './battle/battleWidgets';
 import { computeBattleLayout, type BattleLayout } from './battle/BattleLayout';
-import { BattleFx } from './battle/BattleFx';
+import { BattleFx, type TurnPetDamageSummary } from './battle/BattleFx';
 import { BattleHud } from './battle/BattleHud';
 import { BattleStatusIcons } from './battle/BattleStatusIcons';
 import { BattlePetBar } from './battle/BattlePetBar';
@@ -54,6 +54,37 @@ function lerpColor(a: number, b: number, t: number): number {
   const g = Math.round(ag + (bg - ag) * t);
   const bl = Math.round(ab + (bb - ab) * t);
   return (r << 16) | (g << 8) | bl;
+}
+
+/** 汇总本回合各宠物累计伤害，供总伤害出现时槽位常驻展示 */
+function buildTurnPetSummaries(
+  attacks: readonly PetAttack[],
+  petBar: BattlePetBar,
+): TurnPetDamageSummary[] {
+  const byPet = new Map<number, { damage: number; isCrit: boolean; element: Element }>();
+  for (const a of attacks) {
+    const prev = byPet.get(a.petIndex);
+    if (prev) {
+      prev.damage += a.damage;
+      prev.isCrit = prev.isCrit || a.isCrit;
+    } else {
+      byPet.set(a.petIndex, { damage: a.damage, isCrit: a.isCrit, element: a.element });
+    }
+  }
+  const summaries: TurnPetDamageSummary[] = [];
+  for (const [petIndex, info] of byPet) {
+    const slot = petBar.slotAt(petIndex);
+    if (!slot || slot.destroyed) continue;
+    summaries.push({
+      slotX: slot.x,
+      slotY: slot.y,
+      element: info.element,
+      damage: info.damage,
+      isCrit: info.isCrit,
+    });
+  }
+  summaries.sort((a, b) => a.slotX - b.slotX);
+  return summaries;
 }
 
 export class BattleScene implements Scene {
@@ -318,13 +349,15 @@ export class BattleScene implements Scene {
       }
 
       const resolution = this._ctrl.resolveTurn(allGroups);
-      await this._playPetPhase(resolution, isStale);
+      const skipEnemyPhase = await this._playPetPhase(resolution, isStale);
 
       if (isStale() || this._ctrl.isFinished) {
         return;
       }
 
-      await this._enemyPhase(isStale);
+      if (!skipEnemyPhase) {
+        await this._enemyPhase(isStale);
+      }
     } catch (e) {
       if (!isStale()) throw e;
     }
@@ -347,7 +380,11 @@ export class BattleScene implements Scene {
     }
   }
 
-  private async _playPetPhase(res: TurnResolution, isStale: () => boolean): Promise<void> {
+  /**
+   * 宠物攻击演出 + 结算。
+   * @returns true = 本回合已切波，新波敌人本回合不行动（与模拟器一致）
+   */
+  private async _playPetPhase(res: TurnResolution, isStale: () => boolean): Promise<boolean> {
     // 回血先行
     if (res.heal > 0) {
       const healed = this._ctrl.applyHeal(res.heal);
@@ -355,38 +392,54 @@ export class BattleScene implements Scene {
         this._hud.refreshHeroHp();
         this._fx.spawnFloat(`+${healed}`, Game.logicWidth / 2, this._layout.heroBarY - 24, 0x6fd86a);
         await delay(UI.anim.attackGap);
-        if (isStale()) return;
+        if (isStale()) return false;
       }
     }
 
+    let appliedDamage = 0;
+    let waveAdvanced = false;
+    const appliedAttacks: PetAttack[] = [];
+
     for (let i = 0; i < res.attacks.length; i++) {
-      if (isStale()) return;
+      if (isStale()) return waveAdvanced;
       const attack = res.attacks[i];
       await this._playPetAttack(attack, i, res.attacks.length, isStale);
-      if (isStale()) return;
+      if (isStale()) return waveAdvanced;
       const { enemyDead } = this._ctrl.applyPetAttack(attack);
+      appliedAttacks.push(attack);
+      appliedDamage += attack.damage;
       this._hud.refreshEnemyHp();
-      if (enemyDead && await this._handleEnemyDefeat(isStale)) return;
+      if (enemyDead) {
+        const battleEnded = await this._handleEnemyDefeat(isStale);
+        if (battleEnded || isStale()) return waveAdvanced;
+        waveAdvanced = true;
+        break;
+      }
       await delay(UI.anim.attackGap);
     }
-    if (isStale()) return;
+    if (isStale()) return waveAdvanced;
 
-    const turnTotal = res.attacks.reduce((sum, a) => sum + a.damage, 0);
-    if (turnTotal > 0 && res.attacks.length > 0) {
+    if (appliedDamage > 0 && res.attacks.length > 0 && !waveAdvanced) {
       await delay(UI.anim.turnTotalLeadIn);
-      if (isStale()) return;
+      if (isStale()) return waveAdvanced;
       await this._fx.showTurnTotalDamage({
-        total: turnTotal,
+        total: appliedDamage,
         combo: res.combo,
         hitCount: res.attacks.length,
         x: this._layout.enemyCenterX,
         y: this._layout.enemyCenterY,
         enemyMaxHp: this._ctrl.enemy.maxHp,
+        petSummaries: buildTurnPetSummaries(appliedAttacks, this._petBar),
       });
-      if (isStale()) return;
+      if (isStale()) return waveAdvanced;
     }
 
-    this._ctrl.beginEnemyTurn();
+    if (waveAdvanced) {
+      this._ctrl.beginPlayerTurn();
+    } else {
+      this._ctrl.beginEnemyTurn();
+    }
+    return waveAdvanced;
   }
 
   /** GM：立即通关当前关卡（跳过剩余波次与演出） */

@@ -42,9 +42,8 @@ export const UI = {
     /** 敌人血条 */
     enemyHpBarWidth: 360,
     enemyHpBarHeight: 22,
-    /** 队伍栏头像尺寸与间距 */
-    petSize: 110,
-    petGap: 16,
+    /** 队伍栏头像间距（与棋盘 marginX 一起铺满 750 宽） */
+    petGap: 8,
     /** 五行相框相对头像缩放（对齐 xiao_chu frameScale=1.12） */
     petFrameScale: 1.12,
     /** 队伍栏距棋盘顶部距离（含槽位下方「▲技能」标签留白） */

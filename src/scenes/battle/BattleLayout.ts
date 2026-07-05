@@ -6,6 +6,13 @@ import { Game } from '@/core/Game';
 import { UI } from '@/balance/ui';
 import { COMBAT } from '@/balance/combat';
 
+/** 战斗队伍栏单格尺寸：左右贴边距，5 槽均分（对齐 xiao_chu sidePad + petGap） */
+export function computePetBarPetSize(logicWidth: number, teamCount: number): number {
+  const sidePad = UI.board.marginX;
+  const gap = UI.battle.petGap;
+  return Math.floor((logicWidth - sidePad * 2 - (teamCount - 1) * gap) / teamCount);
+}
+
 export interface BattleLayout {
   /** 珠盘左上角 */
   boardX: number;
@@ -24,6 +31,12 @@ export interface BattleLayout {
   enemyCenterY: number;
   /** 英雄血条顶边 Y */
   heroBarY: number;
+  /** 队伍栏槽位尺寸（按屏宽均分） */
+  petSize: number;
+  petGap: number;
+  petBarSidePad: number;
+  /** 槽位中心 Y */
+  petBarCenterY: number;
 }
 
 export function computeBattleLayout(): BattleLayout {
@@ -31,6 +44,10 @@ export function computeBattleLayout(): BattleLayout {
   const boardX = UI.board.marginX;
   const boardY = Game.logicHeight - UI.board.bottomOffset - cell * COMBAT.boardRows;
   const heroBarY = boardY - UI.battle.teamBarOffset - 44;
+  const petGap = UI.battle.petGap;
+  const petBarSidePad = boardX;
+  const petSize = computePetBarPetSize(Game.logicWidth, 5);
+  const petBarCenterY = boardY - UI.battle.teamBarOffset + petSize / 2;
   const enemyAreaTop = Game.safeTop + 4;
   const enemyAreaBottom = heroBarY - 4;
 
@@ -56,5 +73,9 @@ export function computeBattleLayout(): BattleLayout {
     enemyCenterX: Game.logicWidth / 2,
     enemyCenterY,
     heroBarY,
+    petSize,
+    petGap,
+    petBarSidePad,
+    petBarCenterY,
   };
 }

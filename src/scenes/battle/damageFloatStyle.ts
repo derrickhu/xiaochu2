@@ -2,6 +2,7 @@
  * 宠物槽位伤害飘字 — 样式/文案/运动参数对齐 xiao_chu dmgFloat.js
  */
 import * as PIXI from 'pixi.js';
+import { computePetBarPetSize } from './BattleLayout';
 import { Game } from '@/core/Game';
 import type { Element } from '@/balance/combat';
 import { UI } from '@/balance/ui';
@@ -41,6 +42,13 @@ export const DMG_RENDER_STYLES: Readonly<Record<string, DmgRenderStyle>> = {
   slotDamageMinor: {
     fontSize: 13,
     stroke: 3.2,
+    fontWeight: 900,
+    fontFamily: DMG_FONT,
+  },
+  /** 回合末各宠物累计伤害（与总伤害同步停留） */
+  slotDamageRecap: {
+    fontSize: 23,
+    stroke: 5.4,
     fontWeight: 900,
     fontFamily: DMG_FONT,
   },
@@ -114,6 +122,24 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     jitterFrames: 16,
     jitterAmp: 3.3,
   },
+  /** 回合末槽位累计伤害：快速落定后长时间停留，与敌人总伤害同步淡出 */
+  slotDamageRecap: {
+    startScale: 0.72,
+    peakScale: 1.24,
+    settleScale: 1.06,
+    popFrames: 4,
+    settleFrames: 10,
+    startYOffset: 12,
+    riseFrames: 7,
+    riseDist: 32,
+    returnFrames: 8,
+    returnTo: -4,
+    holdFrames: 98,
+    driftFrames: 10,
+    driftDist: 3,
+    lifeFrames: 168,
+    fadeStart: 142,
+  },
   slotDamageMinor: {
     startScale: 0.8,
     peakScale: 1.12,
@@ -180,7 +206,7 @@ export const PET_FLOAT_CFG = {
   multiHit: { upperYRatio: 0.5, lowerYRatio: 0.78, xStep: 8, scale: 1.03 },
 } as const;
 
-export type PetDmgStyleKey = 'slotDamageMain' | 'slotDamageCrit' | 'slotDamageMinor';
+export type PetDmgStyleKey = 'slotDamageMain' | 'slotDamageCrit' | 'slotDamageMinor' | 'slotDamageRecap';
 
 export type EnemyDmgStyleKey = 'enemyHitMain' | 'enemyHitCrit';
 
@@ -237,7 +263,8 @@ export function buildPetDmgLabel(_element: Element, damage: number): string {
 
 /** 槽位锚点：对齐 xiao_chu _petSlotAnchor main lane */
 export function petSlotDamageAnchor(slotX: number, slotY: number, lane: 'main' | 'minorUpper' | 'minorLower' = 'main'): { x: number; y: number } {
-  const { petSize, petFrameScale } = UI.battle;
+  const petSize = computePetBarPetSize(Game.logicWidth, 5);
+  const { petFrameScale } = UI.battle;
   const frameH = petSize * petFrameScale;
   const frameTop = slotY - frameH / 2;
   const ratio = lane === 'minorUpper'

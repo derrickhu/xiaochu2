@@ -4,6 +4,7 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { TweenManager } from '@/core/TweenManager';
+import { computePetBarPetSize } from './BattleLayout';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { TeamPet } from '@/game/battle/battleTypes';
 import { makePanel } from '@/ui/Panel';
@@ -71,7 +72,7 @@ export function showPetSkillPreview(
   const margin = UI.board.marginX;
   let cx = slotX;
   cx = Math.max(margin + panelW / 2, Math.min(Game.logicWidth - margin - panelW / 2, cx));
-  root.position.set(cx, slotY - UI.battle.petSize / 2 - 12);
+  root.position.set(cx, slotY - computePetBarPetSize(Game.logicWidth, 5) / 2 - 12);
 
   root.addChild(makePanel({
     width: panelW, height: panelH, radius: 12, centered: true,

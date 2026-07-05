@@ -89,7 +89,7 @@ export class BattleHud {
   /** 顶栏关卡信息（置于最上层，避免被敌人区背景遮住） */
   buildStageHeader(parent: PIXI.Container): void {
     const w = Game.logicWidth;
-    this._stageHeaderText = new PIXI.Text(formatStageBattleHeader(this._ctrl.stage), {
+    this._stageHeaderText = new PIXI.Text(this._stageHeaderLabel(), {
       fontSize: 28,
       fill: 0xf0e0c0,
       fontWeight: 'bold',
@@ -103,6 +103,20 @@ export class BattleHud {
     parent.addChild(this._stageHeaderText);
   }
 
+  /** 刷新顶栏关卡号 / 多波进度 */
+  refreshStageHeader(): void {
+    if (!displayAlive(this._stageHeaderText)) return;
+    this._stageHeaderText.text = this._stageHeaderLabel();
+  }
+
+  private _stageHeaderLabel(): string {
+    let label = formatStageBattleHeader(this._ctrl.stage);
+    if (this._ctrl.totalWaves > 1) {
+      label += ` · 第${this._ctrl.waveIndex + 1}/${this._ctrl.totalWaves}波`;
+    }
+    return label;
+  }
+
   /** 敌人区：波次文字 + 立绘容器 + 名字 + 属性克制行 + 血条 + 倒计时 */
   buildEnemyArea(parent: PIXI.Container): void {
     const w = Game.logicWidth;
@@ -111,6 +125,7 @@ export class BattleHud {
     this._waveText = new PIXI.Text('', { fontSize: 26, fill: 0x9b8cc4 });
     this._waveText.anchor.set(1, 0.5);
     this._waveText.position.set(w - 30, headerY);
+    this._waveText.visible = false;
     parent.addChild(this._waveText);
 
     this._enemyContainer = new PIXI.Container();
@@ -330,7 +345,7 @@ export class BattleHud {
     this._refreshEnemyElementTags(enemy.def.element);
     // 背景按关卡属性（与 assetPreload / 场景设计一致），不按当前敌人属性
     this._refreshEnemyBg(this._ctrl.stage.element);
-    this._waveText.text = `第 ${this._ctrl.waveIndex + 1}/${this._ctrl.totalWaves} 波`;
+    this.refreshStageHeader();
     this.refreshEnemyHp();
     this.refreshEnemyCd();
   }

@@ -19,6 +19,8 @@ import {
   updatePetSkillReadyFx,
   type PetSkillReadyFxView,
 } from '@/game/battle/PetSkillReadyFx';
+import { getGrowthUi } from '@/balance/growth';
+import { makeText } from '@/ui/text';
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BattleLayout } from './BattleLayout';
 import { showPetSkillPreview, TAP_SLOP, type PetSkillPreviewHandle } from './PetSkillPreviewBubble';
@@ -35,6 +37,7 @@ interface PetBarHooks {
 
 export class BattlePetBar {
   private _slots: PIXI.Container[] = [];
+  private _petSize = 0;
   private _slotCdBadge: PIXI.Graphics[] = [];
   private _slotCdText: PIXI.Text[] = [];
   private _slotReadyFx: PetSkillReadyFxView[] = [];
@@ -50,11 +53,13 @@ export class BattlePetBar {
 
   build(parent: PIXI.Container, hooks: PetBarHooks): void {
     this._hooks = hooks;
-    const { petSize, petGap, petFrameScale } = UI.battle;
-    const total = this._ctrl.team.length * petSize + (this._ctrl.team.length - 1) * petGap;
-    const startX = (Game.logicWidth - total) / 2 + petSize / 2;
-    const y = this._layout.boardY - UI.battle.teamBarOffset + petSize / 2;
+    const { petFrameScale } = UI.battle;
+    const { petSize, petGap, petBarSidePad, petBarCenterY } = this._layout;
+    this._petSize = petSize;
+    const startX = petBarSidePad + petSize / 2;
+    const y = petBarCenterY;
     const frameSize = petSize * petFrameScale;
+    const starUi = getGrowthUi('inverse');
 
     this._slotCdBadge = [];
     this._slotCdText = [];
@@ -101,6 +106,21 @@ export class BattlePetBar {
       badge.anchor.set(0.5);
       badge.position.set(petSize / 2 - 16, -petSize / 2 + 16);
       slot.addChild(badge);
+
+      // 星级（左下角，对齐 xiao_chu battleTeamBarView）
+      if (pet.star >= 1) {
+        const starSize = Math.max(14, Math.round(petSize * 0.14));
+        const stars = makeText('★'.repeat(pet.star), {
+          size: starSize,
+          fill: starUi.starFilled,
+          bold: true,
+          anchor: [0, 1],
+          strokeColor: 0x000000,
+          strokeWidth: Math.max(2, Math.round(starSize * 0.14)),
+        });
+        stars.position.set(-petSize / 2 + 4, petSize / 2 - 2);
+        slot.addChild(stars);
+      }
 
       // 冷却标记：右下角小圆标（对齐 xiao_chu，不暗化头像）
       const cdR = petSize * 0.2;
@@ -182,7 +202,7 @@ export class BattlePetBar {
 
   /** 技能就绪槽：旋转光弧 + 上升粒子 + 双箭头（对齐 xiao_chu，无每帧 Graphics 重绘） */
   update(dt: number): void {
-    const { petSize } = UI.battle;
+    const petSize = this._petSize;
     const canAct = !this._hooks.isBusy() && this._ctrl.state === 'playerTurn';
 
     this._ctrl.team.forEach((pet, i) => {
@@ -244,7 +264,7 @@ export class BattlePetBar {
   private _onCanvasPetDown(e: unknown): void {
     if (this._hooks.isBusy()) return;
     const design = clientEventToDesign(e);
-    const half = UI.battle.petSize / 2;
+    const half = this._petSize / 2;
     for (let i = 0; i < this._slots.length; i++) {
       const slot = this._slots[i];
       const local = designPointToLocal(slot, design.x, design.y);
