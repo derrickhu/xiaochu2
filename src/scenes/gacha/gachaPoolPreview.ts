@@ -103,15 +103,15 @@ function attachHorizontalScroll(
   };
 }
 
-/** bottomY = 面板底边设计坐标；element 省略时为全局收录池 */
+/** bottomY = 面板底边设计坐标；element 省略时为全局池（全花名册） */
 export function buildGachaPoolPreview(
   w: number,
   bottomY: number,
   element?: Element,
 ): GachaPoolPreviewHandle {
   const root = new PIXI.Container();
-  const poolIds = [...PlayerData.availablePool(element)];
-  const ownedCount = poolIds.filter((id) => PlayerData.isOwned(id)).length;
+  const poolIds = [...PlayerData.gachaPoolIds(element)];
+  const discoveredCount = poolIds.filter((id) => PlayerData.isDiscovered(id)).length;
   const panelW = Math.min(620, w - 32);
   const panelH = poolIds.length > 0 ? GACHA_POOL_PANEL_H : 88;
   const panelLeft = w / 2 - panelW / 2;
@@ -126,20 +126,16 @@ export function buildGachaPoolPreview(
   root.addChild(panel);
 
   const title = makeText(
-    poolIds.length > 0
-      ? (element
-        ? `${ELEMENT_NAME[element]}系 · ${poolIds.length} 种`
-        : `全局召唤池 · ${poolIds.length} 种可出`)
-      : (element ? `${ELEMENT_NAME[element]}系 · 暂无收录` : '全局召唤池 · 暂无收录'),
+    element
+      ? `${ELEMENT_NAME[element]}系 · ${poolIds.length} 种可出`
+      : `全局召唤池 · ${poolIds.length} 种可出`,
     { size: FONT_SIZE.xs, fill: COLORS.textMain, bold: true, anchor: [0, 0] },
   );
   title.position.set(panelLeft + PANEL_PAD, PANEL_PAD);
   root.addChild(title);
 
   const sub = makeText(
-    poolIds.length > 0
-      ? `已拥有 ${ownedCount}/${poolIds.length}${poolIds.length > 6 ? ' · 左右滑动' : ''}`
-      : '推进主线关卡，击败灵宠高级形态即可收录',
+    `已收录 ${discoveredCount}/${poolIds.length} 出率 UP ×2${poolIds.length > 6 ? ' · 左右滑动' : ''}`,
     { size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: [0, 0] },
   );
   sub.position.set(panelLeft + PANEL_PAD, PANEL_PAD + 22);
@@ -169,11 +165,13 @@ export function buildGachaPoolPreview(
       const cell = new PIXI.Container();
       cell.position.set(cx + ICON / 2, ICON / 2);
 
+      // 已收录 = 出率 UP，高亮边框；未收录压暗但仍可出货
+      const discovered = PlayerData.isDiscovered(id);
       cell.addChild(makePanel({
         width: ICON, height: ICON, radius: 8, centered: true,
         bg: COLORS.panelBgAlt,
-        border: PlayerData.isOwned(id) ? COLORS.accent : COLORS.panelBorderSoft,
-        borderWidth: PlayerData.isOwned(id) ? 2 : 1,
+        border: discovered ? COLORS.accent : COLORS.panelBorderSoft,
+        borderWidth: discovered ? 2 : 1,
       }));
 
       const tex = getPetAvatarTexture(id, Math.max(1, PlayerData.petStar(id)));
@@ -184,7 +182,7 @@ export function buildGachaPoolPreview(
         sp.width = dw;
         sp.height = dw * (tex.height / tex.width);
         sp.position.set(0, ICON / 2 - 2);
-        if (!PlayerData.isOwned(id)) sp.alpha = 0.85;
+        if (!discovered) sp.alpha = 0.72;
         cell.addChild(sp);
       }
 

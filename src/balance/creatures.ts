@@ -63,10 +63,13 @@ function monsterPair(
     t2Skills?: readonly string[];
     ai1?: number;
     ai2?: number;
+    /** 攻击基值倍率（章 Boss 波用）：HP 预算收敛后由攻压承担养成门槛 */
+    atkScale?: number;
   } = {},
 ): { tier1: CreatureMonsterTier; tier2: CreatureMonsterTier } {
+  const atkScale = opts.atkScale ?? 1;
   const t1Hp = Math.round(600 + rank * 70);
-  const t1Atk = Math.round(88 + rank * 5);
+  const t1Atk = Math.round((88 + rank * 5) * atkScale);
   const t1Def = Math.round(8 + rank * 2);
   return {
     tier1: {
@@ -110,9 +113,10 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(6, { t2Skills: [E.lionCharge] }),
   },
   {
+    // 怪物面 = 第 2 章 Boss 波 2/3：rank 按 powerBudget 护栏校准
     id: 'pet_004', name: '灵鹿医者', element: 'wood', rarity: 2, role: 'healer',
     skillId: PET_SKILL_IDS.woodBigHeal,
-    monster: monsterPair(8, { t2Skills: [E.serpentHeal] }),
+    monster: monsterPair(6, { t2Skills: [E.serpentHeal] }),
   },
   // ── 水 ──
   {
@@ -147,7 +151,7 @@ export const CREATURES: readonly CreatureDef[] = [
     // 怪物面 = 第 6 章 Boss：首教「时间压缩」机制
     id: 'pet_010', name: '厚土娘娘', element: 'earth', rarity: 3, role: 'healer',
     skillId: PET_SKILL_IDS.earthTime,
-    monster: monsterPair(8, { t1Skills: [E.timeSqueeze], t2Skills: [E.timeSqueeze, E.pandaGuard, E.pandaHeal] }),
+    monster: monsterPair(5, { t1Skills: [E.timeSqueeze], t2Skills: [E.timeSqueeze, E.pandaGuard, E.pandaHeal] }),
   },
 
   // ══════════════════════════════════════════════════════════════
@@ -174,9 +178,10 @@ export const CREATURES: readonly CreatureDef[] = [
   {
     // 钥匙宠（Ch4 收录）：净化技解 Ch4/Ch5 的封珠与毒
     // 怪物面 = 第 4 章 Boss：首教「敌人中途封珠」机制（tier1 铺垫、tier2 技能组）
+    // rank 按 powerBudget 护栏校准（第 4 章铺垫关较轻，Boss 波次相应收敛）
     id: 'pet_014', name: '玄影天鹏', element: 'metal', rarity: 4, role: 'support',
     skillId: PET_SKILL_IDS.shadowPurify,
-    monster: monsterPair(21, { t1Skills: [E.sealOrbs], t2Skills: [E.sealOrbs, E.bladeCharge, E.pandaGuard] }),
+    monster: monsterPair(4, { t1Skills: [E.sealOrbs], t2Skills: [E.sealOrbs, E.bladeCharge, E.pandaGuard] }),
   },
   // ── 木 ──
   {
@@ -190,9 +195,10 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(12, { t2Skills: [E.lionCharge] }),
   },
   {
+    // 怪物面 = 第 1 章 Boss 波 2/3：rank 按 powerBudget 护栏（总量 ≈ 前关 3.5 倍）校准
     id: 'pet_017', name: '星辉灵鹿', element: 'wood', rarity: 2, role: 'attacker',
     skillId: PET_SKILL_IDS.starCross,
-    monster: monsterPair(16, { t2Skills: [E.lionCharge] }),
+    monster: monsterPair(9, { t2Skills: [E.lionCharge] }),
   },
   {
     id: 'pet_018', name: '混沌骨狐', element: 'wood', rarity: 4, role: 'healer',
@@ -241,7 +247,7 @@ export const CREATURES: readonly CreatureDef[] = [
     // 怪物面 = 第 8 章 Boss：首教「技能封印 + 狂暴」复合机制（终章压轴）
     id: 'pet_026', name: '天外魔君', element: 'fire', rarity: 4, role: 'attacker',
     skillId: PET_SKILL_IDS.skyfallGravity,
-    monster: monsterPair(22, { t1Skills: [E.enrage], t2Skills: [E.skillSeal, E.enrage, E.lionCharge] }),
+    monster: monsterPair(16, { t1Skills: [E.enrage], t2Skills: [E.skillSeal, E.enrage, E.lionCharge] }),
   },
   // ── 土 ──
   {
@@ -251,9 +257,10 @@ export const CREATURES: readonly CreatureDef[] = [
   },
   {
     // 钥匙宠（Ch3 收录）：大护盾扛 Ch4 敌人封珠期的输出真空
+    // 怪物面 = 第 3 章 Boss 波 2/3：rank 按 powerBudget 护栏校准
     id: 'pet_028', name: '归墟玄龟', element: 'earth', rarity: 3, role: 'tank',
     skillId: PET_SKILL_IDS.abyssBulwark,
-    monster: monsterPair(14, { t2Skills: [E.golemGuard, E.serpentHeal] }),
+    monster: monsterPair(9, { atkScale: 6, t2Skills: [E.golemGuard, E.lionCharge] }),
   },
   {
     id: 'pet_029', name: '星轮机关兽', element: 'earth', rarity: 3, role: 'support',
@@ -265,7 +272,7 @@ export const CREATURES: readonly CreatureDef[] = [
     // 怪物面 = 第 7 章 Boss：首教「禁疗」机制（与禁心规则复合）
     id: 'pet_030', name: '裂隙甲虫', element: 'earth', rarity: 4, role: 'tank',
     skillId: PET_SKILL_IDS.riftShield,
-    monster: monsterPair(20, { t1Skills: [E.healBlock], t2Skills: [E.healBlock, E.golemGuard, E.bladeCharge] }),
+    monster: monsterPair(5, { t1Skills: [E.healBlock], t2Skills: [E.healBlock, E.golemGuard, E.bladeCharge] }),
   },
 ];
 

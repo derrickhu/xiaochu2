@@ -2,6 +2,12 @@
  * 成长曲线参数表（纯数据，零逻辑）
  */
 import type { StatBlock } from './petRoles';
+import {
+  CHAPTER_POWER,
+  getChapterPower,
+  POWER_CURVE,
+  type ChapterPowerAnchor,
+} from './powerBudget';
 
 /** 三维统一倍率：星级对 atk/hp/rcv 一视同仁，后续可按维度差异化 */
 function uniform(v: number): StatBlock {
@@ -46,35 +52,17 @@ export function getStarProfile(star: number): StarProfile {
 export const MAX_PET_STAR = 5;
 
 /**
- * ── 功率预算曲线（调参锚点，单一真源）──
+ * ── 功率预算曲线（唯一真源已迁至 powerBudget.ts 的 CHAPTER_POWER）──
  *
- * 定义「进入第 N 章时期望的主队养成水平」与「通关该章后期望水平」，
- * 作为数值平衡的锚点：敌人曲线（enemies + chapterGrowth）、经验产出与升星节奏
- * 都应围绕这条预算曲线校准，simulation 契约测试据此断言「循序渐进」。
- *
- * 设计意图：
- * - 第 1 章：初始 L1/1★ 可起步，自然通关后主队成长到约 L12（教学 + 起量）。
- * - 第 2 章：需要把主队升到约 L12 起、主力 2★，通关后约 L25（升级 + 升星 + 换队）。
- * - 第 3 章：需要约 L25 起、主力 3★、至少 1~2 只高稀有，通关后约 L40（深度养成）。
+ * 此处保留兼容别名：既有代码统一经 CHAPTER_BUDGET / getChapterBudget 读取，
+ * 新代码请直接使用 powerBudget.ts 的 CHAPTER_POWER（1~8 章全量锚点）。
  */
-export interface ChapterBudget {
-  chapter: number;
-  /** 进入该章期望主队平均等级 */
-  enterLevel: number;
-  /** 进入该章期望主力星级 */
-  enterStar: number;
-  /** 通关该章后期望主队平均等级 */
-  clearLevel: number;
-}
+export type ChapterBudget = ChapterPowerAnchor;
 
-export const CHAPTER_BUDGET: Readonly<Record<number, ChapterBudget>> = {
-  1: { chapter: 1, enterLevel: 1, enterStar: 1, clearLevel: 12 },
-  2: { chapter: 2, enterLevel: 12, enterStar: 2, clearLevel: 25 },
-  3: { chapter: 3, enterLevel: 25, enterStar: 3, clearLevel: 40 },
-};
+export const CHAPTER_BUDGET: Readonly<Record<number, ChapterBudget>> = CHAPTER_POWER;
 
 export function getChapterBudget(chapter: number): ChapterBudget {
-  return CHAPTER_BUDGET[chapter] ?? CHAPTER_BUDGET[1];
+  return getChapterPower(chapter);
 }
 
 /**
@@ -134,17 +122,14 @@ export const GROWTH = {
     expGrowth: 1.08,
   },
 
-  /** ── 敌人成长 ── */
+  /**
+   * ── 敌人成长 ──
+   * 章节成长系数（复利）：数值 = 基值 × chapterGrowth^(章节-1) × 关卡 difficulty。
+   * 单一真源在 powerBudget.ts 的 POWER_CURVE.enemy，此处仅作读取别名。
+   */
   enemy: {
-    /**
-     * 章节成长系数（复利）：数值 = 基值 × chapterGrowth^(章节-1) × 关卡 difficulty
-     *
-     * 阶段八调优：原 (1.45/1.35/1.30) 在章节边界造成 HP 断崖。略收敛 HP 系数、
-     * 并配合 enemies.ts 平滑后的基值，使跨章曲线单调且与功率预算（CHAPTER_BUDGET）对齐：
-     * 进入新章约需达到上一章 clearLevel + 升星，欠养成则在新章前段卡住。
-     */
-    chapterGrowthHp: 1.40,
-    chapterGrowthAtk: 1.34,
-    chapterGrowthDef: 1.28,
+    chapterGrowthHp: POWER_CURVE.enemy.chapterGrowthHp,
+    chapterGrowthAtk: POWER_CURVE.enemy.chapterGrowthAtk,
+    chapterGrowthDef: POWER_CURVE.enemy.chapterGrowthDef,
   },
 } as const;

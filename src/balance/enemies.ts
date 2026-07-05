@@ -74,19 +74,22 @@ export const MOBS: readonly MobDef[] = [
     skillIds: [ENEMY_SKILL_IDS.serpentHeal],
   },
   // ── 章 Boss 魔物铺垫（3，非灵宠造型） ──
+  // 基值按 powerBudget.ts 预算护栏校准：Boss 首波 ≤ 前关最大单波 × 2.5，
+  // 消灭旧版（3600/4200/5200）造成的章末 5~11 倍 HP 断崖。
   {
     id: 'enemy_bamboo_tyrant_wood', name: '蛮竹魔将', element: 'wood',
-    baseHp: 3600, baseAtk: 170, baseDef: 30, attackInterval: 2,
+    baseHp: 1200, baseAtk: 150, baseDef: 30, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal],
   },
   {
+    // HP 收敛后由攻压承担「养成门槛」：欠养成队伍被续航检定淘汰，而非磨血墙
     id: 'enemy_crystal_boss_earth', name: '幽晶巨像', element: 'earth',
-    baseHp: 4200, baseAtk: 180, baseDef: 60, attackInterval: 2,
+    baseHp: 1250, baseAtk: 200, baseDef: 60, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.lionCharge],
   },
   {
     id: 'enemy_thunderlord_boss_wood', name: '风雷天尊', element: 'wood',
-    baseHp: 5200, baseAtk: 200, baseDef: 45, attackInterval: 2,
+    baseHp: 1300, baseAtk: 280, baseDef: 45, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal, ENEMY_SKILL_IDS.lionCharge],
   },
 ];

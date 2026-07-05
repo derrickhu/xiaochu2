@@ -27,6 +27,7 @@ import {
 } from './playerSave';
 import {
   addLingyu as addLingyuToSave,
+  gachaPoolPets as gachaPoolPetsFromSave,
   pullGachaSingle as pullGachaSingleFromSave,
   pullGachaTen as pullGachaTenFromSave,
   type PullOutcome,
@@ -288,7 +289,7 @@ class PlayerDataClass {
   }
 
   /**
-   * 可获取池 = 已收录 ∪ 初始赠送 ∪ 已拥有；召唤/商店仅在此池内出货。
+   * 可获取池 = 已收录 ∪ 初始赠送 ∪ 已拥有；商店等定向系统仅在此池内出货。
    * @param element 可选；传入时仅取该五行子池，省略则为全局收录池
    */
   availablePool(element?: Element): readonly string[] {
@@ -296,6 +297,11 @@ class PlayerDataClass {
       .filter((p) => this._data.discovered.includes(p.id))
       .filter((p) => !element || p.element === element)
       .map((p) => p.id);
+  }
+
+  /** 召唤出货池 = 全花名册（收录转为档内 UP 权重，不再限制可达性） */
+  gachaPoolIds(element?: Element): readonly string[] {
+    return gachaPoolPetsFromSave(element).map((p) => p.id);
   }
 
   // ═══════════ 图鉴收录 ═══════════

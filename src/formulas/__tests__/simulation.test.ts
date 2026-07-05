@@ -1,20 +1,23 @@
 /**
- * 关卡平衡回归测试：用 simulation 模拟器断言第一章"挑战版(v0.3)"的设计意图。
+ * 关卡平衡回归测试：用 simulation 模拟器断言「平滑养成」数值体系的设计意图。
  *
- * 这些断言是关卡设计的"契约"：改 balance/(combat|pets|enemies|stages|growth) 后若 diff，
- * 说明难度曲线偏离了预期，需要确认是有意调整还是引入了失衡。
+ * 这些断言是关卡设计的"契约"：改 balance/(combat|pets|enemies|stages|growth|powerBudget)
+ * 后若 diff，说明难度曲线偏离了预期，需要确认是有意调整还是引入了失衡。
  *
- * 设计意图：
+ * 设计意图（平滑养成，见 balance/powerBudget.ts）：
  *  - 1-1~1-4 教学段：默认队中手可稳过并拿不错星级，低手也能通关
- *  - 1-5+ 技能怪段：乱带/弱队会卡关或被拖死，带对解法(克制/爆发/护盾/续航)才顺
- *  - Boss 1-8：综合考，弱队几乎打不过，强队也难满星
+ *  - 1-5 Boss：低手也能通关（但拿不到三星），中手 8~12 回合——不再是 7 倍血量断崖
+ *  - 跨章：达标（预算锚点）队伍可通关本章；欠养成的标准队在新章 Boss 处卡住
+ *  - Boss 波次受 powerBudget 护栏约束：首波 ≤ 前关最大单波 2.5 倍、总量 ≈ 前关 2~4.2 倍
  *  - 操作熟练度(低/中/高手)与队伍质量都应显著影响结果
  */
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_TEAM, INITIAL_PET_LEVEL, INITIAL_PET_STAR, PET_MAP } from '@/balance/pets';
-import { STAGES } from '@/balance/stages';
+import { STAGES, stageWaveCount } from '@/balance/stages';
+import { resolveEncounter } from '@/balance/enemies';
 import { CHAPTER_BUDGET, getChapterBudget } from '@/balance/growth';
-import { petExpToNext } from '../growth';
+import { BUDGET_GUARDRAIL, CHAPTER_POWER, stageTtk } from '@/balance/powerBudget';
+import { enemyStats, petExpToNext } from '../growth';
 import { stageDrops } from '../economyOutput';
 import {
   COMBO_MODELS, buildTeam, simulateBattle, simulateMatrix, type SimResult,
@@ -103,9 +106,18 @@ describe('新手 5R 阵容：教学段可达性', () => {
   });
 });
 
-describe('1-5 Boss：弱队受罚 / 强队顺畅', () => {
-  it('低手默认队打不过 1-5 收录 Boss', () => {
-    expect(sim(TEAMS.default, 'stage_1_5', COMBO_MODELS.low).win).toBe(false);
+describe('1-5 Boss：平滑养成（低手可过不三星，中手节奏适中）', () => {
+  it('低手默认队可通关 1-5，但拿不到三星', () => {
+    const r = sim(TEAMS.default, 'stage_1_5', COMBO_MODELS.low);
+    expect(r.win).toBe(true);
+    expect(r.stars).toBeLessThan(3);
+  });
+
+  it('中手默认队约 8~12 回合通 1-5（允许 ±2 回合契约容差）', () => {
+    const r = sim(TEAMS.default, 'stage_1_5', COMBO_MODELS.mid);
+    expect(r.win).toBe(true);
+    expect(r.turnsUsed).toBeGreaterThanOrEqual(6);
+    expect(r.turnsUsed).toBeLessThanOrEqual(14);
   });
 
   it('爆发队中手可零失误清完第一章', () => {
@@ -158,20 +170,22 @@ function teamAtBudget(ch: number) {
   return buildTeam(TEAMS.burst, b.enterLevel, b.enterStar);
 }
 
-describe('功率预算：达标队伍可通关本章', () => {
-  for (const ch of [1, 2, 3]) {
+const ALL_CHAPTERS = Object.keys(CHAPTER_POWER).map(Number).sort((a, b) => a - b);
+
+describe('功率预算：达标队伍可通关本章（1~8 章全量）', () => {
+  for (const ch of ALL_CHAPTERS) {
     it(`第 ${ch} 章：进章预算队（L${CHAPTER_BUDGET[ch].enterLevel}/${CHAPTER_BUDGET[ch].enterStar}★）中手可通关全部关卡`, () => {
       const team = teamAtBudget(ch);
       for (const id of stagesOf(ch)) {
-        expect(simulateBattle(team, id, COMBO_MODELS.mid).win).toBe(true);
+        expect(simulateBattle(team, id, COMBO_MODELS.mid).win, id).toBe(true);
       }
     });
   }
 });
 
 describe('功率预算：欠养成会卡在新章（不能跳章碾压）', () => {
-  it('停留在第 1 章预算（L1/1★）的队伍打不穿第 3 章 Boss', () => {
-    const under = buildTeam(TEAMS.burst, CHAPTER_BUDGET[1].enterLevel, CHAPTER_BUDGET[1].enterStar);
+  it('停留在第 1 章预算（L1/1★）的默认队打不穿第 3 章 Boss', () => {
+    const under = buildTeam(TEAMS.default, CHAPTER_BUDGET[1].enterLevel, CHAPTER_BUDGET[1].enterStar);
     expect(simulateBattle(under, 'stage_3_6', COMBO_MODELS.mid).win).toBe(false);
   });
 
@@ -182,6 +196,96 @@ describe('功率预算：欠养成会卡在新章（不能跳章碾压）', () =
 
   it('初始 L1/1★ 默认队无法全清第 3 章（终章 Boss 卡关）', () => {
     expect(sim(TEAMS.default, 'stage_3_6', COMBO_MODELS.mid).win).toBe(false);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════
+// 功率预算护栏（powerBudget.ts BUDGET_GUARDRAIL）：波次平滑 + 预算符合性 + 跨章单调
+// ════════════════════════════════════════════════════════════════
+
+/** 关卡各波实际 HP（口径同 BattleController：enemyStats 缩放） */
+function stageWaveHps(stageId: string): number[] {
+  const s = STAGES.find((x) => x.id === stageId)!;
+  return s.encounters.map((e) => enemyStats(resolveEncounter(e).def, s.chapter, s.difficulty).hp);
+}
+
+const stageTotalHp = (stageId: string): number =>
+  stageWaveHps(stageId).reduce((a, b) => a + b, 0);
+
+describe('预算护栏：Boss 波次平滑（消灭 HP 断崖）', () => {
+  const bosses = STAGES.filter((s) => s.isBoss);
+
+  it('每章 Boss 首波 ≤ 前一关最大单波 × 护栏倍率', () => {
+    for (const boss of bosses) {
+      const prev = STAGES.find((s) => s.chapter === boss.chapter && s.index === boss.index - 1)!;
+      const firstWave = stageWaveHps(boss.id)[0];
+      const prevMaxWave = Math.max(...stageWaveHps(prev.id));
+      expect(firstWave, `${boss.id} 首波 ${firstWave} vs 前关最大波 ${prevMaxWave}`)
+        .toBeLessThanOrEqual(prevMaxWave * BUDGET_GUARDRAIL.bossFirstWaveMaxRatio);
+    }
+  });
+
+  it('每章 Boss 总量 ≈ 前一关总量 × 目标倍率（±预算容差）', () => {
+    const g = BUDGET_GUARDRAIL;
+    for (const boss of bosses) {
+      const prev = STAGES.find((s) => s.chapter === boss.chapter && s.index === boss.index - 1)!;
+      const total = stageTotalHp(boss.id);
+      const prevTotal = stageTotalHp(prev.id);
+      const target = prevTotal * g.bossTotalTargetRatio;
+      expect(total, `${boss.id} 总量 ${total} vs 目标 ${Math.round(target)}`)
+        .toBeGreaterThanOrEqual(target * (1 - g.budgetTolerance));
+      expect(total, `${boss.id} 总量 ${total} vs 目标 ${Math.round(target)}`)
+        .toBeLessThanOrEqual(target * (1 + g.budgetTolerance));
+    }
+  });
+
+  it('1-5 具体锚点：总量约 5000（旧版 12078 断崖已消除）', () => {
+    const total = stageTotalHp('stage_1_5');
+    expect(total).toBeGreaterThanOrEqual(4200);
+    expect(total).toBeLessThanOrEqual(5800);
+  });
+});
+
+describe('预算护栏：跨章单调性（1~8 章）', () => {
+  it('章 Boss 总 HP 随章节严格递增', () => {
+    const totals = ALL_CHAPTERS.map((ch) => {
+      const boss = STAGES.find((s) => s.chapter === ch && s.isBoss)!;
+      return stageTotalHp(boss.id);
+    });
+    for (let i = 1; i < totals.length; i++) {
+      expect(totals[i], `第 ${ALL_CHAPTERS[i]} 章 Boss`).toBeGreaterThan(totals[i - 1]);
+    }
+  });
+
+  it('章敌方总 HP（全关卡合计）随章节严格递增', () => {
+    const totals = ALL_CHAPTERS.map((ch) =>
+      STAGES.filter((s) => s.chapter === ch).reduce((sum, s) => sum + stageTotalHp(s.id), 0));
+    for (let i = 1; i < totals.length; i++) {
+      expect(totals[i], `第 ${ALL_CHAPTERS[i]} 章`).toBeGreaterThan(totals[i - 1]);
+    }
+  });
+});
+
+describe('预算符合性：达标队伍 TTK 落在目标带内（中手口径）', () => {
+  for (const ch of ALL_CHAPTERS) {
+    it(`第 ${ch} 章：各关用时 ≤ 类型 TTK 上限，Boss 至少 2 回合`, () => {
+      const team = teamAtBudget(ch);
+      for (const s of STAGES.filter((x) => x.chapter === ch)) {
+        const r = simulateBattle(team, s.id, COMBO_MODELS.mid);
+        const band = stageTtk(s.type);
+        expect(r.win, s.id).toBe(true);
+        expect(r.turnsUsed, `${s.id}(${s.type})`).toBeLessThanOrEqual(band.max);
+        if (s.isBoss) expect(r.turnsUsed, s.id).toBeGreaterThanOrEqual(2);
+      }
+    });
+  }
+});
+
+describe('预算符合性：多波关波次数量与分配可用', () => {
+  it('所有 Boss 关均为 3 波（prep + tier1 + tier2）', () => {
+    for (const s of STAGES.filter((x) => x.isBoss)) {
+      expect(stageWaveCount(s)).toBe(3);
+    }
   });
 });
 

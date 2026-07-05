@@ -5,6 +5,7 @@
  * - 出货概率读 rarity.ts 的 gachaRate（与 statMult 解耦）。
  * - 保底（硬保底 SSR+ / 十连保底 SR+）在此结算，计数由调用方持久化传入。
  * - 是否重复由 isOwned 回调判定；重复宠转碎片数读 economy.ts。
+ * - 档内选宠支持权重回调 weightOf（收录 UP ×2 等），缺省等权。
  * 调用方（PlayerData）只负责扣灵玉、落库、改 owned/shards。
  */
 import { PETS, type PetDef } from '@/balance/pets';
@@ -25,7 +26,12 @@ export interface PullOutcome {
   shards: number;
   /** 是否触发硬保底（UI 提示用） */
   pity: boolean;
+  /** 高稀有护航包（NEW SSR/UR 出货附赠，落库时由调用方填充） */
+  escort?: { shards: number; exp: number };
 }
+
+/** 档内选宠权重回调：返回该宠相对权重（≥0），缺省等权 1 */
+export type PetWeightFn = (pet: PetDef) => number;
 
 const DEFAULT_POOL: readonly PetDef[] = PETS;
 
@@ -63,7 +69,12 @@ function rollRarityForPool(
   return tiers[tiers.length - 1];
 }
 
-function pickPetOfRarity(rng: () => number, rarity: Rarity, pool: readonly PetDef[]): PetDef {
+function pickPetOfRarity(
+  rng: () => number,
+  rarity: Rarity,
+  pool: readonly PetDef[],
+  weightOf?: PetWeightFn,
+): PetDef {
   const candidates = pool.filter((p) => p.rarity === rarity);
   if (candidates.length === 0) {
     // 该稀有度无宠时，回退到最接近的较低档，再不行回退到更高档
@@ -72,7 +83,30 @@ function pickPetOfRarity(rng: () => number, rarity: Rarity, pool: readonly PetDe
     const higher = pool.filter((p) => p.rarity > rarity).sort((a, b) => a.rarity - b.rarity);
     return higher[0] ?? pool[0];
   }
-  return candidates[Math.floor(rng() * candidates.length)];
+  if (!weightOf) return candidates[Math.floor(rng() * candidates.length)];
+  // 加权抽取（收录 UP ×2 等）；权重全 0 时退化为等权
+  const weights = candidates.map((p) => Math.max(0, weightOf(p)));
+  const total = weights.reduce((s, w) => s + w, 0);
+  if (total <= 0) return candidates[Math.floor(rng() * candidates.length)];
+  let r = rng() * total;
+  for (let i = 0; i < candidates.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return candidates[i];
+  }
+  return candidates[candidates.length - 1];
+}
+
+/**
+ * 概率公示（动态归一化）：仅在池内实际出现的稀有度档位间按 gachaRate 归一。
+ * 与 rollRarityForPool 同口径，保证「公示 = 实际出货」。
+ */
+export function poolGachaRates(pool: readonly PetDef[]): Map<Rarity, number> {
+  const tiers = poolRarityTiers(pool);
+  const total = tiers.reduce((s, t) => s + getRarity(t).gachaRate, 0);
+  const map = new Map<Rarity, number>();
+  if (total <= 0) return map;
+  for (const t of tiers) map.set(t, getRarity(t).gachaRate / total);
+  return map;
 }
 
 /**
@@ -85,6 +119,7 @@ export function pullOne(
   isOwned: (petId: string) => boolean,
   minRarity: Rarity = 1,
   pool: readonly PetDef[] = DEFAULT_POOL,
+  weightOf?: PetWeightFn,
 ): PullOutcome {
   const g = ECONOMY.gacha;
   const effPool = pool.length > 0 ? pool : DEFAULT_POOL;
@@ -96,7 +131,7 @@ export function pullOne(
   if (rarity >= 3) state.sinceHigh = 0;
   else state.sinceHigh += 1;
 
-  const pet = pickPetOfRarity(rng, rarity, effPool);
+  const pet = pickPetOfRarity(rng, rarity, effPool, weightOf);
   // 展示与碎片结算一律以「实际出货宠」的稀有度为准（与卡面/图鉴一致）
   const actualRarity = pet.rarity;
   const duplicate = isOwned(pet.id);
@@ -113,6 +148,7 @@ export function pullTen(
   state: GachaState,
   isOwned: (petId: string) => boolean,
   pool: readonly PetDef[] = DEFAULT_POOL,
+  weightOf?: PetWeightFn,
 ): PullOutcome[] {
   const g = ECONOMY.gacha;
   const out: PullOutcome[] = [];
@@ -126,7 +162,7 @@ export function pullTen(
     const minRarity: Rarity = (isLast && noFloorYet)
       ? (g.tenPullFloorRarity as Rarity)
       : 1;
-    const r = pullOne(rng, state, ownedOrSeen, minRarity, pool);
+    const r = pullOne(rng, state, ownedOrSeen, minRarity, pool, weightOf);
     seen.add(r.petId);
     out.push(r);
   }

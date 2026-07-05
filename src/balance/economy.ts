@@ -3,14 +3,15 @@
  *
  * 货币收敛为三种：灵宠币（主货币，只做招募）+ 体力 + 碎片（自动转化，不展示为货币）。
  */
+import { POWER_CURVE } from './powerBudget';
 
 export const ECONOMY = {
   /** ── 灵宠币产出 ── */
   coin: {
     /** 单关基础产出（第 1 章基准） */
     stageBase: 30,
-    /** 章节产出成长系数（复利） */
-    chapterGrowth: 1.25,
+    /** 章节产出成长系数（复利）；单一真源在 powerBudget.ts，与敌人曲线成对校准 */
+    chapterGrowth: POWER_CURVE.economyChapterGrowth,
     /** 三星追加：每颗星额外产出比例 */
     perStarBonus: 0.2,
     /** Boss 关产出倍率 */
@@ -57,6 +58,17 @@ export const ECONOMY = {
     duplicateShards: { 1: 5, 2: 10, 3: 20, 4: 40, 5: 80 } as Readonly<Record<number, number>>,
     /** 新号初始赠送灵玉（够一发十连体验） */
     starterLingyu: 1000,
+    /** 已收录（图鉴 UP）宠在档内的出货权重倍数；未收录 = 1 */
+    discoveryUpWeight: 2,
+    /**
+     * 高稀有护航包：NEW SSR/UR 出货附赠本体碎片 + 通用经验，
+     * 保证「抽到强宠 → 立刻升 2★/拉等级 → 上阵可感知提升」的闭环。
+     * 碎片数恰好覆盖 1★→2★ 升星成本（starUpShards[2] = 20）。
+     */
+    escort: {
+      3: { shards: 20, exp: 300 },
+      4: { shards: 40, exp: 800 },
+    } as Readonly<Record<number, { shards: number; exp: number }>>,
   },
 
   /** ── 灵玉里程碑产出（首通奖励）── */

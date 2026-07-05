@@ -16,10 +16,10 @@ import { UI, ELEMENT_NAME } from '@/balance/ui';
 import { PET_MAP } from '@/balance/pets';
 import type { Element } from '@/balance/combat';
 import { RARITIES, getRarity } from '@/balance/rarity';
-import { standardGachaRates } from '@/balance/rarity';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
-import type { PullOutcome } from '@/game/gacha/Gacha';
+import { poolGachaRates, type PullOutcome } from '@/game/gacha/Gacha';
+import { gachaPoolPets } from '@/game/playerGacha';
 import {
   BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES,
 } from '@/config/Assets';
@@ -31,6 +31,7 @@ import {
 } from '@/ui';
 import { GachaRevealSequence } from './gacha/gachaRevealSequence';
 import { buildGachaPoolPreview } from './gacha/gachaPoolPreview';
+import { buildGachaCompareCard, pickBestNewOutcome } from './gacha/gachaCompareCard';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
@@ -137,7 +138,7 @@ export class GachaScene implements Scene {
     this._page.addChild(codexBtn);
   }
 
-  /** 保底进度：进度条 + 文案（距 SSR+ 硬保底还需多少抽） */
+  /** 保底进度：进度条 + 文案（距 SSR 及以上硬保底还需多少抽） */
   private _buildPity(w: number, y: number): void {
     const pity = ECONOMY.gacha.pitySSR;
     const cur = Math.min(pity, PlayerData.gachaSinceHigh);
@@ -148,7 +149,7 @@ export class GachaScene implements Scene {
     bar.position.set(w / 2 - barW / 2, y);
     this._page.addChild(bar);
 
-    const label = makeText(`距 SSR 保底还需 ${remain} 抽`, {
+    const label = makeText(`距「SSR 及以上」保底还需 ${remain} 抽`, {
       size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: 0.5,
     });
     label.position.set(w / 2, y - 16);
@@ -191,7 +192,7 @@ export class GachaScene implements Scene {
       this._page.addChild(text);
     };
 
-    const globalSize = PlayerData.availablePool().length;
+    const globalSize = PlayerData.gachaPoolIds().length;
     mkTab(left, this._elementFilter === null, COLORS.accent, `全部\n${globalSize}`, () => {
       if (this._elementFilter === null) return;
       this._elementFilter = null;
@@ -201,7 +202,7 @@ export class GachaScene implements Scene {
     GACHA_ELEMENTS.forEach((el, i) => {
       const x = left + (i + 1) * (tabW + gap);
       const selected = el === this._elementFilter;
-      const poolSize = PlayerData.availablePool(el).length;
+      const poolSize = PlayerData.gachaPoolIds(el).length;
       mkTab(x, selected, ELEMENT_TINT[el], `${ELEMENT_NAME[el]}\n${poolSize}`, () => {
         this._elementFilter = selected ? null : el;
         this._build();
@@ -225,7 +226,7 @@ export class GachaScene implements Scene {
     this._page.addChild(title);
   }
 
-  /** 概率公示面板 */
+  /** 概率公示面板：按当前池（含五行筛选）动态归一化，保证公示 = 实际出货 */
   private _buildRatePanel(w: number, y: number): void {
     const panelW = 600;
     const panelH = 200;
@@ -237,17 +238,18 @@ export class GachaScene implements Scene {
     panel.position.set(w / 2 - panelW / 2, y);
     this._page.addChild(panel);
 
-    const heading = makeText('出货概率', {
+    const heading = makeText('出货概率（当前池）', {
       size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [0.5, 0],
     });
     heading.position.set(w / 2, y + 14);
     this._page.addChild(heading);
 
-    const rates = standardGachaRates();
+    const rates = poolGachaRates(gachaPoolPets(this._activePoolElement()));
     let lineY = y + 52;
     for (const tier of [...RARITIES].reverse()) {
+      const rate = rates.get(tier);
+      if (rate === undefined) continue; // 当前池无此档位，不虚标
       const def = getRarity(tier);
-      const rate = rates.get(tier) ?? 0;
       const row = makeText(`${def.code}`, {
         size: FONT_SIZE.xs, fill: def.color, bold: true, anchor: [0, 0.5],
       });
@@ -261,6 +263,12 @@ export class GachaScene implements Scene {
       this._page.addChild(val);
       lineY += 30;
     }
+
+    const floorNote = makeText('十连必出 SR 及以上 · 已收录灵宠出率 UP ×2', {
+      size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: [0.5, 1],
+    });
+    floorNote.position.set(w / 2, y + panelH - 10);
+    this._page.addChild(floorNote);
   }
 
   private _buildPullButtons(w: number, h: number): void {
@@ -294,10 +302,8 @@ export class GachaScene implements Scene {
 
   private _doPull(count: 1 | 10): void {
     const el = this._activePoolElement();
-    if (PlayerData.availablePool(el).length === 0) {
-      Platform.showToast(el
-        ? `${ELEMENT_NAME[el]}系暂无可召唤生物，先去关卡战斗收录`
-        : '召唤池暂无收录，先去关卡战斗收录灵宠');
+    if (PlayerData.gachaPoolIds(el).length === 0) {
+      Platform.showToast(el ? `${ELEMENT_NAME[el]}系暂无可召唤生物` : '召唤池为空');
       return;
     }
     let list: PullOutcome[] | null;
@@ -393,6 +399,7 @@ export class GachaScene implements Scene {
       vibrate: (p) => Platform.vibrateShort(p),
       onDone: () => {
         skipBtn.visible = false;
+        this._buildCompareCard(overlay, outcomes);
         this._buildResultButtons(overlay, () => {
           this._teardownResults();
           overlay.destroy({ children: true });
@@ -403,6 +410,25 @@ export class GachaScene implements Scene {
     this._reveal.play();
   }
 
+  /** NEW 出货战力对比卡 + 一键上阵（无 NEW 或无可对比对象时不展示） */
+  private _buildCompareCard(overlay: PIXI.Container, outcomes: readonly PullOutcome[]): void {
+    const best = pickBestNewOutcome(outcomes);
+    if (!best) return;
+    const h = Game.logicHeight;
+    // 底部「再抽 / 确定」按钮区顶边约在 h-100，对比卡与其留 14px 间距
+    const resultBtnTop = h - 100;
+    const card = buildGachaCompareCard({
+      w: Game.logicWidth,
+      bottomY: resultBtnTop - 14,
+      outcome: best,
+      onDeployed: () => {
+        Platform.showToast(`${PET_MAP.get(best.petId)?.name ?? ''} 已上阵`);
+        card?.root.destroy({ children: true });
+      },
+    });
+    if (card) overlay.addChild(card.root);
+  }
+
   /** 结果操作按钮：再抽一次（灵玉足够）+ 确定 */
   private _buildResultButtons(overlay: PIXI.Container, onClose: () => void): void {
     const w = Game.logicWidth;
@@ -411,7 +437,7 @@ export class GachaScene implements Scene {
     const cost = this._lastCount === 10 ? g.tenCost : g.singleCost;
     const el = this._activePoolElement();
     const canRepull = PlayerData.lingyu >= cost
-      && PlayerData.availablePool(el).length > 0;
+      && PlayerData.gachaPoolIds(el).length > 0;
 
     const btnW = 260;
     const y = h - 100;
@@ -491,7 +517,11 @@ export class GachaScene implements Scene {
     nameText.position.set(cardW / 2, cardH * 0.74);
     card.addChild(nameText);
 
-    const tagText = o.duplicate ? `+${o.shards} 碎片` : 'NEW';
+    // NEW SSR/UR 展示护航包内容（碎片可直升 2★，经验可立刻拉等级）
+    const newText = o.escort
+      ? (cardW > 200 ? `NEW · 护航 +${o.escort.shards}碎片 +${o.escort.exp}经验` : 'NEW·护航包')
+      : 'NEW';
+    const tagText = o.duplicate ? `+${o.shards} 碎片` : newText;
     const tag = makeText(tagText, {
       size: cardW > 200 ? FONT_SIZE.xs : FONT_SIZE.xxs,
       fill: o.duplicate ? COLORS.textSub : COLORS.btnSuccessBorder,

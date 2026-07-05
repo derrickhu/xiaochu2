@@ -183,7 +183,7 @@ const CHAPTER_1: readonly StageDef[] = [
   buildChapterCaptureBoss({
     id: 'stage_1_5', chapter: 1, index: 5, name: '星辉试炼', element: 'wood',
     dropTableId: 'dt_forest_boss', creatureId: 'pet_017',
-    difficulty: 1.45, starTurnLimit: 18, challenge: 'multiWave',
+    difficulty: 1.1, starTurnLimit: 18, challenge: 'multiWave',
   }),
 ];
 
@@ -217,7 +217,7 @@ const CHAPTER_2: readonly StageDef[] = [
   buildChapterCaptureBoss({
     id: 'stage_2_6', chapter: 2, index: 6, name: '灵鹿试炼', element: 'wood',
     dropTableId: 'dt_cave_boss', creatureId: 'pet_004',
-    difficulty: 1.5, starTurnLimit: 20, challenge: 'boardSeal',
+    difficulty: 1.2, starTurnLimit: 20, challenge: 'boardSeal',
   }),
 ];
 
@@ -251,7 +251,7 @@ const CHAPTER_3: readonly StageDef[] = [
   buildChapterCaptureBoss({
     id: 'stage_3_6', chapter: 3, index: 6, name: '玄龟试炼', element: 'earth',
     dropTableId: 'dt_peak_boss', creatureId: 'pet_028',
-    difficulty: 2.3, starTurnLimit: 24, challenge: 'highDefense',
+    difficulty: 1.2, starTurnLimit: 24, challenge: 'highDefense',
   }),
 ];
 
@@ -331,7 +331,8 @@ function buildTrialChapter(def: TrialChapterDef): StageDef[] {
     element: c.element,
     dropTableId: `dt_ch${def.chapter}_boss`,
     creatureId: def.captureCreatureId,
-    difficulty: def.difficultyBase + def.stageCount * 0.08,
+    // Boss 难度只比末位铺垫关高一档（+0.05×2），总量断崖由 powerBudget 护栏兜底
+    difficulty: def.difficultyBase + def.stageCount * 0.05,
     starTurnLimit: 18 + def.chapter * 2,
     challenge: def.bossChallenge,
   }));
