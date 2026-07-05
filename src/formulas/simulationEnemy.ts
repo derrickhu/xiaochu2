@@ -5,6 +5,7 @@ import type { SkillVfxId } from '@/balance/skills';
 import type { StageDef } from '@/balance/stages';
 import { skillForEnemy } from '@/game/battle/SkillEngine';
 import { enemyStats } from './growth';
+import { GROWTH } from '@/balance/growth';
 
 export interface SimEnemy {
   def: EnemyDef;
@@ -29,7 +30,7 @@ export function spawnSimEnemy(stage: StageDef, waveIndex: number): SimEnemy {
     hp: stats.hp,
     atk: stats.atk,
     def_: stats.def,
-    attackCountdown: def.attackInterval,
+    attackCountdown: GROWTH.enemy.initialAttackCountdown,
     skillCds: (def.skillIds ?? []).map((id) => skillForEnemy(id).cd),
     charging: null,
     dmgReduction: null,

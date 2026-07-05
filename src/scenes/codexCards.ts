@@ -16,22 +16,18 @@ import {
   makeText,
 } from '@/ui';
 
-export type CodexLockedState = 'discovered' | 'unknown';
-
-/** 未拥有卡：已收录显示灰度可辨头像，未收录显示剪影。 */
+/** 未拥有卡：剪影 + 获取提示占位。 */
 export function buildLockedCodexCard(
   item: PIXI.Container,
   pet: PetDef,
   cardW: number,
   cardH: number,
   S: number,
-  state: CodexLockedState,
 ): void {
-  const discovered = state === 'discovered';
   item.addChild(makePanel({
     width: cardW, height: cardH, radius: 8 * S, centered: false,
     bg: COLORS.panelBgAlt, bgAlpha: 0.9,
-    border: discovered ? COLORS.accent : COLORS.panelBorderSoft,
+    border: COLORS.panelBorderSoft,
   }));
 
   const orbTex = TextureCache.get(ORB_IMAGES[pet.element]);
@@ -41,14 +37,8 @@ export function buildLockedCodexCard(
     orb.width = orbSz;
     orb.height = orbSz;
     orb.position.set(10 * S, 10 * S);
-    orb.alpha = discovered ? 0.85 : 0.4;
+    orb.alpha = 0.4;
     item.addChild(orb);
-  }
-
-  if (discovered) {
-    const badge = makeRarityBadge({ tier: pet.rarity, scale: S });
-    badge.position.set(2 * S, 2 * S);
-    item.addChild(badge);
   }
 
   const avatarSize = cardW * 0.62;
@@ -58,29 +48,23 @@ export function buildLockedCodexCard(
     avatar.width = avatarSize;
     avatar.height = avatarSize;
     avatar.position.set((cardW - avatarSize) / 2, 8 * S);
-    avatar.tint = discovered ? 0x9a9a9a : 0x111317;
-    avatar.alpha = discovered ? 0.95 : 0.85;
+    avatar.tint = 0x111317;
+    avatar.alpha = 0.85;
     item.addChild(avatar);
   }
 
-  const lock = makeText(discovered ? '可获取' : '未收录', {
-    size: Math.round(11 * S), fill: discovered ? COLORS.accent : COLORS.textSub,
+  const lock = makeText('未获得', {
+    size: Math.round(11 * S), fill: COLORS.textSub,
     bold: true, anchor: 0.5,
   });
   lock.position.set(cardW / 2, 8 * S + avatarSize + 14 * S);
   item.addChild(lock);
 
-  if (discovered) {
-    const roleBadge = makeRoleBadge({ role: pet.role, scale: S, maxWidth: cardW - 10 * S });
-    roleBadge.position.set((cardW - roleBadge.width) / 2, cardH - 21 * S);
-    item.addChild(roleBadge);
-  } else {
-    const tip = makeText('？？？', {
-      size: Math.round(11 * S), fill: COLORS.textDisabled, bold: true, anchor: 0.5,
-    });
-    tip.position.set(cardW / 2, cardH - 16 * S);
-    item.addChild(tip);
-  }
+  const tip = makeText('？？？', {
+    size: Math.round(11 * S), fill: COLORS.textDisabled, bold: true, anchor: 0.5,
+  });
+  tip.position.set(cardW / 2, cardH - 16 * S);
+  item.addChild(tip);
 }
 
 /** 已拥有单卡布局，对齐 xiao_chu _drawPetCard。 */

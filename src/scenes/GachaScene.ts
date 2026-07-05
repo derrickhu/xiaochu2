@@ -156,7 +156,7 @@ export class GachaScene implements Scene {
     this._page.addChild(label);
   }
 
-  /** 可选五行筛选（默认「全部」= 全局收录池） */
+  /** 可选五行筛选（默认「全部」= 全花名册） */
   private _buildElementTabs(w: number, y: number): void {
     const tabW = 92;
     const gap = 8;
@@ -164,7 +164,7 @@ export class GachaScene implements Scene {
     const totalW = tabCount * tabW + (tabCount - 1) * gap;
     const left = w / 2 - totalW / 2;
 
-    const hint = makeText('可选 · 筛选五行（默认从全部收录池抽取）', {
+    const hint = makeText('可选 · 筛选五行（默认可出全部灵宠）', {
       size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: 0.5,
     });
     hint.position.set(w / 2, y - 24);
@@ -264,7 +264,7 @@ export class GachaScene implements Scene {
       lineY += 30;
     }
 
-    const floorNote = makeText('十连必出 SR 及以上 · 已收录灵宠出率 UP ×2', {
+    const floorNote = makeText('十连必出 SR 及以上 · UR 仅召唤获取', {
       size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: [0.5, 1],
     });
     floorNote.position.set(w / 2, y + panelH - 10);

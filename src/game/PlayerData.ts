@@ -30,6 +30,7 @@ import {
   gachaPoolPets as gachaPoolPetsFromSave,
   pullGachaSingle as pullGachaSingleFromSave,
   pullGachaTen as pullGachaTenFromSave,
+  unlockPetInSave,
   type PullOutcome,
 } from './playerGacha';
 
@@ -206,7 +207,6 @@ class PlayerDataClass {
         level: INITIAL_PET_LEVEL, star: INITIAL_PET_STAR, shards: 0,
       };
       this._data.recruitedCount++;
-      if (!this._data.discovered.includes(target)) this._data.discovered.push(target);
       this._save();
       return { petId: target, duplicate: false };
     }
@@ -265,46 +265,31 @@ class PlayerDataClass {
     return outcomes;
   }
 
-  // ═══════════ 收录 / 可获取池（阶段九） ═══════════
-
-  /** 已收录生物 id（按 PETS 表顺序，UI 稳定） */
-  get discovered(): readonly string[] {
-    return PETS.filter((p) => this._data.discovered.includes(p.id)).map((p) => p.id);
-  }
-
-  isDiscovered(id: string): boolean {
-    return this._data.discovered.includes(id);
-  }
+  // ═══════════ 解锁灵宠（Boss 掉落 / 抽卡 / 招募） ═══════════
 
   /**
-   * 收录一只生物（战斗击败其高级形态触发）。
-   * @returns true = 本次新收录（用于顶部提示）
+   * 解锁一只灵宠（章 Boss 直掉等）。
+   * @returns true = 本次新获得（用于结算提示）
    */
-  discover(id: string): boolean {
-    if (!PET_MAP.has(id)) return false;
-    if (this._data.discovered.includes(id)) return false;
-    this._data.discovered.push(id);
+  unlockPet(petId: string): boolean {
+    if (!PET_MAP.has(petId)) return false;
+    if (this.isOwned(petId)) return false;
+    unlockPetInSave(this._data, petId);
     this._save();
     return true;
   }
 
-  /**
-   * 可获取池 = 已收录 ∪ 初始赠送 ∪ 已拥有；商店等定向系统仅在此池内出货。
-   * @param element 可选；传入时仅取该五行子池，省略则为全局收录池
-   */
-  availablePool(element?: Element): readonly string[] {
-    return PETS
-      .filter((p) => this._data.discovered.includes(p.id))
-      .filter((p) => !element || p.element === element)
-      .map((p) => p.id);
-  }
-
-  /** 召唤出货池 = 全花名册（收录转为档内 UP 权重，不再限制可达性） */
+  /** 召唤出货池 = 全花名册 */
   gachaPoolIds(element?: Element): readonly string[] {
     return gachaPoolPetsFromSave(element).map((p) => p.id);
   }
 
-  // ═══════════ 图鉴收录 ═══════════
+  /** 商店碎片池 = 全花名册（与召唤池一致） */
+  shopPoolIds(element?: Element): readonly string[] {
+    return this.gachaPoolIds(element);
+  }
+
+  // ═══════════ 图鉴 ═══════════
 
   /** 已收录数量（= 拥有过的灵宠数） */
   get codexCount(): number {
@@ -321,7 +306,7 @@ class PlayerDataClass {
     pendingLingyu: number;
   } {
     const every = ECONOMY.milestone.codexEvery;
-    const total = this._data.discovered.length;
+    const total = this.ownedPets.length;
     const claimedFloor = Math.floor(this._data.codexRewarded / every);
     const nowFloor = Math.floor(total / every);
     const pendingTiers = nowFloor - claimedFloor;
@@ -337,13 +322,12 @@ class PlayerDataClass {
   }
 
   /**
-   * 领取图鉴收录里程碑：每收录 codexEvery 只发一次灵玉（仅在图鉴页调用）。
-   * 战斗收录只更新 discovered，不在这里发奖；不追溯初始 R 池。
+   * 领取图鉴里程碑：每拥有 codexEvery 只发一次灵玉（仅在图鉴页调用）。
    * @returns 本次发放的灵玉总额（无新里程碑为 0）
    */
   claimCodexMilestones(): number {
     const every = ECONOMY.milestone.codexEvery;
-    const total = this._data.discovered.length;
+    const total = this.ownedPets.length;
     const claimedFloor = Math.floor(this._data.codexRewarded / every);
     const nowFloor = Math.floor(total / every);
     this._data.codexRewarded = total;

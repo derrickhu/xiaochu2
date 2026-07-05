@@ -59,20 +59,20 @@ describe('关卡数据完整性（单一真源约束）', () => {
     }
   });
 
-  it('每章恰有一个 tier2 收录点', () => {
+  it('每章恰有一个 tier2 Boss 掉落点', () => {
     for (const ch of CHAPTERS) {
-      const captureCount = stagesOfChapter(ch).flatMap((s) => s.encounters).filter(
-        (e) => e.kind === 'creature' && e.tier === 'tier2' && e.captureUnlock,
+      const dropCount = stagesOfChapter(ch).flatMap((s) => s.encounters).filter(
+        (e) => e.kind === 'creature' && e.tier === 'tier2' && e.bossDrop,
       ).length;
-      expect(captureCount, `章节 ${ch} 收录点`).toBe(1);
+      expect(dropCount, `章节 ${ch} Boss 掉落点`).toBe(1);
     }
   });
 
-  it('战斗收录宠共 8 只（不含开局赠送）', () => {
+  it('Boss 直掉灵宠共 8 只（不含开局赠送）', () => {
     const ids = new Set<string>();
     for (const s of STAGES) {
       for (const e of s.encounters) {
-        if (e.kind === 'creature' && e.tier === 'tier2' && e.captureUnlock) ids.add(e.id);
+        if (e.kind === 'creature' && e.tier === 'tier2' && e.bossDrop) ids.add(e.id);
       }
     }
     expect(ids.size).toBe(8);
@@ -108,41 +108,46 @@ describe('Boss 挑战 archetype', () => {
     }
   });
 
-  it('Boss 收录宠与 CHAPTER_REWARD_PET 一致', () => {
+  it('Boss 掉落宠与 CHAPTER_REWARD_PET 一致', () => {
     for (const ch of CHAPTERS) {
       const boss = stagesOfChapter(ch).find((s) => s.isBoss)!;
-      const cap = boss.encounters.find(
-        (e) => e.kind === 'creature' && e.tier === 'tier2' && e.captureUnlock,
+      const drop = boss.encounters.find(
+        (e) => e.kind === 'creature' && e.tier === 'tier2' && e.bossDrop,
       );
-      expect(cap?.kind === 'creature' && cap.id).toBe(CHAPTER_REWARD_PET[ch]);
+      expect(drop?.kind === 'creature' && drop.id).toBe(CHAPTER_REWARD_PET[ch]);
     }
   });
 
-  it('各章收录宠稀有度按 CHAPTER_CAPTURE_RARITY 递进', () => {
+  it('各章 Boss 掉落稀有度递进且不含 UR', () => {
     for (const ch of CHAPTERS) {
-      expect(chapterCaptureRarityMatches(ch), `章节 ${ch} 收录稀有度`).toBe(true);
+      expect(chapterCaptureRarityMatches(ch), `章节 ${ch} 掉落稀有度`).toBe(true);
       const petId = CHAPTER_REWARD_PET[ch];
       const pet = PET_MAP.get(petId);
       expect(pet?.rarity).toBe(CHAPTER_CAPTURE_RARITY[ch]);
-      expect(pet!.rarity, `章节 ${ch} 收录最低 SR`).toBeGreaterThanOrEqual(2);
+      expect(pet!.rarity, `章节 ${ch} Boss 掉落`).toBeGreaterThanOrEqual(2);
+      expect(pet!.rarity, `章节 ${ch} 不含 UR`).toBeLessThanOrEqual(3);
     }
+    // 1~2 章 SR，3 章起 SSR
+    expect(PET_MAP.get(CHAPTER_REWARD_PET[1])!.rarity).toBe(2);
+    expect(PET_MAP.get(CHAPTER_REWARD_PET[2])!.rarity).toBe(2);
+    expect(PET_MAP.get(CHAPTER_REWARD_PET[3])!.rarity).toBe(3);
   });
 
-  it('各章收录宠定位轮替，不连续重复', () => {
+  it('各章 Boss 掉落宠定位轮替，不连续重复', () => {
     const roles = CHAPTERS.map((ch) => PET_MAP.get(CHAPTER_REWARD_PET[ch])!.role);
     for (let i = 1; i < roles.length; i++) {
       expect(roles[i], `章节 ${i + 1} 与 ${i} 定位`).not.toBe(roles[i - 1]);
     }
     expect(roles).toEqual([
       'attacker', 'healer', 'tank', 'support',
-      'attacker', 'healer', 'tank', 'attacker',
+      'attacker', 'healer', 'support', 'attacker',
     ]);
   });
 
-  it('第 8 章 Boss 首教封火（rule_ban_fire）', () => {
+  it('第 8 章 Boss 首教封木（rule_ban_wood）', () => {
     const boss = stagesOfChapter(8).find((s) => s.isBoss)!;
     expect(CHAPTER_BOSS_CHALLENGE[8]).toBe('banElement');
-    expect(boss.mechanics).toContain('rule_ban_fire');
+    expect(boss.mechanics).toContain('rule_ban_wood');
   });
 });
 

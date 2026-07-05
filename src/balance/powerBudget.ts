@@ -16,8 +16,11 @@ export const POWER_CURVE = {
   /** 敌人章节成长（复利）：数值 = 基值 × growth^(章-1) × 关卡 difficulty */
   enemy: {
     chapterGrowthHp: 1.40,
-    chapterGrowthAtk: 1.34,
+    /** 攻压曲线：铺垫关靠 ATK + 出手频率制造掉血感，不靠堆 HP 磨人 */
+    chapterGrowthAtk: 1.38,
     chapterGrowthDef: 1.28,
+    /** 入场攻击倒计时（1 = 首个敌人回合更快出刀；满 interval 则过慢） */
+    initialAttackCountdown: 1,
   },
   /** 经济产出章节成长（复利）：灵宠币 / 经验产出按此放大，与敌人曲线成对校准 */
   economyChapterGrowth: 1.25,
@@ -29,7 +32,7 @@ export const POWER_CURVE = {
  * 定义「进入第 N 章时期望的主队养成水平」与「通关该章后期望水平」。
  * 敌人曲线、经验产出与升星节奏都围绕这条预算曲线校准：
  * - 达标队伍（enterLevel/enterStar）中手应能通关本章全部关卡；
- * - 欠养成（停留在更早锚点）则在新章 Boss 处卡住，但不会被铺垫关劝退。
+ * - 欠养成（停留在更早锚点）则在新章 Boss 处卡住；铺垫关仍应有明显攻压（会掉血），但不形成「不升级过不去」的劝退墙。
  *
  * 星级档等级上限（growth.ts STAR_PROFILES.maxLevel）：
  * 1★=50 / 2★=60 / 3★=70 / 4★=85 / 5★=99，锚点等级不越当期星级上限。

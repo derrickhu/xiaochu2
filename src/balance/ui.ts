@@ -69,10 +69,14 @@ export const UI = {
     petReturn: 0.24,
     enemyHitFlash: 0.12,
     damageFloat: 0.6,
+    /** 英雄受击飘字（专用动效，比通用 damageFloat 停更久） */
+    heroHitFloat: 1.8,
+    /** 英雄回血飘字（心珠 / 治疗技） */
+    heroHealFloat: 1.7,
     /** 多组攻击的间隔节奏 */
     attackGap: 0.30,
-    /** 最后一击飘字落定后再出总伤害（秒） */
-    turnTotalLeadIn: 0.60,
+    /** 最后一击后稍停再出总伤害（秒）；不阻塞操作，仅错开弹出节奏 */
+    turnTotalLeadIn: 0.22,
     /** 波次切换敌人入场 */
     waveEnter: 0.35,
     /** ── 阶段二：手感强化 ── */

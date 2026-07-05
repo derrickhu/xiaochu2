@@ -25,6 +25,7 @@ import { STAGES } from '@/balance/stages';
 import { BoardModel, type MatchGroup } from '@/game/board/BoardModel';
 import { BoardView } from '@/game/board/BoardView';
 import { BattleController, type PetAttack, type TurnResolution } from '@/game/battle/BattleController';
+import type { EnemyActResult } from '@/game/battle/battleTypes';
 import { PlayerData } from '@/game/PlayerData';
 import { makeButton, delay } from './battle/battleWidgets';
 import { computeBattleLayout, type BattleLayout } from './battle/BattleLayout';
@@ -390,7 +391,7 @@ export class BattleScene implements Scene {
       const healed = this._ctrl.applyHeal(res.heal);
       if (healed > 0) {
         this._hud.refreshHeroHp();
-        this._fx.spawnFloat(`+${healed}`, Game.logicWidth / 2, this._layout.heroBarY - 24, 0x6fd86a);
+        this._fx.spawnHeroHealFloat(healed, Game.logicWidth / 2, this._layout.heroBarY - 24);
         await delay(UI.anim.attackGap);
         if (isStale()) return false;
       }
@@ -420,9 +421,12 @@ export class BattleScene implements Scene {
     if (isStale()) return waveAdvanced;
 
     if (appliedDamage > 0 && res.attacks.length > 0 && !waveAdvanced) {
-      await delay(UI.anim.turnTotalLeadIn);
-      if (isStale()) return waveAdvanced;
-      await this._fx.showTurnTotalDamage({
+      if (UI.anim.turnTotalLeadIn > 0) {
+        await delay(UI.anim.turnTotalLeadIn);
+        if (isStale()) return waveAdvanced;
+      }
+      // 总伤害/槽位 recap 仅作表现，不阻塞下方转珠
+      void this._fx.showTurnTotalDamage({
         total: appliedDamage,
         combo: res.combo,
         hitCount: res.attacks.length,
@@ -431,7 +435,6 @@ export class BattleScene implements Scene {
         enemyMaxHp: this._ctrl.enemy.maxHp,
         petSummaries: buildTurnPetSummaries(appliedAttacks, this._petBar),
       });
-      if (isStale()) return waveAdvanced;
     }
 
     if (waveAdvanced) {
@@ -490,10 +493,7 @@ export class BattleScene implements Scene {
       case 'attack':
       case 'chargedAttack': {
         const heavy = result.action === 'chargedAttack';
-        await this._hud.playEnemyAttack(
-          this._fx, result.damage, result.absorbed, heavy,
-          () => this._playHeroHit(this._ctrl.enemy.def.element, result.damage, result.absorbed, heavy),
-        );
+        await this._presentEnemyHeroDamage(result, heavy);
         if (isStale()) return;
         if (result.heroDead) {
           this._overlay.show(this._ctrl, false);
@@ -507,9 +507,15 @@ export class BattleScene implements Scene {
         break;
       case 'heal':
         await this._hud.playEnemyHeal(this._fx, result.healed);
+        if (result.damage > 0 || result.absorbed > 0) {
+          await this._presentEnemyHeroDamage(result, false);
+        }
         break;
       case 'shield':
         await this._hud.playEnemyShield(this._fx);
+        if (result.damage > 0 || result.absorbed > 0) {
+          await this._presentEnemyHeroDamage(result, false);
+        }
         break;
       case 'sealOrbs': {
         const sealed = this._board.sealRandom(result.boardSealCount ?? 0);
@@ -629,8 +635,16 @@ export class BattleScene implements Scene {
     });
   }
 
+  /** 敌人对英雄的弹道 + 命中反馈（普攻 / 蓄力 / 技能后追刀共用） */
+  private async _presentEnemyHeroDamage(result: EnemyActResult, heavy: boolean): Promise<void> {
+    await this._hud.playEnemyAttack(
+      this._fx, result.damage, result.absorbed, heavy,
+      () => this._playHeroHit(this._ctrl.enemy.def.element, result.damage, result.absorbed, heavy),
+    );
+  }
+
   /**
-   * 英雄受击反馈：飘字 + 属性/红色粒子 + 红屏闪 + 震屏 + 血条字跳动 + 队伍栏后撤
+   * 英雄受击反馈：飘字 + 星爆/护环冲击 + 红屏闪 + 震屏 + 血条字跳动 + 队伍栏后撤
    * （护盾全挡时改为蓝色轻反馈）
    */
   private _playHeroHit(
@@ -644,33 +658,18 @@ export class BattleScene implements Scene {
     const hitY = this._layout.heroBarY;
 
     if (absorbed > 0) {
-      this._fx.spawnFloat(`盾挡 -${absorbed}`, hitX - 90, hitY - 28, 0x8fd4ff);
+      this._fx.spawnHeroHitFloat(`盾挡 -${absorbed}`, hitX - 90, hitY - 28, 'shield');
     }
 
     if (damage > 0) {
-      this._fx.spawnFloat(
+      this._fx.spawnHeroHitFloat(
         `-${damage}`,
         hitX + (absorbed > 0 ? 90 : 0),
         hitY - 28,
-        0xff5252,
-        heavy ? 1.45 : 1.15,
+        'damage',
+        heavy,
       );
-      this._fx.burst({
-        x: hitX, y: hitY,
-        color: ORB_COLOR[element],
-        count: heavy ? 14 : 9,
-        speed: heavy ? 400 : 300,
-        size: heavy ? 18 : 14,
-        life: 0.45,
-      });
-      this._fx.burst({
-        x: hitX, y: hitY,
-        color: 0xff5252,
-        count: heavy ? 8 : 5,
-        speed: 240,
-        size: 12,
-        life: 0.35,
-      });
+      this._fx.spawnHeroHitImpact(hitX, hitY, element, heavy);
       this._fx.flash(0xff2d2d, heavy ? 0.32 : 0.22, heavy ? 0.45 : 0.35);
       if (heavy) {
         this._fx.shakeHeavy();
@@ -680,15 +679,13 @@ export class BattleScene implements Scene {
         Platform.vibrateShort('medium');
       }
       this._hud.pulseHeroHpText(heavy);
+      this._hud.flashHeroHpBar(true);
       this._petBar.recoil(heavy);
     } else if (absorbed > 0) {
+      this._fx.spawnHeroShieldImpact(hitX, hitY);
       this._fx.flash(0x8fd4ff, 0.14, 0.28);
-      this._fx.burst({
-        x: hitX, y: hitY,
-        color: 0x8fd4ff,
-        count: 7, speed: 200, size: 14, life: 0.32,
-      });
       Platform.vibrateShort('light');
+      this._hud.flashHeroHpBar(false);
     }
   }
 

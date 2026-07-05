@@ -171,7 +171,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
     case 'healBurst': {
       hud.refreshHeroHp();
       fx.spawnAuraRing(Game.logicWidth / 2, heroBarY, 0x8be78b);
-      fx.spawnFloat(`+${result.healed ?? 0}`, Game.logicWidth / 2, heroBarY - 24, 0x6fd86a, 1.2);
+      fx.spawnHeroHealFloat(result.healed ?? 0, Game.logicWidth / 2, heroBarY - 24);
       fx.burst({
         x: Game.logicWidth / 2, y: heroBarY,
         color: 0x8be78b, count: 12, speed: 280, gravity: -200, size: 14, life: 0.6,

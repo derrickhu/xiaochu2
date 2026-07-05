@@ -1,5 +1,5 @@
 /**
- * 选关页「章节收录奖励」横幅 — 视觉对齐 xiao_chu 通天塔周挑战条（暖色笺纸 + 左头像右文案）。
+ * 选关页「章节 Boss 掉落」横幅 — 视觉对齐 xiao_chu 通天塔周挑战条（暖色笺纸 + 左头像右文案）。
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
@@ -20,7 +20,7 @@ export const CHAPTER_GOAL_CARD_H = 132;
 
 export interface ChapterGoalCardOpts {
   width?: number;
-  captured?: boolean;
+  owned?: boolean;
   /** 点击卡片（如跳转养成详情预览） */
   onTap?: () => void;
 }
@@ -48,7 +48,7 @@ function drawParchmentPanel(g: PIXI.Graphics, w: number, h: number, accent: numb
 export function buildChapterGoalCard(goal: ChapterGoalInfo, opts: ChapterGoalCardOpts = {}): PIXI.Container {
   const w = opts.width ?? CHAPTER_GOAL_CARD_W;
   const h = CHAPTER_GOAL_CARD_H;
-  const captured = opts.captured ?? PlayerData.isDiscovered(goal.petId);
+  const owned = opts.owned ?? PlayerData.isOwned(goal.petId);
   const accent = ORB_COLOR[goal.elementKey];
   const rarityDef = getRarity(goal.rarityTier);
 
@@ -101,16 +101,16 @@ export function buildChapterGoalCard(goal: ChapterGoalInfo, opts: ChapterGoalCar
 
   let textY = -h / 2 + padV;
 
-  const headLeft = makeText('章节收录', {
+  const headLeft = makeText('章节奖励', {
     size: FONT_SIZE.xxs, fill: 0x9a7228, bold: true, anchor: [0, 0],
   });
   headLeft.position.set(textX, textY);
   card.addChild(headLeft);
 
-  const statusLabel = captured ? '已收录' : '章末 Boss';
+  const statusLabel = owned ? '已获得' : '章末 Boss';
   const headRight = makeText(statusLabel, {
     size: FONT_SIZE.xxs,
-    fill: captured ? COLORS.btnSuccessBg : 0x8b6914,
+    fill: owned ? COLORS.btnSuccessBg : 0x8b6914,
     bold: true,
     anchor: [1, 0],
   });
@@ -138,11 +138,11 @@ export function buildChapterGoalCard(goal: ChapterGoalInfo, opts: ChapterGoalCar
 
   textY += meta.height + GAP_AFTER_META;
 
-  const rewardLine = captured
-    ? '已进召唤池，可用灵玉招募'
+  const rewardLine = owned
+    ? '已加入灵宠，可在编队/养成中使用'
     : (goal.bossStageLabel
-      ? `通关 ${goal.bossStageLabel} 收录 · 进召唤池`
-      : '通关章末 Boss 收录 · 进召唤池');
+      ? `通关 ${goal.bossStageLabel} 直得灵宠`
+      : '通关章末 Boss 直得灵宠');
   const reward = makeText(rewardLine, {
     size: FONT_SIZE.xxs, fill: 0x2d7a48, anchor: [0, 0],
     wordWrapWidth: textW,

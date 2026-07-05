@@ -60,7 +60,7 @@ export interface ChallengeRecipe {
   hintText?: string;
 }
 
-/** 铺垫关 / 历练关：按已学挑战生成遭遇（无 captureUnlock） */
+/** 铺垫关 / 历练关：按已学挑战生成遭遇（无 bossDrop） */
 export function recipeForChallenge(kind: BossChallengeKind): ChallengeRecipe {
   switch (kind) {
     case 'multiWave':
@@ -105,7 +105,7 @@ export function recipeForChallenge(kind: BossChallengeKind): ChallengeRecipe {
       return {
         encounters: [mob('enemy_scorpion_metal')],
         hintTags: ['蓄力重击'],
-        hintText: '晶甲蝎会蓄力重击：护盾/治疗扛住',
+        hintText: '铁壳毒蝎会蓄力重击：护盾/治疗扛住',
       };
     case 'noHeart':
       return {

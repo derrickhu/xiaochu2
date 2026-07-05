@@ -12,6 +12,8 @@ import { ENEMY_SKILL_IDS, SKILL_MAP } from './skills';
 import { CREATURE_MAP } from './creatures';
 import { creatureUsesCrSubpackage } from './creatureIdMigration';
 import { SUBPACKAGE_ROOT } from '@/config/Subpackages';
+import type { EnemyDisplayTier } from './enemyDisplay';
+import { inferCreatureDisplayTier } from './enemyDisplay';
 
 function creatureEnemyRoot(creatureId: string): string {
   const pkg = creatureUsesCrSubpackage(creatureId)
@@ -32,6 +34,8 @@ export interface EnemyDef {
   baseDef: number;
   /** 攻击间隔（回合） */
   attackInterval: number;
+  /** 战斗/UI 表现档位：杂兵 / 精英 / 守关 / Boss */
+  displayTier: EnemyDisplayTier;
   /** 主动技能引用（无 = 纯普攻怪），具体效果在 balance/skills.ts */
   skillIds?: readonly string[];
   /** 立绘路径覆盖（生物怪物面用觉醒/初级全身图）；缺省由 enemyImage(id) 兜底 */
@@ -50,46 +54,43 @@ export type MobDef = EnemyDef;
  * 核心 6 种在全章节循环复用；3 种章 Boss 魔物作收录关铺垫波。
  */
 export const MOBS: readonly MobDef[] = [
-  // ── 核心循环杂兵（6） ──
-  { id: 'enemy_slime_wood', name: '青苔史莱姆', element: 'wood', baseHp: 620, baseAtk: 95, baseDef: 12, attackInterval: 2 },
-  { id: 'enemy_bat_fire', name: '焰翼蝠', element: 'fire', baseHp: 540, baseAtk: 120, baseDef: 8, attackInterval: 2 },
+  // ── 核心循环杂兵（6）── 泛称命名 + 无技能=杂兵 / 有技能=精英
+  { id: 'enemy_slime_wood', name: '木域软泥', element: 'wood', displayTier: 'mob', baseHp: 620, baseAtk: 155, baseDef: 12, attackInterval: 1 },
+  { id: 'enemy_bat_fire', name: '洞窟火蝠', element: 'fire', displayTier: 'mob', baseHp: 540, baseAtk: 195, baseDef: 8, attackInterval: 1 },
   {
-    id: 'enemy_golem_earth', name: '碎岩傀儡', element: 'earth',
-    baseHp: 1500, baseAtk: 120, baseDef: 70, attackInterval: 3,
+    id: 'enemy_golem_earth', name: '碎石傀儡', element: 'earth', displayTier: 'elite',
+    baseHp: 1500, baseAtk: 155, baseDef: 70, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.golemGuard],
   },
   {
-    id: 'enemy_serpent_water', name: '寒潭幼蛟', element: 'water',
-    baseHp: 1080, baseAtk: 165, baseDef: 22, attackInterval: 2,
+    id: 'enemy_serpent_water', name: '寒潭小蛟', element: 'water', displayTier: 'elite',
+    baseHp: 1080, baseAtk: 205, baseDef: 22, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.serpentHeal],
   },
   {
-    id: 'enemy_scorpion_metal', name: '晶甲蝎', element: 'metal',
-    baseHp: 1200, baseAtk: 150, baseDef: 55, attackInterval: 3,
+    id: 'enemy_scorpion_metal', name: '铁壳毒蝎', element: 'metal', displayTier: 'elite',
+    baseHp: 1200, baseAtk: 195, baseDef: 55, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.lionCharge],
   },
   {
-    id: 'enemy_toad_water', name: '溶洞毒蟾', element: 'water',
-    baseHp: 1100, baseAtk: 170, baseDef: 20, attackInterval: 2,
+    id: 'enemy_toad_water', name: '湿苔毒蟾', element: 'water', displayTier: 'elite',
+    baseHp: 1100, baseAtk: 215, baseDef: 20, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.serpentHeal],
   },
-  // ── 章 Boss 魔物铺垫（3，非灵宠造型） ──
-  // 基值按 powerBudget.ts 预算护栏校准：Boss 首波 ≤ 前关最大单波 × 2.5，
-  // 消灭旧版（3600/4200/5200）造成的章末 5~11 倍 HP 断崖。
+  // ── 章 Boss 守关波（3）── 具名魔将/巨像，与铺垫杂兵拉开身份
   {
-    id: 'enemy_bamboo_tyrant_wood', name: '蛮竹魔将', element: 'wood',
-    baseHp: 1200, baseAtk: 150, baseDef: 30, attackInterval: 2,
+    id: 'enemy_bamboo_tyrant_wood', name: '蛮竹魔将', element: 'wood', displayTier: 'miniBoss',
+    baseHp: 1200, baseAtk: 195, baseDef: 30, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal],
   },
   {
-    // HP 收敛后由攻压承担「养成门槛」：欠养成队伍被续航检定淘汰，而非磨血墙
-    id: 'enemy_crystal_boss_earth', name: '幽晶巨像', element: 'earth',
-    baseHp: 1250, baseAtk: 200, baseDef: 60, attackInterval: 2,
+    id: 'enemy_crystal_boss_earth', name: '幽晶巨像', element: 'earth', displayTier: 'miniBoss',
+    baseHp: 1250, baseAtk: 265, baseDef: 60, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.lionCharge],
   },
   {
-    id: 'enemy_thunderlord_boss_wood', name: '风雷天尊', element: 'wood',
-    baseHp: 1300, baseAtk: 280, baseDef: 45, attackInterval: 2,
+    id: 'enemy_thunderlord_boss_wood', name: '风雷天尊', element: 'wood', displayTier: 'miniBoss',
+    baseHp: 1300, baseAtk: 365, baseDef: 45, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal, ENEMY_SKILL_IDS.lionCharge],
   },
 ];
@@ -103,13 +104,13 @@ export const ENEMY_MAP = MOB_MAP;
 /** 关卡遭遇引用：杂怪 或 生物（指定形态、可标记为收录点） */
 export type EncounterRef =
   | { kind: 'mob'; id: string }
-  | { kind: 'creature'; id: string; tier: 'tier1' | 'tier2'; captureUnlock?: boolean };
+  | { kind: 'creature'; id: string; tier: 'tier1' | 'tier2'; bossDrop?: boolean };
 
-/** 解析后的一波敌人：战斗模板 + 收录元信息 */
+/** 解析后的一波敌人：战斗模板 + Boss 掉落元信息 */
 export interface ResolvedEncounter {
   def: EnemyDef;
-  /** 击败后可收录的生物 id（仅 captureUnlock 的高级怪） */
-  captureCreatureId?: string;
+  /** 击败后可直得灵宠 id（仅 bossDrop 的高级怪） */
+  bossDropPetId?: string;
 }
 
 const TIER_SUFFIX: Record<'tier1' | 'tier2', string> = { tier1: '·初', tier2: '·觉' };
@@ -132,6 +133,7 @@ export function creatureMonsterDef(creatureId: string, tier: 'tier1' | 'tier2'):
     baseDef: t.baseDef,
     attackInterval: t.attackInterval,
     skillIds: t.skillIds,
+    displayTier: inferCreatureDisplayTier(tier),
     image,
     creatureId,
     tier,
@@ -157,6 +159,6 @@ export function resolveEncounter(ref: EncounterRef): ResolvedEncounter {
     return { def };
   }
   const def = creatureMonsterDef(ref.id, ref.tier);
-  const captureCreatureId = ref.tier === 'tier2' && ref.captureUnlock ? ref.id : undefined;
-  return { def, captureCreatureId };
+  const bossDropPetId = ref.tier === 'tier2' && ref.bossDrop ? ref.id : undefined;
+  return { def, bossDropPetId };
 }

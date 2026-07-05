@@ -93,11 +93,11 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     returnTo: -7,
     reboundFrames: 9,
     reboundTo: 4,
-    holdFrames: 72,
-    driftFrames: 14,
+    holdFrames: 20,
+    driftFrames: 10,
     driftDist: 6,
-    lifeFrames: 168,
-    fadeStart: 142,
+    lifeFrames: 62,
+    fadeStart: 48,
   },
   slotDamageCrit: {
     startScale: 0.68,
@@ -112,17 +112,17 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     returnTo: -9,
     reboundFrames: 10,
     reboundTo: 4.5,
-    holdFrames: 84,
-    driftFrames: 15,
+    holdFrames: 24,
+    driftFrames: 11,
     driftDist: 7,
-    lifeFrames: 186,
-    fadeStart: 158,
+    lifeFrames: 68,
+    fadeStart: 52,
     shakeDur: 13,
     shakeAmp: 4.8,
     jitterFrames: 16,
     jitterAmp: 3.3,
   },
-  /** 回合末槽位累计伤害：快速落定后长时间停留，与敌人总伤害同步淡出 */
+  /** 回合末槽位累计（非总伤路径 fallback，总伤用 turnTotalSummary） */
   slotDamageRecap: {
     startScale: 0.72,
     peakScale: 1.24,
@@ -134,11 +134,34 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     riseDist: 32,
     returnFrames: 8,
     returnTo: -4,
-    holdFrames: 98,
-    driftFrames: 10,
+    holdFrames: 18,
+    driftFrames: 8,
     driftDist: 3,
+    lifeFrames: 52,
+    fadeStart: 40,
+  },
+  /**
+   * 回合末总伤害汇总（敌人总伤 + 槽位 recap 同步）。
+   * 比单段命中停得久，便于读数；不 await，故不卡转珠。
+   */
+  turnTotalSummary: {
+    startScale: 0.7,
+    peakScale: 1.32,
+    settleScale: 1.08,
+    popFrames: 5,
+    settleFrames: 14,
+    startYOffset: 10,
+    riseFrames: 11,
+    riseDist: 44,
+    returnFrames: 10,
+    returnTo: -6,
+    reboundFrames: 9,
+    reboundTo: 3,
+    holdFrames: 72,
+    driftFrames: 14,
+    driftDist: 4,
     lifeFrames: 168,
-    fadeStart: 142,
+    fadeStart: 138,
   },
   slotDamageMinor: {
     startScale: 0.8,
@@ -168,11 +191,11 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     returnTo: -6,
     reboundFrames: 9,
     reboundTo: 3,
-    holdFrames: 48,
-    driftFrames: 16,
+    holdFrames: 14,
+    driftFrames: 10,
     driftDist: 4,
-    lifeFrames: 125,
-    fadeStart: 102,
+    lifeFrames: 48,
+    fadeStart: 38,
   },
   enemyHitCrit: {
     startScale: 0.62,
@@ -187,15 +210,95 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     returnTo: -8,
     reboundFrames: 10,
     reboundTo: 4,
-    holdFrames: 56,
-    driftFrames: 17,
+    holdFrames: 16,
+    driftFrames: 11,
     driftDist: 5,
-    lifeFrames: 138,
-    fadeStart: 112,
+    lifeFrames: 52,
+    fadeStart: 40,
     shakeDur: 14,
     shakeAmp: 5.2,
     jitterFrames: 18,
     jitterAmp: 3.6,
+  },
+  /** 怪物对英雄扣血：停留够久读数；配合 persistUntilDone 防下回合清掉 */
+  heroHitDamage: {
+    startScale: 0.66,
+    peakScale: 1.38,
+    settleScale: 1.1,
+    popFrames: 5,
+    settleFrames: 14,
+    startYOffset: 12,
+    riseFrames: 10,
+    riseDist: 38,
+    returnFrames: 9,
+    returnTo: -5,
+    reboundFrames: 8,
+    reboundTo: 2,
+    holdFrames: 54,
+    driftFrames: 12,
+    driftDist: 3,
+    lifeFrames: 108,
+    fadeStart: 84,
+  },
+  heroHitDamageHeavy: {
+    startScale: 0.7,
+    peakScale: 1.52,
+    settleScale: 1.14,
+    popFrames: 5,
+    settleFrames: 16,
+    startYOffset: 14,
+    riseFrames: 11,
+    riseDist: 44,
+    returnFrames: 10,
+    returnTo: -6,
+    reboundFrames: 9,
+    reboundTo: 3,
+    holdFrames: 60,
+    driftFrames: 14,
+    driftDist: 4,
+    lifeFrames: 120,
+    fadeStart: 96,
+    shakeDur: 10,
+    shakeAmp: 3.5,
+  },
+  heroHitShield: {
+    startScale: 0.68,
+    peakScale: 1.22,
+    settleScale: 1.04,
+    popFrames: 4,
+    settleFrames: 12,
+    startYOffset: 10,
+    riseFrames: 9,
+    riseDist: 32,
+    returnFrames: 8,
+    returnTo: -4,
+    reboundFrames: 7,
+    reboundTo: 2,
+    holdFrames: 42,
+    driftFrames: 10,
+    driftDist: 2,
+    lifeFrames: 90,
+    fadeStart: 70,
+  },
+  /** 英雄回血（心珠 / 治疗技）：停够时间读 +N */
+  heroHeal: {
+    startScale: 0.68,
+    peakScale: 1.32,
+    settleScale: 1.08,
+    popFrames: 5,
+    settleFrames: 14,
+    startYOffset: 10,
+    riseFrames: 10,
+    riseDist: 36,
+    returnFrames: 9,
+    returnTo: -4,
+    reboundFrames: 8,
+    reboundTo: 2,
+    holdFrames: 48,
+    driftFrames: 12,
+    driftDist: 3,
+    lifeFrames: 102,
+    fadeStart: 78,
   },
 };
 
@@ -209,6 +312,10 @@ export const PET_FLOAT_CFG = {
 export type PetDmgStyleKey = 'slotDamageMain' | 'slotDamageCrit' | 'slotDamageMinor' | 'slotDamageRecap';
 
 export type EnemyDmgStyleKey = 'enemyHitMain' | 'enemyHitCrit';
+
+export type HeroHitDmgStyleKey = 'heroHitDamage' | 'heroHitDamageHeavy' | 'heroHitShield' | 'heroHeal';
+
+export type DmgMotionKey = keyof typeof DMG_MOTION;
 
 export function resolveEnemyDmgStyleKey(isCrit: boolean, minor: boolean): EnemyDmgStyleKey | 'slotDamageMinor' {
   if (minor) return 'slotDamageMinor';
@@ -330,7 +437,7 @@ export function createPetDamageFloatRuntime(opts: {
   baseX: number;
   baseY: number;
   baseScale: number;
-  styleKey: PetDmgStyleKey | EnemyDmgStyleKey;
+  styleKey: PetDmgStyleKey | EnemyDmgStyleKey | HeroHitDmgStyleKey;
   motion: DmgMotionPreset;
   delayFrames?: number;
 }): PetDamageFloatRuntime {

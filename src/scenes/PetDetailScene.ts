@@ -241,7 +241,7 @@ export class PetDetailScene implements Scene {
 
   /** 章节收录等预览入口：说明文案，不提供养成操作 */
   private _buildPreviewHint(w: number, y: number): void {
-    const hint = makeText('章节收录预览 · 以 ★1 初始属性展示', {
+    const hint = makeText('章节 Boss 掉落预览 · 以 ★1 初始属性展示', {
       size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: 0.5,
     });
     hint.position.set(w / 2, y);

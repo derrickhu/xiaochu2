@@ -1,6 +1,5 @@
 import {
   DEFAULT_TEAM,
-  DEFAULT_SUMMON_POOL_R_IDS,
   INITIAL_PET_LEVEL,
   INITIAL_PET_STAR,
   PET_MAP,
@@ -13,7 +12,7 @@ import { ECONOMY } from '@/balance/economy';
 
 export const SAVE_KEY = 'xiaochu2_save_v2';
 export const LEGACY_SAVE_KEY = 'xiaochu2_save_v1';
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 /** 单只灵宠的养成进度 */
 export interface OwnedPet {
@@ -43,9 +42,7 @@ export interface SaveData {
   pendingShards: Record<string, number>;
   /** 已招募新宠次数（招募定价用，含碎片溢出招募） */
   recruitedCount: number;
-  /** 已收录生物 id；R 档开局即入召唤池，SR+ 由章节 Boss 收录扩展。 */
-  discovered: string[];
-  /** 图鉴里程碑已结算到的收录数（每 ECONOMY.milestone.codexEvery 只发灵玉） */
+  /** 图鉴里程碑已结算到的拥有数（每 ECONOMY.milestone.codexEvery 只发灵玉） */
   codexRewarded: number;
 }
 
@@ -78,17 +75,16 @@ export function initialData(): SaveData {
     ownedPets: initialOwned(),
     pendingShards: {},
     recruitedCount: 0,
-    discovered: [...DEFAULT_SUMMON_POOL_R_IDS],
-    // 初始收录池（R 档赠送）不计入里程碑，从后续收录开始累计
-    codexRewarded: DEFAULT_SUMMON_POOL_R_IDS.length,
+    // 初始阵容不计入里程碑，从后续新宠开始累计
+    codexRewarded: DEFAULT_TEAM.length,
   };
 }
 
-/** 解析存档，缺字段回退默认；v3 起迁移灵宠 ID */
-export function parseSaveData(parsed: Partial<SaveData>): SaveData {
+/** 解析存档，缺字段回退默认；v3 起迁移灵宠 ID，v4 移除收录字段 */
+export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown }): SaveData {
   const migrated = migratePetIdsInPartialSave(parsed);
   const owned = sanitizeOwned(migrated.ownedPets);
-  const discovered = sanitizeDiscovered(migrated.discovered, owned);
+  const ownedCount = Object.keys(owned).length;
   return {
     version: SAVE_VERSION,
     coins: typeof migrated.coins === 'number' ? migrated.coins : 0,
@@ -103,15 +99,13 @@ export function parseSaveData(parsed: Partial<SaveData>): SaveData {
     recruitedCount: typeof migrated.recruitedCount === 'number'
       ? migrated.recruitedCount
       : countNonInitial(owned),
-    discovered,
-    // 旧档无此字段：从当前收录数起算，不追溯补发
     codexRewarded: typeof migrated.codexRewarded === 'number'
       ? migrated.codexRewarded
-      : discovered.length,
+      : ownedCount,
   };
 }
 
-/** v1 → v3：保留 coins/stars/team，拥有列表 = 默认队 ∪ 原队伍 */
+/** v1 → v4：保留 coins/stars/team，拥有列表 = 默认队 ∪ 原队伍 */
 export function migrateLegacySave(legacy: { coins?: number; stars?: unknown; team?: unknown }): SaveData {
   const owned = initialOwned();
   if (Array.isArray(legacy.team)) {
@@ -133,18 +127,6 @@ export function migrateLegacySave(legacy: { coins?: number; stars?: unknown; tea
       ? legacy.team.filter((id): id is string => typeof id === 'string')
       : undefined,
   });
-}
-
-/** 收录列表清洗：R 档默认池 + 已拥有 + 存档收录 */
-function sanitizeDiscovered(discovered: unknown, owned: Record<string, OwnedPet>): string[] {
-  const set = new Set<string>(DEFAULT_SUMMON_POOL_R_IDS);
-  for (const id of Object.keys(owned)) set.add(id);
-  if (Array.isArray(discovered)) {
-    for (const id of discovered) {
-      if (typeof id === 'string' && PET_MAP.has(id)) set.add(id);
-    }
-  }
-  return [...set];
 }
 
 /** 暂存碎片清洗：仅保留合法宠 id、非负整数，且必须是「未拥有」的宠 */
@@ -211,7 +193,7 @@ function mergeOwned(into: Record<string, OwnedPet>, id: string, pet: OwnedPet): 
   };
 }
 
-function migratePetIdsInPartialSave(parsed: Partial<SaveData>): Partial<SaveData> {
+function migratePetIdsInPartialSave(parsed: Partial<SaveData> & { discovered?: unknown }): Partial<SaveData> {
   const ownedPets: Record<string, OwnedPet> = {};
   if (parsed.ownedPets && typeof parsed.ownedPets === 'object') {
     for (const [id, v] of Object.entries(parsed.ownedPets)) {
@@ -237,13 +219,7 @@ function migratePetIdsInPartialSave(parsed: Partial<SaveData>): Partial<SaveData
       .filter((id): id is string => !!id)
     : parsed.team;
 
-  const discovered = Array.isArray(parsed.discovered)
-    ? parsed.discovered
-      .map((id) => (typeof id === 'string' ? migrateCreatureId(id) : null))
-      .filter((id): id is string => !!id)
-    : parsed.discovered;
-
-  return { ...parsed, ownedPets, pendingShards, team, discovered };
+  return { ...parsed, ownedPets, pendingShards, team };
 }
 
 function migrateStageStars(stars: Record<string, number>): Record<string, number> {

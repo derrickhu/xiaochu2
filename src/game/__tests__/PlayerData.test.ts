@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { PlayerData } from '../PlayerData';
-import { PETS, DEFAULT_TEAM, DEFAULT_SUMMON_POOL_R_IDS } from '@/balance/pets';
+import { PETS, DEFAULT_TEAM } from '@/balance/pets';
 import { ECONOMY } from '@/balance/economy';
 
 beforeAll(() => {
@@ -12,18 +12,16 @@ beforeAll(() => {
 });
 
 describe('初始存档', () => {
-  it('初始拥有默认阵容且已收录', () => {
+  it('初始拥有默认阵容', () => {
     for (const id of DEFAULT_TEAM) {
       expect(PlayerData.isOwned(id)).toBe(true);
     }
     expect(PlayerData.codexCount).toBeGreaterThanOrEqual(DEFAULT_TEAM.length);
   });
 
-  it('R 档灵宠开局即在召唤池', () => {
-    for (const id of DEFAULT_SUMMON_POOL_R_IDS) {
-      expect(PlayerData.isDiscovered(id)).toBe(true);
-    }
-    expect(PlayerData.availablePool().length).toBeGreaterThanOrEqual(DEFAULT_SUMMON_POOL_R_IDS.length);
+  it('商店/召唤池覆盖全花名册', () => {
+    expect(PlayerData.shopPoolIds().length).toBe(PETS.length);
+    expect(PlayerData.gachaPoolIds().length).toBe(PETS.length);
   });
 
   it('编队默认非空且均为已拥有', () => {
@@ -87,7 +85,16 @@ describe('未拥有宠碎片暂存（修复丢弃）', () => {
     expect(unowned).toBeTruthy();
     PlayerData.addShards(unowned!.id, 7);
     expect(PlayerData.petShards(unowned!.id)).toBe(7);
-    // 用足额灵玉强制抽到它前，至少验证暂存读得到（解锁路径在抽卡测试覆盖）
+  });
+});
+
+describe('Boss 直掉解锁', () => {
+  it('unlockPet 仅首次返回 true', () => {
+    const unowned = PETS.find((p) => !PlayerData.isOwned(p.id));
+    expect(unowned).toBeTruthy();
+    expect(PlayerData.unlockPet(unowned!.id)).toBe(true);
+    expect(PlayerData.isOwned(unowned!.id)).toBe(true);
+    expect(PlayerData.unlockPet(unowned!.id)).toBe(false);
   });
 });
 
@@ -101,7 +108,6 @@ describe('抽卡（灵玉）', () => {
   });
 
   it('灵玉不足时单抽返回 null', () => {
-    // 把灵玉花到不足
     while (PlayerData.lingyu >= ECONOMY.gacha.singleCost) {
       PlayerData.pullGachaSingle(() => 0);
     }
@@ -123,26 +129,22 @@ describe('里程碑与货币', () => {
     expect(PlayerData.spendCoins(PlayerData.coins + 1)).toBe(false);
   });
 
-  it('图鉴收录里程碑：每收录满 codexEvery 只发一次灵玉，且不重复发', () => {
+  it('图鉴里程碑：每拥有满 codexEvery 只发一次灵玉，且不重复发', () => {
     const every = ECONOMY.milestone.codexEvery;
-    // 先对账当前进度（吞掉历史差额，保证后续断言干净）
     PlayerData.claimCodexMilestones();
 
-    const undiscovered = PETS.filter((p) => !PlayerData.isDiscovered(p.id)).map((p) => p.id);
-    expect(undiscovered.length).toBeGreaterThanOrEqual(every);
+    const unowned = PETS.filter((p) => !PlayerData.isOwned(p.id)).map((p) => p.id);
+    expect(unowned.length).toBeGreaterThanOrEqual(every);
 
     const start = PlayerData.codexMilestoneProgress.count;
     const need = (Math.floor(start / every) + 1) * every - start;
-    // 收录到里程碑前一只：不发
-    for (let i = 0; i < need - 1; i++) PlayerData.discover(undiscovered[i]);
+    for (let i = 0; i < need - 1; i++) PlayerData.unlockPet(unowned[i]);
     expect(PlayerData.claimCodexMilestones()).toBe(0);
-    // 跨过里程碑：发一次
-    PlayerData.discover(undiscovered[need - 1]);
+    PlayerData.unlockPet(unowned[need - 1]);
     const before = PlayerData.lingyu;
     const granted = PlayerData.claimCodexMilestones();
     expect(granted).toBe(ECONOMY.milestone.codexLingyu);
     expect(PlayerData.lingyu).toBe(before + granted);
-    // 重复结算不再发
     expect(PlayerData.claimCodexMilestones()).toBe(0);
   });
 });

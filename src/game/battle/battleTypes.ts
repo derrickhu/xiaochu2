@@ -121,6 +121,6 @@ export interface BattleResult {
   shards: { petId: string; count: number }[];
   turnsUsed: number;
   noDamage: boolean;
-  /** 本场击败的「可收录高级怪」对应的生物 id（胜利时收录进宠物池） */
-  discoveredCreatures: string[];
+  /** 本场击败的章 Boss 高级怪直掉灵宠 id（胜利时解锁拥有） */
+  bossDropPets: string[];
 }

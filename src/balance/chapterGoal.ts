@@ -72,21 +72,24 @@ export function getChapterGoal(chapter: number): ChapterGoalInfo | undefined {
     passiveLine,
     bossChallenge,
     bossStageLabel,
-    summary: `收录 ${pet.name} · ${ELEMENT_NAME[pet.element]}${PET_ROLE_NAME[pet.role]} · ${skillLine}`,
+    summary: `获得 ${pet.name} · ${ELEMENT_NAME[pet.element]}${PET_ROLE_NAME[pet.role]} · ${skillLine}`,
   };
 }
 
 export function formatChapterGoalCard(chapter: number): string {
   const g = getChapterGoal(chapter);
-  if (!g) return '本章暂无收录目标';
+  if (!g) return '本章暂无 Boss 掉落';
   return `${g.summary}\n被动：${g.passiveLine}`;
 }
 
 /** 校验收录宠稀有度是否符合章节递进表 */
-export function chapterCaptureRarityMatches(chapter: number): boolean {
+export function chapterBossDropRarityMatches(chapter: number): boolean {
   const petId = CHAPTER_REWARD_PET[chapter];
   const expected = CHAPTER_CAPTURE_RARITY[chapter];
   if (!petId || !expected) return true;
   const pet = PET_MAP.get(petId);
-  return pet?.rarity === expected;
+  return pet?.rarity === expected && pet.rarity <= 3;
 }
+
+/** @deprecated */
+export const chapterCaptureRarityMatches = chapterBossDropRarityMatches;

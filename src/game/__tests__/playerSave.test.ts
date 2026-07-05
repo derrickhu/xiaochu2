@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { parseSaveData, initialData, SAVE_VERSION } from '../playerSave';
-import { DEFAULT_TEAM, DEFAULT_SUMMON_POOL_R_IDS } from '@/balance/pets';
+import { DEFAULT_TEAM } from '@/balance/pets';
 
-describe('存档 v3 灵宠 ID 迁移', () => {
-  it('旧 ID owned/team/discovered 迁移为新 ID', () => {
+describe('存档 v4 灵宠 ID 迁移', () => {
+  it('旧 ID owned/team 迁移为新 ID（忽略已移除的 discovered）', () => {
     const data = parseSaveData({
       version: 2,
       ownedPets: {
@@ -22,7 +22,7 @@ describe('存档 v3 灵宠 ID 迁移', () => {
     expect(data.team).toContain('pet_002');
     expect(data.team).toContain('pet_024');
     expect(data.pendingShards.pet_028).toBe(4);
-    expect(data.discovered).toContain('pet_024');
+    expect('discovered' in data).toBe(false);
   });
 
   it('已是新 ID 则原样保留', () => {
@@ -39,10 +39,8 @@ describe('存档 v3 灵宠 ID 迁移', () => {
     expect(data.team).toEqual([...DEFAULT_TEAM]);
   });
 
-  it('新档 discovered 含全部 R 档默认召唤池', () => {
+  it('新档 milestones 从初始阵容数量起算', () => {
     const data = initialData();
-    for (const id of DEFAULT_SUMMON_POOL_R_IDS) {
-      expect(data.discovered).toContain(id);
-    }
+    expect(data.codexRewarded).toBe(DEFAULT_TEAM.length);
   });
 });

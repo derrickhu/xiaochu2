@@ -13,6 +13,16 @@ import { flashWhite } from '@/core/FxLayer';
 import { Platform } from '@/core/PlatformService';
 import { guardedTween, displayAlive, readScale, resetScale, cancelDisplayTweens, tweenScale, setScaleSafe } from '@/core/animationGuard';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
+import {
+  enemyDisplaySize,
+  enemyDisplayTierOf,
+  enemyHpBarWidthScale,
+  enemyShowsTierRing,
+  enemySpriteTint,
+  enemyTierRingRadius,
+  ENEMY_TIER_COLOR,
+  formatEnemyBattleName,
+} from '@/balance/enemyDisplay';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
 import { enemyImage, battleBgImage, ORB_IMAGES } from '@/config/Assets';
 import { formatStageBattleHeader } from '@/balance/stages';
@@ -27,6 +37,7 @@ export class BattleHud {
   private _stageHeaderText!: PIXI.Text;
   private _waveText!: PIXI.Text;
   private _enemySprite!: PIXI.Sprite;
+  private _enemyTierRing!: PIXI.Graphics;
   private _enemyBgSprite!: PIXI.Sprite;
   private _enemyAreaTop = 0;
   private _enemyAreaBottom = 0;
@@ -130,6 +141,8 @@ export class BattleHud {
 
     this._enemyContainer = new PIXI.Container();
     this._enemyContainer.position.set(enemyCenterX, enemyCenterY);
+    this._enemyTierRing = new PIXI.Graphics();
+    this._enemyContainer.addChild(this._enemyTierRing);
     this._enemySprite = new PIXI.Sprite();
     this._enemySprite.anchor.set(0.5);
     this._enemyContainer.addChild(this._enemySprite);
@@ -214,7 +227,9 @@ export class BattleHud {
   redrawHpBars(): void {
     // ---- 敌人 ----
     {
-      const { enemyHpBarWidth: bw, enemyHpBarHeight: bh } = UI.battle;
+      const tier = enemyDisplayTierOf(this._ctrl.enemy.def);
+      const bw = UI.battle.enemyHpBarWidth * enemyHpBarWidthScale(tier);
+      const { enemyHpBarHeight: bh } = UI.battle;
       const x = (Game.logicWidth - bw) / 2;
       const y = this._layout.enemyHpBarY;
       const g = this._enemyHpBar;
@@ -325,23 +340,36 @@ export class BattleHud {
   /** 刷新敌人立绘/名字/血条/倒计时（switchWave = 是否波次切换） */
   refreshEnemy(switchWave: boolean): void {
     const enemy = this._ctrl.enemy;
-    const tex = TextureCache.get(enemy.def.image ?? enemyImage(enemy.def.id));
+    const def = enemy.def;
+    const tier = enemyDisplayTierOf(def);
+    const displaySize = enemyDisplaySize(tier);
+    const tex = TextureCache.get(def.image ?? enemyImage(def.id));
     if (tex && displayAlive(this._enemySprite)) {
       this._enemySprite.texture = tex;
       const s = readScale(this._enemySprite);
       if (s) {
-        const v = UI.battle.enemySize / Math.max(tex.width, tex.height);
+        const v = displaySize / Math.max(tex.width, tex.height);
         s.set(v);
       }
+      this._enemySprite.tint = enemySpriteTint(tier);
+    }
+    this._enemyTierRing.clear();
+    if (enemyShowsTierRing(tier)) {
+      const r = enemyTierRingRadius(displaySize);
+      const color = ENEMY_TIER_COLOR[tier];
+      this._enemyTierRing.lineStyle(tier === 'boss' ? 5 : 4, color, tier === 'boss' ? 0.75 : 0.55);
+      this._enemyTierRing.drawCircle(0, 0, r);
+      this._enemyTierRing.beginFill(color, tier === 'boss' ? 0.08 : 0.05);
+      this._enemyTierRing.drawCircle(0, 0, r);
+      this._enemyTierRing.endFill();
     }
     if (!switchWave) this._enemyContainer.alpha = 1;
     const ratio = enemy.maxHp > 0 ? enemy.hp / enemy.maxHp : 0;
     TweenManager.cancelTarget(this._enemyHpDisp);
     this._enemyHpDisp.shown = ratio;
     this._enemyHpDisp.white = ratio;
-    this._enemyNameText.text =
-      `${enemy.def.name} · ${ELEMENT_NAME[enemy.def.element]}属性`;
-    this._enemyNameText.style.fill = ORB_COLOR[enemy.def.element];
+    this._enemyNameText.text = formatEnemyBattleName(def);
+    this._enemyNameText.style.fill = ENEMY_TIER_COLOR[tier];
     this._refreshEnemyElementTags(enemy.def.element);
     // 背景按关卡属性（与 assetPreload / 场景设计一致），不按当前敌人属性
     this._refreshEnemyBg(this._ctrl.stage.element);
@@ -537,6 +565,15 @@ export class BattleHud {
     });
   }
 
+  /** 血条文字短暂变色，强化「被打到了」的反馈 */
+  flashHeroHpBar(damage: boolean): void {
+    if (!displayAlive(this._heroHpText)) return;
+    this._heroHpText.style.fill = damage ? 0xff5252 : 0x8fd4ff;
+    setTimeout(() => {
+      if (displayAlive(this._heroHpText)) this._heroHpText.style.fill = 0xffffff;
+    }, 280);
+  }
+
   // ════════════ 敌人受击 / 行动演出 ════════════
 
   /** 受击三件套：闪白 + 击退回弹 + 属性色粒子飞溅；大伤害附加震屏 */
@@ -628,11 +665,8 @@ export class BattleHud {
 
   /** 敌人攻击：蓄力缩放 → 属性弹道飞向英雄血条 → 命中反馈（onHeroHit 由编排者注入） */
   playEnemyAttack(
-    fx: BattleFx, damage: number, absorbed: number, heavy: boolean, onHeroHit: () => void,
+    fx: BattleFx, _damage: number, _absorbed: number, heavy: boolean, onHeroHit: () => void,
   ): Promise<void> {
-    if (Platform.isMinigame) {
-      return this._playEnemyAttackTimer(fx, heavy, onHeroHit);
-    }
     return this._playEnemyAttackTween(fx, heavy, onHeroHit);
   }
 
@@ -680,33 +714,6 @@ export class BattleHud {
       ease: Ease.easeOutQuad,
     });
     onHeroHit();
-  }
-
-  /** 真机 TweenManager 不可靠：用 setTimeout 链代替蓄力+弹道 */
-  private _playEnemyAttackTimer(
-    fx: BattleFx, heavy: boolean, onHeroHit: () => void,
-  ): Promise<void> {
-    const element = this._ctrl.enemy.def.element;
-    const color = ORB_COLOR[element];
-    const { heroBarY } = this._layout;
-    const toX = Game.logicWidth / 2;
-    const toY = heroBarY;
-    const chargeMs = Math.round((heavy ? 0.14 : 0.1) * 1000);
-    const projMs = Math.round((heavy ? UI.anim.enemyProjectileHeavy : UI.anim.enemyProjectile) * 1000);
-
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        fx.burst({
-          x: toX, y: toY, color,
-          count: heavy ? 10 : 6,
-          speed: heavy ? 320 : 240,
-          size: heavy ? 16 : 12,
-          life: 0.35,
-        });
-        onHeroHit();
-        resolve();
-      }, chargeMs + projMs);
-    });
   }
 
   /** 蓄力起手：红色凝聚粒子 + 立绘膨胀脉冲（预告文字由 refreshEnemyCd 常驻） */
@@ -842,7 +849,7 @@ export class BattleHud {
   async playHeroDotTick(fx: BattleFx, amount: number): Promise<void> {
     const { heroBarY } = this._layout;
     const x = Game.logicWidth / 2;
-    fx.spawnFloat(`中毒 -${amount}`, x, heroBarY - 28, 0xc06cf0, 1.15);
+    fx.spawnHeroHitFloat(`中毒 -${amount}`, x, heroBarY - 28, 'damage');
     fx.burst({
       x, y: heroBarY,
       color: 0xc06cf0, count: 8, speed: 220, size: 12, life: 0.4,

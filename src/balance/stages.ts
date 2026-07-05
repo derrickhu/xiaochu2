@@ -1,7 +1,7 @@
 /**
  * 关卡表（纯数据，零逻辑）
  *
- * 52 关 · 8 章 · 每章 Boss 收录 1 只 + 首教 1 种可玩挑战（bossChallenge.ts）。
+ * 52 关 · 8 章 · 每章 Boss 直掉 1 只灵宠（SR/SSR，越后越高稀）+ 首教 1 种可玩挑战（bossChallenge.ts）。
  */
 import type { Element } from './combat';
 import type { StageType } from './stageTypes';
@@ -44,31 +44,34 @@ export const CHAPTER_STAGE_COUNT: Readonly<Record<number, number>> = {
   1: 5, 2: 6, 3: 6, 4: 6, 5: 7, 6: 7, 7: 7, 8: 8,
 };
 
-/** 各章 Boss 收录宠期望稀有度（最低 SR；SR → SSR → UR 递进） */
-export const CHAPTER_CAPTURE_RARITY: Readonly<Record<number, Rarity>> = {
+/** 各章 Boss 掉落宠期望稀有度（仅 SR/SSR；1~2 章 SR，3 章起 SSR；UR 仅抽卡） */
+export const CHAPTER_BOSS_DROP_RARITY: Readonly<Record<number, Rarity>> = {
   1: 2,
   2: 2,
   3: 3,
-  4: 4,
+  4: 3,
   5: 3,
   6: 3,
-  7: 4,
-  8: 4,
+  7: 3,
+  8: 3,
 };
 
+/** @deprecated 旧名，测试/工具兼容 */
+export const CHAPTER_CAPTURE_RARITY = CHAPTER_BOSS_DROP_RARITY;
+
 /**
- * 各章 Boss 收录宠（定位轮替：输出 → 治疗 → 坦克 → 辅助，循环至终章）。
- * R 档见 DEFAULT_SUMMON_POOL_R_IDS，不进章节收录。
+ * 各章 Boss 直掉灵宠（定位轮替：输出 → 治疗 → 坦克 → 辅助，循环至终章）。
+ * R 档见 DEFAULT_SUMMON_POOL_R_IDS；UR 不进 Boss 掉落。
  */
 export const CHAPTER_REWARD_PET: Readonly<Record<number, string>> = {
   1: 'pet_017', // SR 输出 · 木
   2: 'pet_004', // SR 治疗 · 木
   3: 'pet_028', // SSR 坦克 · 土
-  4: 'pet_014', // UR 辅助 · 金
+  4: 'pet_025', // SSR 辅助 · 火
   5: 'pet_011', // SSR 输出 · 金
   6: 'pet_010', // SSR 治疗 · 土
-  7: 'pet_030', // UR 坦克 · 土
-  8: 'pet_026', // UR 输出 · 火
+  7: 'pet_029', // SSR 辅助 · 土
+  8: 'pet_016', // SSR 输出 · 木
 };
 
 const mob = (id: string): EncounterRef => ({ kind: 'mob', id });
@@ -76,10 +79,10 @@ const mob = (id: string): EncounterRef => ({ kind: 'mob', id });
 const creature = (
   id: string,
   tier: 'tier1' | 'tier2',
-  captureUnlock?: boolean,
-): EncounterRef => ({ kind: 'creature', id, tier, ...(captureUnlock ? { captureUnlock: true } : {}) });
+  bossDrop?: boolean,
+): EncounterRef => ({ kind: 'creature', id, tier, ...(bossDrop ? { bossDrop: true } : {}) });
 
-function buildChapterCaptureBoss(opts: {
+function buildChapterBossDrop(opts: {
   id: string;
   chapter: number;
   index: number;
@@ -92,7 +95,7 @@ function buildChapterCaptureBoss(opts: {
   challenge: BossChallengeKind;
 }): StageDef {
   const c = CREATURE_MAP.get(opts.creatureId);
-  if (!c) throw new Error(`收录 Boss 未知生物: ${opts.creatureId}`);
+  if (!c) throw new Error(`Boss 掉落未知生物: ${opts.creatureId}`);
   const cfg = bossChallengeConfig(opts.challenge, { ruleBanElement: opts.element });
   return {
     id: opts.id,
@@ -180,7 +183,7 @@ const CHAPTER_1: readonly StageDef[] = [
     encounters: [mob('enemy_slime_wood'), mob('enemy_slime_wood')], difficulty: 1.2, starTurnLimit: 9,
     hintTags: ['木属性'], hintText: '稳扎稳打，为章末试炼留技能',
   },
-  buildChapterCaptureBoss({
+  buildChapterBossDrop({
     id: 'stage_1_5', chapter: 1, index: 5, name: '星辉试炼', element: 'wood',
     dropTableId: 'dt_forest_boss', creatureId: 'pet_017',
     difficulty: 1.1, starTurnLimit: 18, challenge: 'multiWave',
@@ -214,7 +217,7 @@ const CHAPTER_2: readonly StageDef[] = [
     type: 'elite', dropTableId: 'dt_cave_elite', difficulty: 1.2, starTurnLimit: 14,
     challenge: 'multiWave',
   }),
-  buildChapterCaptureBoss({
+  buildChapterBossDrop({
     id: 'stage_2_6', chapter: 2, index: 6, name: '灵鹿试炼', element: 'wood',
     dropTableId: 'dt_cave_boss', creatureId: 'pet_004',
     difficulty: 1.2, starTurnLimit: 20, challenge: 'boardSeal',
@@ -248,7 +251,7 @@ const CHAPTER_3: readonly StageDef[] = [
     type: 'elite', dropTableId: 'dt_peak_elite', difficulty: 1.35, starTurnLimit: 17,
     challenge: 'multiWave',
   }),
-  buildChapterCaptureBoss({
+  buildChapterBossDrop({
     id: 'stage_3_6', chapter: 3, index: 6, name: '玄龟试炼', element: 'earth',
     dropTableId: 'dt_peak_boss', creatureId: 'pet_028',
     difficulty: 1.2, starTurnLimit: 24, challenge: 'highDefense',
@@ -261,7 +264,7 @@ interface TrialChapterDef {
   name: string;
   stageCount: number;
   difficultyBase: number;
-  captureCreatureId: string;
+  bossDropPetId: string;
   bossChallenge: BossChallengeKind;
   /** 长度 = stageCount - 1，仅已学挑战 */
   fillerChallenges: readonly BossChallengeKind[];
@@ -271,39 +274,39 @@ interface TrialChapterDef {
 const TRIAL_CHAPTERS: readonly TrialChapterDef[] = [
   {
     chapter: 4, name: '历练 · 炽土试炼', stageCount: 6, difficultyBase: 0.9,
-    captureCreatureId: 'pet_014', bossChallenge: 'boardRock',
+    bossDropPetId: 'pet_025', bossChallenge: 'boardRock',
     fillerChallenges: ['multiWave', 'boardSeal', 'highDefense', 'multiWave', 'boardSeal'],
     fillerNames: ['炽土前哨', '熔岩小径', '岩傀儡阵', '焦土深谷', '封印残阵'],
   },
   {
     chapter: 5, name: '历练 · 灵兽秘境', stageCount: 7, difficultyBase: 0.92,
-    captureCreatureId: 'pet_011', bossChallenge: 'selfHeal',
+    bossDropPetId: 'pet_011', bossChallenge: 'selfHeal',
     fillerChallenges: ['boardRock', 'highDefense', 'boardSeal', 'multiWave', 'boardRock', 'highDefense'],
     fillerNames: ['秘境入口', '顽石迷阵', '巨像守卫', '灵泉浅滩', '熔岩岔路', '古阵核心'],
   },
   {
     chapter: 6, name: '历练 · 归墟深渊', stageCount: 7, difficultyBase: 0.94,
-    captureCreatureId: 'pet_010', bossChallenge: 'chargeHit',
+    bossDropPetId: 'pet_010', bossChallenge: 'chargeHit',
     fillerChallenges: ['selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'selfHeal', 'multiWave'],
     fillerNames: ['深渊上层', '寒潭回响', '晶甲巢穴', '自疗深池', '蓄力试场', '归墟裂隙'],
   },
   {
     chapter: 7, name: '历练 · 星轨之野', stageCount: 7, difficultyBase: 0.96,
-    captureCreatureId: 'pet_030', bossChallenge: 'noHeart',
+    bossDropPetId: 'pet_029', bossChallenge: 'noHeart',
     fillerChallenges: ['chargeHit', 'selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'chargeHit'],
     fillerNames: ['星轨外环', '蓄力星门', '自愈绿洲', '顽石星带', '巨像轨道', '禁心前庭'],
   },
   {
     chapter: 8, name: '历练 · 虚空之巅', stageCount: 8, difficultyBase: 0.98,
-    captureCreatureId: 'pet_026', bossChallenge: 'banElement',
+    bossDropPetId: 'pet_016', bossChallenge: 'banElement',
     fillerChallenges: ['noHeart', 'chargeHit', 'selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'noHeart'],
     fillerNames: ['虚空门扉', '禁心廊道', '蓄力深渊', '寒潭虚影', '顽石天阶', '封印核心', '封元前厅'],
   },
 ];
 
 function buildTrialChapter(def: TrialChapterDef): StageDef[] {
-  const c = CREATURE_MAP.get(def.captureCreatureId);
-  if (!c) throw new Error(`历练章收录宠未知: ${def.captureCreatureId}`);
+  const c = CREATURE_MAP.get(def.bossDropPetId);
+  if (!c) throw new Error(`历练章 Boss 掉落宠未知: ${def.bossDropPetId}`);
   const bossIndex = def.stageCount;
   const stages: StageDef[] = [];
 
@@ -323,14 +326,14 @@ function buildTrialChapter(def: TrialChapterDef): StageDef[] {
     }));
   });
 
-  stages.push(buildChapterCaptureBoss({
+  stages.push(buildChapterBossDrop({
     id: `stage_${def.chapter}_${bossIndex}`,
     chapter: def.chapter,
     index: bossIndex,
     name: `${c.name}·试炼`,
     element: c.element,
     dropTableId: `dt_ch${def.chapter}_boss`,
-    creatureId: def.captureCreatureId,
+    creatureId: def.bossDropPetId,
     // Boss 难度只比末位铺垫关高一档（+0.05×2），总量断崖由 powerBudget 护栏兜底
     difficulty: def.difficultyBase + def.stageCount * 0.05,
     starTurnLimit: 18 + def.chapter * 2,

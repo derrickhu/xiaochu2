@@ -1,14 +1,12 @@
 /**
- * 召唤页：当前召唤池可视化（横向滚动，容纳任意数量已收录灵宠）。
+ * 召唤页：当前召唤池可视化（横向滚动，全花名册）。
  */
 import * as PIXI from 'pixi.js';
 import { PET_MAP } from '@/balance/pets';
 import { ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
-import { Game } from '@/core/Game';
 import { Platform } from '@/core/PlatformService';
 import { clientEventToDesign, designPointToLocal } from '@/utils/clientEventToDesign';
-import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { PlayerData } from '@/game/PlayerData';
 import { bindCanvasPointerMove, type CanvasPointerMoveHandle } from '@/minigame/canvasInteraction';
@@ -111,7 +109,7 @@ export function buildGachaPoolPreview(
 ): GachaPoolPreviewHandle {
   const root = new PIXI.Container();
   const poolIds = [...PlayerData.gachaPoolIds(element)];
-  const discoveredCount = poolIds.filter((id) => PlayerData.isDiscovered(id)).length;
+  const ownedCount = poolIds.filter((id) => PlayerData.isOwned(id)).length;
   const panelW = Math.min(620, w - 32);
   const panelH = poolIds.length > 0 ? GACHA_POOL_PANEL_H : 88;
   const panelLeft = w / 2 - panelW / 2;
@@ -134,8 +132,9 @@ export function buildGachaPoolPreview(
   title.position.set(panelLeft + PANEL_PAD, PANEL_PAD);
   root.addChild(title);
 
+  const scrollHint = poolIds.length > 6 ? ' · 左右滑动' : '';
   const sub = makeText(
-    `已收录 ${discoveredCount}/${poolIds.length} 出率 UP ×2${poolIds.length > 6 ? ' · 左右滑动' : ''}`,
+    `已拥有 ${ownedCount}/${poolIds.length} · UR 仅召唤获取${scrollHint}`,
     { size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: [0, 0] },
   );
   sub.position.set(panelLeft + PANEL_PAD, PANEL_PAD + 22);
@@ -165,13 +164,12 @@ export function buildGachaPoolPreview(
       const cell = new PIXI.Container();
       cell.position.set(cx + ICON / 2, ICON / 2);
 
-      // 已收录 = 出率 UP，高亮边框；未收录压暗但仍可出货
-      const discovered = PlayerData.isDiscovered(id);
+      const owned = PlayerData.isOwned(id);
       cell.addChild(makePanel({
         width: ICON, height: ICON, radius: 8, centered: true,
         bg: COLORS.panelBgAlt,
-        border: discovered ? COLORS.accent : COLORS.panelBorderSoft,
-        borderWidth: discovered ? 2 : 1,
+        border: owned ? COLORS.accent : COLORS.panelBorderSoft,
+        borderWidth: owned ? 2 : 1,
       }));
 
       const tex = getPetAvatarTexture(id, Math.max(1, PlayerData.petStar(id)));
@@ -182,7 +180,7 @@ export function buildGachaPoolPreview(
         sp.width = dw;
         sp.height = dw * (tex.height / tex.width);
         sp.position.set(0, ICON / 2 - 2);
-        if (!discovered) sp.alpha = 0.72;
+        if (!owned) sp.alpha = 0.82;
         cell.addChild(sp);
       }
 

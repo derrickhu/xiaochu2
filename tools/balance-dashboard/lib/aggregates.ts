@@ -17,7 +17,7 @@ export function buildCaptureMap(): Map<string, string> {
   const map = new Map<string, string>();
   for (const s of STAGES) {
     for (const e of s.encounters) {
-      if (e.kind === 'creature' && e.tier === 'tier2' && e.captureUnlock) {
+      if (e.kind === 'creature' && e.tier === 'tier2' && e.bossDrop) {
         map.set(e.id, s.id);
       }
     }

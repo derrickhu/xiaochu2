@@ -58,8 +58,6 @@ export const ECONOMY = {
     duplicateShards: { 1: 5, 2: 10, 3: 20, 4: 40, 5: 80 } as Readonly<Record<number, number>>,
     /** 新号初始赠送灵玉（够一发十连体验） */
     starterLingyu: 1000,
-    /** 已收录（图鉴 UP）宠在档内的出货权重倍数；未收录 = 1 */
-    discoveryUpWeight: 2,
     /**
      * 高稀有护航包：NEW SSR/UR 出货附赠本体碎片 + 通用经验，
      * 保证「抽到强宠 → 立刻升 2★/拉等级 → 上阵可感知提升」的闭环。
@@ -77,7 +75,7 @@ export const ECONOMY = {
     firstClearLingyu: 20,
     /** Boss 关首通灵玉 */
     bossFirstClearLingyu: 60,
-    /** 图鉴收录里程碑：每收录 codexEvery 只发一次灵玉（仅在图鉴页领取） */
+    /** 图鉴里程碑：每拥有 codexEvery 只发一次灵玉（仅在图鉴页领取） */
     codexEvery: 5,
     codexLingyu: 100,
   },

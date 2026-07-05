@@ -68,6 +68,21 @@ export function runEnemyTurnAction(ctx: EnemyTurnContext): EnemyActResult {
   return { action: 'attack', ...hit, healed: 0 };
 }
 
+/** 非蓄力技能回合仍推进普攻倒计时；就绪则同回合追加普攻 */
+function followUpBasicAttack(ctx: EnemyTurnContext, base: EnemyActResult): EnemyActResult {
+  const enemy = ctx.enemy;
+  enemy.attackCountdown--;
+  if (enemy.attackCountdown > 0) return base;
+  enemy.attackCountdown = enemy.def.attackInterval;
+  const hit = ctx.applyEnemyDamage(enemy.atk);
+  return {
+    ...base,
+    damage: hit.damage,
+    absorbed: hit.absorbed,
+    heroDead: hit.heroDead,
+  };
+}
+
 function applyEnemySkillResult(ctx: EnemyTurnContext, result: SkillResult): EnemyActResult {
   if (
     result.statusEvents.some((e) => e.status === 'enemyDamageReduction' && e.stack === 'ignoreIfPresent')
@@ -86,13 +101,13 @@ function applyEnemySkillResult(ctx: EnemyTurnContext, result: SkillResult): Enem
   const base = { damage: 0, absorbed: 0, heroDead: false, healed: 0, skillName: result.skill.name };
 
   const heal = result.healEvents.find((e) => e.target === 'enemy');
-  if (heal) return { ...base, action: 'heal', healed: heal.amount };
+  if (heal) return followUpBasicAttack(ctx, { ...base, action: 'heal', healed: heal.amount });
 
   if (result.statusEvents.find((e) => e.status === 'charge')) {
     return { ...base, action: 'charge' };
   }
   if (result.statusEvents.find((e) => e.status === 'enemyDamageReduction')) {
-    return { ...base, action: 'shield' };
+    return followUpBasicAttack(ctx, { ...base, action: 'shield' });
   }
 
   // ── 目标十三新增敌人技能行动映射 ──

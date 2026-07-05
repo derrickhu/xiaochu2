@@ -403,7 +403,13 @@ export function simulateBattle(
       if (result) {
         applySkillResult(result);
         enemy.skillCds[i] = skill.cd;
-        return 0;
+        const heroHit = result.damageEvents.find((e) => e.target === 'hero');
+        if (heroHit) return heroHit.amount;
+        if (result.statusEvents.some((e) => e.status === 'charge')) return 0;
+        enemy.attackCountdown--;
+        if (enemy.attackCountdown > 0) return 0;
+        enemy.attackCountdown = enemy.def.attackInterval;
+        return enemy.atk;
       }
     }
 

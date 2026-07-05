@@ -1,6 +1,6 @@
 /**
  * 抽卡引擎契约测试：出货概率、硬保底、十连保底、重复转碎片、
- * 全花名册池、收录 UP 权重、护航包。RNG 注入保证确定性。
+ * 全花名册池、护航包。RNG 注入保证确定性。
  */
 import { describe, it, expect } from 'vitest';
 import { poolGachaRates, pullOne, pullTen, type GachaState } from '../Gacha';
@@ -74,12 +74,10 @@ describe('抽卡：全花名册池（可达性修复）', () => {
     expect(total).toBe(PETS.length);
   });
 
-  it('未收录宠也能抽到（新号引导池外出货）', () => {
+  it('未拥有宠也能抽到（全池出货）', () => {
     const data = initialData();
-    // rng: 第一发 0.9 → 命中 SSR 档；第二发 0 → 取档内首只（初始必未收录 SSR）
     const outcome = pullGachaSingle(data, seqRng([0.9, 0]))!;
     expect(outcome.rarity).toBe(3);
-    expect(data.discovered).toContain(outcome.petId);
     expect(data.ownedPets[outcome.petId]).toBeDefined();
   });
 
@@ -93,32 +91,6 @@ describe('抽卡：全花名册池（可达性修复）', () => {
     const fire = poolGachaRates(gachaPoolPets('fire'));
     expect(fire.has(2)).toBe(false);
     expect([...fire.values()].reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10);
-  });
-});
-
-describe('抽卡：收录 UP 权重', () => {
-  const poolAB = [PET_MAP.get('pet_001')!, PET_MAP.get('pet_003')!]; // 两只 R
-  const upWeight = ECONOMY.gacha.discoveryUpWeight;
-  const weightOf = (p: { id: string }): number => (p.id === 'pet_001' ? upWeight : 1);
-
-  it('已收录宠按 discoveryUpWeight 加权：权重区间内出 UP 宠', () => {
-    const state: GachaState = { sinceHigh: 0 };
-    // rng1=0 → R 档；rng2=0.6 → 0.6×3=1.8 ≤ 权重 2 → pet_001
-    const o = pullOne(seqRng([0, 0.6]), state, notOwned, 1, poolAB, weightOf);
-    expect(o.petId).toBe('pet_001');
-  });
-
-  it('权重区间外出普通宠', () => {
-    const state: GachaState = { sinceHigh: 0 };
-    // rng2=0.9 → 0.9×3=2.7 > 2 → 落到 pet_003
-    const o = pullOne(seqRng([0, 0.9]), state, notOwned, 1, poolAB, weightOf);
-    expect(o.petId).toBe('pet_003');
-  });
-
-  it('不传权重回调时保持等权（回归）', () => {
-    const state: GachaState = { sinceHigh: 0 };
-    const o = pullOne(seqRng([0, 0.6]), state, notOwned, 1, poolAB);
-    expect(o.petId).toBe('pet_003'); // 0.6×2=1.2 → 第二只
   });
 });
 

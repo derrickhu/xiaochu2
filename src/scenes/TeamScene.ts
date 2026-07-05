@@ -17,6 +17,7 @@ import {
   type PetDef,
 } from '@/balance/pets';
 import { formatEnemyAbility, resolveEncounter } from '@/balance/enemies';
+import { ENEMY_TIER_COLOR, enemyDisplayTierOf, formatEnemyShortName } from '@/balance/enemyDisplay';
 import { STAGE_MAP, formatStageShortLabel, type StageDef } from '@/balance/stages';
 import type { TeamMember } from '@/formulas/team';
 import {
@@ -215,6 +216,7 @@ export class TeamScene implements Scene {
 
     encounters.forEach((enc, i) => {
       const { def } = enc;
+      const tier = enemyDisplayTierOf(def);
       const card = new PIXI.Container();
       card.position.set(startX + i * (cardSize + gap), cardCenterY);
 
@@ -229,8 +231,20 @@ export class TeamScene implements Scene {
       if (tex) {
         const spr = new PIXI.Sprite(tex);
         spr.anchor.set(0.5);
-        spr.scale.set((cardSize - 18) / Math.max(tex.width, tex.height));
+        const scaleMul = tier === 'mob' ? 0.78 : tier === 'boss' ? 1.05 : 1;
+        spr.scale.set((cardSize - 18) / Math.max(tex.width, tex.height) * scaleMul);
+        if (tier === 'mob') spr.tint = 0xd8dde3;
         card.addChild(spr);
+      }
+
+      if (tier !== 'mob') {
+        const tierBadge = makeText(
+          tier === 'boss' ? 'BOSS' : tier === 'miniBoss' ? '守关' : '精英',
+          { size: FONT_SIZE.xxs, fill: ENEMY_TIER_COLOR[tier], bold: true, anchor: 0.5,
+            strokeColor: 0x1a1126, strokeWidth: 3 },
+        );
+        tierBadge.position.set(cardSize / 2 - 10, -cardSize / 2 + 10);
+        card.addChild(tierBadge);
       }
 
       if (waveCount > 1) {
@@ -247,7 +261,7 @@ export class TeamScene implements Scene {
         card.addChild(badgeBg, badge);
       }
 
-      const name = makeText(def.name, {
+      const name = makeText(formatEnemyShortName(def), {
         size: FONT_SIZE.xxs, fill: COLORS.textMain, anchor: 0.5,
       });
       name.position.set(0, cardSize / 2 + 14);

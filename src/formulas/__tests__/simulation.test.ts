@@ -6,6 +6,7 @@
  *
  * 设计意图（平滑养成，见 balance/powerBudget.ts）：
  *  - 1-1~1-4 教学段：默认队中手可稳过并拿不错星级，低手也能通关
+ *  - 铺垫关（1~3 章）：初始队也会明显掉血，但不应形成「不升级过不去」的劝退墙
  *  - 1-5 Boss：低手也能通关（但拿不到三星），中手 8~12 回合——不再是 7 倍血量断崖
  *  - 跨章：达标（预算锚点）队伍可通关本章；欠养成的标准队在新章 Boss 处卡住
  *  - Boss 波次受 powerBudget 护栏约束：首波 ≤ 前关最大单波 2.5 倍、总量 ≈ 前关 2~4.2 倍
@@ -102,6 +103,24 @@ describe('新手 5R 阵容：教学段可达性', () => {
     for (const id of ['stage_1_1', 'stage_1_2', 'stage_1_3', 'stage_1_4']) {
       expect(sim(TEAMS.default, id, COMBO_MODELS.mid).win, `${id} mid`).toBe(true);
       expect(sim(TEAMS.default, id, COMBO_MODELS.low).win, `${id} low`).toBe(true);
+    }
+  });
+});
+
+describe('铺垫关攻压：初始队会受伤（1~3 章）', () => {
+  it('L1/1★ 默认队中手打 1~3 章铺垫关：敌人有效出刀且能通关', () => {
+    for (const ch of [1, 2, 3]) {
+      for (const s of STAGES.filter((x) => x.chapter === ch && !x.isBoss)) {
+        const r = sim(TEAMS.default, s.id, COMBO_MODELS.mid);
+        expect(r.win, s.id).toBe(true);
+        expect(r.maxEnemyHit, s.id).toBeGreaterThan(50);
+        if (ch >= 2) {
+          expect(r.tookDamage, s.id).toBe(true);
+        }
+        if (ch === 3) {
+          expect(r.heroHpRemaining / r.heroMaxHp, s.id).toBeLessThan(0.95);
+        }
+      }
     }
   });
 });

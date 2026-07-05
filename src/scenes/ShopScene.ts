@@ -109,13 +109,13 @@ export class ShopScene implements Scene {
     return best;
   }
 
-  /** 可获取池（已收录生物）对应的 PetDef 列表 */
-  private _discoveredPets(): PetDef[] {
-    const ids = new Set(PlayerData.availablePool());
+  /** 商店碎片池 = 全花名册 */
+  private _shopPets(): PetDef[] {
+    const ids = new Set(PlayerData.shopPoolIds());
     return PETS.filter((p) => ids.has(p.id));
   }
 
-  /** 每日轮换：按日期在「已收录生物」中确定性洗牌取前 N 只 */
+  /** 每日轮换：按日期在全池确定性洗牌取前 N 只 */
   private _dailyPets(count: number): PetDef[] {
     const day = Math.floor(Date.now() / 86_400_000);
     let seed = day * 2654435761 % 2147483647;
@@ -123,7 +123,7 @@ export class ShopScene implements Scene {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff;
       return seed / 0x7fffffff;
     };
-    const pool = this._discoveredPets();
+    const pool = this._shopPets();
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -156,8 +156,8 @@ export class ShopScene implements Scene {
     const chapter = this._focusChapter();
     const dominant = this._chapterDominantElement(chapter);
     const recommendEl = counterElementOf(dominant);
-    const discovered = this._discoveredPets();
-    const recommended = discovered
+    const shopPool = this._shopPets();
+    const recommended = shopPool
       .filter((p) => p.element === recommendEl)
       .slice(0, ECONOMY.shop.recommendCount);
     const daily = this._dailyPets(ECONOMY.shop.dailyRotationCount);

@@ -29,6 +29,7 @@ import {
   resolveEnemyDmgStyleKey,
   resolvePetDmgStyleKey,
   resolveTurnTotalTier,
+  type HeroHitDmgStyleKey,
   type PetDamageFloatRuntime,
 } from './damageFloatStyle';
 
@@ -82,7 +83,12 @@ export interface TurnPetDamageSummary {
   isCrit?: boolean;
 }
 
-type ScopedPetDamageRuntime = PetDamageFloatRuntime & { scopeId: number; onDone?: () => void };
+type ScopedPetDamageRuntime = PetDamageFloatRuntime & {
+  scopeId: number;
+  onDone?: () => void;
+  /** 回合总伤等：不受 clearTransient / scope 切换提前回收，播完再消失 */
+  persistUntilDone?: boolean;
+};
 
 export class BattleFx {
   private _fx!: FxLayer;
@@ -160,7 +166,8 @@ export class BattleFx {
     this._shake.update(dt);
     for (let i = this._petDmgRuntimes.length - 1; i >= 0; i--) {
       const rt = this._petDmgRuntimes[i];
-      if (!displayAlive(rt.text) || rt.scopeId !== this._scopeId) {
+      const staleScope = !rt.persistUntilDone && rt.scopeId !== this._scopeId;
+      if (!displayAlive(rt.text) || staleScope) {
         if (displayAlive(rt.text)) this._petDmgPool.release(rt.text);
         rt.onDone?.();
         this._petDmgRuntimes.splice(i, 1);
@@ -198,12 +205,14 @@ export class BattleFx {
   /** 回合/战斗收尾：清理某个 scope 内所有不应跨回合残留的表现层对象。 */
   clearTransient(scopeId = this._scopeId): void {
     for (const rt of this._petDmgRuntimes) {
-      if (rt.scopeId === scopeId) {
+      if (rt.scopeId === scopeId && !rt.persistUntilDone) {
         this._petDmgPool.release(rt.text);
         rt.onDone?.();
       }
     }
-    this._petDmgRuntimes = this._petDmgRuntimes.filter(rt => rt.scopeId !== scopeId);
+    this._petDmgRuntimes = this._petDmgRuntimes.filter(
+      (rt) => rt.scopeId !== scopeId || rt.persistUntilDone,
+    );
 
     for (const [p, pScope] of Array.from(this._projectiles.entries())) {
       if (pScope !== scopeId) continue;
@@ -277,6 +286,75 @@ export class BattleFx {
     });
   }
 
+  /**
+   * 英雄受击数字（扣血 / 盾挡）：帧动画 + 停留段，persistUntilDone 避免下回合转珠被 clearTransient 清掉。
+   */
+  spawnHeroHitFloat(
+    text: string,
+    x: number,
+    y: number,
+    kind: 'damage' | 'shield',
+    heavy = false,
+  ): void {
+    const motionKey: HeroHitDmgStyleKey = kind === 'shield'
+      ? 'heroHitShield'
+      : (heavy ? 'heroHitDamageHeavy' : 'heroHitDamage');
+    const motion = DMG_MOTION[motionKey];
+    const baseScale = kind === 'shield' ? 1.05 : (heavy ? 1.35 : 1.15);
+    const t = this._petDmgPool.get();
+    t.text = text;
+    t.anchor.set(0.5);
+    t.style.fontSize = kind === 'shield' ? 26 : (heavy ? 34 : 30);
+    t.style.fill = kind === 'shield' ? 0x8fd4ff : 0xff5252;
+    t.style.stroke = 0x101010;
+    t.style.strokeThickness = kind === 'shield' ? 5 : (heavy ? 7 : 6);
+    t.style.fontWeight = '900';
+    t.style.fontFamily = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
+    t.style.align = 'center';
+    this._floatLayer.addChild(t);
+    this._petDmgRuntimes.push({
+      ...createPetDamageFloatRuntime({
+        text: t,
+        baseX: x,
+        baseY: y,
+        baseScale,
+        styleKey: motionKey,
+        motion,
+      }),
+      scopeId: this._scopeId,
+      persistUntilDone: true,
+    });
+  }
+
+  /** 英雄回血 +N：帧动画 + 停留段，persistUntilDone 避免 scope 清理 */
+  spawnHeroHealFloat(amount: number, x: number, y: number): void {
+    if (amount <= 0) return;
+    const motion = DMG_MOTION.heroHeal;
+    const t = this._petDmgPool.get();
+    t.text = `+${amount}`;
+    t.anchor.set(0.5);
+    t.style.fontSize = 30;
+    t.style.fill = 0x6fd86a;
+    t.style.stroke = 0x101010;
+    t.style.strokeThickness = 6;
+    t.style.fontWeight = '900';
+    t.style.fontFamily = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
+    t.style.align = 'center';
+    this._floatLayer.addChild(t);
+    this._petDmgRuntimes.push({
+      ...createPetDamageFloatRuntime({
+        text: t,
+        baseX: x,
+        baseY: y,
+        baseScale: 1.12,
+        styleKey: 'heroHeal',
+        motion,
+      }),
+      scopeId: this._scopeId,
+      persistUntilDone: true,
+    });
+  }
+
   /** 宠物槽位伤害飘字（兼容旧路径） */
   spawnPetDamageFloat(opts: PetDamageFloatOpts): void {
     const {
@@ -321,18 +399,19 @@ export class BattleFx {
   }
 
   /**
-   * 本回合总伤害：敌人处总伤害 + 各宠物槽位累计伤害同步停留。
+   * 本回合总伤害：敌人处总伤害 + 各宠物槽位累计伤害（异步播放，不阻塞回合推进）。
    */
   showTurnTotalDamage(opts: TurnTotalDamageOpts): Promise<void> {
     const { total, combo, hitCount, x, y, enemyMaxHp, petSummaries = [] } = opts;
     if (total <= 0) return Promise.resolve();
 
+    this._clearTurnTotalFloats();
     this._clearScopePetDamageFloats();
 
     const tier = resolveTurnTotalTier(total, combo, hitCount, enemyMaxHp);
     const isHighTier = tier === 'mega' || tier === 'high';
     const styleKey = (isHighTier ? 'enemyHitCrit' : 'enemyHitMain') as 'enemyHitCrit' | 'enemyHitMain';
-    const motion = DMG_MOTION[styleKey];
+    const motion = DMG_MOTION.turnTotalSummary;
     const baseScale = PET_FLOAT_CFG.normalAtk.scale;
     const S = dmgFloatScale();
     const caption = '总伤害';
@@ -372,6 +451,7 @@ export class BattleFx {
         }),
         scopeId: this._scopeId,
         onDone: done,
+        persistUntilDone: true,
       });
       this._petDmgRuntimes.push({
         ...createPetDamageFloatRuntime({
@@ -381,15 +461,27 @@ export class BattleFx {
         }),
         scopeId: this._scopeId,
         onDone: done,
+        persistUntilDone: true,
       });
     });
+  }
+
+  /** 清掉上一段仍在播放的回合总伤（含槽位 recap） */
+  private _clearTurnTotalFloats(): void {
+    for (let i = this._petDmgRuntimes.length - 1; i >= 0; i--) {
+      const rt = this._petDmgRuntimes[i];
+      if (!rt.persistUntilDone) continue;
+      this._petDmgPool.release(rt.text);
+      rt.onDone?.();
+      this._petDmgRuntimes.splice(i, 1);
+    }
   }
 
   /** 清除当前 scope 内已有槽位/总伤飘字，为回合汇总让路 */
   private _clearScopePetDamageFloats(): void {
     for (let i = this._petDmgRuntimes.length - 1; i >= 0; i--) {
       const rt = this._petDmgRuntimes[i];
-      if (rt.scopeId !== this._scopeId) continue;
+      if (rt.persistUntilDone || rt.scopeId !== this._scopeId) continue;
       this._petDmgPool.release(rt.text);
       rt.onDone?.();
       this._petDmgRuntimes.splice(i, 1);
@@ -400,7 +492,7 @@ export class BattleFx {
   private _pushTurnRecapFloat(pet: TurnPetDamageSummary, onDone: () => void): void {
     const anchor = petSlotDamageAnchor(pet.slotX, pet.slotY, 'main');
     const styleKey = pet.isCrit ? 'slotDamageCrit' : 'slotDamageRecap';
-    const motion = DMG_MOTION[styleKey === 'slotDamageCrit' ? 'slotDamageCrit' : 'slotDamageRecap'];
+    const motion = DMG_MOTION.turnTotalSummary;
     const baseScale = PET_FLOAT_CFG.normalAtk.scale * 1.04;
     const t = this._petDmgPool.get();
     t.text = buildPetDmgLabel(pet.element, pet.damage);
@@ -417,6 +509,7 @@ export class BattleFx {
       }),
       scopeId: this._scopeId,
       onDone,
+      persistUntilDone: true,
     });
   }
 
@@ -588,6 +681,83 @@ export class BattleFx {
    * 光环扩散（pkg-fx aura_ring，ADD 混合）：buff / 治疗 / 护盾类技能的我方反馈。
    * 贴图未加载时降级为上升粒子 burst。
    */
+  /**
+   * 英雄受击冲击（敌人弹道命中血条）：属性星爆 + 红橙扩散环 + 火花飞溅。
+   * 比纯粒子 burst 更显眼，便于感知「被打到了」。
+   */
+  spawnHeroHitImpact(x: number, y: number, element: Element, heavy = false): void {
+    const elColor = ORB_COLOR[element];
+    const impactColor = heavy ? 0xff1744 : 0xff5252;
+    this.spawnStarburst(x, y, impactColor);
+    this.spawnAuraRing(x, y, heavy ? 0xff5722 : 0xff7043);
+    this.burst({
+      x, y,
+      color: elColor,
+      count: heavy ? 14 : 10,
+      speed: heavy ? 420 : 320,
+      size: heavy ? 18 : 14,
+      life: 0.45,
+    });
+    this.burst({
+      x, y,
+      color: impactColor,
+      count: heavy ? 10 : 7,
+      speed: 260,
+      size: heavy ? 14 : 11,
+      life: 0.38,
+    });
+    this._spawnSparkBurst(x, y, heavy ? 8 : 5, impactColor);
+  }
+
+  /** 护盾全挡：蓝色护环 + 轻量火花（仍要有受击反馈） */
+  spawnHeroShieldImpact(x: number, y: number): void {
+    this.spawnAuraRing(x, y, 0x8fd4ff);
+    this.burst({
+      x, y,
+      color: 0x8fd4ff,
+      count: 10,
+      speed: 220,
+      size: 14,
+      life: 0.36,
+    });
+    this._spawnSparkBurst(x, y, 4, 0xb3e5fc);
+  }
+
+  /** particleSpark 贴图散射（无贴图时降级为 burst） */
+  private _spawnSparkBurst(x: number, y: number, count: number, color: number): void {
+    const tex = TextureCache.get(UI_FX_IMAGES.particleSpark);
+    if (!tex) {
+      this.burst({ x, y, color, count, speed: 340, size: 12, life: 0.32 });
+      return;
+    }
+    for (let i = 0; i < count; i++) {
+      const sp = new PIXI.Sprite(tex);
+      sp.anchor.set(0.5);
+      sp.tint = color;
+      sp.blendMode = PIXI.BLEND_MODES.ADD;
+      sp.position.set(x, y);
+      setScaleSafe(sp, 0.35 + Math.random() * 0.25);
+      sp.alpha = 0.95;
+      this._scopeChildren.set(sp, this._scopeId);
+      this._fx.container.addChild(sp);
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
+      const dist = 50 + Math.random() * 40;
+      const targetX = x + Math.cos(angle) * dist;
+      const targetY = y + Math.sin(angle) * dist - 20;
+      const cleanup = once(() => {
+        this._scopeChildren.delete(sp);
+        if (displayAlive(sp)) sp.destroy();
+      });
+      void guardedTween({
+        target: sp,
+        props: { x: targetX, y: targetY, alpha: 0 },
+        duration: 0.32 + Math.random() * 0.12,
+        ease: Ease.easeOutQuad,
+        onComplete: cleanup,
+      }, { onFallback: cleanup });
+    }
+  }
+
   spawnAuraRing(x: number, y: number, color: number): void {
     const tex = TextureCache.get(UI_FX_IMAGES.auraRing);
     if (!tex) {

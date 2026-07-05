@@ -131,5 +131,6 @@ export const GROWTH = {
     chapterGrowthHp: POWER_CURVE.enemy.chapterGrowthHp,
     chapterGrowthAtk: POWER_CURVE.enemy.chapterGrowthAtk,
     chapterGrowthDef: POWER_CURVE.enemy.chapterGrowthDef,
+    initialAttackCountdown: POWER_CURVE.enemy.initialAttackCountdown,
   },
 } as const;

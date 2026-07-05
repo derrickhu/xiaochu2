@@ -17,7 +17,7 @@ export interface WaveComputed {
 
 export function computeStageWaves(stage: StageDef): WaveComputed[] {
   return stage.encounters.map((ref, i) => {
-    const { def, captureCreatureId } = resolveEncounter(ref);
+    const { def, bossDropPetId } = resolveEncounter(ref);
     const stats = enemyStats(def, stage.chapter, stage.difficulty);
     const label = ref.kind === 'mob'
       ? `杂怪 ${def.name}`
@@ -28,14 +28,14 @@ export function computeStageWaves(stage: StageDef): WaveComputed[] {
       hp: stats.hp,
       atk: stats.atk,
       def: stats.def,
-      capture: !!captureCreatureId,
+      capture: !!bossDropPetId,
     };
   });
 }
 
 export function formatWaves(waves: WaveComputed[]): string {
   return waves.map((w) =>
-    `#${w.index} ${w.label}${w.capture ? ' [收录]' : ''} HP${w.hp} ATK${w.atk} DEF${w.def}`,
+    `#${w.index} ${w.label}${w.capture ? ' [Boss掉]' : ''} HP${w.hp} ATK${w.atk} DEF${w.def}`,
   ).join('\n');
 }
 

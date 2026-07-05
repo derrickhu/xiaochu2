@@ -34,15 +34,15 @@ function designScale(w: number): number {
   return w / 375;
 }
 
-/** 图鉴三态：已拥有 / 已收录可获取 / 未收录 */
-type CodexState = 'owned' | 'discovered' | 'unknown';
+/** 图鉴两态：已拥有 / 未获得 */
+type CodexState = 'owned' | 'locked';
 
-/** 某生物的收录入口：其 tier2 captureUnlock 遭遇所在关卡（取首个） */
-const CAPTURE_STAGE: ReadonlyMap<string, { name: string; chapter: number }> = (() => {
+/** 章 Boss 直掉入口：其 tier2 bossDrop 遭遇所在关卡（取首个） */
+const BOSS_DROP_STAGE: ReadonlyMap<string, { name: string; chapter: number }> = (() => {
   const m = new Map<string, { name: string; chapter: number }>();
   for (const s of STAGES) {
     for (const e of s.encounters) {
-      if (e.kind === 'creature' && e.tier === 'tier2' && e.captureUnlock && !m.has(e.id)) {
+      if (e.kind === 'creature' && e.tier === 'tier2' && e.bossDrop && !m.has(e.id)) {
         m.set(e.id, { name: s.name, chapter: s.chapter });
       }
     }
@@ -76,7 +76,7 @@ export class CodexScene implements Scene {
     PlayerData.load();
     const codexLingyu = PlayerData.claimCodexMilestones();
     if (codexLingyu > 0) {
-      Platform.showToast(`收录里程碑达成 · 灵玉 +${codexLingyu}`);
+      Platform.showToast(`图鉴里程碑达成 · 灵玉 +${codexLingyu}`);
     }
     void this._enter(this._enterSeq.next());
   }
@@ -137,9 +137,8 @@ export class CodexScene implements Scene {
     expRow.position.set(w / 2 - expRow.width / 2, Game.safeTop + 82);
     this.container.addChild(expRow);
 
-    const discoveredCount = PETS.filter((p) => PlayerData.isDiscovered(p.id)).length;
     const countText = makeText(
-      `已拥有 ${PlayerData.ownedPets.length} · 已收录 ${discoveredCount} / 共 ${PETS.length} 只 · 点击查看`,
+      `已拥有 ${PlayerData.ownedPets.length} / 共 ${PETS.length} 只 · 点击查看`,
       { size: FONT_SIZE.xs, fill: COLORS.accent, bold: true, anchor: 0.5 },
     );
     countText.position.set(w / 2, Game.safeTop + 118);
@@ -148,7 +147,7 @@ export class CodexScene implements Scene {
     this._buildMilestoneBar(w, Game.safeTop + 148);
   }
 
-  /** 图鉴里程碑进度条：收录进度与灵玉奖励均在图鉴页结算 */
+  /** 图鉴里程碑进度条：拥有进度与灵玉奖励均在图鉴页结算 */
   private _buildMilestoneBar(w: number, y: number): void {
     const { inCycle, next, every, lingyu } = PlayerData.codexMilestoneProgress;
     const barW = Math.min(420, w * 0.7);
@@ -168,7 +167,7 @@ export class CodexScene implements Scene {
     this.container.addChild(g);
 
     const label = makeText(
-      `收录里程碑 ${inCycle}/${every} · 集满 ${next} 只奖励灵玉 ×${lingyu}`,
+      `图鉴里程碑 ${inCycle}/${every} · 集满 ${next} 只奖励灵玉 ×${lingyu}`,
       { size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: 0.5 },
     );
     label.position.set(w / 2, y + barH + 14);
@@ -208,15 +207,12 @@ export class CodexScene implements Scene {
     const { S, cols, cardGap, cardW, cardH, marginX } = petPoolGrid(w);
     const cardBgTex = TextureCache.get(UI_SCENE_IMAGES.petCardPortrait);
 
-    // 三态分组：已拥有 → 已收录可获取 → 未收录（按 PETS 顺序稳定）
+    // 两态分组：已拥有 → 未获得（按 PETS 顺序稳定）
     const stateOf = (p: PetDef): CodexState =>
-      PlayerData.isOwned(p.id) ? 'owned'
-        : PlayerData.isDiscovered(p.id) ? 'discovered'
-          : 'unknown';
+      PlayerData.isOwned(p.id) ? 'owned' : 'locked';
     const ordered = [
       ...PETS.filter((p) => stateOf(p) === 'owned'),
-      ...PETS.filter((p) => stateOf(p) === 'discovered'),
-      ...PETS.filter((p) => stateOf(p) === 'unknown'),
+      ...PETS.filter((p) => stateOf(p) === 'locked'),
     ];
 
     const content = new PIXI.Container();
@@ -239,7 +235,7 @@ export class CodexScene implements Scene {
       if (state === 'owned') {
         buildOwnedCodexCard(item, pet, cardW, cardH, S, cardBgTex);
       } else {
-        buildLockedCodexCard(item, pet, cardW, cardH, S, state);
+        buildLockedCodexCard(item, pet, cardW, cardH, S);
       }
 
       item.eventMode = 'static';
@@ -290,15 +286,15 @@ export class CodexScene implements Scene {
       SceneManager.switchTo('petDetail', { petId: pet.id } satisfies PetDetailEnterData);
       return;
     }
-    if (state === 'discovered') {
-      Platform.showToast('已收录 · 前往召唤或商店获取');
+    const drop = BOSS_DROP_STAGE.get(pet.id);
+    const where = drop
+      ? `${CHAPTER_NAME[drop.chapter] ?? `第${drop.chapter}章`} · ${drop.name}`
+      : null;
+    if (where) {
+      Platform.showToast(`未获得 · 通关「${where}」Boss 直得`);
       return;
     }
-    const cap = CAPTURE_STAGE.get(pet.id);
-    const where = cap
-      ? `${CHAPTER_NAME[cap.chapter] ?? `第${cap.chapter}章`} · ${cap.name}`
-      : '暂未开放获取';
-    Platform.showToast(cap ? `未收录 · 在「${where}」击败其高级形态即可收录` : `未收录 · ${where}`);
+    Platform.showToast('未获得 · 可通过召唤获取（UR 仅召唤）');
   }
 
 }

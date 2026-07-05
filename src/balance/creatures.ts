@@ -6,8 +6,7 @@
  * - 怪物面：monster.tier1（初级怪）/ monster.tier2（高级怪），各含战斗模板数值与敌人技能
  * - 四形态美术（约定）：宠物初始头像 / 宠物觉醒头像 / 初级怪全身 / 高级怪全身
  *
- * 获取闭环：关卡击败生物 tier2+captureUnlock → 收录进 PlayerData.discovered → 召唤/碎片拥有。
- * R 档开局即入召唤池（DEFAULT_SUMMON_POOL_R_IDS）；章节 Boss 收录 SR 及以上扩展池子。
+ * 获取闭环：开局 R 直给 + 章 Boss 直掉 SR/SSR + 灵玉召唤（含 UR）。
  *
  * pets.ts 仅作为本表「宠物面视图」，enemies.ts 的 MobDef 是不可收服的廉价杂怪，二者不混用。
  */
@@ -69,14 +68,14 @@ function monsterPair(
 ): { tier1: CreatureMonsterTier; tier2: CreatureMonsterTier } {
   const atkScale = opts.atkScale ?? 1;
   const t1Hp = Math.round(600 + rank * 70);
-  const t1Atk = Math.round((88 + rank * 5) * atkScale);
+  const t1Atk = Math.round((118 + rank * 7) * atkScale);
   const t1Def = Math.round(8 + rank * 2);
   return {
     tier1: {
       baseHp: t1Hp,
       baseAtk: t1Atk,
       baseDef: t1Def,
-      attackInterval: opts.ai1 ?? 2,
+      attackInterval: opts.ai1 ?? 1,
       skillIds: opts.t1Skills,
     },
     tier2: {
@@ -147,7 +146,7 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(6, { t2Skills: [E.golemGuard] }),
   },
   {
-    // 钥匙宠（Ch6 收录）：加时对抗 Ch6 时间压缩
+    // 钥匙宠（Ch6 Boss 掉落）：加时对抗 Ch6 时间压缩
     // 怪物面 = 第 6 章 Boss：首教「时间压缩」机制
     id: 'pet_010', name: '厚土娘娘', element: 'earth', rarity: 3, role: 'healer',
     skillId: PET_SKILL_IDS.earthTime,
@@ -159,7 +158,7 @@ export const CREATURES: readonly CreatureDef[] = [
   // ══════════════════════════════════════════════════════════════
   // ── 金 ──
   {
-    // 钥匙宠（Ch5 收录）：直伤 + 驱散，应对 Ch5 剧毒/禁疗
+    // 钥匙宠（Ch5 Boss 掉落）：直伤 + 驱散，应对 Ch5 剧毒/禁疗
     // 怪物面 = 第 5 章 Boss：首教「剧毒」机制
     id: 'pet_011', name: '金羽仙鹤', element: 'metal', rarity: 3, role: 'attacker',
     skillId: PET_SKILL_IDS.goldenCleanse,
@@ -176,12 +175,9 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(17, { t2Skills: [E.bladeCharge, E.golemGuard] }),
   },
   {
-    // 钥匙宠（Ch4 收录）：净化技解 Ch4/Ch5 的封珠与毒
-    // 怪物面 = 第 4 章 Boss：首教「敌人中途封珠」机制（tier1 铺垫、tier2 技能组）
-    // rank 按 powerBudget 护栏校准（第 4 章铺垫关较轻，Boss 波次相应收敛）
     id: 'pet_014', name: '玄影天鹏', element: 'metal', rarity: 4, role: 'support',
     skillId: PET_SKILL_IDS.shadowPurify,
-    monster: monsterPair(4, { t1Skills: [E.sealOrbs], t2Skills: [E.sealOrbs, E.bladeCharge, E.pandaGuard] }),
+    monster: monsterPair(14, { t2Skills: [E.sealOrbs, E.bladeCharge, E.pandaGuard] }),
   },
   // ── 木 ──
   {
@@ -190,9 +186,10 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(10, { t2Skills: [E.serpentHeal] }),
   },
   {
+    // 怪物面 = 第 8 章 Boss：首教「技能封印 + 狂暴」+ 封木规则
     id: 'pet_016', name: '昆仑玉蛟', element: 'wood', rarity: 3, role: 'attacker',
     skillId: PET_SKILL_IDS.woodVolley,
-    monster: monsterPair(12, { t2Skills: [E.lionCharge] }),
+    monster: monsterPair(16, { t1Skills: [E.enrage], t2Skills: [E.skillSeal, E.enrage, E.lionCharge] }),
   },
   {
     // 怪物面 = 第 1 章 Boss 波 2/3：rank 按 powerBudget 护栏（总量 ≈ 前关 3.5 倍）校准
@@ -238,13 +235,12 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(16, { t2Skills: [E.lionCharge] }),
   },
   {
+    // 怪物面 = 第 4 章 Boss：首教「敌人中途封珠」；rank 按 powerBudget 护栏校准
     id: 'pet_025', name: '星河烛龙', element: 'fire', rarity: 3, role: 'support',
     skillId: PET_SKILL_IDS.fireBoost,
-    monster: monsterPair(18, { t2Skills: [E.lionCharge, E.pandaGuard] }),
+    monster: monsterPair(4, { t1Skills: [E.sealOrbs], t2Skills: [E.sealOrbs, E.bladeCharge, E.pandaGuard] }),
   },
   {
-    // 钥匙宠（Ch8 收录）：重力 + 爆发，速杀 Ch8 狂暴 Boss
-    // 怪物面 = 第 8 章 Boss：首教「技能封印 + 狂暴」复合机制（终章压轴）
     id: 'pet_026', name: '天外魔君', element: 'fire', rarity: 4, role: 'attacker',
     skillId: PET_SKILL_IDS.skyfallGravity,
     monster: monsterPair(16, { t1Skills: [E.enrage], t2Skills: [E.skillSeal, E.enrage, E.lionCharge] }),
@@ -256,23 +252,22 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(11, { t2Skills: [E.golemGuard] }),
   },
   {
-    // 钥匙宠（Ch3 收录）：大护盾扛 Ch4 敌人封珠期的输出真空
+    // 钥匙宠（Ch3 Boss 掉落）：大护盾扛 Ch4 敌人封珠期的输出真空
     // 怪物面 = 第 3 章 Boss 波 2/3：rank 按 powerBudget 护栏校准
     id: 'pet_028', name: '归墟玄龟', element: 'earth', rarity: 3, role: 'tank',
     skillId: PET_SKILL_IDS.abyssBulwark,
     monster: monsterPair(9, { atkScale: 6, t2Skills: [E.golemGuard, E.lionCharge] }),
   },
   {
+    // 怪物面 = 第 7 章 Boss：首教「禁疗」；rank 按 powerBudget 护栏校准
     id: 'pet_029', name: '星轮机关兽', element: 'earth', rarity: 3, role: 'support',
     skillId: PET_SKILL_IDS.earthHeartConvert,
-    monster: monsterPair(17, { t2Skills: [E.golemGuard] }),
+    monster: monsterPair(5, { t1Skills: [E.healBlock], t2Skills: [E.healBlock, E.golemGuard, E.bladeCharge] }),
   },
   {
-    // 钥匙宠（Ch7 收录）：护盾+威吓，应对 Ch7 禁疗环境（回不了血就少掉血）
-    // 怪物面 = 第 7 章 Boss：首教「禁疗」机制（与禁心规则复合）
     id: 'pet_030', name: '裂隙甲虫', element: 'earth', rarity: 4, role: 'tank',
     skillId: PET_SKILL_IDS.riftShield,
-    monster: monsterPair(5, { t1Skills: [E.healBlock], t2Skills: [E.healBlock, E.golemGuard, E.bladeCharge] }),
+    monster: monsterPair(17, { t2Skills: [E.healBlock, E.golemGuard, E.bladeCharge] }),
   },
 ];
 
@@ -284,7 +279,7 @@ export const CREATURE_IDS: readonly string[] = CREATURES.map((c) => c.id);
 
 /**
  * 初始赠送阵容（五行各 1，新 10 只中每属性较低稀有度的一只）。
- * 建档/迁移时同时写入 ownedPets / discovered / team（开场师门契约登记，直给）。
+ * 建档/迁移时同时写入 ownedPets / team（开场师门契约登记，直给）。
  */
 export const STARTER_CREATURE_IDS: readonly string[] = [
   'pet_001',

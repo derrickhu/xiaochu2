@@ -161,7 +161,7 @@ function buildStageNode(
   wrap.addChild(nameText);
 
   if (stage.isBoss) {
-    const cap = makeText('收录', {
+    const cap = makeText('掉落', {
       size: FONT_SIZE.xxs, fill: COLORS.accent, bold: true, anchor: 0.5,
       strokeColor: 0x2a3444, strokeWidth: 2,
     });

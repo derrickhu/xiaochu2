@@ -1,5 +1,5 @@
 /**
- * 战斗结算浮层：胜/负面板、星级、奖励滚动入账、收录提示、卡关引导，以及失败/重试/下一关导航。
+ * 战斗结算浮层：胜/负面板、星级、奖励滚动入账、Boss 掉落提示、卡关引导，以及失败/重试/下一关导航。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -35,7 +35,7 @@ const WIN_GAP_TITLE_STARS = 50;
 const WIN_GAP_STARS_DETAIL = 42;
 const WIN_GAP_DETAIL_REWARDS = 40;
 const WIN_REWARD_ROW_GAP = 40;
-const WIN_GAP_REWARDS_DISCOVER = 20;
+const WIN_GAP_REWARDS_DROP = 20;
 const REWARD_ICON_SIZE = 36;
 const SHARD_ICON_SIZE = 40;
 
@@ -44,7 +44,7 @@ interface WinLayout {
   stars: number;
   detail: number;
   rewardYs: number[];
-  discover: number;
+  drop: number;
   progressHint: number;
   buttonYs: number[];
 }
@@ -62,13 +62,13 @@ export class BattleResultOverlay {
     const result = ctrl.finish(win);
     let milestoneLingyu = 0;
     let defeatRefund = 0;
-    const newlyDiscovered: string[] = [];
+    const newlyUnlocked: string[] = [];
     if (win) {
       milestoneLingyu = PlayerData.recordClear(ctrl.stage.id, result.stars, result.coins);
       PlayerData.addExp(result.exp);
       for (const s of result.shards) PlayerData.addShards(s.petId, s.count);
-      for (const cid of result.discoveredCreatures) {
-        if (PlayerData.discover(cid)) newlyDiscovered.push(cid);
+      for (const pid of result.bossDropPets) {
+        if (PlayerData.unlockPet(pid)) newlyUnlocked.push(pid);
       }
       BattleResultOverlay._failCounts.delete(ctrl.stage.id);
     } else {
@@ -104,7 +104,7 @@ export class BattleResultOverlay {
       ? this._computeWinLayout(panelH, {
         btnCount,
         rewardRowCount,
-        hasDiscover: newlyDiscovered.length > 0,
+        hasDrop: newlyUnlocked.length > 0,
         hasProgressHint: !!progressHintText,
       })
       : null;
@@ -114,7 +114,7 @@ export class BattleResultOverlay {
 
     if (win && winLayout) {
       this._buildWinContent(
-        panel, ctrl, result, milestoneLingyu, newlyDiscovered, progressHintText, winLayout,
+        panel, ctrl, result, milestoneLingyu, newlyUnlocked, progressHintText, winLayout,
       );
       this._buildNavButtons(panel, ctrl, win, winLayout.buttonYs);
     } else {
@@ -144,7 +144,7 @@ export class BattleResultOverlay {
   /** 奖励区自上而下排布，按钮贴金框底部 */
   private _computeWinLayout(
     panelH: number,
-    opts: { btnCount: number; rewardRowCount: number; hasDiscover: boolean; hasProgressHint: boolean },
+    opts: { btnCount: number; rewardRowCount: number; hasDrop: boolean; hasProgressHint: boolean },
   ): WinLayout {
     const half = panelH / 2;
     const innerTop = -half + panelH * FRAME_INSET_TOP;
@@ -171,15 +171,15 @@ export class BattleResultOverlay {
     const lastRewardY = rewardYs.length > 0
       ? rewardYs[rewardYs.length - 1]
       : detail;
-    const discover = opts.hasDiscover
-      ? lastRewardY + WIN_GAP_REWARDS_DISCOVER + 24
+    const drop = opts.hasDrop
+      ? lastRewardY + WIN_GAP_REWARDS_DROP + 24
       : lastRewardY;
-    const tailY = opts.hasDiscover ? discover + 52 : lastRewardY;
+    const tailY = opts.hasDrop ? drop + 52 : lastRewardY;
     const progressHint = opts.hasProgressHint
-      ? tailY + (opts.hasDiscover ? 16 : WIN_GAP_REWARDS_DISCOVER + 28)
+      ? tailY + (opts.hasDrop ? 16 : WIN_GAP_REWARDS_DROP + 28)
       : tailY;
 
-    return { title, stars, detail, rewardYs, discover, progressHint, buttonYs };
+    return { title, stars, detail, rewardYs, drop, progressHint, buttonYs };
   }
 
   private _placeIconRow(panel: PIXI.Container, row: IconLabelHandle, y: number): void {
@@ -222,7 +222,7 @@ export class BattleResultOverlay {
     ctrl: BattleController,
     result: ReturnType<BattleController['finish']>,
     milestoneLingyu: number,
-    newlyDiscovered: string[],
+    newlyUnlocked: string[],
     progressHintText: string | null,
     layout: WinLayout,
   ): void {
@@ -325,14 +325,14 @@ export class BattleResultOverlay {
       this._placeIconRow(panel, lingyuRow, nextRewardY());
     }
 
-    if (newlyDiscovered.length > 0) {
+    if (newlyUnlocked.length > 0) {
       const iconSize = 48;
       const gap = 10;
-      const rowW = newlyDiscovered.length * iconSize + (newlyDiscovered.length - 1) * gap;
+      const rowW = newlyUnlocked.length * iconSize + (newlyUnlocked.length - 1) * gap;
       let ix = -rowW / 2 + iconSize / 2;
-      const rowY = layout.discover;
-      for (const cid of newlyDiscovered) {
-        const tex = getPetAvatarTexture(cid, 1);
+      const rowY = layout.drop;
+      for (const pid of newlyUnlocked) {
+        const tex = getPetAvatarTexture(pid, 1);
         if (tex) {
           const sp = new PIXI.Sprite(tex);
           sp.anchor.set(0.5, 1);
@@ -350,17 +350,17 @@ export class BattleResultOverlay {
         ix += iconSize + gap;
       }
 
-      const names = newlyDiscovered.map((cid) => PET_MAP.get(cid)?.name ?? cid).join('、');
-      const discoverLine = new PIXI.Text(`${names} · 已进召唤池`, {
+      const names = newlyUnlocked.map((pid) => PET_MAP.get(pid)?.name ?? pid).join('、');
+      const dropLine = new PIXI.Text(`${names} · 获得灵宠`, {
         fontSize: 20, fill: COLORS.accentDeep, align: 'center', fontWeight: 'bold',
       });
-      discoverLine.anchor.set(0.5);
-      discoverLine.position.set(0, rowY + iconSize / 2 + 18);
-      discoverLine.alpha = 0;
-      panel.addChild(discoverLine);
+      dropLine.anchor.set(0.5);
+      dropLine.position.set(0, rowY + iconSize / 2 + 18);
+      dropLine.alpha = 0;
+      panel.addChild(dropLine);
 
       TweenManager.to({
-        target: discoverLine, props: { alpha: 1 },
+        target: dropLine, props: { alpha: 1 },
         duration: 0.35, delay: 0.65, ease: Ease.easeOutCubic,
       });
     }
