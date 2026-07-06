@@ -1,5 +1,9 @@
 # macOS
 .DS_Store
+__MACOSX/
+
+# 抖音开发者工具本地缓存
+.dy-game-cache/
 
 # Node
 node_modules/
