@@ -44,6 +44,8 @@ export interface SaveData {
   recruitedCount: number;
   /** 图鉴里程碑已结算到的拥有数（每 ECONOMY.milestone.codexEvery 只发灵玉） */
   codexRewarded: number;
+  /** 侧边栏复访奖励最后领取日期（YYYY-MM-DD，抖音必接） */
+  sidebarRewardDate: string;
 }
 
 /** 招募结果 */
@@ -77,6 +79,7 @@ export function initialData(): SaveData {
     recruitedCount: 0,
     // 初始阵容不计入里程碑，从后续新宠开始累计
     codexRewarded: DEFAULT_TEAM.length,
+    sidebarRewardDate: '',
   };
 }
 
@@ -102,6 +105,9 @@ export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown
     codexRewarded: typeof migrated.codexRewarded === 'number'
       ? migrated.codexRewarded
       : ownedCount,
+    sidebarRewardDate: typeof migrated.sidebarRewardDate === 'string'
+      ? migrated.sidebarRewardDate
+      : '',
   };
 }
 

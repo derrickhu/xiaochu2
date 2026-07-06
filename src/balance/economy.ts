@@ -36,6 +36,12 @@ export const ECONOMY = {
    */
   starUpShards: { 2: 20, 3: 50, 4: 120, 5: 300 } as Readonly<Record<number, number>>,
 
+  /** ── 抖音侧边栏复访（必接） ── */
+  sidebar: {
+    /** 每日从侧边栏进入可领灵玉 */
+    lingyuReward: 30,
+  },
+
   /** ── 体力 ── */
   stamina: {
     max: 100,

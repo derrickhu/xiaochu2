@@ -22,6 +22,8 @@ import { bindPointerTap } from '@/utils/bindPointerTap';
 import { buildTitleScreenWorld } from './chapterMapView';
 import { attachChapterMapEditor } from './chapterMapEditor';
 import { ensurePetAvatars, titleLeadPetAvatarEntry } from '@/config/assetPreload';
+import { SidebarEntryButton } from '@/ui/SidebarEntryButton';
+import { Platform } from '@/core/PlatformService';
 
 declare const GameGlobal: any;
 
@@ -136,7 +138,16 @@ export class TitleScene implements Scene {
 
     this._buildResourceBar(w, Game.safeTop + 36);
     this._buildChapterNav(w, Game.safeTop + 120);
+    this._buildSidebarEntry(w, h);
     this._buildBottomNav(w, h);
+  }
+
+  /** 抖音侧边栏复访入口（平台必接） */
+  private _buildSidebarEntry(w: number, h: number): void {
+    if (!Platform.isDouyin) return;
+    const reserve = TitleScene.BOTTOM_RESERVE;
+    const btn = new SidebarEntryButton(w - 56, h - reserve - 72);
+    this.container.addChild(btn);
   }
 
   private _buildResourceBar(w: number, y: number): void {

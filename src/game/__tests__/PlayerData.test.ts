@@ -148,3 +148,14 @@ describe('里程碑与货币', () => {
     expect(PlayerData.claimCodexMilestones()).toBe(0);
   });
 });
+
+describe('抖音侧边栏复访奖励', () => {
+  it('每日仅可领取一次灵玉', () => {
+    const before = PlayerData.lingyu;
+    expect(PlayerData.sidebarRewardClaimedToday).toBe(false);
+    expect(PlayerData.claimSidebarReward()).toBe(true);
+    expect(PlayerData.lingyu).toBe(before + ECONOMY.sidebar.lingyuReward);
+    expect(PlayerData.sidebarRewardClaimedToday).toBe(true);
+    expect(PlayerData.claimSidebarReward()).toBe(false);
+  });
+});

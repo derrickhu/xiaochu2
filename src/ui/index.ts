@@ -19,3 +19,5 @@ export * from './RarityVisual';
 export * from './RoleVisual';
 export * from './GrowthVisual';
 export * from './StatVisual';
+export * from './SidebarPanel';
+export * from './SidebarEntryButton';

@@ -5,6 +5,7 @@
  * 养成闭环单一真源：拥有/等级/星级/碎片只在此读写，UI 与战斗均读此处。
  */
 import { Platform } from '@/core/PlatformService';
+import { localDateKey } from '@/core/SidebarService';
 import { STAGES, type StageDef } from '@/balance/stages';
 import {
   PETS, PET_MAP, DEFAULT_TEAM, TEAM_SIZE,
@@ -401,6 +402,21 @@ class PlayerDataClass {
   isChapterUnlocked(chapter: number): boolean {
     const first = STAGES.find((s) => s.chapter === chapter && s.index === 1);
     return first ? this.isUnlocked(first) : false;
+  }
+
+  // ═══════════ 抖音侧边栏复访奖励 ═══════════
+
+  get sidebarRewardClaimedToday(): boolean {
+    return this._data.sidebarRewardDate === localDateKey();
+  }
+
+  /** 从侧边栏进入且今日未领 → 发放灵玉 */
+  claimSidebarReward(): boolean {
+    if (this.sidebarRewardClaimedToday) return false;
+    this._data.lingyu += ECONOMY.sidebar.lingyuReward;
+    this._data.sidebarRewardDate = localDateKey();
+    this._save();
+    return true;
   }
 
   /**

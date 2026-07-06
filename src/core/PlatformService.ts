@@ -179,6 +179,42 @@ class PlatformServiceClass {
       this._api?.onHide?.(handler);
     } catch (_) {}
   }
+
+  // ═══════════════ 抖音侧边栏复访 ═══════════════
+
+  /** 检测宿主是否支持指定场景（如 sidebar） */
+  checkScene(opts: {
+    scene: string;
+    success?: (res: { isExist?: boolean }) => void;
+    fail?: (err?: unknown) => void;
+  }): void {
+    try {
+      if (this._api?.checkScene) {
+        this._api.checkScene(opts);
+      } else {
+        opts.fail?.({ errMsg: 'checkScene not supported' });
+      }
+    } catch (e) {
+      opts.fail?.(e);
+    }
+  }
+
+  /** 跳转宿主场景（侧边栏复访必接） */
+  navigateToScene(opts: {
+    scene: string;
+    success?: () => void;
+    fail?: (err?: unknown) => void;
+  }): void {
+    try {
+      if (this._api?.navigateToScene) {
+        this._api.navigateToScene(opts);
+      } else {
+        opts.fail?.({ errMsg: 'navigateToScene not supported' });
+      }
+    } catch (e) {
+      opts.fail?.(e);
+    }
+  }
 }
 
 export const Platform = new PlatformServiceClass();

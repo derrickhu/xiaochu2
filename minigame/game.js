@@ -37,6 +37,37 @@ try { require('./share-bootstrap.js'); } catch (e) {
   console.error('[game.js] share-bootstrap 失败:', e);
 }
 
+// 侧边栏复访（抖音必接）：须在 bundle 加载前同步注册 onShow / checkScene
+(function () {
+  var P = typeof tt !== 'undefined' ? tt : (typeof wx !== 'undefined' ? wx : null);
+  if (typeof GameGlobal !== 'undefined') {
+    GameGlobal.__launchInfo = {};
+    GameGlobal.__sidebarSupported = false;
+  }
+  if (P && typeof P.onShow === 'function') {
+    P.onShow(function (res) {
+      console.log('[Sidebar] onShow:', JSON.stringify(res));
+      if (typeof GameGlobal !== 'undefined') {
+        GameGlobal.__launchInfo = res || {};
+      }
+    });
+  }
+  if (P && typeof P.checkScene === 'function') {
+    P.checkScene({
+      scene: 'sidebar',
+      success: function (res) {
+        if (typeof GameGlobal !== 'undefined') {
+          GameGlobal.__sidebarSupported = !!(res && res.isExist);
+        }
+        console.log('[Sidebar] checkScene supported:', GameGlobal.__sidebarSupported);
+      },
+      fail: function () {
+        if (typeof GameGlobal !== 'undefined') GameGlobal.__sidebarSupported = false;
+      },
+    });
+  }
+})();
+
 try {
   require('./pixi-adapter/index');
 } catch (e) {

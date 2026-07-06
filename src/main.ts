@@ -22,6 +22,7 @@ import { GMManager } from '@/core/GMManager';
 import { OverlayManager } from '@/core/OverlayManager';
 import { GMPanel } from '@/ui/GMPanel';
 import { GMEntryButton } from '@/ui/GMEntryButton';
+import { SidebarPanel } from '@/ui/SidebarPanel';
 
 declare const GameGlobal: any;
 
@@ -63,6 +64,10 @@ async function main(): Promise<void> {
   if (GMManager.isRuntimeAllowed) {
     OverlayManager.container.addChild(new GMPanel());
     OverlayManager.container.addChild(new GMEntryButton());
+  }
+
+  if (Platform.isDouyin) {
+    OverlayManager.container.addChild(new SidebarPanel());
   }
 
   await Game.warmScenePresent();
