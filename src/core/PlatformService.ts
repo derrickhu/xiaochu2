@@ -4,7 +4,8 @@
  * 业务侧跨平台 SDK 入口：所有 wx/tt 差异（存储、登录、分享、生命周期等）
  * 都必须走 Platform，禁止在业务里写 typeof wx / typeof tt。
  *
- * 抖音运行时同时注入 wx 兼容层 + tt 原生 API，识别顺序必须 tt 优先。
+ * 宿主识别：抖音注入 tt（可同时存在 wx 兼容层）；微信仅 wx。
+ * 检测到哪个宿主，就只绑定该宿主原生 API（抖音→tt，微信→wx），互不倒用。
  */
 
 declare const wx: any;
@@ -13,15 +14,24 @@ declare const tt: any;
 export type PlatformName = 'wechat' | 'douyin' | 'unknown';
 export type BackendPlatformCode = 'wx' | 'dy' | 'anon';
 
-/** 平台识别单一真源（PlatformService / 早期 patch 模块共用） */
+/** 检测当前小游戏宿主（单一真源，与 minigame/runtime.js 逻辑一致） */
+export function detectMinigamePlatform(): PlatformName {
+  if (typeof tt !== 'undefined') return 'douyin';
+  if (typeof wx !== 'undefined') return 'wechat';
+  return 'unknown';
+}
+
+/** 指定宿主的原生 API：抖音仅 tt，微信仅 wx */
+export function getNativePlatformApi(platform: PlatformName = detectMinigamePlatform()): any {
+  if (platform === 'douyin') return typeof tt !== 'undefined' ? tt : null;
+  if (platform === 'wechat') return typeof wx !== 'undefined' ? wx : null;
+  return null;
+}
+
+/** @deprecated 请用 detectMinigamePlatform + getNativePlatformApi */
 export function resolveMinigameRuntime(): { name: PlatformName; api: any } {
-  if (typeof tt !== 'undefined') {
-    return { name: 'douyin', api: tt };
-  }
-  if (typeof wx !== 'undefined') {
-    return { name: 'wechat', api: wx };
-  }
-  return { name: 'unknown', api: null };
+  const name = detectMinigamePlatform();
+  return { name, api: getNativePlatformApi(name) };
 }
 
 export function toBackendPlatformCode(name: PlatformName): BackendPlatformCode {
@@ -38,10 +48,9 @@ class PlatformServiceClass {
   private _api: any;
 
   constructor() {
-    const runtime = resolveMinigameRuntime();
-    this._api = runtime.api;
-    this.name = runtime.name;
-    console.log(`[Platform] 当前平台: ${this.name}`);
+    this.name = detectMinigamePlatform();
+    this._api = getNativePlatformApi(this.name);
+    console.log(`[Platform] 当前平台: ${this.name}, api=${this.name === 'douyin' ? 'tt' : this.name === 'wechat' ? 'wx' : 'none'}`);
   }
 
   /** 是否在小游戏环境中 */

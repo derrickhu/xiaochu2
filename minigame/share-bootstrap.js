@@ -5,7 +5,8 @@
  * bundle 加载后 ShareService.configureWechatShare 会通过 GameGlobal.__sharePayloadFn 升级分享文案。
  */
 (function () {
-  var api = typeof wx !== 'undefined' ? wx : (typeof tt !== 'undefined' ? tt : null);
+  var runtime = require('./runtime.js');
+  var api = runtime.getNativePlatformApi();
   if (!api) return;
 
   var g = typeof GameGlobal !== 'undefined' ? GameGlobal : {};

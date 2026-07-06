@@ -4,11 +4,11 @@
  */
 import { ShaderSystem, BaseImageResource, Texture, BaseTexture } from '@pixi/core';
 import { settings } from '@pixi/settings';
-import { resolveMinigameRuntime } from '@/core/PlatformService';
+import { getNativePlatformApi } from '@/core/PlatformService';
 
 declare const GameGlobal: any;
 
-const _api: any = resolveMinigameRuntime().api;
+const _api: any = getNativePlatformApi();
 if (_api) {
   try {
     let _useOffscreen = false;
@@ -142,7 +142,7 @@ Object.assign(ShaderSystem.prototype, {
 
 const _isRealDevice = (() => {
   try {
-    const p: any = resolveMinigameRuntime().api;
+    const p: any = getNativePlatformApi();
     if (!p) return false;
     return p.getSystemInfoSync().platform !== 'devtools';
   } catch { return false; }

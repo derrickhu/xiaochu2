@@ -1,3 +1,6 @@
+// 最早加载：宿主识别 + 原生 API 绑定（须在 share-bootstrap / bundle 之前）
+var _runtime = require('./runtime.js');
+
 // ====== 启动诊断（仅启动失败时弹窗，对齐 game2D_huahua）======
 var _diagMsgs = [];
 var _diagStart = Date.now();
@@ -8,7 +11,7 @@ function _diag(msg) {
 
 function _showDiag() {
   try {
-    var api = typeof wx !== 'undefined' ? wx : (typeof tt !== 'undefined' ? tt : null);
+    var api = _runtime.getNativePlatformApi();
     if (api && api.showModal) {
       var tail = _diagMsgs.length > 28 ? _diagMsgs.slice(-28) : _diagMsgs.slice();
       api.showModal({
@@ -39,7 +42,7 @@ try { require('./share-bootstrap.js'); } catch (e) {
 
 // 侧边栏复访（抖音必接）：须在 bundle 加载前同步注册 onShow / checkScene
 (function () {
-  var P = typeof tt !== 'undefined' ? tt : (typeof wx !== 'undefined' ? wx : null);
+  var P = _runtime.getNativePlatformApi();
   if (typeof GameGlobal !== 'undefined') {
     GameGlobal.__launchInfo = {};
     GameGlobal.__sidebarSupported = false;

@@ -6,7 +6,7 @@
 import * as PIXI from 'pixi.js';
 import { TweenManager } from './TweenManager';
 import { iosPlatform } from './webglContextPatch';
-import { Platform, resolveMinigameRuntime } from './PlatformService';
+import { Platform, getNativePlatformApi } from './PlatformService';
 import { UPDATE_PRIORITY } from '@pixi/ticker';
 
 declare const GameGlobal: any;
@@ -47,7 +47,7 @@ class GameClass {
   init(canvas: any): void {
     if (this._initialized) return;
 
-    const _api: any = resolveMinigameRuntime().api;
+    const _api: any = getNativePlatformApi();
     const sysInfo = _api?.getSystemInfoSync?.();
 
     if (sysInfo) {

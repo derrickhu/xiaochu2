@@ -1,11 +1,13 @@
 /**
  * 平台抽象层 - 统一微信/抖音小游戏 API
- * 识别顺序与 src/core/PlatformService.resolveMinigameRuntime 一致：tt 优先
+ * 宿主识别与 src/core/PlatformService 一致：检测到哪个平台就用哪个原生 API
  */
 
-const _isDouyin = typeof tt !== 'undefined';
-const _isWechat = !_isDouyin && typeof wx !== 'undefined';
-const _api = _isDouyin ? tt : _isWechat ? wx : null;
+const { detectMinigamePlatform, getNativePlatformApi } = require('../runtime.js');
+const _platformName = detectMinigamePlatform();
+const _api = getNativePlatformApi(_platformName);
+const _isDouyin = _platformName === 'douyin';
+const _isWechat = _platformName === 'wechat';
 
 if (!_api) {
   console.error('[platform] 未检测到小游戏运行环境（wx/tt）');
@@ -95,7 +97,7 @@ const platform = {
 
   createInnerAudioContext: () => _api && _api.createInnerAudioContext ? _api.createInnerAudioContext() : null,
 
-  name: _isWechat ? 'wechat' : _isDouyin ? 'douyin' : 'unknown',
+  name: _platformName,
   api: _api,
 };
 

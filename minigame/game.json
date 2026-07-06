@@ -1,6 +1,7 @@
 {
   "deviceOrientation": "portrait",
   "showStatusBar": false,
+  "usePrivacyCheck": true,
   "networkTimeout": {
     "request": 10000,
     "connectSocket": 10000,

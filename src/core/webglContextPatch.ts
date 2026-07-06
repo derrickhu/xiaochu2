@@ -6,10 +6,10 @@
  */
 import { ENV } from '@pixi/constants';
 import { settings } from '@pixi/settings';
-import { resolveMinigameRuntime } from '@/core/PlatformService';
+import { getNativePlatformApi } from '@/core/PlatformService';
 
 function platformApi(): any {
-  return resolveMinigameRuntime().api;
+  return getNativePlatformApi();
 }
 
 export function iosPlatform(): boolean {
