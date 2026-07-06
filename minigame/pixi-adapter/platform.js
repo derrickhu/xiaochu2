@@ -1,11 +1,11 @@
 /**
  * 平台抽象层 - 统一微信/抖音小游戏 API
- * 所有 adapter 模块通过此模块调用平台 API，不直接写 wx.xxx 或 tt.xxx
+ * 识别顺序与 src/core/PlatformService.resolveMinigameRuntime 一致：tt 优先
  */
 
-const _isWechat = typeof wx !== 'undefined';
 const _isDouyin = typeof tt !== 'undefined';
-const _api = _isWechat ? wx : _isDouyin ? tt : null;
+const _isWechat = !_isDouyin && typeof wx !== 'undefined';
+const _api = _isDouyin ? tt : _isWechat ? wx : null;
 
 if (!_api) {
   console.error('[platform] 未检测到小游戏运行环境（wx/tt）');

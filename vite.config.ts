@@ -2,6 +2,8 @@ import { defineConfig, type Plugin } from 'vite';
 import path from 'path';
 import fs from 'fs';
 
+const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')) as { version: string };
+
 /**
  * Vite 插件：构建后替换 bundle 中所有 ShaderSystem 的 systemCheck 方法体，
  * 使其不再抛出 unsafe-eval 错误。
@@ -28,6 +30,9 @@ function pixiUnsafeEvalPlugin(): Plugin {
 }
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

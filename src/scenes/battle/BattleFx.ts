@@ -610,15 +610,17 @@ export class BattleFx {
       let frame = 0;
       const complete = once(() => {
         TweenManager.cancelTarget(p);
-        this._fx.burst({
-          x: toX, y: toY, color,
-          count: heavy ? 10 : 6,
-          speed: heavy ? 320 : 240,
-          size: heavy ? 16 : 12,
-          life: 0.35,
-        });
         this._projectiles.delete(p);
-        p.destroy();
+        if (displayAlive(p)) {
+          this._fx.burst({
+            x: toX, y: toY, color,
+            count: heavy ? 10 : 6,
+            speed: heavy ? 320 : 240,
+            size: heavy ? 16 : 12,
+            life: 0.35,
+          });
+          p.destroy();
+        }
         resolve();
       });
       minigameFallback(duration, complete, 100);
@@ -626,6 +628,7 @@ export class BattleFx {
         target: p, props: { x: toX, y: toY },
         duration, ease: Ease.easeInQuad,
         onUpdate: () => {
+          if (!displayAlive(p)) return;
           if (++frame % 2 === 0) {
             this._fx.burst({
               x: p.x, y: p.y, color,

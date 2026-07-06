@@ -6,11 +6,9 @@
 import * as PIXI from 'pixi.js';
 import { TweenManager } from './TweenManager';
 import { iosPlatform } from './webglContextPatch';
-import { Platform } from './PlatformService';
+import { Platform, resolveMinigameRuntime } from './PlatformService';
 import { UPDATE_PRIORITY } from '@pixi/ticker';
 
-declare const wx: any;
-declare const tt: any;
 declare const GameGlobal: any;
 
 /** 小游戏真机 WebGL 初始化选项（对齐 game2D_huahua） */
@@ -49,7 +47,7 @@ class GameClass {
   init(canvas: any): void {
     if (this._initialized) return;
 
-    const _api: any = typeof wx !== 'undefined' ? wx : typeof tt !== 'undefined' ? tt : null;
+    const _api: any = resolveMinigameRuntime().api;
     const sysInfo = _api?.getSystemInfoSync?.();
 
     if (sysInfo) {

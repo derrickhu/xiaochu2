@@ -5,6 +5,7 @@
  * 养成闭环单一真源：拥有/等级/星级/碎片只在此读写，UI 与战斗均读此处。
  */
 import { Platform } from '@/core/PlatformService';
+import { PersistService } from '@/core/PersistService';
 import { localDateKey } from '@/core/SidebarService';
 import { STAGES, type StageDef } from '@/balance/stages';
 import {
@@ -26,6 +27,7 @@ import {
   type RecruitResult,
   type SaveData,
 } from './playerSave';
+import { DEV_LEGACY_SAVE_KEYS } from '@/config/CloudConfig';
 import {
   addLingyu as addLingyuToSave,
   gachaPoolPets as gachaPoolPetsFromSave,
@@ -45,21 +47,37 @@ class PlayerDataClass {
     if (this._loaded) return;
     this._loaded = true;
     try {
-      const raw = Platform.getStorageSync(SAVE_KEY);
-      if (raw) {
-        this._data = parseSaveData(JSON.parse(raw));
+      const parsed = PersistService.readJSON<unknown>(SAVE_KEY);
+      if (parsed) {
+        this._data = parseSaveData(parsed);
         return;
       }
-      // 旧档（v1）迁移：补出拥有系统，原队伍宠物保底入手
-      const legacy = Platform.getStorageSync(LEGACY_SAVE_KEY);
-      if (legacy) {
-        this._data = migrateLegacySave(JSON.parse(legacy));
+      const legacyParsed = PersistService.readJSON<unknown>(LEGACY_SAVE_KEY);
+      if (legacyParsed) {
+        this._data = migrateLegacySave(legacyParsed);
         this._save();
+        return;
+      }
+      for (const legacyKey of DEV_LEGACY_SAVE_KEYS) {
+        const devLegacy = PersistService.readJSON<unknown>(legacyKey);
+        if (devLegacy) {
+          this._data = parseSaveData(devLegacy);
+          this._save();
+          return;
+        }
       }
     } catch (e) {
       console.warn('[PlayerData] 存档解析失败，使用初始数据', e);
       this._data = initialData();
     }
+  }
+
+  /** 云端下行覆盖本地缓存后，重新灌入运行态 */
+  reloadFromStorage(reason = 'manual'): boolean {
+    console.warn(`[PlayerData] 重新载入存档 reason=${reason}`);
+    this._loaded = false;
+    this.load();
+    return true;
   }
 
   // ═══════════ 拥有 / 养成 ═══════════
@@ -443,7 +461,7 @@ class PlayerDataClass {
 
   private _save(): void {
     try {
-      Platform.setStorageAsync(SAVE_KEY, JSON.stringify(this._data));
+      PersistService.writeJSON(SAVE_KEY, this._data);
     } catch (_) {}
   }
 }

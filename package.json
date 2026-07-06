@@ -18,6 +18,7 @@
     "balance:dashboard:install": "./tools/balance-dashboard/start.sh install"
   },
   "dependencies": {
+    "@gp/analytics-sdk": "file:../game-analysis/packages/analytics-sdk",
     "@pixi/unsafe-eval": "^7.3.2",
     "pixi.js": "^7.3.2"
   },

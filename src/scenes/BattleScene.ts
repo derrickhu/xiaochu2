@@ -35,6 +35,7 @@ import { BattleStatusIcons } from './battle/BattleStatusIcons';
 import { BattlePetBar } from './battle/BattlePetBar';
 import { BattleResultOverlay } from './battle/BattleResultOverlay';
 import { presentSkillCast, type SkillCastDeps } from './battle/battleSkillPresenter';
+import { analytics } from '@/analytics';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 import {
   guardedPromise, guardedTween, minigameFallback, once, startMinigamePresentLoop,
@@ -113,6 +114,7 @@ export class BattleScene implements Scene {
   private _tickerCb = (): void => this._update();
   private readonly _enterSeq = new SceneEnterSeq();
   private readonly _gmInstantClear = (): string => this._executeGmInstantClear();
+  private _battleStartedAt = 0;
 
   onEnter(data?: unknown): void {
     PlayerData.load();
@@ -148,6 +150,8 @@ export class BattleScene implements Scene {
     deferSceneBuild(token, this._enterSeq, 'battle', () => {
       this._build();
       this._alive = true;
+      this._battleStartedAt = Date.now();
+      analytics.trackLevelStart(this._ctrl.stage.id, this._ctrl.stage.name);
       GMManager.registerInstantClearHandler(this._gmInstantClear);
       this._hud.refreshEnemy(false);
       this._hud.refreshHeroHp();
@@ -457,7 +461,7 @@ export class BattleScene implements Scene {
     while (this._ctrl.hasNextWave()) this._ctrl.nextWave();
     this._ctrl.enemy.hp = 0;
     this._settleBattleVisuals();
-    this._overlay.show(this._ctrl, true);
+    this._overlay.show(this._ctrl, true, this._battleStartedAt);
     return `已通关：${this._ctrl.stage.name}`;
   }
 
@@ -471,7 +475,7 @@ export class BattleScene implements Scene {
       await this._hud.playWaveEnter();
       return false;
     }
-    this._overlay.show(this._ctrl, true);
+    this._overlay.show(this._ctrl, true, this._battleStartedAt);
     await delay(0.3);
     return true;
   }
@@ -496,7 +500,7 @@ export class BattleScene implements Scene {
         await this._presentEnemyHeroDamage(result, heavy);
         if (isStale()) return;
         if (result.heroDead) {
-          this._overlay.show(this._ctrl, false);
+          this._overlay.show(this._ctrl, false, this._battleStartedAt);
           await delay(0.3);
           return;
         }
@@ -561,7 +565,7 @@ export class BattleScene implements Scene {
     }
     if (isStale()) return;
     if (result.heroDead) {
-      this._overlay.show(this._ctrl, false);
+      this._overlay.show(this._ctrl, false, this._battleStartedAt);
       await delay(0.3);
       return;
     }

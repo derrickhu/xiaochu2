@@ -19,6 +19,7 @@ import { COLORS } from '@/ui/theme';
 import type { BattleEnterData } from '../BattleScene';
 import type { TeamEnterData } from '../TeamScene';
 import { battleProgressHint } from './battleProgressHints';
+import { analytics } from '@/analytics';
 
 const PANEL_W = 560;
 const PANEL_H_DEFAULT = 820;
@@ -58,7 +59,7 @@ export class BattleResultOverlay {
     parent.addChild(this._overlayLayer);
   }
 
-  show(ctrl: BattleController, win: boolean): void {
+  show(ctrl: BattleController, win: boolean, battleStartedAt = 0): void {
     const result = ctrl.finish(win);
     let milestoneLingyu = 0;
     let defeatRefund = 0;
@@ -78,6 +79,23 @@ export class BattleResultOverlay {
         ctrl.stage.id,
         (BattleResultOverlay._failCounts.get(ctrl.stage.id) ?? 0) + 1,
       );
+    }
+
+    const durationMs = battleStartedAt > 0 ? Date.now() - battleStartedAt : 0;
+    if (win) {
+      analytics.trackLevelClear(ctrl.stage.id, {
+        durationMs,
+        turnsUsed: result.turnsUsed,
+        stars: result.stars,
+        stageName: ctrl.stage.name,
+      });
+    } else {
+      analytics.trackLevelFail(ctrl.stage.id, {
+        durationMs,
+        turnsUsed: result.turnsUsed,
+        reason: 'defeat',
+        stageName: ctrl.stage.name,
+      });
     }
 
     const w = Game.logicWidth;

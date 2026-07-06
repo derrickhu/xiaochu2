@@ -1,14 +1,34 @@
 /**
  * 平台服务抽象层 - 统一封装微信/抖音双平台 API
  *
- * 所有平台特有调用（存储、振动、分享等）都通过本模块统一访问，
- * src/ 中不再需要各自 declare const wx / tt。
+ * 业务侧跨平台 SDK 入口：所有 wx/tt 差异（存储、登录、分享、生命周期等）
+ * 都必须走 Platform，禁止在业务里写 typeof wx / typeof tt。
+ *
+ * 抖音运行时同时注入 wx 兼容层 + tt 原生 API，识别顺序必须 tt 优先。
  */
 
 declare const wx: any;
 declare const tt: any;
 
 export type PlatformName = 'wechat' | 'douyin' | 'unknown';
+export type BackendPlatformCode = 'wx' | 'dy' | 'anon';
+
+/** 平台识别单一真源（PlatformService / 早期 patch 模块共用） */
+export function resolveMinigameRuntime(): { name: PlatformName; api: any } {
+  if (typeof tt !== 'undefined') {
+    return { name: 'douyin', api: tt };
+  }
+  if (typeof wx !== 'undefined') {
+    return { name: 'wechat', api: wx };
+  }
+  return { name: 'unknown', api: null };
+}
+
+export function toBackendPlatformCode(name: PlatformName): BackendPlatformCode {
+  if (name === 'douyin') return 'dy';
+  if (name === 'wechat') return 'wx';
+  return 'anon';
+}
 
 class PlatformServiceClass {
   /** 当前平台名 */
@@ -18,16 +38,10 @@ class PlatformServiceClass {
   private _api: any;
 
   constructor() {
-    if (typeof wx !== 'undefined') {
-      this._api = wx;
-      this.name = 'wechat';
-    } else if (typeof tt !== 'undefined') {
-      this._api = tt;
-      this.name = 'douyin';
-    } else {
-      this._api = null;
-      this.name = 'unknown';
-    }
+    const runtime = resolveMinigameRuntime();
+    this._api = runtime.api;
+    this.name = runtime.name;
+    console.log(`[Platform] 当前平台: ${this.name}`);
   }
 
   /** 是否在小游戏环境中 */
@@ -41,6 +55,16 @@ class PlatformServiceClass {
 
   get isDouyin(): boolean {
     return this.name === 'douyin';
+  }
+
+  /** 后端 login 接口 platform 字段（wx / dy / anon） */
+  get backendPlatformCode(): BackendPlatformCode {
+    return toBackendPlatformCode(this.name);
+  }
+
+  /** 是否具备 HTTP 能力（小游戏 request 或浏览器 fetch） */
+  get canUseBackend(): boolean {
+    return typeof this._api?.request === 'function' || typeof fetch === 'function';
   }
 
   /** 开发者工具（非真机） */
@@ -89,6 +113,113 @@ class PlatformServiceClass {
     try {
       this._api?.removeStorageSync(key);
     } catch (_) {}
+  }
+
+  getSystemInfoSync(): Record<string, unknown> {
+    try {
+      return this._api?.getSystemInfoSync?.() ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** 经分 SDK / 后端 HTTP 请求（Promise 风格） */
+  request(opts: {
+    url: string;
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+    data?: unknown;
+    headers?: Record<string, string>;
+    timeoutMs?: number;
+  }): Promise<{ statusCode: number; data: unknown }> {
+    const method = (opts.method || 'POST').toUpperCase();
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      ...(opts.headers || {}),
+    };
+    const timeoutMs = opts.timeoutMs && opts.timeoutMs > 0 ? opts.timeoutMs : 10000;
+    const payload = opts.data === undefined || typeof opts.data === 'string'
+      ? opts.data
+      : JSON.stringify(opts.data);
+
+    if (this._api?.request) {
+      return new Promise((resolve, reject) => {
+        let done = false;
+        const timer = setTimeout(() => {
+          if (done) return;
+          done = true;
+          reject(new Error(`request timeout: ${opts.url}`));
+        }, timeoutMs);
+        try {
+          this._api.request({
+            url: opts.url,
+            method,
+            data: payload,
+            header: headers,
+            timeout: timeoutMs,
+            success: (res: { statusCode?: number; data?: unknown }) => {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              resolve({ statusCode: res?.statusCode ?? 0, data: res?.data });
+            },
+            fail: (err: unknown) => {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              reject(err);
+            },
+          });
+        } catch (e) {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            reject(e);
+          }
+        }
+      });
+    }
+
+    if (typeof fetch === 'function') {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      return fetch(opts.url, {
+        method,
+        headers,
+        body: payload as BodyInit | undefined,
+        signal: controller.signal,
+      })
+        .then(async (res) => {
+          clearTimeout(timer);
+          const text = await res.text();
+          let data: unknown = text;
+          try { data = text ? JSON.parse(text) : null; } catch { /* keep text */ }
+          return { statusCode: res.status, data };
+        })
+        .catch((e) => {
+          clearTimeout(timer);
+          throw e;
+        });
+    }
+
+    return Promise.reject(new Error('no http transport available'));
+  }
+
+  /** 平台登录 code（wx.login / tt.login） */
+  loginCode(): Promise<string> {
+    return new Promise((resolve) => {
+      if (!this._api?.login) {
+        resolve('');
+        return;
+      }
+      try {
+        this._api.login({
+          success: (res: { code?: string }) => resolve(res?.code || ''),
+          fail: () => resolve(''),
+        });
+      } catch {
+        resolve('');
+      }
+    });
   }
 
   // ═══════════════ 创建资源 ═══════════════

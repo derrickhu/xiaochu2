@@ -6,12 +6,10 @@
  */
 import { ENV } from '@pixi/constants';
 import { settings } from '@pixi/settings';
-
-declare const wx: any;
-declare const tt: any;
+import { resolveMinigameRuntime } from '@/core/PlatformService';
 
 function platformApi(): any {
-  return typeof wx !== 'undefined' ? wx : typeof tt !== 'undefined' ? tt : null;
+  return resolveMinigameRuntime().api;
 }
 
 export function iosPlatform(): boolean {

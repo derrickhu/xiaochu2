@@ -10,8 +10,13 @@ import { migrateCreatureId } from '@/balance/creatureIdMigration';
 import { getStarProfile } from '@/balance/growth';
 import { ECONOMY } from '@/balance/economy';
 
-export const SAVE_KEY = 'xiaochu2_save_v2';
-export const LEGACY_SAVE_KEY = 'xiaochu2_save_v1';
+import {
+  DEV_LEGACY_SAVE_KEYS,
+  LEGACY_SAVE_KEY,
+  SAVE_KEY,
+} from '@/config/CloudConfig';
+
+export { SAVE_KEY, LEGACY_SAVE_KEY } from '@/config/CloudConfig';
 export const SAVE_VERSION = 4;
 
 /** 单只灵宠的养成进度 */
