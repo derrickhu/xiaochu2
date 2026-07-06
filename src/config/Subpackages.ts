@@ -1,5 +1,5 @@
 /**
- * 微信小游戏分包配置与按需加载。
+ * 小游戏分包配置与按需加载（微信 wx.loadSubpackage / 抖音 tt.loadSubpackage 通用）。
  *
  * 资源路径前缀与 scripts/organize-subpackages.mjs 目录结构一致。
  */
@@ -17,8 +17,8 @@ export const SUBPACKAGE_ROOT = {
 
 export type SubpackageName = keyof typeof SUBPACKAGE_ROOT;
 
-/** 与 minigame/game.json subpackages[].name 一致 */
-const WX_SUBPACKAGE_NAME: Record<SubpackageName, string> = {
+/** 与 minigame/game.json subpackages[].name / subPackages[].name 一致 */
+const PLATFORM_SUBPACKAGE_NAME: Record<SubpackageName, string> = {
   pet: 'pkg-pet',
   enemy: 'pkg-enemy',
   enemyCr: 'pkg-enemy-cr',
@@ -50,8 +50,8 @@ export function loadSubpackage(name: SubpackageName): Promise<void> {
     loaded.add(name);
     return Promise.resolve();
   }
-  const wxApi = (globalThis as { wx?: WechatMinigame.Wx }).wx;
-  const loadPkg = wxApi?.loadSubpackage;
+  const api = Platform.api;
+  const loadPkg = api?.loadSubpackage;
   if (!loadPkg) {
     loaded.add(name);
     return Promise.resolve();
@@ -65,18 +65,18 @@ export function loadSubpackage(name: SubpackageName): Promise<void> {
       fn();
     };
     const timer = setTimeout(() => {
-      const err = new Error(`[Subpackage] 加载超时 ${WX_SUBPACKAGE_NAME[name]}`);
+      const err = new Error(`[Subpackage] 加载超时 ${PLATFORM_SUBPACKAGE_NAME[name]}`);
       console.error(err.message);
       finish(() => reject(err));
     }, 45000);
-    loadPkg.call(wxApi, {
-      name: WX_SUBPACKAGE_NAME[name],
+    loadPkg.call(api, {
+      name: PLATFORM_SUBPACKAGE_NAME[name],
       success: () => {
         loaded.add(name);
         finish(resolve);
       },
-      fail: (err) => {
-        console.error(`[Subpackage] 加载失败 ${WX_SUBPACKAGE_NAME[name]}`, err);
+      fail: (err: unknown) => {
+        console.error(`[Subpackage] 加载失败 ${PLATFORM_SUBPACKAGE_NAME[name]}`, err);
         finish(() => reject(err));
       },
     });

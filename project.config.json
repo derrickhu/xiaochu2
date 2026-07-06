@@ -32,7 +32,11 @@
   "description": "灵宠消消塔 2",
   "simulatorPluginLibVersion": {},
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      { "type": "file", "value": "project.config.json" },
+      { "type": "file", "value": "project.private.config.json" }
+    ],
     "include": []
-  }
+  },
+  "projectname": "灵宠消消塔"
 }

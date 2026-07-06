@@ -14,5 +14,13 @@
     { "name": "pkg-scene", "root": "subpackages/pkg-scene" },
     { "name": "pkg-fx", "root": "subpackages/pkg-fx" },
     { "name": "pkg-audio", "root": "subpackages/pkg-audio" }
+  ],
+  "subPackages": [
+    { "name": "pkg-pet", "root": "subpackages/pkg-pet/" },
+    { "name": "pkg-enemy", "root": "subpackages/pkg-enemy/" },
+    { "name": "pkg-enemy-cr", "root": "subpackages/pkg-enemy-cr/" },
+    { "name": "pkg-scene", "root": "subpackages/pkg-scene/" },
+    { "name": "pkg-fx", "root": "subpackages/pkg-fx/" },
+    { "name": "pkg-audio", "root": "subpackages/pkg-audio/" }
   ]
 }

@@ -3,31 +3,31 @@
 exports[`enemyStats > 敌人曲线快照（1~5 章基准数值） 1`] = `
 [
   {
-    "atk": 95,
+    "atk": 155,
     "chapter": 1,
     "def": 12,
     "hp": 620,
   },
   {
-    "atk": 127,
+    "atk": 213,
     "chapter": 2,
     "def": 15,
     "hp": 868,
   },
   {
-    "atk": 170,
+    "atk": 295,
     "chapter": 3,
     "def": 19,
     "hp": 1215,
   },
   {
-    "atk": 228,
+    "atk": 407,
     "chapter": 4,
     "def": 25,
     "hp": 1701,
   },
   {
-    "atk": 306,
+    "atk": 562,
     "chapter": 5,
     "def": 32,
     "hp": 2381,
