@@ -11,7 +11,7 @@ import { registerCanvasTap } from './canvasTapRouter';
 export function bindPointerTap(
   target: PIXI.Container,
   fn: () => void,
-  opts?: { guard?: () => boolean; blockTap?: () => boolean },
+  opts?: { guard?: () => boolean; blockTap?: () => boolean; sync?: boolean },
 ): void {
   let fired = false;
   const run = (): void => {
@@ -19,6 +19,11 @@ export function bindPointerTap(
     if (opts?.guard && !opts.guard()) return;
     if (opts?.blockTap?.()) return;
     fired = true;
+    if (opts?.sync) {
+      try { fn(); } catch (err) { console.error('[bindPointerTap sync]', err); }
+      fired = false;
+      return;
+    }
     deferAfterPointerEvent(() => {
       fired = false;
       fn();
@@ -34,6 +39,7 @@ export function bindPointerTap(
       fn: run,
       guard: opts?.guard,
       blockTap: opts?.blockTap,
+      sync: opts?.sync,
     });
     return;
   }

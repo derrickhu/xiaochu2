@@ -355,6 +355,44 @@ class PlatformServiceClass {
       opts.fail?.(e);
     }
   }
+
+  // ═══════════════ 抖音添加到桌面（广告金政策必接） ═══════════════
+
+  /** 检查桌面快捷方式是否已添加（仅 Android 有效） */
+  checkShortcut(opts: {
+    success?: (res: { status?: { exist?: boolean; needUpdate?: boolean } }) => void;
+    fail?: (err?: unknown) => void;
+  }): void {
+    try {
+      if (this._api?.checkShortcut) {
+        this._api.checkShortcut(opts);
+      } else {
+        opts.fail?.({ errMsg: 'checkShortcut not supported' });
+      }
+    } catch (e) {
+      opts.fail?.(e);
+    }
+  }
+
+  /**
+   * 添加小游戏到手机桌面（须在用户点击/touchend 内同步调用）
+   * 仅支持抖音 / 抖音极速版 / 抖音火山版
+   */
+  addShortcut(opts: {
+    success?: () => void;
+    fail?: (err?: { errMsg?: string }) => void;
+    complete?: () => void;
+  }): void {
+    try {
+      if (this._api?.addShortcut) {
+        this._api.addShortcut(opts);
+      } else {
+        opts.fail?.({ errMsg: 'addShortcut not supported' });
+      }
+    } catch (e) {
+      opts.fail?.(e as { errMsg?: string });
+    }
+  }
 }
 
 export const Platform = new PlatformServiceClass();

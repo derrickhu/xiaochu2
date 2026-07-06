@@ -21,3 +21,5 @@ export * from './GrowthVisual';
 export * from './StatVisual';
 export * from './SidebarPanel';
 export * from './SidebarEntryButton';
+export * from './DesktopShortcutPanel';
+export * from './DesktopShortcutEntryButton';

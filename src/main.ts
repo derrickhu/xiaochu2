@@ -28,6 +28,7 @@ import { OverlayManager } from '@/core/OverlayManager';
 import { GMPanel } from '@/ui/GMPanel';
 import { GMEntryButton } from '@/ui/GMEntryButton';
 import { SidebarPanel } from '@/ui/SidebarPanel';
+import { DesktopShortcutPanel } from '@/ui/DesktopShortcutPanel';
 
 declare const GameGlobal: any;
 
@@ -99,6 +100,7 @@ async function main(): Promise<void> {
   }
 
   if (Platform.isDouyin) {
+    OverlayManager.container.addChild(new DesktopShortcutPanel());
     OverlayManager.container.addChild(new SidebarPanel());
   }
 

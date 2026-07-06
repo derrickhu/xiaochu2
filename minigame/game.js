@@ -40,12 +40,14 @@ try { require('./share-bootstrap.js'); } catch (e) {
   console.error('[game.js] share-bootstrap 失败:', e);
 }
 
-// 侧边栏复访（抖音必接）：须在 bundle 加载前同步注册 onShow / checkScene
+// 抖音平台必接能力：侧边栏复访 + 添加到桌面（须在 bundle 加载前注册/探测）
 (function () {
   var P = _runtime.getNativePlatformApi();
   if (typeof GameGlobal !== 'undefined') {
     GameGlobal.__launchInfo = {};
     GameGlobal.__sidebarSupported = false;
+    GameGlobal.__desktopShortcutSupported = false;
+    GameGlobal.__desktopShortcutStatus = null;
   }
   if (P && typeof P.onShow === 'function') {
     P.onShow(function (res) {
@@ -66,6 +68,23 @@ try { require('./share-bootstrap.js'); } catch (e) {
       },
       fail: function () {
         if (typeof GameGlobal !== 'undefined') GameGlobal.__sidebarSupported = false;
+      },
+    });
+  }
+  if (P && typeof P.addShortcut === 'function') {
+    if (typeof GameGlobal !== 'undefined') GameGlobal.__desktopShortcutSupported = true;
+    console.log('[DesktopShortcut] addShortcut supported');
+  }
+  if (P && typeof P.checkShortcut === 'function') {
+    P.checkShortcut({
+      success: function (res) {
+        if (typeof GameGlobal !== 'undefined') {
+          GameGlobal.__desktopShortcutStatus = res && res.status ? res.status : null;
+        }
+        console.log('[DesktopShortcut] checkShortcut', JSON.stringify(GameGlobal.__desktopShortcutStatus));
+      },
+      fail: function (err) {
+        console.warn('[DesktopShortcut] checkShortcut fail', err && err.errMsg);
       },
     });
   }

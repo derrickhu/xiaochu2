@@ -44,6 +44,8 @@ export interface ButtonOpts {
   /** 字号，默认按高度推导 */
   fontSize?: number;
   enabled?: boolean;
+  /** 抖音 addShortcut 等须在 touchend 同步调用的 API 使用 */
+  syncGesture?: boolean;
   onTap: () => void;
 }
 
@@ -83,7 +85,7 @@ export function makeButton(opts: ButtonOpts): ButtonHandle {
     text.text = v;
   };
 
-  bindPointerTap(btn, onTap, { guard: () => enabled });
+  bindPointerTap(btn, onTap, { guard: () => enabled, sync: opts.syncGesture });
   btn.hitArea = new PIXI.Rectangle(-width / 2, -height / 2, width, height);
   btn.interactiveChildren = false;
   // 全局按下缩放反馈（禁用态不触发交互，故反馈也不会触发）

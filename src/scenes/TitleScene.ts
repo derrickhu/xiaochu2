@@ -23,6 +23,8 @@ import { buildTitleScreenWorld } from './chapterMapView';
 import { attachChapterMapEditor } from './chapterMapEditor';
 import { ensurePetAvatars, titleLeadPetAvatarEntry } from '@/config/assetPreload';
 import { SidebarEntryButton } from '@/ui/SidebarEntryButton';
+import { DesktopShortcutEntryButton } from '@/ui/DesktopShortcutEntryButton';
+import { DesktopShortcutService } from '@/core/DesktopShortcutService';
 import { Platform } from '@/core/PlatformService';
 
 declare const GameGlobal: any;
@@ -139,7 +141,16 @@ export class TitleScene implements Scene {
     this._buildResourceBar(w, Game.safeTop + 36);
     this._buildChapterNav(w, Game.safeTop + 120);
     this._buildSidebarEntry(w, h);
+    this._buildDesktopShortcutEntry(w, h);
     this._buildBottomNav(w, h);
+  }
+
+  /** 抖音添加到桌面入口（广告金政策必接） */
+  private _buildDesktopShortcutEntry(w: number, h: number): void {
+    if (!DesktopShortcutService.isAvailable) return;
+    const reserve = TitleScene.BOTTOM_RESERVE;
+    const btn = new DesktopShortcutEntryButton(w - 130, h - reserve - 72);
+    this.container.addChild(btn);
   }
 
   /** 抖音侧边栏复访入口（平台必接） */

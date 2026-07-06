@@ -14,6 +14,8 @@ interface TapBinding {
   fn: () => void;
   guard?: () => boolean;
   blockTap?: () => boolean;
+  /** 为 true 时在 touchend 内同步执行（tt.addShortcut 等必须用户手势同步调用的 API） */
+  sync?: boolean;
 }
 
 let _installed = false;
@@ -59,7 +61,11 @@ function ensureInstalled(): void {
     const dy = p.y - act.y;
     if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) return;
     if (!containsDesignPoint(b.target, p.x, p.y)) return;
-    deferAfterPointerEvent(b.fn);
+    if (b.sync) {
+      try { b.fn(); } catch (err) { console.error('[canvasTapRouter sync]', err); }
+    } else {
+      deferAfterPointerEvent(b.fn);
+    }
   }) as EventListener;
 
   canvas.addEventListener('touchstart', _onStart, { passive: true });
