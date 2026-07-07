@@ -13,6 +13,7 @@ import { TextureCache } from '@/core/TextureCache';
 import { TweenManager } from '@/core/TweenManager';
 import { setScaleSafe, readScale } from '@/core/animationGuard';
 import { Platform } from '@/core/PlatformService';
+import { SfxManager } from '@/core/SfxManager';
 import { UI } from '@/balance/ui';
 import { COMBAT, type OrbType } from '@/balance/combat';
 import { ORB_IMAGES } from '@/config/Assets';
@@ -384,6 +385,7 @@ export class BoardView {
     this._floatOrb = float;
 
     Platform.vibrateShort();
+    SfxManager.playPickUp();
     this._cb.onDragStart?.();
   }
 
@@ -435,6 +437,7 @@ export class BoardView {
     this._dragR = r;
     this._dragC = c;
     this._swapLockUntilMs = Date.now() + UI.anim.orbSwapLogicLock * 1000;
+    SfxManager.playSwap();
   }
 
   private _onUp(): void {
@@ -453,6 +456,7 @@ export class BoardView {
       this._pool.release(this._floatOrb);
       this._floatOrb = null;
     }
+    if (this._didMove) SfxManager.playDragEnd();
     this._cb.onDragEnd(this._didMove);
   }
 

@@ -15,6 +15,10 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
+import { BgmManager } from '@/core/BgmManager';
+import { SfxManager } from '@/core/SfxManager';
+import { enemyDisplayTierOf } from '@/balance/enemyDisplay';
+import { isComboMilestone } from './battle/ComboDisplay';
 import { GMManager } from '@/core/GMManager';
 import { battlePreloadImages, battlePetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { UI_FX_IMAGES } from '@/config/Assets';
@@ -155,12 +159,26 @@ export class BattleScene implements Scene {
       GMManager.registerInstantClearHandler(this._gmInstantClear);
       this._hud.refreshEnemy(false);
       this._hud.refreshHeroHp();
+      this._syncBattleBgm(true);
       Game.ticker.add(this._tickerCb);
     });
   }
 
+  /** Boss / 守关波切 Boss BGM，其余保持主 BGM */
+  private _syncBattleBgm(playEntranceSfx = false): void {
+    const tier = enemyDisplayTierOf(this._ctrl.enemy.def);
+    const intense = this._ctrl.stage.isBoss || tier === 'boss' || tier === 'miniBoss';
+    if (intense) {
+      BgmManager.playBoss();
+      if (playEntranceSfx) SfxManager.playBoss();
+    } else {
+      BgmManager.resumeNormal();
+    }
+  }
+
   onExit(): void {
     this._alive = false;
+    BgmManager.resumeNormal();
     GMManager.unregisterInstantClearHandler();
     this._resolveSeq++;
     this._stopPresent?.();
@@ -325,9 +343,13 @@ export class BattleScene implements Scene {
         for (const group of groups) {
           if (isStale()) return;
           allGroups.push(group);
+          const combo = allGroups.length;
+          SfxManager.playEliminate(group.cells.length);
+          SfxManager.playComboHit(combo);
+          if (isComboMilestone(combo)) SfxManager.playComboMilestone(combo);
           this._board.clearCells(group.cells);
           this._burstGroup(group);
-          this._hud.showCombo(allGroups.length, this._fx);
+          this._hud.showCombo(combo, this._fx);
           Platform.vibrateShort(allGroups.length >= 7 ? 'medium' : 'light');
           if (allGroups.length >= 7) this._fx.shakeLight();
           await this._boardView!.playClear(group);
@@ -396,6 +418,7 @@ export class BattleScene implements Scene {
       if (healed > 0) {
         this._hud.refreshHeroHp();
         this._fx.spawnHeroHealFloat(healed, Game.logicWidth / 2, this._layout.heroBarY - 24);
+        SfxManager.playHeal();
         await delay(UI.anim.attackGap);
         if (isStale()) return false;
       }
@@ -472,9 +495,12 @@ export class BattleScene implements Scene {
     if (isStale()) return true;
     if (this._ctrl.hasNextWave()) {
       this._ctrl.nextWave();
+      SfxManager.playNextFloor();
+      this._syncBattleBgm();
       await this._hud.playWaveEnter();
       return false;
     }
+    SfxManager.playVictory();
     this._overlay.show(this._ctrl, true, this._battleStartedAt);
     await delay(0.3);
     return true;
@@ -500,6 +526,7 @@ export class BattleScene implements Scene {
         await this._presentEnemyHeroDamage(result, heavy);
         if (isStale()) return;
         if (result.heroDead) {
+          SfxManager.playGameOver();
           this._overlay.show(this._ctrl, false, this._battleStartedAt);
           await delay(0.3);
           return;
@@ -565,6 +592,7 @@ export class BattleScene implements Scene {
     }
     if (isStale()) return;
     if (result.heroDead) {
+      SfxManager.playGameOver();
       this._overlay.show(this._ctrl, false, this._battleStartedAt);
       await delay(0.3);
       return;
@@ -590,6 +618,9 @@ export class BattleScene implements Scene {
       if (isStale() || slot.destroyed) return;
       TweenManager.cancelTarget(slot);
       slot.y = baseY;
+      if (attack.isCrit) SfxManager.playAttackCrit();
+      else SfxManager.playAttack();
+      SfxManager.playPetDmgHit(attack.isCrit);
       this._hud.playEnemyHit(this._fx, attack.element, attack.damage, attack.isCrit);
       this._spawnDamageFloat(attack, orderIdx, hitCount);
     });
@@ -660,6 +691,16 @@ export class BattleScene implements Scene {
     this._hud.refreshHeroHp();
     const hitX = Game.logicWidth / 2;
     const hitY = this._layout.heroBarY;
+    const maxHp = Math.max(1, this._ctrl.heroMaxHp);
+    const dmgRatio = (damage + absorbed) / maxHp;
+
+    if (absorbed > 0 && damage <= 0) {
+      SfxManager.playBlock();
+    }
+    if (damage > 0) {
+      SfxManager.playEnemyAttack(dmgRatio);
+      SfxManager.playHeroHurt(dmgRatio);
+    }
 
     if (absorbed > 0) {
       this._fx.spawnHeroHitFloat(`盾挡 -${absorbed}`, hitX - 90, hitY - 28, 'shield');

@@ -22,9 +22,11 @@ declare namespace WechatMinigame {
     src: string;
     loop: boolean;
     volume: number;
+    playbackRate: number;
     play(): void;
     pause(): void;
     stop(): void;
+    seek(position: number): void;
     destroy(): void;
     onError(cb: (err: unknown) => void): void;
   }

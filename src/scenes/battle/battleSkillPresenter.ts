@@ -10,6 +10,7 @@ import { SKILL_VFX_MAP } from '@/balance/skillVfx';
 import { UI } from '@/balance/ui';
 import { Game } from '@/core/Game';
 import { Platform } from '@/core/PlatformService';
+import { SfxManager } from '@/core/SfxManager';
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BoardModel } from '@/game/board/BoardModel';
 import type { BoardView } from '@/game/board/BoardView';
@@ -66,6 +67,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
   const result = ctrl.castSkill(petIndex);
   deps.refreshSkillUi();
   Platform.vibrateShort('medium');
+  SfxManager.playPetSkill();
 
   // 通用演出：属性色全屏闪 + 技能名横幅
   const vfx = SKILL_VFX_MAP.get(result.vfxEvents[0]);
