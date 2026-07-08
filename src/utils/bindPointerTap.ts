@@ -11,7 +11,12 @@ import { registerCanvasTap } from './canvasTapRouter';
 export function bindPointerTap(
   target: PIXI.Container,
   fn: () => void,
-  opts?: { guard?: () => boolean; blockTap?: () => boolean; sync?: boolean },
+  opts?: {
+    guard?: () => boolean;
+    blockTap?: () => boolean;
+    pointGuard?: (dx: number, dy: number) => boolean;
+    sync?: boolean;
+  },
 ): void {
   let fired = false;
   const run = (): void => {
@@ -39,6 +44,7 @@ export function bindPointerTap(
       fn: run,
       guard: opts?.guard,
       blockTap: opts?.blockTap,
+      pointGuard: opts?.pointGuard,
       sync: opts?.sync,
     });
     return;

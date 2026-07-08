@@ -200,6 +200,12 @@ export class BattlePetBar {
     });
   }
 
+  /** 施法瞬间槽位脉冲闪（对齐 xiao_chu 释放者描边脉冲） */
+  flashSkillCast(petIndex: number): void {
+    const fx = this._slotReadyFx[petIndex];
+    if (fx) triggerPetSkillReadyFlash(fx);
+  }
+
   /** 技能就绪槽：旋转光弧 + 上升粒子 + 双箭头（对齐 xiao_chu，无每帧 Graphics 重绘） */
   update(dt: number): void {
     const petSize = this._petSize;

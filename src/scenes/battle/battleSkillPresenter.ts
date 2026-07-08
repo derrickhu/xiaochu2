@@ -34,26 +34,25 @@ export interface SkillCastDeps {
   handleEnemyDefeat: () => Promise<boolean>;
 }
 
+/** 技能直伤飘字：打在敌人身上，与消珠命中共用 enemyHit 样式（槽位飘字会被棋盘挡住） */
 function spawnSkillDamage(
   fx: BattleFx,
-  petBar: BattlePetBar,
-  petIndex: number,
+  layout: BattleLayout,
   element: Element,
   damage: number,
-  opts?: { isCrit?: boolean; orderIdx?: number; minor?: boolean; skill?: boolean },
+  opts?: { isCrit?: boolean; orderIdx?: number; minor?: boolean; hitCount?: number },
 ): void {
   if (damage <= 0) return;
-  const slot = petBar.slotAt(petIndex);
-  if (!slot || slot.destroyed) return;
-  fx.spawnPetDamageFloat({
-    slotX: slot.x,
-    slotY: slot.y,
+  fx.spawnEnemyHitDamage({
+    enemyX: layout.enemyCenterX,
+    enemyY: layout.enemyCenterY,
     element,
     damage,
     isCrit: opts?.isCrit ?? false,
     orderIdx: opts?.orderIdx ?? 0,
+    hitCount: opts?.hitCount ?? 1,
     minor: opts?.minor,
-    skill: opts?.skill ?? true,
+    skill: true,
   });
 }
 
@@ -64,12 +63,17 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
 
   const pet = ctrl.team[petIndex];
   const color = ORB_COLOR[pet.def.element];
+  const casterSlot = petBar.slotAt(petIndex);
   const result = ctrl.castSkill(petIndex);
   deps.refreshSkillUi();
   Platform.vibrateShort('medium');
   SfxManager.playPetSkill();
 
-  // 通用演出：属性色全屏闪 + 技能名横幅
+  // L1 前摇：释放者脚下光晕 + 槽位脉冲（对齐 xiao_chu emitPetSkillIntro）
+  petBar.flashSkillCast(petIndex);
+  fx.spawnSkillCasterIntro(casterSlot.x, casterSlot.y + layout.petSize * 0.24, color);
+
+  // 通用演出：属性色全屏闪 + 技能名快闪
   const vfx = SKILL_VFX_MAP.get(result.vfxEvents[0]);
   fx.flash(color, vfx?.flashDuration ?? 0.25, vfx?.flashAlpha ?? 0.4);
   await fx.showSkillBanner(pet.skill.name, color);
@@ -83,7 +87,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       // UR 招牌直伤命中：starburst 高光（pkg-fx，缺贴图自动降级白粒子）
       if (pet.def.rarity >= 4) fx.spawnStarburst(enemyCenterX, enemyCenterY, ORB_COLOR[el]);
       hud.playEnemyHit(fx, el, damage, true);
-      spawnSkillDamage(fx, petBar, petIndex, el, damage);
+      spawnSkillDamage(fx, layout, el, damage);
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
       break;
@@ -97,7 +101,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         ),
       ));
       hud.playEnemyHit(fx, pet.def.element, damage, true);
-      spawnSkillDamage(fx, petBar, petIndex, pet.def.element, damage);
+      spawnSkillDamage(fx, layout, pet.def.element, damage);
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
       break;
@@ -111,9 +115,10 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       for (let i = 0; i < hits; i++) {
         await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
         hud.playEnemyHit(fx, el, Math.round(total / hits), i === hits - 1);
-        spawnSkillDamage(fx, petBar, petIndex, el, Math.round(total / hits), {
+        spawnSkillDamage(fx, layout, el, Math.round(total / hits), {
           orderIdx: i,
           minor: i > 0,
+          hitCount: hits,
         });
       }
       hud.refreshEnemyHp();
@@ -127,7 +132,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
       if (initial > 0) {
         hud.playEnemyHit(fx, el, initial, true);
-        spawnSkillDamage(fx, petBar, petIndex, el, initial);
+        spawnSkillDamage(fx, layout, el, initial);
       }
       fx.spawnFloat(
         `灼烧 ${result.value ?? 0}/回合 ×${result.turns ?? 0}`,
@@ -148,7 +153,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         const el = result.element ?? pet.def.element;
         await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
         hud.playEnemyHit(fx, el, damage, true);
-        spawnSkillDamage(fx, petBar, petIndex, el, damage);
+        spawnSkillDamage(fx, layout, el, damage);
       }
       fx.spawnFloat(`眩晕 ${result.turns ?? 0} 回合`, enemyCenterX, enemyCenterY - 76, 0xfff176, 1.2);
       fx.burst({
@@ -204,7 +209,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
           const el = result.element ?? pet.def.element;
           await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
           hud.playEnemyHit(fx, el, damage, true);
-          spawnSkillDamage(fx, petBar, petIndex, el, damage);
+          spawnSkillDamage(fx, layout, el, damage);
           hud.refreshEnemyHp();
           if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
         }
@@ -228,7 +233,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       await hud.playEnemyGravityCrush(fx);
       fx.spawnStarburst(enemyCenterX, enemyCenterY, 0x9575cd);
       hud.playEnemyHit(fx, pet.def.element, damage, true);
-      spawnSkillDamage(fx, petBar, petIndex, pet.def.element, damage);
+      spawnSkillDamage(fx, layout, pet.def.element, damage);
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
       break;

@@ -69,7 +69,10 @@ export function buildTeamPetList(opts: TeamPetListOpts): PIXI.Container | null {
     if (!pet) return;
     const lv = PlayerData.petLevel(petId);
     const star = PlayerData.petStar(petId);
-    const item = buildListItem(pet, lv, star, scrollTex, scroll, onToggle);
+    const item = buildListItem(pet, lv, star, scrollTex, scroll, onToggle, scrollable ? {
+      viewportTop: startY,
+      viewportBottom: listBottom!,
+    } : undefined);
 
     const col = i % cols;
     const row = Math.floor(i / cols);
@@ -137,6 +140,7 @@ function buildListItem(
   scrollTex: PIXI.Texture | null,
   scroll: ScrollListController,
   onToggle: (petId: string) => void,
+  viewport?: { viewportTop: number; viewportBottom: number },
 ): PIXI.Container {
   const item = new PIXI.Container();
   if (scrollTex) {
@@ -201,6 +205,9 @@ function buildListItem(
   // 点击统一走 bindPointerTap / canvasTapRouter；ScrollList 只负责滚动
   bindPointerTap(item, () => onToggle(pet.id), {
     blockTap: () => scroll.moved,
+    pointGuard: viewport
+      ? (dx, dy) => dy >= viewport.viewportTop && dy <= viewport.viewportBottom
+      : undefined,
   });
 
   return item;

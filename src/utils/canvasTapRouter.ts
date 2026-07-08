@@ -14,6 +14,8 @@ interface TapBinding {
   fn: () => void;
   guard?: () => boolean;
   blockTap?: () => boolean;
+  /** 设计坐标额外过滤（如滚动列表视口外不响应） */
+  pointGuard?: (dx: number, dy: number) => boolean;
   /** 为 true 时在 touchend 内同步执行（tt.addShortcut 等必须用户手势同步调用的 API） */
   sync?: boolean;
 }
@@ -28,7 +30,9 @@ let _onEnd: EventListener | null = null;
 function pickBinding(dx: number, dy: number): TapBinding | null {
   _bindings = _bindings.filter((b) => b.target.parent);
   // 禁用态也要参与 hitTest，否则会穿透点到下层按钮（抽卡结果页点「确定」误触底层十连）
-  const hits = _bindings.filter((b) => containsDesignPoint(b.target, dx, dy));
+  const hits = _bindings.filter((b) =>
+    containsDesignPoint(b.target, dx, dy)
+    && (!b.pointGuard || b.pointGuard(dx, dy)));
   if (!hits.length) return null;
   const top = pickTopmostHit(hits.map((b) => b.target), dx, dy);
   if (!top) return null;

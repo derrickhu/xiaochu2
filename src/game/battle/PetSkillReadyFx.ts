@@ -13,7 +13,6 @@ export interface PetSkillReadyFxView {
   flash: PIXI.Graphics;
   ring: PIXI.Container;
   arrowBox: PIXI.Container;
-  labelBox: PIXI.Container;
   particles: Array<{ core: PIXI.Sprite; glow: PIXI.Sprite }>;
   /** 上升粒子相位偏移 */
   particlePhase: number[];
@@ -82,31 +81,11 @@ export function createPetSkillReadyFx(petSize: number, color: number): PetSkillR
   arrowBox.y = -petSize / 2 - arrowSize - 3;
   root.addChild(arrowBox);
 
-  const lblW = petSize * 0.7;
-  const lblH = petSize * 0.2;
-  const labelBox = new PIXI.Container();
-  const lblBg = new PIXI.Graphics();
-  lblBg.beginFill(color, 0.85);
-  lblBg.drawRoundedRect(-lblW / 2, 0, lblW, lblH, 3);
-  lblBg.endFill();
-  labelBox.addChild(lblBg);
-  const lblText = new PIXI.Text('▲技能', {
-    fontSize: Math.round(petSize * 0.13),
-    fill: 0xffffff,
-    fontWeight: 'bold',
-  });
-  lblText.anchor.set(0.5);
-  lblText.position.set(0, lblH / 2);
-  labelBox.addChild(lblText);
-  labelBox.y = petSize / 2 + 2;
-  root.addChild(labelBox);
-
   return {
     root,
     flash,
     ring,
     arrowBox,
-    labelBox,
     particles,
     particlePhase: [0, 0.25, 0.5, 0.75],
     flashT: 0,
@@ -168,7 +147,6 @@ export function updatePetSkillReadyFx(
   const bounce = canAct ? Math.sin(t * 1.5) * 4 : 0;
   fx.arrowBox.y = -half - arrowSize - 3 - bounce;
   fx.arrowBox.alpha = canAct ? 0.7 + pulse * 0.3 : 0.5;
-  fx.labelBox.alpha = canAct ? 0.85 + pulse * 0.15 : 0.5;
 
   if (canAct && slotScale) {
     slotScale.set(1 + pulse * 0.02);

@@ -273,31 +273,31 @@ interface TrialChapterDef {
 
 const TRIAL_CHAPTERS: readonly TrialChapterDef[] = [
   {
-    chapter: 4, name: '历练 · 炽土试炼', stageCount: 6, difficultyBase: 0.9,
+    chapter: 4, name: '炽土试炼', stageCount: 6, difficultyBase: 0.9,
     bossDropPetId: 'pet_025', bossChallenge: 'boardRock',
     fillerChallenges: ['multiWave', 'boardSeal', 'highDefense', 'multiWave', 'boardSeal'],
     fillerNames: ['炽土前哨', '熔岩小径', '岩傀儡阵', '焦土深谷', '封印残阵'],
   },
   {
-    chapter: 5, name: '历练 · 灵兽秘境', stageCount: 7, difficultyBase: 0.92,
+    chapter: 5, name: '灵兽秘境', stageCount: 7, difficultyBase: 0.92,
     bossDropPetId: 'pet_011', bossChallenge: 'selfHeal',
     fillerChallenges: ['boardRock', 'highDefense', 'boardSeal', 'multiWave', 'boardRock', 'highDefense'],
     fillerNames: ['秘境入口', '顽石迷阵', '巨像守卫', '灵泉浅滩', '熔岩岔路', '古阵核心'],
   },
   {
-    chapter: 6, name: '历练 · 归墟深渊', stageCount: 7, difficultyBase: 0.94,
+    chapter: 6, name: '归墟深渊', stageCount: 7, difficultyBase: 0.94,
     bossDropPetId: 'pet_010', bossChallenge: 'chargeHit',
     fillerChallenges: ['selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'selfHeal', 'multiWave'],
     fillerNames: ['深渊上层', '寒潭回响', '晶甲巢穴', '自疗深池', '蓄力试场', '归墟裂隙'],
   },
   {
-    chapter: 7, name: '历练 · 星轨之野', stageCount: 7, difficultyBase: 0.96,
+    chapter: 7, name: '星轨之野', stageCount: 7, difficultyBase: 0.96,
     bossDropPetId: 'pet_029', bossChallenge: 'noHeart',
     fillerChallenges: ['chargeHit', 'selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'chargeHit'],
     fillerNames: ['星轨外环', '蓄力星门', '自愈绿洲', '顽石星带', '巨像轨道', '禁心前庭'],
   },
   {
-    chapter: 8, name: '历练 · 虚空之巅', stageCount: 8, difficultyBase: 0.98,
+    chapter: 8, name: '虚空之巅', stageCount: 8, difficultyBase: 0.98,
     bossDropPetId: 'pet_016', bossChallenge: 'banElement',
     fillerChallenges: ['noHeart', 'chargeHit', 'selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'noHeart'],
     fillerNames: ['虚空门扉', '禁心廊道', '蓄力深渊', '寒潭虚影', '顽石天阶', '封印核心', '封元前厅'],

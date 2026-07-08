@@ -12,7 +12,7 @@ import { PlayerData } from '@/game/PlayerData';
 import { UI_IMAGES } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE,
-  makeText, makeIconButton, makeCurrencyRow, makeChapterNavArrow,
+  makeText, makeIconButton, makeCurrencyRow, makeChapterNavArrow, CURRENCY_ICON_SIZE,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
 import { GMManager } from '@/core/GMManager';
@@ -42,7 +42,11 @@ export class TitleScene implements Scene {
 
   /** 底部导航区高度（紫祥云底栏 + 三图标 + 文字标签） */
   private static readonly BOTTOM_RESERVE = 128;
-  private static readonly CHAPTER_NAV_H = 44;
+
+  /** 资源条底边 + 间距，章节导航紧贴其下，避免挡住路径顶部节点星级 */
+  private static chapterNavY(): number {
+    return Game.safeTop + 36 + CURRENCY_ICON_SIZE + 10;
+  }
 
   private _chapter = 1;
   private _minimalStrip: TitleEnterData['minimalStrip'];
@@ -139,7 +143,7 @@ export class TitleScene implements Scene {
     }
 
     this._buildResourceBar(w, Game.safeTop + 36);
-    this._buildChapterNav(w, Game.safeTop + 120);
+    this._buildChapterNav(w, TitleScene.chapterNavY());
     this._buildSidebarEntry(w, h);
     this._buildDesktopShortcutEntry(w, h);
     this._buildBottomNav(w, h);
@@ -177,7 +181,7 @@ export class TitleScene implements Scene {
     const name = CHAPTER_NAME[this._chapter] ?? `第${this._chapter}章`;
     const idx = CHAPTERS.indexOf(this._chapter);
 
-    const label = makeText(`— ${name} —`, {
+    const label = makeText(name, {
       size: FONT_SIZE.md, fill: chapterUnlocked ? COLORS.textTitle : COLORS.textDisabled,
       bold: true, anchor: 0.5,
       strokeColor: 0xfdf3df, strokeWidth: 3,
@@ -188,6 +192,11 @@ export class TitleScene implements Scene {
       bindPointerTap(label, () => GMManager.onTitleTap());
     }
     this.container.addChild(label);
+
+    const arrowGap = 14;
+    const arrowHalf = 28;
+    const leftX = w / 2 - label.width / 2 - arrowGap - arrowHalf;
+    const rightX = w / 2 + label.width / 2 + arrowGap + arrowHalf;
 
     const mkArrow = (direction: 'left' | 'right', x: number, targetChapter: number | null): void => {
       const enabled = targetChapter !== null
@@ -203,8 +212,8 @@ export class TitleScene implements Scene {
       arrow.position.set(x, y);
       this.container.addChild(arrow);
     };
-    mkArrow('left', w / 2 - 220, idx > 0 ? CHAPTERS[idx - 1] : null);
-    mkArrow('right', w / 2 + 220, idx < CHAPTERS.length - 1 ? CHAPTERS[idx + 1] : null);
+    mkArrow('left', leftX, idx > 0 ? CHAPTERS[idx - 1] : null);
+    mkArrow('right', rightX, idx < CHAPTERS.length - 1 ? CHAPTERS[idx + 1] : null);
   }
 
   private _buildBottomNav(w: number, h: number): void {

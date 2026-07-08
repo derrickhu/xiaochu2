@@ -161,15 +161,10 @@ export class TeamScene implements Scene {
 
     const bottomBtnH = 72;
     const bottomPad = 20;
+    const listBtnGap = 16;
     if (prep) {
-      const listBottom = h - bottomPad - bottomBtnH - 12;
-      const startBtn = makeButton({
-        label: '开始战斗', width: 320, height: bottomBtnH, variant: 'danger',
-        onTap: () => this._startBattle(),
-      });
-      startBtn.position.set(w / 2, h - bottomPad - bottomBtnH / 2);
-      this.container.addChild(startBtn);
-      // 列表后添加，保证卡片在按钮之上可点击（按钮仅露出底栏区域）
+      const listBottom = h - bottomPad - bottomBtnH - listBtnGap;
+      // 先建列表（带 mask 裁剪），再叠底栏遮罩与按钮，避免列表抢点「开始战斗」
       this._listContent = buildTeamPetList({
         container: this.container,
         startY: listStartY,
@@ -179,6 +174,28 @@ export class TeamScene implements Scene {
         scroll: this._listScroll,
         onToggle: (petId) => this._togglePet(petId),
       });
+
+      const footTop = listBottom;
+      const footH = h - footTop;
+      const footShield = new PIXI.Container();
+      footShield.position.set(w / 2, footTop + footH / 2);
+      footShield.hitArea = new PIXI.Rectangle(-w / 2, -footH / 2, w, footH);
+      footShield.eventMode = 'static';
+      footShield.interactiveChildren = false;
+      footShield.addChild(makePanel({
+        width: w, height: footH, radius: 0,
+        bg: COLORS.panelBgAlt, bgAlpha: 0.96,
+        centered: true,
+      }));
+      bindPointerTap(footShield, () => { /* 吸收底栏区点击，防止穿透到列表 */ });
+      this.container.addChild(footShield);
+
+      const startBtn = makeButton({
+        label: '开始战斗', width: 320, height: bottomBtnH, variant: 'danger',
+        onTap: () => this._startBattle(),
+      });
+      startBtn.position.set(w / 2, h - bottomPad - bottomBtnH / 2);
+      this.container.addChild(startBtn);
     } else {
       this._listContent = buildTeamPetList({
         container: this.container,
