@@ -344,18 +344,24 @@ export class BattleScene implements Scene {
           if (isStale()) return;
           allGroups.push(group);
           const combo = allGroups.length;
-          SfxManager.playEliminate(group.cells.length);
+          // 音效顺序对齐 xiao_chu startNextElimAnim：连击升调 → 里程碑 → 消除
           SfxManager.playComboHit(combo);
           if (isComboMilestone(combo)) SfxManager.playComboMilestone(combo);
+          if (this._groupPlaysElimSfx(group)) {
+            SfxManager.playEliminate(group.cells.length);
+          }
           this._board.clearCells(group.cells);
           this._burstGroup(group);
           this._hud.showCombo(combo, this._fx);
           Platform.vibrateShort(allGroups.length >= 7 ? 'medium' : 'light');
           if (allGroups.length >= 7) this._fx.shakeLight();
-          await this._boardView!.playClear(group);
+          void this._boardView!.playClear(group);
           if (isStale()) return;
-          await delay(UI.anim.groupClearGap);
+          // 16 帧节拍驱动下一组连击音（动画并行，不叠在 playClear 尾部）
+          await delay(UI.anim.comboElimBeat);
         }
+        if (isStale()) return;
+        await delay(UI.anim.orbClear * 0.35);
         if (isStale()) return;
         const moves = this._board.collapse();
         await this._boardView!.playFall(moves);
@@ -391,6 +397,11 @@ export class BattleScene implements Scene {
   }
 
   /** 消除组爆裂粒子：组内每颗珠喷属性色光点 */
+  private _groupPlaysElimSfx(group: MatchGroup): boolean {
+    if (group.orb === 'heart') return true;
+    return this._ctrl.teamElementSet.has(group.orb as Element);
+  }
+
   private _burstGroup(group: MatchGroup): void {
     const cell = UI.board.cellSize;
     const color = ORB_COLOR[group.orb];
@@ -625,7 +636,7 @@ export class BattleScene implements Scene {
       this._spawnDamageFloat(attack, orderIdx, hitCount);
     });
 
-    minigameFallback(UI.anim.petDash + UI.anim.projectile + 0.35, finishHit);
+    minigameFallback(UI.anim.petDash + UI.anim.projectile + 0.42, finishHit);
 
     if (Platform.isMinigame) {
       slot.y = baseY - 46;
@@ -649,7 +660,7 @@ export class BattleScene implements Scene {
       this._fx.fireProjectileBetween(
         slot.x, slot.y - 60, this._layout.enemyCenterX, this._layout.enemyCenterY, attack.element,
       ),
-      UI.anim.projectile + 0.12,
+      UI.anim.projectile + 0.15,
     );
     if (isStale() || slot.destroyed) return;
     finishHit();

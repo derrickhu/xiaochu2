@@ -65,8 +65,9 @@ export const UI = {
     orbSwapLogicLock: 2 / 60,
     orbClear: 0.25,
     orbFall: 0.3,
-    petDash: 0.20,
-    petReturn: 0.24,
+    /** 宠物冲刺 / 回位（略放慢，便于看清出手与弹道） */
+    petDash: 0.26,
+    petReturn: 0.30,
     enemyHitFlash: 0.12,
     damageFloat: 0.6,
     /** 英雄受击飘字（专用动效，比通用 damageFloat 停更久） */
@@ -74,14 +75,16 @@ export const UI = {
     /** 英雄回血飘字（心珠 / 治疗技） */
     heroHealFloat: 1.7,
     /** 多组攻击的间隔节奏 */
-    attackGap: 0.30,
+    attackGap: 0.38,
     /** 最后一击后稍停再出总伤害（秒）；不阻塞操作，仅错开弹出节奏 */
-    turnTotalLeadIn: 0.22,
+    turnTotalLeadIn: 0.30,
     /** 波次切换敌人入场 */
     waveEnter: 0.35,
     /** ── 阶段二：手感强化 ── */
-    /** 逐组消除之间的节奏间隔 */
-    groupClearGap: 0.14,
+    /** 连组消除音画节拍（对齐 xiao_chu elimAnimTimer ≥ 16 帧 @60fps） */
+    comboElimBeat: 16 / 60,
+    /** 逐组消除之间的节奏间隔（与 comboElimBeat 同构，保留别名） */
+    groupClearGap: 16 / 60,
     /** 消除粒子寿命 */
     orbBurst: 0.45,
     /** Combo 大字弹跳 */
@@ -90,10 +93,10 @@ export const UI = {
     comboFadeDelay: 0.5,
     comboFade: 0.4,
     /** 属性弹道飞行（宠物 → 敌人） */
-    projectile: 0.24,
+    projectile: 0.30,
     /** 敌人弹道飞行（略慢，便于看清来向） */
-    enemyProjectile: 0.26,
-    enemyProjectileHeavy: 0.34,
+    enemyProjectile: 0.32,
+    enemyProjectileHeavy: 0.42,
     /** 英雄受击：队伍栏后撤复位 */
     heroHitRecoil: 0.22,
     /** 受击闪白 */

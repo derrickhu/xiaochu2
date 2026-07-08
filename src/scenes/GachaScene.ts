@@ -27,7 +27,7 @@ import {
   COLORS, FONT_SIZE, RADIUS,
   makeButton, makeCoverBackground, makePanel, makeText,
   makeRarityBadge, makeCurrencyLabel, makeProgressBar,
-  SceneFx,
+  SceneFx, type ButtonHandle,
 } from '@/ui';
 import { GachaRevealSequence } from './gacha/gachaRevealSequence';
 import { buildGachaPoolPreview } from './gacha/gachaPoolPreview';
@@ -55,6 +55,9 @@ export class GachaScene implements Scene {
   private _reveal: GachaRevealSequence | null = null;
   /** 上次抽卡数量，用于「再抽一次」 */
   private _lastCount: 1 | 10 = 1;
+  /** 主界面抽卡按钮（结果浮层打开时需禁用，避免误触底层十连） */
+  private _singlePullBtn: ButtonHandle | null = null;
+  private _tenPullBtn: ButtonHandle | null = null;
   private _poolTeardown: (() => void) | null = null;
   private readonly _enterSeq = new SceneEnterSeq();
 
@@ -277,23 +280,30 @@ export class GachaScene implements Scene {
     const btnH = 88;
     const y = h - 140;
 
-    const single = makeButton({
+    this._singlePullBtn = makeButton({
       label: `单抽\n${g.singleCost} 灵玉`, width: btnW, height: btnH,
       variant: 'primary', fontSize: FONT_SIZE.sm,
       enabled: PlayerData.lingyu >= g.singleCost,
       onTap: () => this._doPull(1),
     });
-    single.position.set(w / 2 - btnW / 2 - 16, y);
-    this._page.addChild(single);
+    this._singlePullBtn.position.set(w / 2 - btnW / 2 - 16, y);
+    this._page.addChild(this._singlePullBtn);
 
-    const ten = makeButton({
+    this._tenPullBtn = makeButton({
       label: `十连\n${g.tenCost} 灵玉`, width: btnW, height: btnH,
       variant: 'recruit', fontSize: FONT_SIZE.sm,
       enabled: PlayerData.lingyu >= g.tenCost,
       onTap: () => this._doPull(10),
     });
-    ten.position.set(w / 2 + btnW / 2 + 16, y);
-    this._page.addChild(ten);
+    this._tenPullBtn.position.set(w / 2 + btnW / 2 + 16, y);
+    this._page.addChild(this._tenPullBtn);
+  }
+
+  /** 结果浮层期间禁用主界面抽卡按钮（灵玉已扣但按钮 enabled 未刷新，会误触十连） */
+  private _setMainPullButtonsEnabled(enabled: boolean): void {
+    const g = ECONOMY.gacha;
+    this._singlePullBtn?.setEnabled(enabled && PlayerData.lingyu >= g.singleCost);
+    this._tenPullBtn?.setEnabled(enabled && PlayerData.lingyu >= g.tenCost);
   }
 
   private _activePoolElement(): Element | undefined {
@@ -334,6 +344,7 @@ export class GachaScene implements Scene {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     this._teardownResults();
+    this._setMainPullButtonsEnabled(false);
 
     const overlay = new PIXI.Container();
     this.container.addChild(overlay);
@@ -343,6 +354,9 @@ export class GachaScene implements Scene {
     scrim.drawRect(0, 0, w, h);
     scrim.endFill();
     scrim.eventMode = 'static';
+    scrim.hitArea = new PIXI.Rectangle(0, 0, w, h);
+    // 吸收空白区域点击，避免穿透到底层主界面按钮
+    bindPointerTap(scrim, () => {});
     overlay.addChild(scrim);
 
     // 受震屏影响的舞台层（scrim 不参与，避免露边）
@@ -403,7 +417,7 @@ export class GachaScene implements Scene {
         this._buildResultButtons(overlay, () => {
           this._teardownResults();
           overlay.destroy({ children: true });
-          this._build();
+          this._build(); // _build 会按最新灵玉重建主界面按钮
         });
       },
     });

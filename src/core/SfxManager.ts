@@ -7,10 +7,19 @@ import { AUDIO } from '@/config/Audio';
 import { COMBO_MILESTONES, getComboTier } from '@/scenes/battle/ComboDisplay';
 import { Platform } from './PlatformService';
 
-/** 连击音阶（十二平均律，以 combo.mp3 为 Do 基准） */
-const SCALE = [
-  1.0, 1.122, 1.26, 1.335, 1.498, 1.682, 1.888, 2.0,
+/** 连击音阶（十二平均律，以 combo.mp3 为 Do 基准）— 对齐 xiao_chu music.js */
+export const COMBO_PITCH_SCALE = [
+  1.0,     // 1 Do
+  1.122,   // 2 Re
+  1.26,    // 3 Mi
+  1.335,   // 4 Fa
+  1.498,   // 5 Sol
+  1.682,   // 6 La
+  1.888,   // 7 Si
+  2.0,     // 8 Do'
 ] as const;
+
+const SCALE = COMBO_PITCH_SCALE;
 
 type SfxPool = { idx: number; items: WechatMinigame.InnerAudioContext[] };
 
@@ -18,6 +27,7 @@ class SfxManagerClass {
   enabled = true;
   private _sfxPool: Record<string, SfxPool> = {};
   private readonly _poolSize = 4;
+  private readonly _comboPoolSize = 8;
   private _swapPlaying = false;
 
   setEnabled(enabled: boolean): void {
@@ -29,16 +39,21 @@ class SfxManagerClass {
     return this.enabled;
   }
 
+  /**
+   * 连击递进 — Do Re Mi Fa Sol La Si Do，连击越高音越高、音量略增。
+   * combo 9+ 叠加 levelup 进入第二八度（对齐 xiao_chu playComboHit）。
+   */
   playComboHit(comboNum: number): void {
     if (!this.enabled) return;
+    const scale = SCALE;
     const n = Math.min(comboNum, 8);
-    const pitch = SCALE[n - 1];
+    const pitch = scale[n - 1];
     const vol = Math.min(1.0, 0.85 + (comboNum - 1) * 0.025);
-    this._playEx(AUDIO.combo, vol, Math.min(2.0, pitch * 1.3));
+    this._playComboEx(vol, Math.min(2.0, pitch * 1.3));
 
     if (comboNum > 8) {
-      const idx2 = Math.min(comboNum - 9, SCALE.length - 1);
-      const pitch2 = SCALE[idx2];
+      const idx2 = Math.min(comboNum - 9, scale.length - 1);
+      const pitch2 = scale[idx2];
       const vol2 = Math.min(0.6, 0.3 + (comboNum - 9) * 0.05);
       this._playEx(AUDIO.levelup, vol2, pitch2);
     }
@@ -58,7 +73,7 @@ class SfxManagerClass {
       this._playEx(AUDIO.levelup, 0.6, SCALE[4]);
       setTimeout(() => {
         if (this.enabled) {
-          this._playEx(AUDIO.combo, 0.45, SCALE[6]);
+          this._playComboEx(0.45, SCALE[6]);
           this._playEx(AUDIO.eliminate, 0.35, SCALE[7]);
         }
       }, 40);
@@ -66,7 +81,7 @@ class SfxManagerClass {
       this._playEx(AUDIO.skill, 0.7, SCALE[7]);
       setTimeout(() => {
         if (this.enabled) {
-          this._playEx(AUDIO.combo, 0.5, SCALE[4]);
+          this._playComboEx(0.5, SCALE[4]);
           this._playEx(AUDIO.attack, 0.4, SCALE[7]);
         }
       }, 50);
@@ -76,7 +91,7 @@ class SfxManagerClass {
         if (this.enabled) {
           this._playEx(AUDIO.victory, 0.5, SCALE[4]);
           this._playEx(AUDIO.skill, 0.4, SCALE[7]);
-          this._playEx(AUDIO.combo, 0.35, SCALE[7]);
+          this._playComboEx(0.35, SCALE[7]);
         }
       }, 60);
     }
@@ -99,11 +114,11 @@ class SfxManagerClass {
       this._playEx(AUDIO.eliminate, 0.7, 1.2);
       this._playEx(AUDIO.skill, 0.3, 0.8);
       setTimeout(() => {
-        if (this.enabled) this._playEx(AUDIO.combo, 0.25, 1.5);
+        if (this.enabled) this._playComboEx(0.25, 1.5);
       }, 30);
     } else if (count === 4) {
       this._playEx(AUDIO.eliminate, 0.55, 1.1);
-      this._playEx(AUDIO.combo, 0.2, 1.3);
+      this._playComboEx(0.2, 1.3);
     } else {
       this._play(AUDIO.eliminate, 0.4);
     }
@@ -130,7 +145,7 @@ class SfxManagerClass {
   playAttack(): void {
     if (!this.enabled) return;
     this._play(AUDIO.attack, 0.5);
-    this._playEx(AUDIO.combo, 0.15, 0.5);
+    this._playComboEx(0.15, 0.5);
   }
 
   playAttackCrit(): void {
@@ -141,7 +156,7 @@ class SfxManagerClass {
 
   playCritHit(): void {
     if (!this.enabled) return;
-    this._playEx(AUDIO.combo, 0.7, 1.6);
+    this._playComboEx(0.7, 1.6);
     setTimeout(() => {
       if (this.enabled) this._playEx(AUDIO.attack, 0.6, 0.7);
     }, 50);
@@ -221,11 +236,17 @@ class SfxManagerClass {
     }, 90);
   }
 
-  private _getPooled(src: string): WechatMinigame.InnerAudioContext | null {
+  private _poolSizeFor(src: string, requested?: number): number {
+    if (src === AUDIO.combo) return this._comboPoolSize;
+    return requested ?? this._poolSize;
+  }
+
+  private _getPooled(src: string, poolSize?: number): WechatMinigame.InnerAudioContext | null {
     if (!Platform.isMinigame) return null;
+    const size = this._poolSizeFor(src, poolSize);
     if (!this._sfxPool[src]) {
       this._sfxPool[src] = { idx: 0, items: [] };
-      for (let i = 0; i < this._poolSize; i++) {
+      for (let i = 0; i < size; i++) {
         const a = Platform.createInnerAudioContext();
         if (!a) continue;
         a.src = src;
@@ -243,22 +264,36 @@ class SfxManagerClass {
     const a = this._getPooled(src);
     if (!a) return;
     if (volume !== undefined) a.volume = volume;
-    a.playbackRate = 1.0;
+    this._applyRate(a, 1.0);
     try { a.stop(); } catch (_) {}
     try { a.seek(0); } catch (_) {}
     a.play();
   }
 
-  private _playEx(src: string, volume: number, playbackRate: number): void {
-    const a = this._getPooled(src);
+  /** 支持 playbackRate 变调（xiao_chu _playSfxEx + BGM 双保险） */
+  private _playEx(src: string, volume: number, playbackRate: number, poolSize?: number): void {
+    const a = this._getPooled(src, poolSize);
     if (!a) return;
     a.volume = volume;
     try { a.stop(); } catch (_) {}
     try { a.seek(0); } catch (_) {}
     const rate = playbackRate !== 1.0 ? playbackRate : 1.0;
-    a.playbackRate = rate;
+    this._applyRate(a, rate);
     a.play();
-    if (rate !== 1.0) a.playbackRate = rate;
+  }
+
+  private _applyRate(a: WechatMinigame.InnerAudioContext, rate: number): void {
+    a.playbackRate = rate;
+    if (rate === 1.0) return;
+    try {
+      a.onCanplay(() => { a.playbackRate = rate; });
+      a.onPlay(() => { a.playbackRate = rate; });
+    } catch (_) {}
+    setTimeout(() => { a.playbackRate = rate; }, 50);
+  }
+
+  private _playComboEx(volume: number, playbackRate: number): void {
+    this._playEx(AUDIO.combo, volume, playbackRate, this._comboPoolSize);
   }
 }
 
