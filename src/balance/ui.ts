@@ -63,8 +63,9 @@ export const UI = {
     orbSwap: 4 / 60,
     /** 交换后逻辑锁（秒），对齐 xiao_chu SWAP_LOGIC_LOCK_FRAMES=2，动画后半段可连续换格 */
     orbSwapLogicLock: 2 / 60,
-    orbClear: 0.25,
-    orbFall: 0.3,
+    /** 消珠动画（v0.4.1 放慢：0.25→0.32，玩家反馈消除节奏太赶） */
+    orbClear: 0.32,
+    orbFall: 0.34,
     /** 宠物冲刺 / 回位（略放慢，便于看清出手与弹道） */
     petDash: 0.26,
     petReturn: 0.30,
@@ -81,10 +82,10 @@ export const UI = {
     /** 波次切换敌人入场 */
     waveEnter: 0.35,
     /** ── 阶段二：手感强化 ── */
-    /** 连组消除音画节拍（对齐 xiao_chu elimAnimTimer ≥ 16 帧 @60fps） */
-    comboElimBeat: 16 / 60,
+    /** 连组消除音画节拍（v0.4.1 放慢：16→22 帧 @60fps，每组连击留出辨识时间） */
+    comboElimBeat: 22 / 60,
     /** 逐组消除之间的节奏间隔（与 comboElimBeat 同构，保留别名） */
-    groupClearGap: 16 / 60,
+    groupClearGap: 22 / 60,
     /** 消除粒子寿命 */
     orbBurst: 0.45,
     /** Combo 大字弹跳 */

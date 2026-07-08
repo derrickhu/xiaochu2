@@ -20,11 +20,11 @@ describe('petAtk', () => {
     expect(a10).toBeGreaterThan(petAtk(samplePet, 1, 1));
   });
 
-  it('星级倍率生效', () => {
+  it('星级倍率生效（v0.4：5★ baseMult = 2.4）', () => {
     const star1 = petAtk(samplePet, 1, 1);
     const star5 = petAtk(samplePet, 1, 5);
-    expect(star5).toBeGreaterThan(star1 * 2.7);
-    expect(star5).toBeLessThan(star1 * 2.9);
+    expect(star5).toBeGreaterThan(star1 * 2.3);
+    expect(star5).toBeLessThan(star1 * 2.5);
   });
 
   it('成长曲线快照（全宠物 Lv1/10/30/50 攻击一览）', () => {

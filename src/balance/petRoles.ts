@@ -137,33 +137,42 @@ export type SkillTraitDef =
  * 首版模板以现有 10 只宠均值为锚点，先保证迁移后数值接近；
  * 后续要强化定位时优先调整这里。
  */
+/**
+ * 成长率标准（v0.4 数值重做）：
+ * - 旧版 5%~6.1%/级 的复利在 L44+ 后爆炸（2★L60 坦克 1.4 万血、5★L99 输出 9.6 万攻），
+ *   玩家按正常首通节奏（8 章时约 L44）即可无伤平推 4~8 章。
+ * - 新版压至 3.0%~3.7%/级：L60 约 ×8、L99 约 ×35，配合星级 baseMult 主导的档位差，
+ *   全程战力跨度 ~×40（旧版 ~×2000），与敌人章节曲线（×1.45/章 ≈ 全程 ×13）+ 操作/
+ *   稀有度成长空间匹配。锚点校准见 powerBudget.ts CHAPTER_POWER。
+ * - 基准锚点不变：L1/1★ 三维 = base（教学段契约不破坏）。
+ */
 export const PET_ROLE_PROFILES: Readonly<Record<PetRole, PetRoleProfile>> = {
   attacker: {
     role: 'attacker', name: '输出', color: 0xff6b4a,
     ui: { badgeBg: 0x5a2010, badgeText: 0xffc4b0, badgeBorder: 0xff6b4a },
     base: { atk: 53, hp: 185, rcv: 11 },
-    growth: { atk: 0.061, hp: 0.05, rcv: 0.045 },
+    growth: { atk: 0.036, hp: 0.030, rcv: 0.028 },
     weights: { atk: 1.35, hp: 0.75, rcv: 0.55 },
   },
   healer: {
     role: 'healer', name: '治疗', color: 0x52c97a,
     ui: { badgeBg: 0x1a4a2a, badgeText: 0xb8f0c8, badgeBorder: 0x52c97a },
     base: { atk: 34, hp: 190, rcv: 45 },
-    growth: { atk: 0.05, hp: 0.05, rcv: 0.06 },
+    growth: { atk: 0.030, hp: 0.030, rcv: 0.035 },
     weights: { atk: 0.65, hp: 0.9, rcv: 1.45 },
   },
   tank: {
     role: 'tank', name: '坦克', color: 0x5a9fd4,
     ui: { badgeBg: 0x1a3560, badgeText: 0xb8dcff, badgeBorder: 0x5a9fd4 },
     base: { atk: 37, hp: 290, rcv: 19 },
-    growth: { atk: 0.05, hp: 0.063, rcv: 0.05 },
+    growth: { atk: 0.030, hp: 0.037, rcv: 0.030 },
     weights: { atk: 0.7, hp: 1.45, rcv: 0.8 },
   },
   support: {
     role: 'support', name: '辅助', color: 0x9b7bff,
     ui: { badgeBg: 0x3c1860, badgeText: 0xd4c4ff, badgeBorder: 0x9b7bff },
     base: { atk: 40, hp: 210, rcv: 25 },
-    growth: { atk: 0.053, hp: 0.052, rcv: 0.052 },
+    growth: { atk: 0.031, hp: 0.031, rcv: 0.031 },
     weights: { atk: 0.9, hp: 1.0, rcv: 1.1 },
   },
 };

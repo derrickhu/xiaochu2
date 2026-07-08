@@ -187,9 +187,10 @@ export const CREATURES: readonly CreatureDef[] = [
   },
   {
     // 怪物面 = 第 8 章 Boss：首教「技能封印 + 狂暴」+ 封木规则
+    // atkScale 1.5：第 8 章是 3★→4★ 升星门槛章，终章 Boss 攻压须拦住停留 3★ 的欠养成队
     id: 'pet_016', name: '昆仑玉蛟', element: 'wood', rarity: 3, role: 'attacker',
     skillId: PET_SKILL_IDS.woodVolley,
-    monster: monsterPair(16, { t1Skills: [E.enrage], t2Skills: [E.skillSeal, E.enrage, E.lionCharge] }),
+    monster: monsterPair(16, { atkScale: 1.5, t1Skills: [E.enrage], t2Skills: [E.skillSeal, E.enrage, E.lionCharge] }),
   },
   {
     // 怪物面 = 第 1 章 Boss 波 2/3：rank 按 powerBudget 护栏（总量 ≈ 前关 3.5 倍）校准
@@ -236,9 +237,10 @@ export const CREATURES: readonly CreatureDef[] = [
   },
   {
     // 怪物面 = 第 4 章 Boss：首教「敌人中途封珠」；rank 按 powerBudget 护栏校准
+    // atkScale 4.0：第 4 章是 2★→3★ 升星门槛章，蓄力斩须能击穿停留 2★ 的欠养成队（章墙契约）
     id: 'pet_025', name: '星河烛龙', element: 'fire', rarity: 3, role: 'support',
     skillId: PET_SKILL_IDS.fireBoost,
-    monster: monsterPair(4, { t1Skills: [E.sealOrbs], t2Skills: [E.sealOrbs, E.bladeCharge, E.pandaGuard] }),
+    monster: monsterPair(4, { atkScale: 4.0, t1Skills: [E.sealOrbs], t2Skills: [E.sealOrbs, E.bladeCharge, E.pandaGuard] }),
   },
   {
     id: 'pet_026', name: '天外魔君', element: 'fire', rarity: 4, role: 'attacker',
@@ -254,9 +256,11 @@ export const CREATURES: readonly CreatureDef[] = [
   {
     // 钥匙宠（Ch3 Boss 掉落）：大护盾扛 Ch4 敌人封珠期的输出真空
     // 怪物面 = 第 3 章 Boss 波 2/3：rank 按 powerBudget 护栏校准
+    // atkScale 旧值 6 按 v0.3 膨胀曲线配平；v0.4 玩家 HP 压平后 6 档会秒杀达标队。
+    // 2.6 档校准：L17/2★ 首通队中手可过（掉血到 ~35%），低手需练级后再来
     id: 'pet_028', name: '归墟玄龟', element: 'earth', rarity: 3, role: 'tank',
     skillId: PET_SKILL_IDS.abyssBulwark,
-    monster: monsterPair(9, { atkScale: 6, t2Skills: [E.golemGuard, E.lionCharge] }),
+    monster: monsterPair(9, { atkScale: 2.6, t2Skills: [E.golemGuard, E.lionCharge] }),
   },
   {
     // 怪物面 = 第 7 章 Boss：首教「禁疗」；rank 按 powerBudget 护栏校准

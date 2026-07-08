@@ -18,7 +18,7 @@ import { STAGES, stageWaveCount } from '@/balance/stages';
 import { resolveEncounter } from '@/balance/enemies';
 import { CHAPTER_BUDGET, getChapterBudget } from '@/balance/growth';
 import { BUDGET_GUARDRAIL, CHAPTER_POWER, stageTtk } from '@/balance/powerBudget';
-import { enemyStats, petExpToNext } from '../growth';
+import { enemyStats, petExpToNext, petHp as petHpOf } from '../growth';
 import { stageDrops } from '../economyOutput';
 import {
   COMBO_MODELS, buildTeam, simulateBattle, simulateMatrix, type SimResult,
@@ -118,7 +118,8 @@ describe('铺垫关攻压：初始队会受伤（1~3 章）', () => {
           expect(r.tookDamage, s.id).toBe(true);
         }
         if (ch === 3) {
-          expect(r.heroHpRemaining / r.heroMaxHp, s.id).toBeLessThan(0.95);
+          // v0.4 敌人攻压曲线放缓后阈值放宽至 96%（仍要求可感知掉血）
+          expect(r.heroHpRemaining / r.heroMaxHp, s.id).toBeLessThan(0.96);
         }
       }
     }
@@ -304,6 +305,101 @@ describe('预算符合性：多波关波次数量与分配可用', () => {
   it('所有 Boss 关均为 3 波（prep + tier1 + tier2）', () => {
     for (const s of STAGES.filter((x) => x.isBoss)) {
       expect(stageWaveCount(s)).toBe(3);
+    }
+  });
+});
+
+// ════════════════════════════════════════════════════════════════
+// v0.4 真实首通路径契约（玩家实测反馈修复：默认队按产出节奏推进应有真实压力）
+//
+// 背景：v0.3 锚点（8 章 L82/5★）远超首通产出（约 L44），契约拿爆发队在虚高锚点验关，
+// 真实玩家 L44/2★ 却能无伤平推 4~8 章。v0.4 锚点 = 首通产出，用「默认 5R + 各章 Boss
+// 掉落宠」这条真实阵容路径直接验：Boss 有压力、欠养成有墙、铺垫关不劝退。
+// ════════════════════════════════════════════════════════════════
+
+describe('v0.4 首通路径：Boss 有真实压力，碾压不复存在', () => {
+  /** 默认 5R 队 + 已通章节的 Boss 掉落宠按同元素换入（真实白嫖阵容） */
+  const BOSS_DROPS: Record<number, string> = {
+    1: 'pet_017', 3: 'pet_028', 5: 'pet_011', 6: 'pet_010',
+  };
+  function firstRunTeamIds(chapter: number): string[] {
+    const ids = [...TEAMS.default];
+    for (let ch = 1; ch < chapter; ch++) {
+      const dropId = BOSS_DROPS[ch];
+      if (!dropId) continue;
+      const drop = PET_MAP.get(dropId)!;
+      const idx = ids.findIndex((id) => PET_MAP.get(id)!.element === drop.element);
+      if (idx >= 0) ids[idx] = dropId;
+    }
+    return ids;
+  }
+  const firstRunTeam = (ch: number) => {
+    const b = getChapterBudget(ch);
+    return buildTeam(firstRunTeamIds(ch), b.enterLevel, b.enterStar);
+  };
+
+  it('锚点首通队中手可通 4~8 章 Boss，但用时 ≥ 8 回合（不是秒推）', () => {
+    for (const ch of [4, 5, 6, 7, 8]) {
+      const boss = STAGES.find((s) => s.chapter === ch && s.isBoss)!;
+      const r = simulateBattle(firstRunTeam(ch), boss.id, COMBO_MODELS.mid);
+      expect(r.win, boss.id).toBe(true);
+      expect(r.turnsUsed, `${boss.id} 应有真实战斗时长`).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it('升星门槛章（4/8 章）：欠一章锚点的队伍被明显拦截', () => {
+    // 4 章（2★→3★）与 8 章（3★→4★）为升星门槛章：
+    // - 终章 8：欠养成中手直接打不过（硬墙）；
+    // - 4 章：中手要么打不过、要么被磨到 TTK ≥ 12 回合（软墙），且低手必败。
+    // 5~7 章锚点只差 4~5 级（平滑推进段），不设墙，由 TTK 变长体现压力。
+    const underAt = (ch: number) => {
+      const prev = getChapterBudget(ch - 1);
+      return buildTeam(firstRunTeamIds(ch), prev.enterLevel, prev.enterStar);
+    };
+    const bossOf = (ch: number) => STAGES.find((s) => s.chapter === ch && s.isBoss)!;
+
+    const r8 = simulateBattle(underAt(8), bossOf(8).id, COMBO_MODELS.mid);
+    expect(r8.win, '8 章 Boss 欠一章养成不应能过').toBe(false);
+
+    const r4mid = simulateBattle(underAt(4), bossOf(4).id, COMBO_MODELS.mid);
+    if (r4mid.win) {
+      expect(r4mid.turnsUsed, '4 章 Boss 欠养成即便能过也应被明显磨长').toBeGreaterThanOrEqual(12);
+    }
+    const r4low = simulateBattle(underAt(4), bossOf(4).id, COMBO_MODELS.low);
+    expect(r4low.win, '4 章 Boss 欠养成低手必败').toBe(false);
+  });
+
+  it('操作水平有意义：首通队低手在 3/4/7 章 Boss 打不过（需练级或提升操作）', () => {
+    for (const ch of [3, 4, 7]) {
+      const boss = STAGES.find((s) => s.chapter === ch && s.isBoss)!;
+      const r = simulateBattle(firstRunTeam(ch), boss.id, COMBO_MODELS.low);
+      expect(r.win, boss.id).toBe(false);
+    }
+  });
+
+  it('锚点首通队中手可通本章全部铺垫关（墙只设在 Boss）', () => {
+    for (const ch of [4, 5, 6, 7, 8]) {
+      const team = firstRunTeam(ch);
+      for (const s of STAGES.filter((x) => x.chapter === ch && !x.isBoss)) {
+        expect(simulateBattle(team, s.id, COMBO_MODELS.mid).win, s.id).toBe(true);
+      }
+    }
+  });
+});
+
+describe('v0.4 面板膨胀护栏：2★ 上限不破万血', () => {
+  it('任意宠 2★ 满级（L60）单体 HP < 6000（玩家反馈的 1 万血 2★ 已消除）', () => {
+    // 上限由 UR 坦克顶格（statMult 1.75 × tank 高 HP 成长），当前实测 ~5.5k
+    for (const [, pet] of PET_MAP) {
+      const hp = petHpOf(pet, 60, 2);
+      expect(hp, `${pet.id} 2★L60 HP=${hp}`).toBeLessThan(6000);
+    }
+  });
+
+  it('5★ 满级（L99）单体 HP < 6 万（长线上限可控）', () => {
+    for (const [, pet] of PET_MAP) {
+      const hp = petHpOf(pet, 99, 5);
+      expect(hp, `${pet.id} 5★L99 HP=${hp}`).toBeLessThan(60000);
     }
   });
 });

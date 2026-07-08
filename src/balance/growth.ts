@@ -26,6 +26,10 @@ function uniform(v: number): StatBlock {
  * 避免双表漂移。
  *
  * 不变量：1★ 为恒等档（baseMult = 1、growthMult = 1），保证现有 1★ 数值不变。
+ *
+ * v0.4 数值重做：星级差异以 baseMult（初始档位）为主、growthMult（成长加速）为辅。
+ * 旧版 5★ growthMult 1.12 会把每级成长推到 ~6.8% 复利，L99 时三维爆炸（60 万血）；
+ * 新版 growthMult 压至 ≤1.08，5★L99 全程倍率 ~×35，见 petRoles.ts 成长率标准注释。
  */
 export interface StarProfile {
   star: number;
@@ -37,10 +41,10 @@ export interface StarProfile {
 
 export const STAR_PROFILES: Readonly<Record<number, StarProfile>> = {
   1: { star: 1, baseMult: uniform(1.0), growthMult: uniform(1.0), maxLevel: 50, skillTier: 1 },
-  2: { star: 2, baseMult: uniform(1.25), growthMult: uniform(1.02), maxLevel: 60, skillTier: 1 },
-  3: { star: 3, baseMult: uniform(1.6), growthMult: uniform(1.05), maxLevel: 70, skillTier: 2 },
-  4: { star: 4, baseMult: uniform(2.1), growthMult: uniform(1.08), maxLevel: 85, skillTier: 2 },
-  5: { star: 5, baseMult: uniform(2.8), growthMult: uniform(1.12), maxLevel: 99, skillTier: 3 },
+  2: { star: 2, baseMult: uniform(1.25), growthMult: uniform(1.01), maxLevel: 60, skillTier: 1 },
+  3: { star: 3, baseMult: uniform(1.55), growthMult: uniform(1.03), maxLevel: 70, skillTier: 2 },
+  4: { star: 4, baseMult: uniform(1.95), growthMult: uniform(1.05), maxLevel: 85, skillTier: 2 },
+  5: { star: 5, baseMult: uniform(2.4), growthMult: uniform(1.08), maxLevel: 99, skillTier: 3 },
 };
 
 /** 取星级档案，越界回退到 1★ 恒等档 */

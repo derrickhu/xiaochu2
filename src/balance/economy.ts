@@ -62,8 +62,8 @@ export const ECONOMY = {
     tenPullFloorRarity: 2,
     /** 重复宠转碎片数（按稀有度，越稀有越多） */
     duplicateShards: { 1: 5, 2: 10, 3: 20, 4: 40, 5: 80 } as Readonly<Record<number, number>>,
-    /** 新号初始赠送灵玉（够一发十连体验） */
-    starterLingyu: 1000,
+    /** 新号初始灵玉（0 = 不赠送，靠首通里程碑 / 侧边栏 / 图鉴等途径获取） */
+    starterLingyu: 0,
     /**
      * 高稀有护航包：NEW SSR/UR 出货附赠本体碎片 + 通用经验，
      * 保证「抽到强宠 → 立刻升 2★/拉等级 → 上阵可感知提升」的闭环。
@@ -71,7 +71,8 @@ export const ECONOMY = {
      */
     escort: {
       3: { shards: 20, exp: 300 },
-      4: { shards: 40, exp: 800 },
+      // v0.4：UR 经验包 800→700，守住「≤ 2× 第 2 章进章预算(L10) 累计经验」契约
+      4: { shards: 40, exp: 700 },
     } as Readonly<Record<number, { shards: number; exp: number }>>,
   },
 
