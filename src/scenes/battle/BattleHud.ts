@@ -606,6 +606,13 @@ export class BattleHud {
     }
   }
 
+  /** 技能直伤命中：仅立绘闪白，避免与弹道叠粒子/震屏 */
+  playEnemyHitLight(): void {
+    if (displayAlive(this._enemySprite)) {
+      flashWhite(this._enemySprite, UI.anim.enemyWhiteFlash);
+    }
+  }
+
   /** 敌人死亡：闪白 + 碎裂粒子 + 缩小淡出 */
   playEnemyDeath(fx: BattleFx): Promise<void> {
     const c = this._enemyContainer;

@@ -761,15 +761,6 @@ export class BattleFx {
     }
   }
 
-  /** L1 释放者脚下光晕（对齐 xiao_chu emitPetSkillIntro _casterGlow） */
-  spawnSkillCasterIntro(x: number, y: number, color: number): void {
-    this.spawnAuraRing(x, y, color);
-    this.burst({
-      x, y,
-      color, count: 10, speed: 200, gravity: -80, size: 12, life: 0.45,
-    });
-  }
-
   spawnAuraRing(x: number, y: number, color: number): void {
     const tex = TextureCache.get(UI_FX_IMAGES.auraRing);
     if (!tex) {

@@ -28,7 +28,7 @@ import type { BattleEnterData } from './BattleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
   makeButton, makeCoverBackground, makePanel, makeText,
-  staggerIn, popIn, fadeIn,
+  staggerIn, popIn, fadeIn, attachRarityBadge,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
 import {
@@ -384,6 +384,7 @@ export class TeamScene implements Scene {
 
       if (pet) {
         addTeamPetAvatar(slot, pet, 0, 0, slotSize);
+        attachRarityBadge(slot, pet.rarity, -slotSize / 2, -slotSize / 2, slotSize, { variant: 'codex' });
         slot.hitArea = new PIXI.Rectangle(-slotSize / 2, -slotSize / 2, slotSize, slotSize);
         slot.interactiveChildren = false;
         slot.eventMode = 'static';

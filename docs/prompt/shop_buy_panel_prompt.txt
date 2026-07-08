@@ -1,0 +1,24 @@
+Game UI asset: shop purchase button background for a Chinese fantasy mobile game shard shop.
+
+REFERENCE: Match the gold capsule on the RIGHT side of the shop row in the reference UI — solid golden fill, NOT hollow/outline-only.
+
+SHAPE (CRITICAL):
+- Horizontal pill / capsule shape, aspect ratio ~1.7:1 (wider than tall).
+- LEFT and RIGHT ends have ornamental curved bracket arcs (scalloped cloud-like concave curves on the sides), NOT simple rounded-rectangle corners.
+- The silhouette resembles a traditional Chinese UI plaque: flat top/bottom edges, decorative curved side bulges inward then outward.
+- NOT a square, NOT a plain rounded rectangle.
+
+COLOR (CRITICAL):
+- SOLID golden yellow fill throughout the entire interior — rich warm gold gradient from lighter center (#FFE566) to deeper gold edges (#E8A820).
+- Must look like a filled gold button, NOT a cream panel with gold border.
+- Thin darker gold outline around the outer edge for definition.
+
+STYLE:
+- Polished 2D game UI, subtle inner highlight, premium feel.
+- Completely EMPTY inside — no text, no icons, no numbers.
+
+OUTPUT:
+- Transparent background outside the shape.
+- NO TEXT, no labels, no captions, no writing anywhere in the image.
+- Center area should be smooth and stretchable; decorative curves only on left/right end caps.
+- Suitable for horizontal 3-slice / 9-slice UI scaling.

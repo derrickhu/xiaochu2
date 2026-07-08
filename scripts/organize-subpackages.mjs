@@ -2,7 +2,7 @@
  * 构建后整理 minigame 资源为微信分包目录（主包 ≤4MB，单分包 ≤4MB）。
  *
  * 主包保留：代码 + 棋盘/珠子 + 首页背景 + 基础 UI
- * 子包：pkg-pet / pkg-enemy / pkg-enemy-cr / pkg-scene / pkg-fx / pkg-audio
+ * 子包：pkg-pet / pkg-enemy / pkg-enemy-cr / pkg-scene / pkg-shop / pkg-fx / pkg-audio
  */
 import fs from 'fs';
 import path from 'path';
@@ -55,6 +55,7 @@ const SUBPACKAGE_NAMES = [
   'pkg-enemy',
   'pkg-enemy-cr',
   'pkg-scene',
+  'pkg-shop',
   'pkg-fx',
   'pkg-audio',
 ];
@@ -132,11 +133,30 @@ function alreadyOrganized() {
   return fs.existsSync(path.join(ROOT, 'subpackages/pkg-pet'));
 }
 
+/** 将误留在主包的大图迁回分包（构建幂等） */
+function migrateOverflowFromMain() {
+  const moves = [
+    [path.join(ROOT, 'images/ui/shop'), path.join(ROOT, 'subpackages/pkg-shop/images/ui/shop')],
+    [path.join(ROOT, 'images/ui/badge'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/badge')],
+    [path.join(ROOT, 'images/ui/panel'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/panel')],
+    [path.join(ROOT, 'images/ui/fx'), path.join(ROOT, 'subpackages/pkg-fx/images/ui/fx')],
+  ];
+  for (const [srcDir, destDir] of moves) {
+    if (!fs.existsSync(srcDir)) continue;
+    ensureDir(destDir);
+    for (const f of fs.readdirSync(srcDir)) {
+      moveFile(path.join(srcDir, f), path.join(destDir, f));
+    }
+    rmEmpty(srcDir);
+  }
+}
+
 function main() {
   if (alreadyOrganized()) {
+    migrateOverflowFromMain();
     splitEnemySubpackage();
     ensureSubpackageEntryFiles();
-    console.log('[subpackage] 已是分包结构，补跑 enemy 拆分与入口文件');
+    console.log('[subpackage] 已是分包结构，补跑主包溢出迁移与 enemy 拆分');
     reportSizes();
     return;
   }
@@ -169,6 +189,7 @@ function main() {
   rmEmpty(path.join(ROOT, 'images/ui/card'));
 
   splitEnemySubpackage();
+  migrateOverflowFromMain();
   ensureSubpackageEntryFiles();
   reportSizes();
 }

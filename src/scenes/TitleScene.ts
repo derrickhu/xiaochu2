@@ -7,12 +7,11 @@ import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
 import { UI } from '@/balance/ui';
 import { CHAPTERS, CHAPTER_NAME, stagesOfChapter } from '@/balance/stages';
-import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
-import { UI_IMAGES } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE,
-  makeText, makeIconButton, makeCurrencyRow, makeChapterNavArrow, CURRENCY_ICON_SIZE,
+  makeText, makeCurrencyRow, makeChapterNavArrow, CURRENCY_ICON_SIZE,
+  buildBottomNav, BOTTOM_NAV_RESERVE,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
 import { GMManager } from '@/core/GMManager';
@@ -41,11 +40,11 @@ export class TitleScene implements Scene {
   readonly container = new PIXI.Container();
 
   /** 底部导航区高度（紫祥云底栏 + 三图标 + 文字标签） */
-  private static readonly BOTTOM_RESERVE = 128;
+  private static readonly BOTTOM_RESERVE = BOTTOM_NAV_RESERVE;
 
   /** 资源条底边 + 间距，章节导航紧贴其下，避免挡住路径顶部节点星级 */
   private static chapterNavY(): number {
-    return Game.safeTop + 36 + CURRENCY_ICON_SIZE + 10;
+    return Game.safeTop + 36 + CURRENCY_ICON_SIZE + 20;
   }
 
   private _chapter = 1;
@@ -149,7 +148,9 @@ export class TitleScene implements Scene {
     this._buildBottomNav(w, h);
   }
 
-  /** 抖音添加到桌面入口（广告金政策必接） */
+  private _buildBottomNav(w: number, h: number): void {
+    buildBottomNav(this.container, w, h);
+  }
   private _buildDesktopShortcutEntry(w: number, h: number): void {
     if (!DesktopShortcutService.isAvailable) return;
     const reserve = TitleScene.BOTTOM_RESERVE;
@@ -214,46 +215,5 @@ export class TitleScene implements Scene {
     };
     mkArrow('left', leftX, idx > 0 ? CHAPTERS[idx - 1] : null);
     mkArrow('right', rightX, idx < CHAPTERS.length - 1 ? CHAPTERS[idx + 1] : null);
-  }
-
-  private _buildBottomNav(w: number, h: number): void {
-    const reserve = TitleScene.BOTTOM_RESERVE;
-    const navTop = h - reserve;
-
-    const navTex = TextureCache.get(UI_IMAGES.navBar);
-    if (navTex) {
-      const navBg = new PIXI.Sprite(navTex);
-      navBg.anchor.set(0.5, 1);
-      const scale = w / navTex.width;
-      navBg.scale.set(scale);
-      navBg.position.set(w / 2, h);
-      this.container.addChild(navBg);
-    } else {
-      const barBg = new PIXI.Graphics();
-      barBg.beginFill(COLORS.navBarFallback, 0.96);
-      barBg.drawRect(0, navTop, w, reserve);
-      barBg.endFill();
-      this.container.addChild(barBg);
-    }
-
-    const navIconSize = 64;
-    const btnY = navTop + 56;
-    const canGacha = PlayerData.lingyu >= ECONOMY.gacha.singleCost;
-    const slots: { label: string; icon: string; x: number; onTap: () => void; active?: boolean }[] = [
-      { label: '灵宠', icon: UI_IMAGES.navPet, x: w * 0.14, onTap: () => SceneManager.switchTo('codex') },
-      { label: '召唤', icon: UI_IMAGES.iconRecruit, x: w * 0.38, active: canGacha, onTap: () => SceneManager.switchTo('gacha') },
-      { label: '商店', icon: UI_IMAGES.iconCoin, x: w * 0.62, onTap: () => SceneManager.switchTo('shop') },
-      { label: '编队', icon: UI_IMAGES.navTeam, x: w * 0.86, onTap: () => SceneManager.switchTo('team') },
-    ];
-    for (const s of slots) {
-      const btn = makeIconButton({
-        iconPath: s.icon, iconSize: navIconSize,
-        label: s.label, labelSize: 22,
-        labelColor: s.active ? COLORS.navTextActive : COLORS.navText,
-        onTap: s.onTap,
-      });
-      btn.position.set(s.x, btnY);
-      this.container.addChild(btn);
-    }
   }
 }

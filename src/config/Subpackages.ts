@@ -11,6 +11,7 @@ export const SUBPACKAGE_ROOT = {
   enemy: 'subpackages/pkg-enemy',
   enemyCr: 'subpackages/pkg-enemy-cr',
   scene: 'subpackages/pkg-scene',
+  shop: 'subpackages/pkg-shop',
   fx: 'subpackages/pkg-fx',
   audio: 'subpackages/pkg-audio',
 } as const;
@@ -23,6 +24,7 @@ const PLATFORM_SUBPACKAGE_NAME: Record<SubpackageName, string> = {
   enemy: 'pkg-enemy',
   enemyCr: 'pkg-enemy-cr',
   scene: 'pkg-scene',
+  shop: 'pkg-shop',
   fx: 'pkg-fx',
   audio: 'pkg-audio',
 };

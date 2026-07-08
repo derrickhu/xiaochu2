@@ -13,7 +13,7 @@ import { skillForPet } from '@/game/battle/SkillEngine';
 import { ORB_IMAGES } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
-  makePanel, makeText, makeRarityBadge, makeRoleBadge,
+  makePanel, makeText, attachRarityBadge, makeRoleBadge,
 } from '@/ui';
 import { passiveDisplayLines } from './abilityInfo';
 
@@ -48,14 +48,16 @@ export function buildAbilityPanel(pet: PetDef, opts: AbilityCardOpts): PIXI.Cont
   // 头像
   const avatarTex = getPetAvatarTexture(pet.id, opts.star ?? 1);
   const avatarSize = 110;
+  const avatarTop = 24;
   if (avatarTex) {
     const avatar = new PIXI.Sprite(avatarTex);
     avatar.width = avatarSize;
     avatar.height = avatarSize;
-    avatar.position.set(padX, 24);
+    avatar.position.set(padX, avatarTop);
     if (!opts.owned) avatar.tint = 0x8a8a8a;
     cont.addChild(avatar);
   }
+  attachRarityBadge(cont, pet.rarity, padX, avatarTop, avatarSize, { variant: 'list' });
 
   // 属性珠
   const orbTex = TextureCache.get(ORB_IMAGES[pet.element]);
@@ -74,12 +76,8 @@ export function buildAbilityPanel(pet: PetDef, opts: AbilityCardOpts): PIXI.Cont
   name.position.set(infoX, 28);
   cont.addChild(name);
 
-  const badge = makeRarityBadge({ tier: pet.rarity, scale: 1.6 });
-  badge.position.set(infoX, 70);
-  cont.addChild(badge);
-
   const role = makeRoleBadge({ role: pet.role, scale: 1.6, maxWidth: 160 });
-  role.position.set(infoX + badge.width + 12, 70);
+  role.position.set(infoX, 70);
   cont.addChild(role);
 
   const elemLine = makeText(`${ELEMENT_NAME[pet.element]}属性`, {

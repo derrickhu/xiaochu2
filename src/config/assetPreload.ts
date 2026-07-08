@@ -15,7 +15,10 @@ import {
   PET_FRAME_IMAGES,
   UI_FX_IMAGES,
   UI_IMAGES,
+  UI_SHOP_IMAGES,
   UI_SCENE_IMAGES,
+  UI_PANEL_IMAGES,
+  RARITY_BADGE_IMAGES,
   battleBgImage,
   enemyImage,
   petAvatarLoadPaths,
@@ -28,6 +31,8 @@ import { preloadPetAvatarTextures } from '@/config/petAvatarTexture';
 export const PET_POOL_SHELL_IMAGES: readonly string[] = [
   BACKGROUND_IMAGES.petPool,
   UI_IMAGES.titlePlaque,
+  UI_IMAGES.rarityBadgeSheet,
+  ...Object.values(RARITY_BADGE_IMAGES),
 ];
 
 export const CODEX_SHELL_IMAGES: readonly string[] = [
@@ -50,7 +55,11 @@ export const GACHA_SHELL_IMAGES: readonly string[] = [
 ];
 
 export const SHOP_SHELL_IMAGES: readonly string[] = [
-  ...PET_POOL_SHELL_IMAGES,
+  BACKGROUND_IMAGES.shop,
+  UI_IMAGES.titlePlaque,
+  UI_IMAGES.rarityBadgeSheet,
+  ...Object.values(RARITY_BADGE_IMAGES),
+  ...Object.values(UI_SHOP_IMAGES),
   UI_FX_IMAGES.particleSpark,
 ];
 
@@ -108,6 +117,7 @@ export function battlePreloadImages(stageId: string, teamPetIds: readonly string
     ...Object.values(BOARD_IMAGES),
     ...Object.values(ORB_IMAGES),
     ...Object.values(PET_FRAME_IMAGES),
+    UI_PANEL_IMAGES.battleVictory,
     battleBgImage(stage.element),
   ];
   for (const ref of stage.encounters) {
@@ -146,7 +156,10 @@ export function shopPreloadImages(): readonly string[] {
 }
 
 export function shopPetAvatarEntries(): PetAvatarPreloadEntry[] {
-  return PETS.map((pet) => ({ petId: pet.id, star: 1 }));
+  return PlayerData.ownedPets.map((petId) => ({
+    petId,
+    star: PlayerData.petStar(petId),
+  }));
 }
 
 /** 灵宠详情：壳 + 当前灵宠头像与相框 */

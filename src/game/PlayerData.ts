@@ -303,9 +303,12 @@ class PlayerDataClass {
     return gachaPoolPetsFromSave(element).map((p) => p.id);
   }
 
-  /** 商店碎片池 = 全花名册（与召唤池一致） */
+  /** 商店碎片池 = 玩家已拥有的灵宠 */
   shopPoolIds(element?: Element): readonly string[] {
-    return this.gachaPoolIds(element);
+    return this.ownedPets.filter((id) => {
+      const pet = PET_MAP.get(id);
+      return pet && (!element || pet.element === element);
+    });
   }
 
   // ═══════════ 图鉴 ═══════════

@@ -1,0 +1,20 @@
+Game UI asset: horizontal shop item row background panel for a Chinese fantasy mobile game.
+
+REFERENCE: Match the cream row container from the shop UI mockup — one wide horizontal frame that wraps the entire product row (pet portrait on left + text in center + gold buy button on right).
+
+SHAPE & SIZE:
+- Wide horizontal rounded rectangle, aspect ratio approximately 7:1 (about 1400x200 pixels feel).
+- Generous width; the panel must look wide enough to contain a large pet portrait AND a gold purchase capsule on the right inside the same border.
+- Moderate height (~120-140px visual proportion).
+- Corner radius: soft rounded corners, NOT sharp.
+
+STYLE:
+- Interior fill: warm light cream / parchment beige (#F8F2E4), flat with very subtle paper texture.
+- Border: thin elegant metallic gold stroke (single clean line, ~2-3px), slightly glossy.
+- NO inner dividers, NO shadows outside, NO decorative ornaments inside.
+- The panel is EMPTY — no pet, no text, no buttons drawn inside.
+
+OUTPUT:
+- Transparent background outside the panel.
+- NO TEXT, no labels, no captions, no writing anywhere in the image.
+- Clean game-ready 2D UI sprite, crisp edges, suitable for horizontal 9-slice scaling.

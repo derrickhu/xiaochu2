@@ -1,1 +1,17 @@
-{"description":"灵宠消消塔 2（抖音小游戏工程配置，用抖音开发者工具直接打开 minigame/ 目录）","projectname":"灵宠消消塔","appid":"tt64d6126bfab7cc5502","libVersion":"3.19.0","setting":{"es6":true,"minified":true,"urlCheck":false}}
+{
+    "description": "灵宠消消塔 2（抖音小游戏工程配置，用抖音开发者工具直接打开 minigame/ 目录）",
+    "projectname": "灵宠消消塔",
+    "appid": "tt64d6126bfab7cc5502",
+    "libVersion": "3.19.0",
+    "setting": {
+        "es6": true,
+        "minified": true,
+        "urlCheck": false
+    },
+    "condition": {
+        "game": {
+            "current": -1,
+            "list": []
+        }
+    }
+}

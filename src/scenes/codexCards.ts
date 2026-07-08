@@ -10,7 +10,7 @@ import {
   makeLevelLabel,
   makePanel,
   makePetStatsLine,
-  makeRarityBadge,
+  attachRarityBadge,
   makeRoleBadge,
   makeStarRow,
   makeText,
@@ -42,16 +42,20 @@ export function buildLockedCodexCard(
   }
 
   const avatarSize = cardW * 0.62;
+  const avatarLeft = (cardW - avatarSize) / 2;
+  const avatarTop = 8 * S;
+
   const avatarTex = getPetAvatarTexture(pet.id, 1);
   if (avatarTex) {
     const avatar = new PIXI.Sprite(avatarTex);
     avatar.width = avatarSize;
     avatar.height = avatarSize;
-    avatar.position.set((cardW - avatarSize) / 2, 8 * S);
+    avatar.position.set(avatarLeft, avatarTop);
     avatar.tint = 0x111317;
     avatar.alpha = 0.85;
     item.addChild(avatar);
   }
+  attachRarityBadge(item, pet.rarity, 0, 0, avatarSize, { variant: 'codex' });
 
   const lock = makeText('未获得', {
     size: Math.round(11 * S), fill: COLORS.textSub,
@@ -102,19 +106,19 @@ export function buildOwnedCodexCard(
     item.addChild(orb);
   }
 
-  const badge = makeRarityBadge({ tier: pet.rarity, scale: S });
-  badge.position.set(2 * S, 2 * S);
-  item.addChild(badge);
-
   const avatarSize = cardW * 0.62;
+  const avatarLeft = (cardW - avatarSize) / 2;
+  const avatarTop = 8 * S;
+
   const avatarTex = getPetAvatarTexture(pet.id, star);
   if (avatarTex) {
     const avatar = new PIXI.Sprite(avatarTex);
     avatar.width = avatarSize;
     avatar.height = avatarSize;
-    avatar.position.set((cardW - avatarSize) / 2, 8 * S);
+    avatar.position.set(avatarLeft, avatarTop);
     item.addChild(avatar);
   }
+  attachRarityBadge(item, pet.rarity, 0, 0, avatarSize, { variant: 'codex' });
 
   const displayName = pet.name.length > 4 ? `${pet.name.slice(0, 4)}…` : pet.name;
   const nameY = 8 * S + avatarSize + 6 * S;

@@ -15,7 +15,7 @@ import { PersistService } from '@/core/PersistService';
 import { CloudSyncManager } from '@/managers/CloudSyncManager';
 import { PlayerData } from '@/game/PlayerData';
 import { MAIN_PRELOAD_IMAGES } from '@/config/Assets';
-import { ensureAudioSubpackage } from '@/config/Subpackages';
+import { ensureAudioSubpackage, loadSubpackagesForPaths } from '@/config/Subpackages';
 import { warmupCommonSubpackages } from '@/config/SubpackageWarmup';
 import { TitleScene } from '@/scenes/TitleScene';
 import { BattleScene } from '@/scenes/BattleScene';
@@ -94,6 +94,7 @@ async function main(): Promise<void> {
   PlayerData.load();
   initialSaveLoaded = true;
 
+  await loadSubpackagesForPaths(MAIN_PRELOAD_IMAGES);
   await TextureCache.preload([...MAIN_PRELOAD_IMAGES]);
 
   SceneManager.register(new TitleScene());

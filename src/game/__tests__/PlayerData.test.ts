@@ -19,8 +19,11 @@ describe('初始存档', () => {
     expect(PlayerData.codexCount).toBeGreaterThanOrEqual(DEFAULT_TEAM.length);
   });
 
-  it('商店/召唤池覆盖全花名册', () => {
-    expect(PlayerData.shopPoolIds().length).toBe(PETS.length);
+  it('商店池为已拥有灵宠，召唤池覆盖全花名册', () => {
+    expect(PlayerData.shopPoolIds().length).toBe(PlayerData.ownedPets.length);
+    for (const id of PlayerData.shopPoolIds()) {
+      expect(PlayerData.isOwned(id)).toBe(true);
+    }
     expect(PlayerData.gachaPoolIds().length).toBe(PETS.length);
   });
 

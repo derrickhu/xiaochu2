@@ -1,0 +1,21 @@
+Mobile game SHOP BACKGROUND plate only, portrait 9:16 (750x1334 proportions), NO UI elements.
+
+ART STYLE (match xiaochu2 approved Q版 bright国风 xianxia):
+- Pastel cute mobile game environment: soft cel-shading, thin warm outlines
+- Color palette: cream mint sky glow, warm golden lantern light, rice-paper white shelves, bamboo accents, purple-lavender mist at bottom edges
+- Same family as scene_pet_pool: bright cheerful, NOT dark, NOT realistic
+
+SCENE: cozy xianxia spirit pet shop interior viewed from customer perspective
+- Wooden display shelves with empty niches (left and right margins, center kept relatively open for UI overlay)
+- Hanging red-gold paper lanterns with soft warm glow
+- Bamboo pots, spirit wisps, small glowing crystals on shelves
+- Subtle depth of field blur on far background
+- Top area: soft bright cream-mint sky light (safe for title overlay)
+- Bottom 18%: gentle purple-lavender atmospheric fade (blend with nav bar)
+- Center vertical band kept calmer/lighter for product card overlays
+
+MUST NOT include:
+- NO UI, NO text, NO buttons, NO cards, NO numbers, NO labels, NO pets, NO characters
+- NO watermark
+
+NO TEXT anywhere in the image.

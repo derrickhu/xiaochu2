@@ -26,7 +26,7 @@ import {
 import {
   COLORS, FONT_SIZE, RADIUS,
   makeButton, makeCoverBackground, makePanel, makeText,
-  makeRarityBadge, makeCurrencyLabel, makeProgressBar,
+  attachRarityBadge, makeCurrencyLabel, makeProgressBar,
   SceneFx, type ButtonHandle,
 } from '@/ui';
 import { GachaRevealSequence } from './gacha/gachaRevealSequence';
@@ -509,19 +509,19 @@ export class GachaScene implements Scene {
       bg: COLORS.panelBg, border: def.color, borderWidth: 3,
     }));
 
-    const badge = makeRarityBadge({ tier: o.rarity, scale: cardW / 120 });
-    badge.position.set(6, 6);
-    card.addChild(badge);
-
     const avatarSize = cardW * 0.66;
+    const avatarLeft = (cardW - avatarSize) / 2;
+    const avatarTop = cardH * 0.16;
+
     const avatarTex = getPetAvatarTexture(o.petId, 1);
     if (avatarTex) {
       const avatar = new PIXI.Sprite(avatarTex);
       avatar.width = avatarSize;
       avatar.height = avatarSize;
-      avatar.position.set((cardW - avatarSize) / 2, cardH * 0.16);
+      avatar.position.set(avatarLeft, avatarTop);
       card.addChild(avatar);
     }
+    attachRarityBadge(card, o.rarity, avatarLeft, avatarTop, avatarSize, { variant: 'list' });
 
     const name = pet?.name ?? o.petId;
     const nameText = makeText(name.length > 5 ? `${name.slice(0, 5)}…` : name, {

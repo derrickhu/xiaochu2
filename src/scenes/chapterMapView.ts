@@ -27,6 +27,8 @@ import { ScrollListController } from '@/ui/ScrollList';
 const SHIELD_H = 88;
 const SHIELD_W = 64;
 const NODE_HIT_R = 52;
+/** 关卡路径整体下移（屏幕像素），与顶栏资源图标留出呼吸间距 */
+const TITLE_MAP_TOP_INSET = 32;
 
 type NodeKind = 'cleared' | 'active' | 'locked';
 
@@ -321,7 +323,7 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
 
   const world = new PIXI.Container();
   world.scale.set(fit.scale);
-  world.position.set(fit.offsetX, fit.offsetY);
+  world.position.set(fit.offsetX, fit.offsetY + TITLE_MAP_TOP_INSET);
   root.addChild(world);
 
   const bgTex = TextureCache.get(BACKGROUND_IMAGES.titleScreen)

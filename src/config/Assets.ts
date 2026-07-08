@@ -1,10 +1,11 @@
 /**
  * 图片资源路径映射表（单一真源）
  *
- * 主包：board / orb / scene_home / 基础 UI
+ * 主包：board / orb / scene_home / 基础 UI（导航、货币图标等）
  * 分包：见 config/Subpackages.ts（构建后由 scripts/organize-subpackages.mjs 整理目录）
  */
 import type { Element, OrbType } from '@/balance/combat';
+import type { Rarity } from '@/balance/rarity';
 import {
   creatureUsesCrSubpackage,
   legacyCreatureId,
@@ -114,6 +115,8 @@ export const BACKGROUND_IMAGES = {
   chapterMap: `${IMG}/bg/title_screen.jpg`,
   petDetail: `${PKG.scene}/images/bg/scene_pet_detail.jpg`,
   petPool: `${PKG.scene}/images/bg/scene_pet_pool.jpg`,
+  /** 碎片商店专用背景（9:16 商铺内景） */
+  shop: `${PKG.scene}/images/bg/scene_shop.jpg`,
 } as const;
 
 /** 战斗背景（pkg-scene） */
@@ -133,18 +136,40 @@ export function battleBgImage(element: Element): string {
 export const UI_IMAGES = {
   titleLogo: `${IMG}/ui/logo/title.png`,
   navBar: `${IMG}/ui/bar/nav_bottom.png`,
+  /** 底栏当前 tab 选中光晕 + 底部祥云（pkg-fx） */
+  navTabActiveFx: `${PKG.fx}/images/ui/fx/nav_tab_active.png`,
   navPet: `${IMG}/ui/icon/nav_pet.png`,
+  navShop: `${IMG}/ui/icon/nav_shop.png`,
   navTeam: `${IMG}/ui/icon/nav_team.png`,
   iconCoin: `${IMG}/ui/icon/currency_coin.png`,
   iconExp: `${IMG}/ui/icon/currency_exp.png`,
   iconLingyu: `${IMG}/ui/icon/currency_lingyu.png`,
   iconRecruit: `${IMG}/ui/icon/action_recruit.png`,
   titlePlaque: `${IMG}/ui/plaque/title.png`,
+  /** R/SR/SSR/UR 角标雪碧图（pkg-scene，优先读单张 rarity_*.png） */
+  rarityBadgeSheet: `${PKG.scene}/images/ui/badge/rarity_sheet.png`,
 } as const;
 
-/** 战斗/UI 面板（主包） */
+/** 碎片商店专用 UI 贴图（pkg-shop） */
+export const UI_SHOP_IMAGES = {
+  titlePlaque: `${PKG.shop}/images/ui/shop/shop_title_plaque.png`,
+  coinPill: `${PKG.shop}/images/ui/shop/shop_coin_pill.png`,
+  rowPanel: `${PKG.shop}/images/ui/shop/shop_row_panel.png`,
+  buyPanel: `${PKG.shop}/images/ui/shop/shop_buy_panel.png`,
+  sectionBar: `${PKG.shop}/images/ui/shop/shop_section_bar.png`,
+} as const;
+
+/** 稀有度角标单张（pkg-scene） */
+export const RARITY_BADGE_IMAGES: Readonly<Record<Rarity, string>> = {
+  1: `${PKG.scene}/images/ui/badge/rarity_r.png`,
+  2: `${PKG.scene}/images/ui/badge/rarity_sr.png`,
+  3: `${PKG.scene}/images/ui/badge/rarity_ssr.png`,
+  4: `${PKG.scene}/images/ui/badge/rarity_ur.png`,
+};
+
+/** 战斗/UI 面板（pkg-scene，战斗结算按需加载） */
 export const UI_PANEL_IMAGES = {
-  battleVictory: `${IMG}/ui/panel/battle_victory.png`,
+  battleVictory: `${PKG.scene}/images/ui/panel/battle_victory.png`,
 } as const;
 
 /** 场景卡片 UI（pkg-scene） */
@@ -170,7 +195,6 @@ export const MAIN_PRELOAD_IMAGES: readonly string[] = [
   BACKGROUND_IMAGES.titleScreen,
   ...Object.values(MAP_UI_IMAGES),
   ...Object.values(UI_IMAGES),
-  ...Object.values(UI_PANEL_IMAGES),
   ...Object.values(PET_FRAME_IMAGES),
   ...Object.values(ORB_IMAGES),
 ];

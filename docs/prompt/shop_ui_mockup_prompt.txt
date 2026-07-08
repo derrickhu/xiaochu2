@@ -1,0 +1,28 @@
+Mobile game SHOP UI mockup screen, portrait 9:16 (750x1334 proportions), full UI layout design for approval.
+
+ART STYLE (match xiaochu2 Q版修仙 bright国风):
+- Pastel cute mobile game UI: soft cel-shading, thin warm outlines, rounded corners
+- Color palette: cream paper white #FDF3DF panels, warm gold #E8A33D accents, deep brown text #3A2E22, purple-lavender bottom atmosphere #5A3F7A hints
+- NOT dark fantasy, NOT cyberpunk, NOT realistic — bright cheerful xianxia shop aesthetic
+- Background: soft blurred xianxia interior — wooden shelves, hanging lanterns, spirit wisps, bamboo accents, warm golden ambient light, shallow depth of field
+
+LAYOUT (top to bottom):
+1. TOP BAR: left rounded ghost button "返回", center ornate gold title plaque "碎片商店", right area empty
+2. CURRENCY ROW: centered green coin icon + number "5903" in bold
+3. SECTION HEADER gold-brown text: "推荐：克制第5章 · 金灵宠"
+4. THREE PRODUCT ROW CARDS (cream rounded panels, gold border, horizontal):
+   - Left: cute chibi pet avatar in circle frame + small SR rarity badge corner
+   - Middle: pet name bold + subtitle "金 · 当前碎片 12"
+   - Right: golden pill button "碎片×5" and "600 币"
+   - Show 3 different cute fantasy pets (rhino, bird, fox) with element color hints
+5. SECTION HEADER: "每日轮换"
+6. THREE MORE similar product row cards with different pets
+7. BOTTOM NAV BAR: purple cloud pattern bar with 4 icons — 灵宠, 召唤, 商店(active/highlighted), 编队
+
+UI QUALITY:
+- Clean readable Chinese placeholder text (this is a UI mockup, text IS required)
+- Generous padding, card shadows, subtle paper texture on panels
+- Premium mobile game shop feel like Genshin/阴阳师 but brighter Q版 style
+- "商店" tab highlighted with golden glow
+
+NO watermark, NO logo, polished game UI concept art.

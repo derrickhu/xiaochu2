@@ -18,9 +18,8 @@ import {
   makeLevelStarLine,
   makePanel,
   makePetStatsLine,
-  makeRarityBadge,
+  attachRarityBadge,
   makeRarityCardBorder,
-  makeRarityNameLine,
   makeShardBadge,
   makeText,
 } from '@/ui';
@@ -160,22 +159,21 @@ function buildListItem(
     }));
   }
 
-  const badge = makeRarityBadge({ tier: pet.rarity, scale: Game.logicWidth / 375 });
-  badge.position.set(-LIST_CARD_W / 2 + LIST_LEFT_PAD, -LIST_CARD_H / 2 + 6);
-  item.addChild(badge);
-
+  const frameLeft = -LIST_CARD_W / 2;
+  const frameTop = -LIST_CARD_H / 2;
   const avatarX = -LIST_CARD_W / 2 + LIST_LEFT_PAD + LIST_AVATAR_SIZE / 2;
   addTeamPetAvatar(item, pet, avatarX, 4, LIST_AVATAR_SIZE);
+  attachRarityBadge(item, pet.rarity, frameLeft, frameTop, LIST_AVATAR_SIZE, { variant: 'codex' });
   const shardBadge = makeShardBadge({ shards: PlayerData.petShards(pet.id) });
   shardBadge.position.set(avatarX, 4 + LIST_AVATAR_SIZE / 2 + 14);
   item.addChild(shardBadge);
 
   const textX = -LIST_CARD_W / 2 + LIST_LEFT_PAD + LIST_AVATAR_SIZE + LIST_TEXT_GAP;
-  const nameLine = makeRarityNameLine(pet.rarity, pet.name, {
-    size: FONT_SIZE.xs, nameFill: COLORS.textMain,
+  const nameText = makeText(pet.name, {
+    size: FONT_SIZE.xs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
   });
-  nameLine.position.set(textX, -30);
-  item.addChild(nameLine);
+  nameText.position.set(textX, -30);
+  item.addChild(nameText);
 
   const line2 = makeElementRoleLine(pet.element, pet.role, { size: FONT_SIZE.xxs });
   line2.position.set(textX, -6);

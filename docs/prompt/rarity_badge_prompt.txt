@@ -1,0 +1,17 @@
+Game UI rarity corner badge sprite sheet, 4 badges in ONE horizontal row, aspect 4:1 landscape.
+
+Each badge is identical ribbon shape: small folded corner tag / pentagon shield badge for mobile game pet card corner overlay.
+
+Left to right exactly 4 badges with text labels:
+1. "R" — green theme: emerald green gradient body #6FD86A, dark green border, white bold text
+2. "SR" — blue theme: sky blue gradient #4AA3FF, navy border, white bold text
+3. "SSR" — purple theme: violet gradient #B06BFF, deep purple border, white bold text
+4. "UR" — gold theme: warm gold gradient #FFB43D, bronze border, white bold text
+
+STYLE (match approved shop UI mockup corner badges):
+- Cute Q版 mobile game UI, glossy cel-shaded, subtle highlight, thin outline
+- Same size and shape for all four, evenly spaced, equal width cells
+- Transparent background (alpha outside badges)
+- Clean game-ready sprites, no shadow on ground
+
+NO watermark. Only the four badges and transparent background.
