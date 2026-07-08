@@ -15,6 +15,19 @@
         ".env",
         "*.local"
       ]
+    },
+    {
+      "name": "analytics-ingest",
+      "type": "Event",
+      "handler": "index.main",
+      "timeout": 10,
+      "runtime": "Nodejs18.15",
+      "memorySize": 256,
+      "installDependency": true,
+      "envVariables": {
+        "ANALYTICS_COLLECTION": "analytics_events",
+        "ANALYTICS_GAME_KEYS": "hotpot,huahua,caizhu,xiaochu,petTower,petTower_tt"
+      }
     }
   ]
 }

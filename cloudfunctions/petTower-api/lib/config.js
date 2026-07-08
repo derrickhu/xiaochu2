@@ -2,6 +2,13 @@ const DEFAULT_GAME_KEY = 'petTower';
 const DEFAULT_TTL_SEC = 7 * 24 * 3600;
 const DEFAULT_MAX_BYTES = 256 * 1024;
 
+/** 后端 platform 字段 → 命名空间段（与客户端 gameKeyScope 一致） */
+function getPlatformScope(platform) {
+  const p = String(platform || '').toLowerCase();
+  if (p === 'dy' || p === 'tt' || p === 'douyin') return 'tt';
+  return null;
+}
+
 function getGameKey() {
   const v = String(process.env.GAME_KEY || '').trim().toLowerCase();
   if (!v) return DEFAULT_GAME_KEY;
@@ -9,6 +16,17 @@ function getGameKey() {
     throw new Error(`非法 GAME_KEY: ${v}`);
   }
   return v;
+}
+
+/** 存档 / 集合 / JWT gk 使用的命名空间：微信 petTower，抖音 petTower_tt */
+function getScopedGameKey(platform) {
+  const base = getGameKey();
+  const scope = getPlatformScope(platform);
+  return scope ? `${base}_${scope}` : base;
+}
+
+function scopedKeyUpper(platform) {
+  return getScopedGameKey(platform).toUpperCase().replace(/[^A-Z0-9]/g, '_');
 }
 
 function gameKeyUpper() {
@@ -25,13 +43,14 @@ function readEnvPrefer(...keys) {
   return '';
 }
 
-function getCollectionName(suffix) {
-  const overrideKey = `${gameKeyUpper()}_${suffix.toUpperCase()}_COLLECTION`;
+function getCollectionName(suffix, platform) {
+  const normalizedSuffix = String(suffix || '').replace(/^_+/, '');
+  const overrideKey = `${scopedKeyUpper(platform)}_${normalizedSuffix.toUpperCase()}_COLLECTION`;
   const override = process.env[overrideKey];
   if (override) {
     return String(override);
   }
-  return `${getGameKey()}_${suffix}`;
+  return `${getScopedGameKey(platform)}_${normalizedSuffix}`;
 }
 
 function getJwtSecret() {
@@ -58,6 +77,9 @@ function getPlatformCredential(platform, field) {
 
 module.exports = {
   getGameKey,
+  getPlatformScope,
+  getScopedGameKey,
+  scopedKeyUpper,
   gameKeyUpper,
   getCollectionName,
   getJwtSecret,

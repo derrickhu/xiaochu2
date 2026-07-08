@@ -15,8 +15,8 @@ function getDb() {
   return getApp().database();
 }
 
-function getCollection() {
-  return getDb().collection(getCollectionName('playerData'));
+function getCollection(platform) {
+  return getDb().collection(getCollectionName('playerData', platform));
 }
 
 module.exports = {

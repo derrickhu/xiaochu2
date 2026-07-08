@@ -3,10 +3,35 @@ const { requireUser } = require('./auth');
 const { getCollection } = require('./db');
 const { getMaxBytes } = require('./config');
 
+function isCollectionNotExistError(error) {
+  const msg = String((error && error.message) || error || '');
+  return /collection not exist|DATABASE_COLLECTION_NOT_EXIST|ResourceNotFound|Db or Table not exist/i.test(msg);
+}
+
+function emptyPullResult(userId, platform) {
+  return {
+    userId,
+    platform,
+    exists: false,
+    schemaVersion: 0,
+    updatedAt: 0,
+    payload: {},
+    payloadKeys: [],
+  };
+}
+
 async function handlePull(req) {
   const { userId, platform } = requireUser(req);
-  const col = getCollection();
-  const res = await col.where({ userId }).limit(1).get();
+  const col = getCollection(platform);
+  let res;
+  try {
+    res = await col.where({ userId }).limit(1).get();
+  } catch (error) {
+    if (isCollectionNotExistError(error)) {
+      return emptyPullResult(userId, platform);
+    }
+    throw error;
+  }
   const doc = (res && Array.isArray(res.data) && res.data[0]) || null;
   if (!doc) {
     return {
@@ -68,9 +93,16 @@ async function handlePush(req) {
     payloadKeys.push(key);
   }
 
-  const col = getCollection();
-  const existingRes = await col.where({ userId }).limit(1).get();
-  const existing = (existingRes && Array.isArray(existingRes.data) && existingRes.data[0]) || null;
+  const col = getCollection(platform);
+  let existing = null;
+  try {
+    const existingRes = await col.where({ userId }).limit(1).get();
+    existing = (existingRes && Array.isArray(existingRes.data) && existingRes.data[0]) || null;
+  } catch (error) {
+    if (!isCollectionNotExistError(error)) {
+      throw error;
+    }
+  }
   if (existing && !force) {
     const prevUpdatedAt = Number(existing.updatedAt) || 0;
     if (updatedAt < prevUpdatedAt || baseRemoteUpdatedAt < prevUpdatedAt) {

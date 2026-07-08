@@ -1,15 +1,19 @@
 /**
  * 统一 HTTP 后端 / 经分 / 云同步配置（CloudBase HTTP 访问服务）
  *
- * 多游戏复用时只需改 GAME_KEY；客户端存档 key、后端路径前缀、经分 game_key 均由此派生。
+ * 多游戏复用时改 BASE_GAME_KEY；多平台数据隔离见 gameKeyScope.ts（抖音 petTower_tt_*）。
  */
-export const GAME_KEY = 'petTower';
+import {
+  BASE_GAME_KEY,
+  getScopedGameKey,
+  scopedStorageKey,
+} from '@/config/gameKeyScope';
 
 /** CloudBase HTTP 访问服务根域名（不含路径） */
 export const BACKEND_BASE_URL = 'https://rosa-env-d7grf78r5dbd37323.service.tcloudbase.com';
 
-/** 本游戏 API 挂载前缀（cloudfunctions/${GAME_KEY}-api） */
-export const BACKEND_PATH_PREFIX = `/${GAME_KEY}-api`;
+/** 本游戏 API 挂载前缀（cloudfunctions/${BASE_GAME_KEY}-api，平台无关） */
+export const BACKEND_PATH_PREFIX = `/${BASE_GAME_KEY}-api`;
 
 export const BACKEND_LOGIN_PATH = `${BACKEND_PATH_PREFIX}/login`;
 export const BACKEND_PULL_PATH = `${BACKEND_PATH_PREFIX}/save/pull`;
@@ -22,17 +26,20 @@ export const ANALYTICS_ENDPOINT = `${BACKEND_BASE_URL}${ANALYTICS_INGEST_PATH}`;
 
 export const BACKEND_REQUEST_TIMEOUT_MS = 10000;
 
-export const BACKEND_TOKEN_KEY = `${GAME_KEY}_token`;
-export const BACKEND_ANON_ID_KEY = `${GAME_KEY}_anon_id`;
+/** 经分 / JWT / 云存档命名空间（运行时按宿主：微信 petTower，抖音 petTower_tt） */
+export const GAME_KEY = getScopedGameKey();
 
-/** 本地存档 key（与 GAME_KEY 绑定） */
-export const SAVE_KEY = `${GAME_KEY}_save_v2`;
-export const LEGACY_SAVE_KEY = `${GAME_KEY}_save_v1`;
-/** 开发期旧项目名存档，仅迁移用 */
+export const BACKEND_TOKEN_KEY = scopedStorageKey('token');
+export const BACKEND_ANON_ID_KEY = scopedStorageKey('anon_id');
+
+/** 本地存档 key（与 SCOPED GAME_KEY 绑定） */
+export const SAVE_KEY = scopedStorageKey('save_v2');
+export const LEGACY_SAVE_KEY = scopedStorageKey('save_v1');
+/** 开发期旧项目名存档，仅微信侧迁移用 */
 export const DEV_LEGACY_SAVE_KEYS = ['xiaochu2_save_v2', 'xiaochu2_save_v1'] as const;
 
 export const CLOUD_SYNC_SCHEMA_VERSION = 1;
-export const CLOUD_SYNC_META_KEY = `${GAME_KEY}_cloud_meta`;
+export const CLOUD_SYNC_META_KEY = scopedStorageKey('cloud_meta');
 
 /** 参与云同步的本地 storage key（value 为原始 JSON 字符串） */
 export const CLOUD_SYNC_ALLOWLIST = [SAVE_KEY] as const;
@@ -51,3 +58,5 @@ export const CLOUD_SYNC_RETRY_INTERVAL_MS = 60000;
 export const CLOUD_SYNC_LOG_THRESHOLD = 3;
 
 export type CloudSyncKey = typeof CLOUD_SYNC_ALLOWLIST[number];
+
+export { BASE_GAME_KEY, getScopedGameKey, scopedStorageKey } from '@/config/gameKeyScope';

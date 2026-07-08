@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const { httpError } = require('./http');
 const {
   getGameKey,
+  getScopedGameKey,
   gameKeyUpper,
   getJwtSecret: readJwtSecret,
   getTtlSec,
@@ -46,10 +47,10 @@ async function handleLogin(req) {
 
   const userId = `${platform}:${platformUid}`;
   const ttlSec = getTtlSec();
-  const gameKey = getGameKey();
+  const scopedGameKey = getScopedGameKey(platform);
   const now = Math.floor(Date.now() / 1000);
   const token = jwt.sign(
-    { sub: userId, plt: platform, gk: gameKey, iat: now },
+    { sub: userId, plt: platform, gk: scopedGameKey, iat: now },
     getJwtSecret(),
     { expiresIn: ttlSec },
   );
@@ -58,7 +59,8 @@ async function handleLogin(req) {
     token,
     userId,
     platform,
-    gameKey,
+    gameKey: scopedGameKey,
+    baseGameKey: getGameKey(),
     expiresAt: (now + ttlSec) * 1000,
     ttlSec,
   };
@@ -81,12 +83,17 @@ function requireUser(req) {
     throw httpError(401, 'BAD_TOKEN', 'token sub 非法');
   }
 
-  const currentGameKey = getGameKey();
+  const platform = payload.plt || userId.split(':')[0];
+  const currentGameKey = getScopedGameKey(platform);
   if (payload.gk && payload.gk !== currentGameKey) {
-    throw httpError(401, 'BAD_TOKEN', `token gameKey=${payload.gk} 与当前 GAME_KEY=${currentGameKey} 不匹配`);
+    throw httpError(
+      401,
+      'BAD_TOKEN',
+      `token gameKey=${payload.gk} 与当前 scoped GAME_KEY=${currentGameKey} 不匹配`,
+    );
   }
 
-  return { userId, platform: payload.plt || userId.split(':')[0] };
+  return { userId, platform, gameKey: currentGameKey };
 }
 
 async function wxCode2Session(code) {

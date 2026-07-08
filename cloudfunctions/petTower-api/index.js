@@ -1,11 +1,21 @@
 const { handleLogin } = require('./lib/auth');
 const { handlePull, handlePush } = require('./lib/save');
 const { respond, parseEvent, preflight } = require('./lib/http');
-const { getGameKey } = require('./lib/config');
+const { getGameKey, getScopedGameKey } = require('./lib/config');
 
 const ROUTES = {
-  'GET /health': async () => ({ ok: true, gameKey: getGameKey(), ts: Date.now() }),
-  'POST /health': async () => ({ ok: true, gameKey: getGameKey(), ts: Date.now() }),
+  'GET /health': async () => ({
+    ok: true,
+    gameKey: getGameKey(),
+    scopedGameKeys: { wx: getScopedGameKey('wx'), dy: getScopedGameKey('dy') },
+    ts: Date.now(),
+  }),
+  'POST /health': async () => ({
+    ok: true,
+    gameKey: getGameKey(),
+    scopedGameKeys: { wx: getScopedGameKey('wx'), dy: getScopedGameKey('dy') },
+    ts: Date.now(),
+  }),
   'POST /login': handleLogin,
   'POST /save/pull': handlePull,
   'POST /save/push': handlePush,

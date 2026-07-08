@@ -7,6 +7,7 @@ import { SceneManager } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
 import { BgmManager } from '@/core/BgmManager';
 import { Platform } from '@/core/PlatformService';
+import { BackendService } from '@/core/BackendService';
 import { configureWechatShare } from '@/core/ShareService';
 import { initAnalytics, analytics, setAnalyticsUserId } from '@/analytics';
 import { SAVE_KEY } from '@/config/CloudConfig';
@@ -72,10 +73,20 @@ async function main(): Promise<void> {
   console.log(
     `[main] 云同步启动结果: ${startupSync.status}, reason=${startupSync.reason}, platform=${Platform.name}`,
   );
-  console.log(`[main] userId=${CloudSyncManager.userId || '(empty)'}`);
 
-  if (CloudSyncManager.userId) {
-    setAnalyticsUserId(CloudSyncManager.userId);
+  let resolvedUserId = CloudSyncManager.userId;
+  if (!resolvedUserId && BackendService.available) {
+    try {
+      await BackendService.ensureToken();
+      resolvedUserId = BackendService.userId;
+    } catch (error) {
+      console.warn('[main] 启动后补登失败', error);
+    }
+  }
+  console.log(`[main] userId=${resolvedUserId || '(empty)'}`);
+
+  if (resolvedUserId) {
+    setAnalyticsUserId(resolvedUserId);
   } else {
     console.warn('[main] 未拿到登录 userId，经分仅以 anonymous_id 上报（请检查 Backend 登录日志）');
   }
@@ -113,7 +124,7 @@ async function main(): Promise<void> {
 
   analytics.trackSessionStart({
     entry: 'main_boot',
-    with_user_id: !!CloudSyncManager.userId,
+    with_user_id: !!resolvedUserId,
     cloud_sync_status: startupSync.status,
   });
 
