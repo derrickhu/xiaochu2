@@ -77,24 +77,29 @@ function hex(c: string): number {
   return parseInt(c.replace('#', ''), 16);
 }
 
-/** 微信小游戏 Canvas Text 对 fill 渐变数组不稳定，使用纯色 + 描边/阴影 */
+/**
+ * 连击文字：对齐伤害飘字的真机安全路径。
+ * 抖音/微信真机上 italic + 厚描边 + dropShadow 都会把 Text 画布填成矩形底色板，
+ * 故：无斜体、无阴影、描边收薄（与 damageFloatStyle 同量级）。
+ */
 function styledText(content: string, fontSize: number, fill: string, strokeW: number): PIXI.Text {
   const S = dmgFloatScale();
-  return new PIXI.Text(content, {
+  const t = new PIXI.Text(content, {
     fontFamily: COMBO_FONT,
     fontSize,
-    fontStyle: 'italic',
+    fontStyle: 'normal',
     fontWeight: '900',
     fill,
-    stroke: '#000000',
-    strokeThickness: strokeW * S,
-    dropShadow: true,
-    dropShadowColor: fill,
-    dropShadowBlur: fontSize * 0.45,
-    dropShadowDistance: 0,
-    dropShadowAlpha: 0.9,
+    stroke: '#1a1028',
+    strokeThickness: Math.min(strokeW, 3.2) * S,
+    dropShadow: false,
     align: 'center',
+    padding: 0,
   });
+  // 部分宿主会缓存旧 style；显式再关一次
+  t.style.dropShadow = false;
+  t.style.fontStyle = 'normal';
+  return t;
 }
 
 export class ComboDisplay {
@@ -160,16 +165,17 @@ export class ComboDisplay {
 
     this._num.text = String(combo);
     this._num.style.fontSize = numSz;
-    this._num.style.strokeThickness = (style.isMega ? 7 : style.isSuper ? 6 : 5) * S;
+    this._num.style.fontStyle = 'normal';
+    this._num.style.dropShadow = false;
+    // 真机厚描边会糊成底板：上限对齐飘字 (~3.2)
+    this._num.style.strokeThickness = (style.isMega ? 3.2 : style.isSuper ? 3.0 : 2.6) * S;
     this._num.style.fill = style.mainColor;
-    this._num.style.dropShadowColor = style.glowColor;
-    this._num.style.dropShadowBlur = (style.isMega ? 34 : style.isSuper ? 28 : 22) * S;
 
     this._suffix.style.fontSize = suffixSz;
-    this._suffix.style.strokeThickness = (style.isMega ? 4.5 : 4) * S;
+    this._suffix.style.fontStyle = 'normal';
+    this._suffix.style.dropShadow = false;
+    this._suffix.style.strokeThickness = (style.isMega ? 2.8 : 2.4) * S;
     this._suffix.style.fill = '#ffe7a8';
-    this._suffix.style.dropShadowColor = style.glowColor;
-    this._suffix.style.dropShadowBlur = (style.isMega ? 22 : 18) * S;
 
     const totalW = this._num.width + gap + this._suffix.width;
     this._num.position.set(-totalW / 2 + this._num.width / 2, 0);
@@ -177,6 +183,9 @@ export class ComboDisplay {
 
     this._mul.text = `x${comboMultiplier(combo).toFixed(1)}`;
     this._mul.style.fontSize = style.baseSz * 0.42;
+    this._mul.style.fontStyle = 'normal';
+    this._mul.style.dropShadow = false;
+    this._mul.style.strokeThickness = 2.2 * S;
     this._mul.position.set(0, style.baseSz * 0.62);
 
     const milestoneDef = COMBO_MILESTONES.find((m) => m.threshold === combo);
@@ -184,8 +193,10 @@ export class ComboDisplay {
       this._milestone.visible = true;
       this._milestone.text = milestoneDef.text;
       this._milestone.style.fontSize = style.baseSz * 1.18;
+      this._milestone.style.fontStyle = 'normal';
+      this._milestone.style.dropShadow = false;
+      this._milestone.style.strokeThickness = 2.8 * S;
       this._milestone.style.fill = milestoneDef.color;
-      this._milestone.style.dropShadowColor = milestoneDef.color;
       this._milestone.position.set(0, -style.baseSz * 1.95);
     } else {
       this._milestone.visible = false;
@@ -220,10 +231,12 @@ export class ComboDisplay {
     const isTierBreak = isComboMilestone(combo);
     const center = this._comboCenter(combo);
 
-    const tierFlash = tier >= 3 ? 18 : tier >= 1 ? 14 : 10;
-    const flashMax = isTierBreak ? (tier >= 4 ? 24 : 20) : tierFlash;
-    const flashAlpha = combo >= 12 ? 0.46 : combo >= 8 ? 0.36 : combo >= 5 ? 0.28 : 0.24;
-    fx.flash(0xfffff0, flashMax / UI.fps.battle, flashAlpha);
+    // 普通连击不再全屏闪：真机上会像「文字下的底色板」。仅里程碑轻闪。
+    if (isTierBreak) {
+      const flashMax = tier >= 4 ? 18 : 14;
+      const flashAlpha = tier >= 4 ? 0.28 : 0.18;
+      fx.flash(0xfffff0, flashMax / UI.fps.battle, flashAlpha);
+    }
 
     const palettes = tier >= 4
       ? ['#ff2050', '#ff6040', '#ffaa00', '#ffffff']
