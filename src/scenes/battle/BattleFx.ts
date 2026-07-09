@@ -202,6 +202,41 @@ export class BattleFx {
     return this._scopeId;
   }
 
+  /**
+   * 等待指定 scope 内「命中飘字」播完（不含 persistUntilDone 的总伤/英雄飘字）。
+   * 用于击杀后延迟弹出结算，避免伤害数字未出全就盖住战场。
+   * legacy spawnFloat（灼烧等）无 runtime，由调用方 victoryFloatHold 超时兜底。
+   */
+  waitForDamageFloats(scopeId = this._scopeId): Promise<void> {
+    const pending = this._petDmgRuntimes.filter(
+      (rt) => rt.scopeId === scopeId && !rt.persistUntilDone,
+    );
+    if (pending.length === 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      let left = pending.length;
+      let settled = false;
+      const finish = (): void => {
+        if (settled) return;
+        left -= 1;
+        if (left <= 0) {
+          settled = true;
+          resolve();
+        }
+      };
+      for (const rt of pending) {
+        if (!this._petDmgRuntimes.includes(rt)) {
+          finish();
+          continue;
+        }
+        const prev = rt.onDone;
+        rt.onDone = () => {
+          prev?.();
+          finish();
+        };
+      }
+    });
+  }
+
   /** 回合/战斗收尾：清理某个 scope 内所有不应跨回合残留的表现层对象。 */
   clearTransient(scopeId = this._scopeId): void {
     for (const rt of this._petDmgRuntimes) {

@@ -324,7 +324,14 @@ export class BattleScene implements Scene {
       this._stopPresent?.();
       this._stopPresent = null;
       if (isStale()) return;
-      this._settleBattleVisuals(visualScope);
+      // 胜负已定：飘字已在结算前等完，这里只收敛血条/combo，避免 clearTransient 截断尾帧
+      if (this._ctrl.isFinished) {
+        this._hud.hideCombo(true);
+        this._hud.snapHpBarsToModel();
+        this._boardView?.refreshOrbStates();
+      } else {
+        this._settleBattleVisuals(visualScope);
+      }
       this._busy = false;
       if (!this._ctrl.isFinished && this._ctrl.state !== 'playerTurn') {
         this._ctrl.beginPlayerTurn();
@@ -449,7 +456,13 @@ export class BattleScene implements Scene {
       appliedDamage += attack.damage;
       this._hud.refreshEnemyHp();
       if (enemyDead) {
-        const battleEnded = await this._handleEnemyDefeat(isStale);
+        // 击杀路径：把本回合已出手伤害带入，先播「总伤害」再弹结算
+        const battleEnded = await this._handleEnemyDefeat(isStale, {
+          total: appliedDamage,
+          combo: res.combo,
+          hitCount: appliedAttacks.length,
+          petSummaries: buildTurnPetSummaries(appliedAttacks, this._petBar),
+        });
         if (battleEnded || isStale()) return waveAdvanced;
         waveAdvanced = true;
         break;
@@ -463,7 +476,7 @@ export class BattleScene implements Scene {
         await delay(UI.anim.turnTotalLeadIn);
         if (isStale()) return waveAdvanced;
       }
-      // 总伤害/槽位 recap 仅作表现，不阻塞下方转珠
+      // 非击杀：总伤害/槽位 recap 仅作表现，不阻塞下方转珠
       void this._fx.showTurnTotalDamage({
         total: appliedDamage,
         combo: res.combo,
@@ -499,11 +512,57 @@ export class BattleScene implements Scene {
     return `已通关：${this._ctrl.stage.name}`;
   }
 
-  /** 敌人死亡处理：死亡演出 → 下一波入场 / 胜利结算。返回 true = 战斗已结束 */
-  private async _handleEnemyDefeat(isStale: () => boolean): Promise<boolean> {
+  /**
+   * 敌人死亡处理：死亡演出 → 单段飘字 →（可选）总伤害汇总 → 反应停顿 → 下一波 / 胜利结算。
+   * 返回 true = 战斗已结束。
+   */
+  private async _handleEnemyDefeat(
+    isStale: () => boolean,
+    turnRecap?: {
+      total: number;
+      combo: number;
+      hitCount: number;
+      petSummaries: ReturnType<typeof buildTurnPetSummaries>;
+    },
+  ): Promise<boolean> {
     if (isStale()) return true;
     await this._hud.playEnemyDeath(this._fx);
     if (isStale()) return true;
+
+    // 1) 等最后一击单段伤害飘字出全
+    await Promise.race([
+      this._fx.waitForDamageFloats(),
+      delay(UI.anim.victoryFloatHold),
+    ]);
+    if (isStale()) return true;
+
+    // 2) 击杀当回合也要播「总伤害」（非击杀路径在 _playPetPhase 里 fire-and-forget）
+    if (turnRecap && turnRecap.total > 0) {
+      if (UI.anim.turnTotalLeadIn > 0) {
+        await delay(UI.anim.turnTotalLeadIn);
+        if (isStale()) return true;
+      }
+      await Promise.race([
+        this._fx.showTurnTotalDamage({
+          total: turnRecap.total,
+          combo: turnRecap.combo,
+          hitCount: turnRecap.hitCount,
+          x: this._layout.enemyCenterX,
+          y: this._layout.enemyCenterY,
+          enemyMaxHp: this._ctrl.enemy.maxHp,
+          petSummaries: turnRecap.petSummaries,
+        }),
+        delay(UI.anim.victoryTotalHold),
+      ]);
+      if (isStale()) return true;
+    }
+
+    // 3) 全部伤害表现结束后，给玩家一点反应时间再切波/弹结算
+    if (UI.anim.victoryReactionHold > 0) {
+      await delay(UI.anim.victoryReactionHold);
+      if (isStale()) return true;
+    }
+
     if (this._ctrl.hasNextWave()) {
       this._ctrl.nextWave();
       SfxManager.playNextFloor();
