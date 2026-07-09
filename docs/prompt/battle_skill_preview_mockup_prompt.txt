@@ -1,0 +1,38 @@
+Mobile game BATTLE SCREEN UI mockup, STRICT portrait 9:16 phone screen for xiaochu2 Chinese fantasy match-3 RPG.
+
+EDIT the attached battle_ui_mockup_v2 reference. Keep the SAME layout, art style, bamboo forest, cream-gold UI, slime enemy, 5 pets, orb board, drag timer. Do NOT redesign from scratch.
+
+NEW FOCUS — PET SKILL PREVIEW BUBBLE (tap pet to show skill):
+Show the player has TAP-SELECTED the middle Water pet (white winged griffin / 水属性).
+
+Selected pet state:
+- Soft water-blue / gold glow ring around the middle pet portrait
+- Small upward double-chevron ▲▲ above the slot (skill ready hint optional)
+- Other pets unchanged (keep CD badges 3,1,2,4 on corners if present)
+
+SKILL BUBBLE DESIGN (required, polished game HUD):
+- Floating tooltip ABOVE the selected pet, centered on that pet column
+- CRITICAL: bubble must sit in the gap BETWEEN the hero green HP bar and the pet portraits — OR slightly overlapping the HP bar area but ALWAYS drawn ON TOP of the HP bar (never hidden behind it)
+- Do NOT cover the enemy slime or enemy HP meaningfully
+- Do NOT cover the orb board
+
+Bubble visual (match cream-gold Q版修仙):
+- Cream parchment panel #FDF3DF, rounded corners ~16px
+- Thin water-blue border #5DB9FF (selected pet element color), 2–3px
+- Soft drop shadow under panel
+- Small downward triangle / caret pointing to the selected pet portrait
+- Width ~42–48% of screen width, compact readable card
+
+Bubble Chinese text content (exact, readable):
+1) Title line (bold, water-blue): 冰封锁影 · CD 6
+2) Status line (smaller, grey-brown): 冷却中 · 剩 6 回合
+3) Description (dark ink #3A2E22, 2–3 wrapped lines): 寒霜封形，对敌人造成自身攻击 400% 的水伤害，并眩晕敌人 1 回合，使其无法行动
+
+KEEP REST OF SCREEN:
+- Top: 返回 | 1-1 青苔林边 | 设置
+- Enemy slime + HP + 1 回合后攻击 + tags
+- Hero HP 1809/1809 + shield
+- 5 pets with Lv / stars / element icons
+- Drag countdown bar + 6x5 orb board
+
+Bright Q版修仙 cream #FDF3DF gold #E8A33D. Chinese UI text. NO watermark. 9:16.

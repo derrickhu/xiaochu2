@@ -250,9 +250,16 @@ export class BattlePetBar {
     });
 
     this._previewLayer = new PIXI.Container();
+    // 预览层稍后由 raisePreviewLayer 置顶，避免被英雄血条挡住
     parent.addChild(this._previewLayer);
 
     this._installPetSwipeInput();
+  }
+
+  /** 技能说明气泡置顶（须在英雄血条等 HUD 之后调用） */
+  raisePreviewLayer(parent: PIXI.Container): void {
+    if (!this._previewLayer) return;
+    parent.addChild(this._previewLayer);
   }
 
   /** 槽位容器（编排者做冲刺/弹道起点定位用） */
@@ -350,18 +357,22 @@ export class BattlePetBar {
       const slot = this._slots[i];
       const local = designPointToLocal(slot, design.x, design.y);
       if (local.x >= -half && local.x <= half && local.y >= -half && local.y <= half) {
-        this._onPetSlotDown(i, e);
+        // 小游戏真机：槽位点击走 canvas；浏览器/devtools 仍由 slot.pointerdown 处理，避免重复
+        if (Platform.isMinigame && !Platform.isDevtools) {
+          this._onPetSlotDown(i, e);
+        }
         return;
       }
     }
+    // 点到宠物栏外：收起技能说明气泡
+    this._hideSkillPreview();
   }
 
   private _installPetSwipeInput(): void {
     this._teardownPetSwipeInput();
     this._petSwipeBridge = bindCanvasPointerMove({
-      onDown: Platform.isMinigame && !Platform.isDevtools
-        ? (e) => this._onCanvasPetDown(e)
-        : undefined,
+      // 始终监听 down：真机负责点宠；各端点空白处关闭气泡
+      onDown: (e) => this._onCanvasPetDown(e),
       onMove: (e) => this._onPetSwipeMove(e),
       onUp: (e) => this._cancelPetPointer(true, e),
     });

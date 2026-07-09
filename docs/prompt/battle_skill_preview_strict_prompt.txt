@@ -1,0 +1,47 @@
+STRICT UI replication. Mobile game battle screen 9:16. Chinese fantasy match-3 RPG xiaochu2.
+
+Primary reference is the attached skill-tooltip crop. COPY the skill card EXACTLY — same layout, same colors, same ornaments, same typography hierarchy. Do not invent a new style.
+
+Place this exact skill card into a full battle screen matching battle_ui_mockup_v2 composition (bamboo forest, slime enemy, 5 pets, orb board), with the middle Water pet selected.
+
+══════════════════════════════════════
+SKILL CARD — pixel-faithful to reference crop
+══════════════════════════════════════
+
+SHAPE:
+- Cream parchment panel, rounded corners
+- Outer border: light blue ~#5090AE, medium thickness
+- Soft drop shadow
+- Downward cream triangle caret at bottom center pointing to selected pet
+- Top-left: light-blue snowflake ornament
+- Top-right: 2–3 light-blue water droplets
+- Bottom corners: very faint cream filigree swirls
+
+HEADER (left → right):
+- Circular blue water-drop icon badge
+- Skill name 「冰封锁影」 bold, medium-dark blue ~#1D607B
+- Gold/tan oval pill 「CD 6」 white text on ~#C9A65C fill
+
+STATUS:
+- Grey-teal rounded capsule below title: 「冷却中 · 剩 6 回合」
+- Capsule fill ~#527A85 / muted teal-grey, light text
+
+DIVIDER:
+- Thin horizontal hairline with small diamond ornament in center
+
+BODY TEXT (exact Chinese):
+寒霜封形，对敌人造成自身攻击 400% 的水伤害，并眩晕敌人 1 回合，使其无法行动
+- Base text dark brown ~#4E3819
+- Numbers 「400%」 and 「1」 highlighted teal-blue ~#3A8E9B / #5090AE, bold larger
+- Keywords 水伤害 / 眩晕 may be slightly emphasized but keep readable
+
+PANEL BG: cream ~#FBF4DF / #FEF9E7
+
+LAYERING:
+- Card ON TOP of hero HP bar, never behind
+- Anchored above middle Water pet with cyan glow ring
+- Do not cover orb board
+
+KEEP battle chrome: 返回, 1-1 青苔林边, slime, pets, drag timer, orbs.
+
+NO watermark. Exact Chinese text. 9:16 portrait. Polished mockup fidelity matching the reference crop.

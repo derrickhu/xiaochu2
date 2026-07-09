@@ -1,0 +1,44 @@
+Mobile game BATTLE SCREEN UI mockup, STRICT portrait 9:16 for xiaochu2 Chinese fantasy match-3 RPG.
+
+EDIT the attached battle_ui_mockup_v2. Keep bamboo forest, cream-gold UI, slime, 5 pets, orb board, drag timer. Same composition. Only ADD a beautiful pet skill tooltip.
+
+SCENE: Player tapped the middle Water pet (white winged griffin). Soft cyan-gold glow ring on that pet. Other pets keep CD badges.
+
+══════════════════════════════════════
+SKILL TOOLTIP — premium Q版修仙 design (main focus)
+══════════════════════════════════════
+A gorgeous floating skill card ABOVE the selected pet, centered on its column.
+
+LAYERING (critical):
+- Drawn ON TOP of the hero green HP bar (never behind)
+- Sits in the band between enemy tags and pet portraits
+- Does NOT cover enemy slime body or orb board
+- Soft shadow so it floats above the HUD
+
+VISUAL STYLE (make it look premium, not a plain white box):
+- Cream parchment body #FDF8EC with subtle paper grain
+- Double frame: outer thin gold #E8A33D, inner soft water-blue #5DB9FF glow edge
+- Rounded corners ~18px, slight 3D bevel / soft highlight on top edge
+- Tiny frost / water droplet ornaments at top-left and top-right corners (cute, minimal)
+- Small water-element droplet icon badge on the left of the title
+- Downward cream caret / triangle pointing exactly to the selected pet
+- Soft blue ambient glow behind the card (very subtle)
+
+TYPOGRAPHY hierarchy (Chinese, crisp, readable):
+1) Title: 「冰封锁影」 large bold water-blue #3AA0E8
+   beside it a small gold pill badge 「CD 6」
+2) Status chip: rounded cream-grey pill 「冷却中 · 剩 6 回合」 muted brown text
+3) Divider: thin gold hairline
+4) Body: dark ink #3A2E22, 2–3 lines wrapped:
+   「寒霜封形，对敌人造成自身攻击 400% 的水伤害，并眩晕敌人 1 回合，使其无法行动」
+
+Card width ~48% of screen. Compact elegant, not oversized.
+
+KEEP:
+返回 | 1-1 青苔林边 | 设置
+Enemy slime + HP + 1 回合后攻击 + 克制 tags
+Hero HP 1809/1809 + shield +217
+5 pets Lv/stars/elements
+Drag timer + orb board
+
+Polished mobile game mockup fidelity. Bright Q版修仙. NO watermark. 9:16.

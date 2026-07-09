@@ -228,6 +228,8 @@ export class BattleScene implements Scene {
     this._hud.buildHeroBar(this.container);
     this._hud.buildStatus(this.container);
     this._statusIcons.build(this.container);
+    // 技能说明气泡须在血条之上，否则会被英雄 HP 框挡住
+    this._petBar.raisePreviewLayer(this.container);
 
     // 特效层（粒子 / 飘字 / 闪光）—— 先加，珠盘后加以保证跟手珠不被挡住
     this._fx.build(this.container, w, h);
