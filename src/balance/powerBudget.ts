@@ -21,17 +21,23 @@ export const POWER_CURVE = {
    * - HP 复利略高于玩家 ATK 增速：制造「不养成则 TTK 逐章变长」的压力；
    * - ATK 复利略低于玩家 HP 增速：铺垫关掉血但不劝退，Boss 蓄力技才是生存考验。
    * 旧值 1.40/1.38 是按旧版宠物 5~6%/级 膨胀曲线配的，压平成长后须同步下调。
+   *
+   * v0.4.2：玩家 1 天可推至 8-8，后期偏软。HP 1.32→1.36（第 8 章约 +20%）、
+   * ATK 1.26→1.29（约 +18%）、DEF 1.20→1.22；前 3 章复利差小，教学手感基本不变。
    */
   enemy: {
-    chapterGrowthHp: 1.32,
+    chapterGrowthHp: 1.36,
     /** 攻压曲线：铺垫关靠 ATK + 出手频率制造掉血感，不靠堆 HP 磨人 */
-    chapterGrowthAtk: 1.26,
-    chapterGrowthDef: 1.20,
+    chapterGrowthAtk: 1.29,
+    chapterGrowthDef: 1.22,
     /** 入场攻击倒计时（1 = 首个敌人回合更快出刀；满 interval 则过慢） */
     initialAttackCountdown: 1,
   },
-  /** 经济产出章节成长（复利）：灵宠币 / 经验产出按此放大，与敌人曲线成对校准 */
-  economyChapterGrowth: 1.25,
+  /**
+   * 经济产出章节成长（复利）：灵宠币 / 经验产出按此放大，与敌人曲线成对校准。
+   * v0.4.2：1.25→1.22，略放缓后期养成，配合敌人加难拉长推进天数。
+   */
+  economyChapterGrowth: 1.22,
 } as const;
 
 /**

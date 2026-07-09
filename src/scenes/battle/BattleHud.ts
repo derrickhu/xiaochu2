@@ -17,6 +17,7 @@ import {
   enemyDisplaySize,
   enemyDisplayTierOf,
   enemyShowsTierRing,
+  enemySpriteScale,
   enemySpriteTint,
   enemyTierRingRadius,
   ENEMY_TIER_COLOR,
@@ -532,8 +533,7 @@ export class BattleHud {
       this._enemySprite.texture = tex;
       const s = readScale(this._enemySprite);
       if (s) {
-        const v = displaySize / Math.max(tex.width, tex.height);
-        s.set(v);
+        s.set(enemySpriteScale(tex.width, tex.height, tier));
       }
       this._enemySprite.tint = enemySpriteTint(tier);
     }

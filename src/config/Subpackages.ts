@@ -14,6 +14,8 @@ export const SUBPACKAGE_ROOT = {
   shop: 'subpackages/pkg-shop',
   fx: 'subpackages/pkg-fx',
   audio: 'subpackages/pkg-audio',
+  /** 战斗 HUD 贴图（主包 4MB 上限，从主包迁出） */
+  battle: 'subpackages/pkg-battle',
 } as const;
 
 export type SubpackageName = keyof typeof SUBPACKAGE_ROOT;
@@ -27,6 +29,7 @@ const PLATFORM_SUBPACKAGE_NAME: Record<SubpackageName, string> = {
   shop: 'pkg-shop',
   fx: 'pkg-fx',
   audio: 'pkg-audio',
+  battle: 'pkg-battle',
 };
 
 const NAME_BY_PREFIX = (Object.entries(SUBPACKAGE_ROOT) as [SubpackageName, string][])

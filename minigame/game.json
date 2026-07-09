@@ -15,7 +15,8 @@
     { "name": "pkg-scene", "root": "subpackages/pkg-scene" },
     { "name": "pkg-shop", "root": "subpackages/pkg-shop" },
     { "name": "pkg-fx", "root": "subpackages/pkg-fx" },
-    { "name": "pkg-audio", "root": "subpackages/pkg-audio" }
+    { "name": "pkg-audio", "root": "subpackages/pkg-audio" },
+    { "name": "pkg-battle", "root": "subpackages/pkg-battle" }
   ],
   "subPackages": [
     { "name": "pkg-pet", "root": "subpackages/pkg-pet/" },
@@ -24,6 +25,7 @@
     { "name": "pkg-scene", "root": "subpackages/pkg-scene/" },
     { "name": "pkg-shop", "root": "subpackages/pkg-shop/" },
     { "name": "pkg-fx", "root": "subpackages/pkg-fx/" },
-    { "name": "pkg-audio", "root": "subpackages/pkg-audio/" }
+    { "name": "pkg-audio", "root": "subpackages/pkg-audio/" },
+    { "name": "pkg-battle", "root": "subpackages/pkg-battle/" }
   ]
 }

@@ -5,10 +5,11 @@
 import { loadSubpackage, type SubpackageName } from '@/config/Subpackages';
 import { Platform } from '@/core/PlatformService';
 
-/** 灵宠 / 场景 UI / 战斗敌人 / 特效（audio 在 main 已拉） */
+/** 灵宠 / 场景 UI / 战斗 HUD / 战斗敌人 / 特效（audio 在 main 已拉） */
 const COMMON_WARMUP: readonly SubpackageName[] = [
   'pet',
   'scene',
+  'battle',
   'enemy',
   'enemyCr',
   'fx',

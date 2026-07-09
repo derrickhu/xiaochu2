@@ -2,7 +2,7 @@
  * 构建后整理 minigame 资源为微信分包目录（主包 ≤4MB，单分包 ≤4MB）。
  *
  * 主包保留：代码 + 棋盘/珠子 + 首页背景 + 基础 UI
- * 子包：pkg-pet / pkg-enemy / pkg-enemy-cr / pkg-scene / pkg-shop / pkg-fx / pkg-audio
+ * 子包：pkg-pet / pkg-enemy / pkg-enemy-cr / pkg-scene / pkg-shop / pkg-fx / pkg-audio / pkg-battle
  */
 import fs from 'fs';
 import path from 'path';
@@ -58,6 +58,7 @@ const SUBPACKAGE_NAMES = [
   'pkg-shop',
   'pkg-fx',
   'pkg-audio',
+  'pkg-battle',
 ];
 
 const SUBPACKAGE_GAME_JS = `/** 资源分包占位：微信要求分包根目录必须有 game.js，游戏逻辑仍在主包 game-bundle.js */\n`;
@@ -140,6 +141,8 @@ function migrateOverflowFromMain() {
     [path.join(ROOT, 'images/ui/badge'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/badge')],
     [path.join(ROOT, 'images/ui/panel'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/panel')],
     [path.join(ROOT, 'images/ui/fx'), path.join(ROOT, 'subpackages/pkg-fx/images/ui/fx')],
+    // 战斗 HUD 贴图约 3MB，必须出主包（微信主包 ≤4MB）
+    [path.join(ROOT, 'images/ui/battle'), path.join(ROOT, 'subpackages/pkg-battle/images/ui/battle')],
   ];
   for (const [srcDir, destDir] of moves) {
     if (!fs.existsSync(srcDir)) continue;

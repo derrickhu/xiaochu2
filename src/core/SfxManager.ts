@@ -41,20 +41,25 @@ class SfxManagerClass {
 
   /**
    * 连击递进 — Do Re Mi Fa Sol La Si Do，连击越高音越高、音量略增。
-   * combo 9+ 叠加 levelup 进入第二八度（对齐 xiao_chu playComboHit）。
+   * combo 9+ 叠加 levelup 进入第二八度。
+   *
+   * 注意：旧版沿用 xiao_chu 的 `pitch × 1.3` 再 `min(2.0)`，会在第 5 连起
+   * 全部顶死在 2.0（5~8 连几乎同音），玩家听不出升调。这里直接走音阶比值，
+   * 让 1→8 连完整跨一个八度。
    */
   playComboHit(comboNum: number): void {
     if (!this.enabled) return;
     const scale = SCALE;
     const n = Math.min(comboNum, 8);
     const pitch = scale[n - 1];
-    const vol = Math.min(1.0, 0.85 + (comboNum - 1) * 0.025);
-    this._playComboEx(vol, Math.min(2.0, pitch * 1.3));
+    const vol = Math.min(1.0, 0.82 + (comboNum - 1) * 0.03);
+    this._playComboEx(vol, pitch);
 
     if (comboNum > 8) {
       const idx2 = Math.min(comboNum - 9, scale.length - 1);
       const pitch2 = scale[idx2];
-      const vol2 = Math.min(0.6, 0.3 + (comboNum - 9) * 0.05);
+      const vol2 = Math.min(0.65, 0.35 + (comboNum - 9) * 0.05);
+      // 第二八度：levelup 音色 + 音阶，避免再被 2.0 顶死
       this._playEx(AUDIO.levelup, vol2, pitch2);
     }
 

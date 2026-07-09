@@ -29,14 +29,46 @@ export const ENEMY_TIER_COLOR: Readonly<Record<EnemyDisplayTier, number>> = {
   boss: 0xc0392b,
 };
 
-/** 战斗立绘目标边长（设计坐标 px；Q 版亮色 UI 下整体放大） */
+/**
+ * 战斗立绘目标高度（设计坐标 px）。
+ * 以 1-1 木域软泥的视觉体量为基准：所有怪按高度对齐，避免横图（如火蝠）
+ * 被 `max(宽,高)` contain 压成「小一圈」。
+ */
 export function enemyDisplaySize(tier: EnemyDisplayTier): number {
   switch (tier) {
-    case 'mob': return 260;
-    case 'elite': return 290;
+    case 'mob': return 280;
+    case 'elite': return 300;
     case 'miniBoss': return 320;
     case 'boss': return 340;
   }
+}
+
+/** 立绘最大宽度：横图可略宽于竖图，但不顶满屏 */
+export function enemyDisplayMaxWidth(tier: EnemyDisplayTier): number {
+  switch (tier) {
+    case 'mob': return 480;
+    case 'elite': return 500;
+    case 'miniBoss': return 520;
+    case 'boss': return 540;
+  }
+}
+
+/**
+ * 敌人立绘缩放：优先对齐目标高度（与 1-1 史莱姆同体量），
+ * 过宽时再按 maxWidth 回压。
+ */
+export function enemySpriteScale(
+  texWidth: number,
+  texHeight: number,
+  tier: EnemyDisplayTier,
+): number {
+  const w = Math.max(1, texWidth);
+  const h = Math.max(1, texHeight);
+  const targetH = enemyDisplaySize(tier);
+  const maxW = enemyDisplayMaxWidth(tier);
+  let s = targetH / h;
+  if (w * s > maxW) s = maxW / w;
+  return s;
 }
 
 /** Q 版亮色战斗：杂兵不再压灰，保持原色 */
