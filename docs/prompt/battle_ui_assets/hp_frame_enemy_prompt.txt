@@ -1,0 +1,16 @@
+Mobile game UI asset ONLY: EMPTY enemy HP BAR FRAME for Chinese fantasy match-3 RPG.
+
+Match the RED enemy health bar FRAME from the reference battle UI mockup (under the green slime).
+
+CRITICAL:
+- Horizontal capsule / rounded bar FRAME only
+- Warm gold-bronze ornate border with thin decorative scroll flourishes at LEFT and RIGHT ends (elegant wing/scroll tips)
+- NO solid circular dots, NO round anchor balls, NO rivets as end caps
+- Interior of the bar must be EMPTY / transparent (fill will be drawn in code as red)
+- Soft cream outer rim optional, but center channel fully transparent
+- Bright Q-version cute UI, clean game-ready PNG
+- Transparent background outside the frame
+- NO TEXT, no numbers, no labels, no writing
+- NO characters, NO monsters
+
+Aspect roughly 8:1 wide. Single centered empty HP frame.

@@ -317,6 +317,7 @@ describe('阶段十二·角色专属战斗属性（全队聚合）', () => {
 describe('resolvePlayerTurnDamage：治疗强化 / 全队增伤透传（纯函数）', () => {
   const firePet = (): TeamPet => ({
     def: { element: 'fire' } as TeamPet['def'],
+    level: 1,
     star: 1,
     skill: {} as TeamPet['skill'],
     atk: 1000,

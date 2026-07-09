@@ -150,6 +150,23 @@ export const UI_IMAGES = {
   rarityBadgeSheet: `${PKG.scene}/images/ui/badge/rarity_sheet.png`,
 } as const;
 
+/** 战斗 HUD 专用贴图（主包，对齐 battle_ui_mockup） */
+export const UI_BATTLE_IMAGES = {
+  stageBanner: `${IMG}/ui/battle/battle_stage_banner.png`,
+  petPanel: `${IMG}/ui/battle/battle_pet_panel.png`,
+  shieldBadge: `${IMG}/ui/battle/battle_shield_badge.png`,
+  /** 敌人血条外框（短、两端卷饰，无圆点锚点） */
+  hpFrameEnemy: `${IMG}/ui/battle/battle_hp_frame_enemy.png`,
+  /** 英雄血条外框（长、干净金边，连宠物板） */
+  hpFrameHero: `${IMG}/ui/battle/battle_hp_frame_hero.png`,
+  /** Q 版宠物星级单星图标 */
+  petStar: `${IMG}/ui/battle/battle_pet_star.png`,
+  /** 敌人名独立匾（关卡匾下方） */
+  enemyNamePlaque: `${IMG}/ui/battle/battle_enemy_name_plaque.png`,
+  /** 克制/抵抗标签羊皮纸底板 */
+  counterTag: `${IMG}/ui/battle/battle_counter_tag.png`,
+} as const;
+
 /** 碎片商店专用 UI 贴图（pkg-shop） */
 export const UI_SHOP_IMAGES = {
   titlePlaque: `${PKG.shop}/images/ui/shop/shop_title_plaque.png`,

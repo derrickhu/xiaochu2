@@ -11,12 +11,11 @@ import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
 import { flashWhite } from '@/core/FxLayer';
 import { Platform } from '@/core/PlatformService';
-import { guardedTween, displayAlive, readScale, resetScale, cancelDisplayTweens, tweenScale, setScaleSafe } from '@/core/animationGuard';
+import { guardedTween, displayAlive, readScale, resetScale, cancelDisplayTweens, tweenScale } from '@/core/animationGuard';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import {
   enemyDisplaySize,
   enemyDisplayTierOf,
-  enemyHpBarWidthScale,
   enemyShowsTierRing,
   enemySpriteTint,
   enemyTierRingRadius,
@@ -24,7 +23,7 @@ import {
   formatEnemyBattleName,
 } from '@/balance/enemyDisplay';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
-import { enemyImage, battleBgImage, ORB_IMAGES } from '@/config/Assets';
+import { enemyImage, ORB_IMAGES, UI_BATTLE_IMAGES } from '@/config/Assets';
 import { formatStageBattleHeader } from '@/balance/stages';
 import type { BattleController, EnemyActResult } from '@/game/battle/BattleController';
 import type { BoardView } from '@/game/board/BoardView';
@@ -32,23 +31,30 @@ import { delay } from './battleWidgets';
 import type { BattleLayout } from './BattleLayout';
 import type { BattleFx } from './BattleFx';
 import { ComboDisplay } from './ComboDisplay';
+import { COLORS, FONT_SIZE, RADIUS } from '@/ui/theme';
+import { makeText } from '@/ui/text';
 
 export class BattleHud {
-  private _stageHeaderText!: PIXI.Text;
+  private _stageTitleText!: PIXI.Text;
+  private _stageSubText!: PIXI.Text;
+  /** 敌人名匾底板（随文字宽度动态重绘） */
+  private _enemyNameBg!: PIXI.Graphics;
   private _waveText!: PIXI.Text;
   private _enemySprite!: PIXI.Sprite;
   private _enemyTierRing!: PIXI.Graphics;
-  private _enemyBgSprite!: PIXI.Sprite;
   private _enemyAreaTop = 0;
   private _enemyAreaBottom = 0;
   private _enemyContainer!: PIXI.Container;
-  private _enemyHpBar!: PIXI.Graphics;
+  private _enemyHpFill!: PIXI.Graphics;
+  private _enemyHpFrame!: PIXI.Sprite | null;
   private _enemyHpText!: PIXI.Text;
-  private _enemyNameText!: PIXI.Text;
   private _enemyElementRow!: PIXI.Container;
   private _enemyCdText!: PIXI.Text;
-  private _heroHpBar!: PIXI.Graphics;
+  private _heroHpFill!: PIXI.Graphics;
+  private _heroHpFrame!: PIXI.Sprite | null;
   private _heroHpText!: PIXI.Text;
+  private _shieldBadge!: PIXI.Container;
+  private _shieldText!: PIXI.Text;
   private _dragBar!: PIXI.Graphics;
   private _combo!: ComboDisplay;
   private _statusText!: PIXI.Text;
@@ -61,7 +67,10 @@ export class BattleHud {
 
   // ════════════ 构建 ════════════
 
-  /** 敌人区背景：宽适配 + 底对齐（对齐 xiao_chu），仅底渐隐，顶部不压暗 */
+  /**
+   * 敌人区轻量遮罩：章节大背景已由 BattleScene 全屏铺开，
+   * 此处仅在敌人区底部做极淡 cream 过渡，不再压暗场景图。
+   */
   buildEnemyBg(parent: PIXI.Container): void {
     const w = Game.logicWidth;
     const areaTop = this._layout.enemyAreaTop;
@@ -70,70 +79,112 @@ export class BattleHud {
     this._enemyAreaTop = areaTop;
     this._enemyAreaBottom = areaBottom;
 
-    const layer = new PIXI.Container();
-    const mask = new PIXI.Graphics();
-    mask.beginFill(0xffffff);
-    mask.drawRect(0, areaTop, w, areaH);
-    mask.endFill();
-    layer.mask = mask;
-    layer.addChild(mask);
-
-    this._enemyBgSprite = new PIXI.Sprite();
-    this._enemyBgSprite.anchor.set(0.5, 1);
-    this._enemyBgSprite.position.set(w / 2, areaBottom);
-    layer.addChild(this._enemyBgSprite);
-
-    const dim = new PIXI.Graphics();
-    dim.beginFill(0x000000, 0.15);
-    dim.drawRect(0, areaTop, w, areaH);
-    dim.endFill();
-    layer.addChild(dim);
-
-    // xiao_chu 只有底部 20% 渐隐，顶部让背景图自然延伸供关卡信息区使用
-    layer.addChild(this._makeVerticalFade(
-      0, areaBottom - areaH * 0.2, w, areaH * 0.2, 0x0a0810, 0, 0.5,
+    parent.addChild(this._makeVerticalFade(
+      0, areaBottom - areaH * 0.28, w, areaH * 0.28, COLORS.bgFallback, 0, 0.35,
     ));
-
-    parent.addChild(layer);
   }
 
-  /** 顶栏关卡信息（置于最上层，避免被敌人区背景遮住） */
+  /**
+   * 顶栏：关卡匾（仅关卡名）+ 其下独立敌人名匾（对齐 mockup）。
+   */
   buildStageHeader(parent: PIXI.Container): void {
     const w = Game.logicWidth;
-    this._stageHeaderText = new PIXI.Text(this._stageHeaderLabel(), {
-      fontSize: 28,
-      fill: 0xf0e0c0,
-      fontWeight: 'bold',
-      dropShadow: true,
-      dropShadowColor: 0x000000,
-      dropShadowBlur: 4,
-      dropShadowDistance: 2,
+    const { stageBannerW, stageBannerH } = UI.battle;
+    const cy = this._layout.headerY;
+
+    const plaqueTex = TextureCache.get(UI_BATTLE_IMAGES.stageBanner);
+    if (plaqueTex) {
+      const plaque = new PIXI.Sprite(plaqueTex);
+      plaque.anchor.set(0.5);
+      const scale = stageBannerW / plaqueTex.width;
+      plaque.scale.set(scale);
+      if (plaque.height > stageBannerH) {
+        plaque.scale.set(stageBannerH / plaqueTex.height);
+      }
+      plaque.position.set(w / 2, cy);
+      parent.addChild(plaque);
+    } else {
+      const fallback = new PIXI.Graphics();
+      fallback.beginFill(COLORS.panelBg, 0.96);
+      fallback.lineStyle(4, COLORS.panelBorder, 1);
+      fallback.drawRoundedRect(
+        w / 2 - stageBannerW / 2, cy - stageBannerH / 2,
+        stageBannerW, stageBannerH, 28,
+      );
+      fallback.endFill();
+      parent.addChild(fallback);
+    }
+
+    // 关卡匾只放关卡名（居中；mockup 深棕墨字，非金色）
+    this._stageTitleText = makeText(this._stageTitleLabel(), {
+      size: FONT_SIZE.md, fill: COLORS.battlePlaqueText, bold: true, anchor: 0.5,
     });
-    this._stageHeaderText.anchor.set(0.5);
-    this._stageHeaderText.position.set(w / 2, this._layout.headerY);
-    parent.addChild(this._stageHeaderText);
+    this._stageTitleText.position.set(w / 2, cy);
+    parent.addChild(this._stageTitleText);
+
+    // 敌人名：关卡匾下方独立匾，宽随文字动态适应（截图浅金底 + 深棕字）
+    const nameY = this._layout.enemyNameY;
+    this._enemyNameBg = new PIXI.Graphics();
+    parent.addChild(this._enemyNameBg);
+
+    this._stageSubText = makeText(this._stageSubLabel(), {
+      size: FONT_SIZE.xs, fill: COLORS.battleEnemyNameText, bold: true, anchor: 0.5,
+    });
+    this._stageSubText.position.set(w / 2, nameY);
+    parent.addChild(this._stageSubText);
+    this._layoutEnemyNamePlaque();
   }
 
-  /** 刷新顶栏关卡号 / 多波进度 */
+  /** 敌人名匾：按文字宽度重绘底板（左右留白，勿固定过长） */
+  private _layoutEnemyNamePlaque(): void {
+    if (!displayAlive(this._stageSubText) || !displayAlive(this._enemyNameBg)) return;
+    const { enemyNamePlaqueH } = UI.battle;
+    const padX = 22;
+    const minW = 120;
+    const maxW = Game.logicWidth - 80;
+    const tw = Math.ceil(this._stageSubText.width);
+    const bw = Math.min(maxW, Math.max(minW, tw + padX * 2));
+    const bh = enemyNamePlaqueH;
+    const cx = Game.logicWidth / 2;
+    const cy = this._layout.enemyNameY;
+    const g = this._enemyNameBg;
+    g.clear();
+    g.beginFill(COLORS.battleEnemyNameBg, 0.96);
+    g.lineStyle(2, COLORS.battleEnemyNameBorder, 1);
+    g.drawRoundedRect(cx - bw / 2, cy - bh / 2, bw, bh, bh / 2);
+    g.endFill();
+    this._stageSubText.position.set(cx, cy);
+  }
+
+  /** 刷新顶栏关卡号 / 多波进度 / 敌人名匾 */
   refreshStageHeader(): void {
-    if (!displayAlive(this._stageHeaderText)) return;
-    this._stageHeaderText.text = this._stageHeaderLabel();
+    if (displayAlive(this._stageTitleText)) {
+      this._stageTitleText.text = this._stageTitleLabel();
+    }
+    if (displayAlive(this._stageSubText)) {
+      this._stageSubText.text = this._stageSubLabel();
+      this._layoutEnemyNamePlaque();
+    }
   }
 
-  private _stageHeaderLabel(): string {
+  private _stageTitleLabel(): string {
     let label = formatStageBattleHeader(this._ctrl.stage);
     if (this._ctrl.totalWaves > 1) {
-      label += ` · 第${this._ctrl.waveIndex + 1}/${this._ctrl.totalWaves}波`;
+      label += ` · ${this._ctrl.waveIndex + 1}/${this._ctrl.totalWaves}波`;
     }
     return label;
   }
 
-  /** 敌人区：波次文字 + 立绘容器 + 名字 + 属性克制行 + 血条 + 倒计时 */
+  private _stageSubLabel(): string {
+    return formatEnemyBattleName(this._ctrl.enemy.def);
+  }
+
+  /** 敌人区：立绘 + 金框血条 + 倒计时 + 克制标签（敌人名在独立匾，见 buildStageHeader） */
   buildEnemyArea(parent: PIXI.Container): void {
     const w = Game.logicWidth;
-    const { enemyCenterX, enemyCenterY, headerY, enemyNameY, enemyTagY, enemyHpBarY } = this._layout;
+    const { enemyCenterX, enemyCenterY, headerY, enemyTagY, enemyHpBarY, enemyCdY } = this._layout;
 
-    this._waveText = new PIXI.Text('', { fontSize: 26, fill: 0x9b8cc4 });
+    this._waveText = new PIXI.Text('', { fontSize: 22, fill: COLORS.textSub });
     this._waveText.anchor.set(1, 0.5);
     this._waveText.position.set(w - 30, headerY);
     this._waveText.visible = false;
@@ -148,42 +199,92 @@ export class BattleHud {
     this._enemyContainer.addChild(this._enemySprite);
     parent.addChild(this._enemyContainer);
 
-    this._enemyNameText = new PIXI.Text('', {
-      fontSize: 26, fill: 0xffffff, fontWeight: 'bold',
-      dropShadow: true, dropShadowColor: 0x000000, dropShadowBlur: 4, dropShadowDistance: 2,
+    const { enemyHpBarWidth: ebw, enemyHpBarHeight: ebh } = this._layout;
+    const enemyBarX = (w - ebw) / 2;
+    this._enemyHpFill = new PIXI.Graphics();
+    parent.addChild(this._enemyHpFill);
+    this._enemyHpFrame = this._makeHpFrameSprite(
+      UI_BATTLE_IMAGES.hpFrameEnemy, enemyBarX, enemyHpBarY, ebw, ebh,
+    );
+    if (this._enemyHpFrame) parent.addChild(this._enemyHpFrame);
+
+    this._enemyHpText = makeText('', {
+      size: FONT_SIZE.sm, fill: COLORS.white, bold: true, anchor: 0.5,
+      strokeColor: 0x5a3a1a, strokeWidth: 5,
     });
-    this._enemyNameText.anchor.set(0.5);
-    this._enemyNameText.position.set(w / 2, enemyNameY);
-    parent.addChild(this._enemyNameText);
+    this._enemyHpText.position.set(w / 2, enemyHpBarY + ebh / 2);
+    parent.addChild(this._enemyHpText);
+
+    // 倒计时：血条与克制标签之间（mockup：白字 + 深棕描边）
+    this._enemyCdText = makeText('', {
+      size: FONT_SIZE.sm, fill: COLORS.white, bold: true, anchor: 0.5,
+      strokeColor: COLORS.battlePlaqueText, strokeWidth: 5,
+    });
+    this._enemyCdText.position.set(w / 2, enemyCdY);
+    parent.addChild(this._enemyCdText);
 
     this._enemyElementRow = new PIXI.Container();
     this._enemyElementRow.position.set(w / 2, enemyTagY);
     parent.addChild(this._enemyElementRow);
-
-    this._enemyHpBar = new PIXI.Graphics();
-    parent.addChild(this._enemyHpBar);
-    this._enemyHpText = new PIXI.Text('', { fontSize: 22, fill: 0xffffff });
-    this._enemyHpText.anchor.set(0.5);
-    this._enemyHpText.position.set(
-      w / 2, enemyHpBarY + UI.battle.enemyHpBarHeight / 2,
-    );
-    parent.addChild(this._enemyHpText);
-
-    this._enemyCdText = new PIXI.Text('', { fontSize: 24, fill: 0xffb74d });
-    this._enemyCdText.anchor.set(0.5);
-    this._enemyCdText.position.set(w / 2, enemyHpBarY + UI.battle.enemyHpBarHeight + 22);
-    parent.addChild(this._enemyCdText);
   }
 
   buildHeroBar(parent: PIXI.Container): void {
-    this._heroHpBar = new PIXI.Graphics();
-    parent.addChild(this._heroHpBar);
-    this._heroHpText = new PIXI.Text('', { fontSize: 22, fill: 0xffffff });
-    this._heroHpText.anchor.set(0.5);
-    this._heroHpText.position.set(
-      Game.logicWidth / 2, this._layout.heroBarY + UI.battle.heroHpBarHeight / 2,
+    const { heroHpBarWidth: bw, heroHpBarHeight: bh, heroBarY } = this._layout;
+    const { shieldBadgeSize } = UI.battle;
+    const barX = (Game.logicWidth - bw) / 2;
+
+    this._heroHpFill = new PIXI.Graphics();
+    parent.addChild(this._heroHpFill);
+    this._heroHpFrame = this._makeHpFrameSprite(
+      UI_BATTLE_IMAGES.hpFrameHero, barX, heroBarY, bw, bh,
     );
+    if (this._heroHpFrame) parent.addChild(this._heroHpFrame);
+
+    this._heroHpText = makeText('', {
+      size: FONT_SIZE.sm, fill: COLORS.white, bold: true, anchor: 0.5,
+      strokeColor: 0x2a4a1a, strokeWidth: 5,
+    });
+    this._heroHpText.position.set(Game.logicWidth / 2, heroBarY + bh / 2);
     parent.addChild(this._heroHpText);
+
+    // 盾标：叠在绿色填充区最右端（中空槽尾，非卷饰框外沿），底边与血条底对齐
+    const fillInsetX = this._hpFillInsetX(bw, !!this._heroHpFrame);
+    const fillRight = barX + bw - fillInsetX;
+    this._shieldBadge = new PIXI.Container();
+    this._shieldBadge.position.set(
+      fillRight - shieldBadgeSize * 0.35,
+      heroBarY + bh - shieldBadgeSize / 2,
+    );
+    const shieldTex = TextureCache.get(UI_BATTLE_IMAGES.shieldBadge);
+    if (shieldTex) {
+      const sp = new PIXI.Sprite(shieldTex);
+      sp.anchor.set(0.5);
+      const s = shieldBadgeSize / Math.max(shieldTex.width, shieldTex.height);
+      sp.scale.set(s);
+      this._shieldBadge.addChild(sp);
+    } else {
+      const shieldG = new PIXI.Graphics();
+      const r = shieldBadgeSize / 2;
+      shieldG.beginFill(0x4aa8e8, 1);
+      shieldG.lineStyle(3, 0xffffff, 0.95);
+      shieldG.moveTo(0, -r + 2);
+      shieldG.bezierCurveTo(r * 0.85, -r + 2, r * 0.9, -r * 0.2, r * 0.75, r * 0.15);
+      shieldG.lineTo(0, r - 2);
+      shieldG.lineTo(-r * 0.75, r * 0.15);
+      shieldG.bezierCurveTo(-r * 0.9, -r * 0.2, -r * 0.85, -r + 2, 0, -r + 2);
+      shieldG.closePath();
+      shieldG.endFill();
+      this._shieldBadge.addChild(shieldG);
+    }
+
+    this._shieldText = makeText('+0', {
+      size: FONT_SIZE.xs, fill: COLORS.white, bold: true, anchor: 0.5,
+      strokeColor: 0x1a4a7a, strokeWidth: 4,
+    });
+    this._shieldText.position.set(0, 2);
+    this._shieldBadge.addChild(this._shieldText);
+    this._shieldBadge.visible = false;
+    parent.addChild(this._shieldBadge);
   }
 
   buildDragBar(parent: PIXI.Container): void {
@@ -196,10 +297,12 @@ export class BattleHud {
     this._combo.build(parent);
   }
 
-  /** 增伤 buff 状态行（护盾已在血条上展示） */
+  /** 增伤 buff 状态行（护盾由右侧盾标展示） */
   buildStatus(parent: PIXI.Container): void {
-    this._statusText = new PIXI.Text('', { fontSize: 22, fill: 0x8fd4ff, fontWeight: 'bold' });
-    this._statusText.anchor.set(1, 0.5);
+    this._statusText = makeText('', {
+      size: FONT_SIZE.xs, fill: COLORS.accentDeep, bold: true, anchor: [1, 0.5],
+      strokeColor: COLORS.panelBg, strokeWidth: 3,
+    });
     this._statusText.position.set(Game.logicWidth - UI.board.marginX, this._layout.heroBarY - 20);
     parent.addChild(this._statusText);
   }
@@ -223,82 +326,117 @@ export class BattleHud {
 
   // ════════════ 每帧重绘 ════════════
 
-  /** 每帧重绘双方血条（主条 + 损血白条均为补间值） */
+  /**
+   * 每帧只重绘血条填充（边框为静态贴图）。
+   * 敌人短条鲜红 / 英雄长条翠绿；无圆点锚点。
+   */
   redrawHpBars(): void {
-    // ---- 敌人 ----
+    const L = this._layout;
     {
-      const tier = enemyDisplayTierOf(this._ctrl.enemy.def);
-      const bw = UI.battle.enemyHpBarWidth * enemyHpBarWidthScale(tier);
-      const { enemyHpBarHeight: bh } = UI.battle;
-      const x = (Game.logicWidth - bw) / 2;
-      const y = this._layout.enemyHpBarY;
-      const g = this._enemyHpBar;
+      const x = (Game.logicWidth - L.enemyHpBarWidth) / 2;
       const { shown, white } = this._enemyHpDisp;
-      g.clear();
-      g.beginFill(0x1a1126);
-      g.drawRoundedRect(x, y, bw, bh, bh / 2);
-      g.endFill();
-      if (white > 0.001) {
-        g.beginFill(0xf5e0d3);
-        g.drawRoundedRect(x, y, Math.max(bw * white, bh), bh, bh / 2);
-        g.endFill();
-      }
-      if (shown > 0.001) {
-        g.beginFill(shown > 0.3 ? 0xe8554d : 0xff2d2d);
-        g.drawRoundedRect(x, y, Math.max(bw * shown, bh), bh, bh / 2);
-        g.endFill();
-      }
+      this._paintHpFill(
+        this._enemyHpFill, x, L.enemyHpBarY,
+        L.enemyHpBarWidth, L.enemyHpBarHeight, shown, white, 'enemy',
+        !!this._enemyHpFrame,
+      );
     }
-    // ---- 英雄（绿条从起点按 hp/max；护盾从起点同色段覆盖，先扣覆盖段再扣绿条） ----
     {
-      const { heroHpBarHeight: bh } = UI.battle;
-      const x = UI.board.marginX;
-      const bw = Game.logicWidth - x * 2;
-      const g = this._heroHpBar;
+      const x = (Game.logicWidth - L.heroHpBarWidth) / 2;
       const { shown, white } = this._heroHpDisp;
-      const heroBarY = this._layout.heroBarY;
-      const shield = this._ctrl.shield;
-      const maxHp = this._ctrl.heroMaxHp;
+      this._paintHpFill(
+        this._heroHpFill, x, L.heroBarY,
+        L.heroHpBarWidth, L.heroHpBarHeight, shown, white, 'hero',
+        !!this._heroHpFrame,
+      );
+    }
+  }
 
-      g.clear();
-      g.beginFill(0x1a1126);
-      g.drawRoundedRect(x, heroBarY, bw, bh, bh / 2);
+  /**
+   * 血条装饰框：与血条同宽同高，贴图拉伸贴合，避免卷饰把框撑得过宽。
+   */
+  private _makeHpFrameSprite(
+    path: string, x: number, y: number, bw: number, bh: number,
+  ): PIXI.Sprite | null {
+    const tex = TextureCache.get(path);
+    if (!tex) return null;
+    const sp = new PIXI.Sprite(tex);
+    sp.position.set(x, y);
+    sp.width = bw;
+    sp.height = bh;
+    return sp;
+  }
+
+  /**
+   * 血条填充区左右内缩（与盾标定位共用）。
+   * 敌条略贴中空槽内沿，避免满血时两端留缝。
+   */
+  private _hpFillInsetX(bw: number, hasFrame: boolean, kind: 'enemy' | 'hero' = 'hero'): number {
+    if (!hasFrame) return 4;
+    // 敌框中空约 14%；略收内缩让红条贴满内槽
+    if (kind === 'enemy') return Math.max(28, bw * 0.128);
+    return Math.max(36, bw * 0.145);
+  }
+
+  private _hpFillInsetY(bh: number, hasFrame: boolean): number {
+    return hasFrame ? Math.max(5, bh * 0.12) : 4;
+  }
+
+  /**
+   * 仅绘制槽底 + 损血白条 + 主填充。
+   * 有边框贴图时只留金边内缩，让血条铺满框内槽。
+   */
+  private _paintHpFill(
+    g: PIXI.Graphics,
+    x: number, y: number, bw: number, bh: number,
+    shown: number, white: number,
+    kind: 'enemy' | 'hero',
+    hasFrame: boolean,
+  ): void {
+    const r = bh / 2;
+    g.clear();
+
+    if (!hasFrame) {
+      // 回退：干净金边胶囊，绝不画两端圆点
+      g.beginFill(0xf8ecd0);
+      g.lineStyle(3, COLORS.panelBorder, 1);
+      g.drawRoundedRect(x, y, bw, bh, r);
       g.endFill();
+    }
 
-      if (white > shown + 0.001) {
-        g.beginFill(0xeadfc8);
-        g.drawRoundedRect(x, heroBarY, Math.max(bw * white, bh), bh, bh / 2);
-        g.endFill();
-      }
+    // 填充区：敌条贴满内槽；圆角略小，避免两端圆头留空
+    const insetX = this._hpFillInsetX(bw, hasFrame, kind);
+    const insetY = this._hpFillInsetY(bh, hasFrame);
+    const ix = x + insetX;
+    const iy = y + insetY;
+    const iw = bw - insetX * 2;
+    const ih = bh - insetY * 2;
+    const ir = kind === 'enemy' ? Math.max(4, ih * 0.35) : Math.max(ih / 2, 2);
 
-      const greenW = shown > 0.001 ? Math.max(bw * shown, bh) : 0;
-      if (greenW > 0.001) {
-        g.beginFill(shown > 0.3 ? 0x6fd86a : 0xffb74d);
-        g.drawRoundedRect(x, heroBarY, greenW, bh, bh / 2);
-        g.endFill();
-      }
+    g.lineStyle(0);
+    // 槽底（略深，衬托填充）
+    g.beginFill(kind === 'enemy' ? 0x6b2e2a : 0x2f4a2a, 0.65);
+    g.drawRoundedRect(ix, iy, iw, ih, ir);
+    g.endFill();
 
-      if (shield > 0 && maxHp > 0 && greenW > 0.001) {
-        const shieldW = Math.min(bw * (shield / maxHp), greenW);
-        if (shieldW > 1) {
-          g.beginFill(0x40b8e0);
-          g.drawRoundedRect(x, heroBarY, shieldW, bh, bh / 2);
-          g.endFill();
-          g.beginFill(0xffffff, 0.35);
-          g.drawRoundedRect(x + 2, heroBarY + 1, Math.max(shieldW - 4, 0), bh * 0.35, bh / 4);
-          g.endFill();
-        }
-        const hpHighlightW = Math.max(greenW - shieldW - 4, 0);
-        if (hpHighlightW > 0) {
-          g.beginFill(0xffffff, 0.35);
-          g.drawRoundedRect(x + shieldW + 2, heroBarY + 1, hpHighlightW, bh * 0.35, bh / 4);
-          g.endFill();
-        }
-      } else if (greenW > 0.001) {
-        g.beginFill(0xffffff, 0.35);
-        g.drawRoundedRect(x + 2, heroBarY + 1, Math.max(greenW - 4, 0), bh * 0.35, bh / 4);
-        g.endFill();
-      }
+    if (white > 0.001) {
+      g.beginFill(0xf5e0d3);
+      g.drawRoundedRect(ix, iy, Math.max(iw * white, ir), ih, ir);
+      g.endFill();
+    }
+
+    if (shown > 0.001) {
+      const { enemyHpFill, enemyHpFillLow, heroHpFill, heroHpFillLow } = UI.battle;
+      const fill = kind === 'enemy'
+        ? (shown > 0.3 ? enemyHpFill : enemyHpFillLow)
+        : (shown > 0.3 ? heroHpFill : heroHpFillLow);
+      g.beginFill(fill);
+      g.drawRoundedRect(ix, iy, Math.max(iw * shown, ir), ih, ir);
+      g.endFill();
+      // 顶部高光（模拟 mockup 渐变）
+      g.beginFill(0xffffff, 0.28);
+      g.drawRoundedRect(ix + 2, iy + 1, Math.max(iw * shown - 4, 0), ih * 0.38, ir / 2);
+      g.endFill();
     }
   }
 
@@ -309,10 +447,12 @@ export class BattleHud {
     const left = boardView.dragTimeLeft;
     const w = boardView.boardWidth * left;
     const y = this._layout.boardY - UI.battle.dragBarHeight - 4;
-    g.beginFill(0x3a2d58);
+    g.beginFill(COLORS.trackBg, 0.95);
+    g.lineStyle(1.5, COLORS.panelBorder, 0.8);
     g.drawRoundedRect(this._layout.boardX, y, boardView.boardWidth, UI.battle.dragBarHeight, 5);
     g.endFill();
-    g.beginFill(left > 0.3 ? 0x6fd86a : 0xff7a5c);
+    g.lineStyle(0);
+    g.beginFill(left > 0.3 ? COLORS.trackFillFull : COLORS.btnDangerBg);
     g.drawRoundedRect(this._layout.boardX, y, Math.max(w, 8), UI.battle.dragBarHeight, 5);
     g.endFill();
   }
@@ -368,32 +508,10 @@ export class BattleHud {
     TweenManager.cancelTarget(this._enemyHpDisp);
     this._enemyHpDisp.shown = ratio;
     this._enemyHpDisp.white = ratio;
-    this._enemyNameText.text = formatEnemyBattleName(def);
-    this._enemyNameText.style.fill = ENEMY_TIER_COLOR[tier];
     this._refreshEnemyElementTags(enemy.def.element);
-    // 背景按关卡属性（与 assetPreload / 场景设计一致），不按当前敌人属性
-    this._refreshEnemyBg(this._ctrl.stage.element);
     this.refreshStageHeader();
     this.refreshEnemyHp();
     this.refreshEnemyCd();
-  }
-
-  /** 切换敌人区背景：底对齐；高度不足时 cover 补顶，避免顶部蓝黑留空 */
-  private _refreshEnemyBg(element: Element): void {
-    const tex = TextureCache.get(battleBgImage(element));
-    if (!tex) {
-      this._enemyBgSprite.visible = false;
-      return;
-    }
-    this._enemyBgSprite.visible = true;
-    this._enemyBgSprite.texture = tex;
-    const w = Game.logicWidth;
-    const areaH = this._enemyAreaBottom - this._enemyAreaTop;
-    const fitW = w / tex.width;
-    const fitH = areaH / tex.height;
-    if (displayAlive(this._enemyBgSprite)) {
-      setScaleSafe(this._enemyBgSprite, Math.max(fitW, fitH));
-    }
   }
 
   /** 敌人属性克制提示：弱点珠 / 抵抗珠（对齐 xiao_chu） */
@@ -401,7 +519,7 @@ export class BattleHud {
     this._enemyElementRow.removeChildren();
     const weak = counterElementOf(element);
     const resist = resistedElementOf(element);
-    const gap = 10;
+    const gap = 14;
     const weakBanned = this._ctrl.bannedElements.has(weak);
     const weakLabel = weakBanned
       ? `拖${ELEMENT_NAME[weak]}珠克制·本关封印`
@@ -416,44 +534,52 @@ export class BattleHud {
     this._enemyElementRow.addChild(weakTag, resistTag);
   }
 
+  /**
+   * 克制/抵抗标签：截图样式——深棕金底 + 浅金边 + 奶油白字深描边 + 透明底珠图标。
+   */
   private _makeElementCounterTag(
     label: string,
     element: Element,
-    highlight: boolean,
+    _highlight: boolean,
   ): PIXI.Container & { tagW: number; tagH: number } {
     const color = ORB_COLOR[element];
-    const fontSize = 20;
-    const orbSize = 14;
-    const padX = 8;
-    const padY = 4;
-    const text = new PIXI.Text(label, {
-      fontSize,
-      fill: highlight ? 0xffffff : 0xaaaaaa,
-      fontWeight: 'bold',
+    const orbSize = 26;
+    const padX = 14;
+    const padY = 8;
+    const gap = 6;
+    const text = makeText(label, {
+      size: FONT_SIZE.xs,
+      fill: COLORS.battleTagText,
+      bold: true,
+      strokeColor: COLORS.battleTagTextStroke,
+      strokeWidth: 4,
     });
-    const tagW = text.width + orbSize + padX * 2 + 6;
-    const tagH = Math.max(text.height, orbSize) + padY * 2;
+    const tagH = Math.max(Math.ceil(text.height), orbSize) + padY * 2;
+    const tagW = Math.ceil(padX + orbSize + gap + text.width + padX);
+
+    const tag = new PIXI.Container() as PIXI.Container & { tagW: number; tagH: number };
+    tag.tagW = tagW;
+    tag.tagH = tagH;
+
+    // 深棕金胶囊 + 浅金描边（对齐用户截图）
     const bg = new PIXI.Graphics();
-    if (highlight) {
-      bg.beginFill(color, 0.25);
-      bg.lineStyle(1.5, color, 0.6);
-    } else {
-      bg.beginFill(0x3c3c50, 0.6);
-      bg.lineStyle(1, 0x9696aa, 0.4);
-    }
+    bg.beginFill(COLORS.battleTagBg, 0.96);
+    bg.lineStyle(2, COLORS.battleTagBorder, 1);
     bg.drawRoundedRect(0, 0, tagW, tagH, tagH / 2);
     bg.endFill();
-    text.position.set(padX, (tagH - text.height) / 2);
+    tag.addChild(bg);
+
+    // 珠图标：直接用透明底 orb，不加外框/底色块
     const orb = new PIXI.Sprite(TextureCache.get(ORB_IMAGES[element]) ?? PIXI.Texture.WHITE);
     orb.width = orbSize;
     orb.height = orbSize;
     orb.anchor.set(0.5);
-    orb.position.set(padX + text.width + 3 + orbSize / 2, tagH / 2);
+    orb.position.set(padX + orbSize / 2, tagH / 2);
     if (!orb.texture || orb.texture === PIXI.Texture.WHITE) orb.tint = color;
-    const tag = new PIXI.Container() as PIXI.Container & { tagW: number; tagH: number };
-    tag.tagW = tagW;
-    tag.tagH = tagH;
-    tag.addChild(bg, text, orb);
+    tag.addChild(orb);
+
+    text.position.set(padX + orbSize + gap, (tagH - text.height) / 2);
+    tag.addChild(text);
     return tag;
   }
 
@@ -474,7 +600,7 @@ export class BattleHud {
     const parts: string[] = [];
     if (enemy.charging) {
       parts.push(`⚠ 蓄力中！下回合重击 ×${enemy.charging.mult}`);
-      this._enemyCdText.style.fill = 0xff5252;
+      this._enemyCdText.style.fill = 0xc0392b;
       const cdScale = readScale(this._enemyCdText);
       if (cdScale) {
         TweenManager.cancelTarget(cdScale);
@@ -486,7 +612,7 @@ export class BattleHud {
       }
     } else {
       parts.push(`${enemy.attackCountdown} 回合后攻击`);
-      this._enemyCdText.style.fill = 0xffb74d;
+      this._enemyCdText.style.fill = COLORS.white;
     }
     if (enemy.dmgReduction) {
       parts.push(`减伤${Math.round(enemy.dmgReduction.reduction * 100)}%·剩${enemy.dmgReduction.turnsLeft}回合`);
@@ -519,13 +645,15 @@ export class BattleHud {
   }
 
   private _refreshHeroHpText(): void {
+    this._heroHpText.text = `${this._ctrl.heroHp} / ${this._ctrl.heroMaxHp}`;
     const sh = this._ctrl.shield;
-    this._heroHpText.text = sh > 0
-      ? `${this._ctrl.heroHp} / ${this._ctrl.heroMaxHp}  +${sh}`
-      : `${this._ctrl.heroHp} / ${this._ctrl.heroMaxHp}`;
+    if (displayAlive(this._shieldBadge)) {
+      this._shieldBadge.visible = sh > 0;
+      if (sh > 0) this._shieldText.text = `+${sh}`;
+    }
   }
 
-  /** 增伤等 buff 状态行（护盾由血条青色段展示） */
+  /** 增伤等 buff 状态行（护盾由右侧盾标展示） */
   refreshStatus(): void {
     this._refreshHeroHpText();
     const parts: string[] = [];
@@ -568,9 +696,9 @@ export class BattleHud {
   /** 血条文字短暂变色，强化「被打到了」的反馈 */
   flashHeroHpBar(damage: boolean): void {
     if (!displayAlive(this._heroHpText)) return;
-    this._heroHpText.style.fill = damage ? 0xff5252 : 0x8fd4ff;
+    this._heroHpText.style.fill = damage ? 0xff5252 : 0x4aa8e8;
     setTimeout(() => {
-      if (displayAlive(this._heroHpText)) this._heroHpText.style.fill = 0xffffff;
+      if (displayAlive(this._heroHpText)) this._heroHpText.style.fill = COLORS.white;
     }, 280);
   }
 

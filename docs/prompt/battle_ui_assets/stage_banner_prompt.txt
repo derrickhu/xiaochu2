@@ -1,0 +1,17 @@
+Mobile game UI asset ONLY: ornate horizontal STAGE TITLE BANNER plaque for Chinese fantasy match-3 RPG battle screen.
+
+STRICT: Match the cream-gold parchment banner style from the reference battle UI mockup (top center header plaque).
+
+Design requirements:
+- Wide horizontal rounded rectangle / soft capsule plaque
+- Warm cream parchment fill #FDF3DF with subtle paper texture
+- Ornate gold/bronze border #E8A33D with thin inner line
+- Small decorative flourishes at left and right ends (diamond or scroll tips), elegant but not busy
+- Center area MUST be clean empty cream for overlay text (no patterns, no icons, no watermarks in the middle)
+- Soft Q-version cute Chinese fantasy UI, bright and comfortable
+- Transparent background outside the plaque
+- NO TEXT, no labels, no captions, no Chinese characters, no writing anywhere in the image
+- NO characters, NO monsters, NO orbs
+- Clean game-ready PNG UI element, centered, high contrast border
+
+Aspect roughly 5:1 wide banner. Studio product shot of a single UI plaque on transparent/checker void.

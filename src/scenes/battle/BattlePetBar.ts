@@ -12,7 +12,7 @@ import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
-import { petFrameImage } from '@/config/Assets';
+import { petFrameImage, UI_BATTLE_IMAGES } from '@/config/Assets';
 import {
   createPetSkillReadyFx,
   triggerPetSkillReadyFlash,
@@ -20,7 +20,7 @@ import {
   type PetSkillReadyFxView,
 } from '@/game/battle/PetSkillReadyFx';
 import { getGrowthUi } from '@/balance/growth';
-import { makeText } from '@/ui/text';
+import { makeText, makePanel, COLORS } from '@/ui';
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BattleLayout } from './BattleLayout';
 import { showPetSkillPreview, TAP_SLOP, type PetSkillPreviewHandle } from './PetSkillPreviewBubble';
@@ -54,26 +54,62 @@ export class BattlePetBar {
   build(parent: PIXI.Container, hooks: PetBarHooks): void {
     this._hooks = hooks;
     const { petFrameScale } = UI.battle;
-    const { petSize, petGap, petBarSidePad, petBarCenterY } = this._layout;
+    const {
+      petSize, petGap, petBarSidePad, petBarCenterY,
+      petBarPanelY, petBarPanelH, petBarPanelW,
+    } = this._layout;
     this._petSize = petSize;
     const startX = petBarSidePad + petSize / 2;
     const y = petBarCenterY;
     const frameSize = petSize * petFrameScale;
-    const starUi = getGrowthUi('inverse');
+    const starUi = getGrowthUi('panel');
+    const w = Game.logicWidth;
+
+    // cream 宠物栏底板贴图（Gemini，对齐 mockup；缺图回退程序面板）
+    const panelTex = TextureCache.get(UI_BATTLE_IMAGES.petPanel);
+    if (panelTex) {
+      const panel = new PIXI.Sprite(panelTex);
+      panel.anchor.set(0.5);
+      panel.width = petBarPanelW;
+      panel.height = petBarPanelH;
+      panel.position.set(w / 2, petBarPanelY);
+      parent.addChild(panel);
+    } else {
+      parent.addChild(makePanel({
+        width: petBarPanelW,
+        height: petBarPanelH,
+        radius: 22,
+        bg: COLORS.panelBg,
+        bgAlpha: 0.96,
+        border: COLORS.panelBorder,
+        borderWidth: 4,
+        centered: true,
+      })).position.set(w / 2, petBarPanelY);
+    }
 
     this._slotCdBadge = [];
     this._slotCdText = [];
     this._slotReadyFx = [];
     this._slotWasReady = [];
     this._slotBaseY = [];
+    // 5 星总宽 ≈ 宠物格宽（略大一点更清晰）
+    const MAX_STARS = 5;
+    const starGap = 1;
+    const starSize = Math.max(
+      UI.battle.petStarSize,
+      Math.floor((petSize - (MAX_STARS - 1) * starGap) / MAX_STARS),
+    );
+    const starTex = TextureCache.get(UI_BATTLE_IMAGES.petStar);
+
     this._slots = this._ctrl.team.map((pet, i) => {
       const slot = new PIXI.Container();
       slot.position.set(startX + i * (petSize + petGap), y);
       this._slotBaseY.push(y);
       const color = ORB_COLOR[pet.def.element];
 
+      // 浅色槽底（相框下垫一层）
       const bg = new PIXI.Graphics();
-      bg.beginFill(0x1a1126);
+      bg.beginFill(COLORS.panelBgAlt, 0.85);
       bg.drawRoundedRect(-petSize / 2 + 1, -petSize / 2 + 1, petSize - 2, petSize - 2, 14);
       bg.endFill();
       slot.addChild(bg);
@@ -99,49 +135,69 @@ export class BattlePetBar {
         slot.addChild(frame);
       }
 
-      const badge = new PIXI.Text(ELEMENT_NAME[pet.def.element], {
-        fontSize: 22, fill: 0xffffff, fontWeight: 'bold',
-        stroke: 0x000000, strokeThickness: 3,
+      // 属性角标：左上
+      const badge = makeText(ELEMENT_NAME[pet.def.element], {
+        size: Math.max(14, Math.round(petSize * 0.17)),
+        fill: COLORS.white,
+        bold: true,
+        anchor: 0.5,
+        strokeColor: 0x000000,
+        strokeWidth: 3,
       });
-      badge.anchor.set(0.5);
-      badge.position.set(petSize / 2 - 16, -petSize / 2 + 16);
+      badge.position.set(-petSize / 2 + 14, -petSize / 2 + 14);
       slot.addChild(badge);
 
-      // 星级（左下角，对齐 xiao_chu battleTeamBarView）
-      if (pet.star >= 1) {
-        const starSize = Math.max(14, Math.round(petSize * 0.14));
-        const stars = makeText('★'.repeat(pet.star), {
-          size: starSize,
-          fill: starUi.starFilled,
-          bold: true,
-          anchor: [0, 1],
-          strokeColor: 0x000000,
-          strokeWidth: Math.max(2, Math.round(starSize * 0.14)),
-        });
-        stars.position.set(-petSize / 2 + 4, petSize / 2 - 2);
-        slot.addChild(stars);
+      // Lv 角标：右下（不再叠 CD 回合数）
+      const lvText = makeText(`Lv.${pet.level}`, {
+        size: Math.max(11, Math.round(petSize * 0.12)),
+        fill: starUi.levelColor,
+        bold: true,
+        anchor: [1, 1],
+        strokeColor: COLORS.panelBg,
+        strokeWidth: 3,
+      });
+      lvText.position.set(petSize / 2 - 3, petSize / 2 - 2);
+      slot.addChild(lvText);
+
+      // Q 版星级：固定 5 槽铺满宠物格宽，按星级点亮
+      {
+        const filled = Math.min(Math.max(pet.star, 0), MAX_STARS);
+        const starRow = new PIXI.Container();
+        const rowW = MAX_STARS * starSize + (MAX_STARS - 1) * starGap;
+        for (let s = 0; s < MAX_STARS; s++) {
+          const lit = s < filled;
+          if (starTex) {
+            const star = new PIXI.Sprite(starTex);
+            star.anchor.set(0.5);
+            star.width = starSize;
+            star.height = starSize;
+            if (!lit) {
+              star.tint = 0x9a8a70;
+              star.alpha = 0.35;
+            }
+            star.position.set(-rowW / 2 + starSize / 2 + s * (starSize + starGap), 0);
+            starRow.addChild(star);
+          } else {
+            const fallback = makeText('★', {
+              size: starSize,
+              fill: lit ? 0xf5c84a : starUi.starEmpty,
+              bold: true,
+              anchor: 0.5,
+              strokeColor: lit ? 0xb5701f : 0x8a7a60,
+              strokeWidth: 2,
+            });
+            if (!lit) fallback.alpha = 0.45;
+            fallback.position.set(-rowW / 2 + starSize / 2 + s * (starSize + starGap), 0);
+            starRow.addChild(fallback);
+          }
+        }
+        starRow.position.set(0, petSize / 2 + starSize / 2 + 2);
+        slot.addChild(starRow);
       }
 
-      // 冷却标记：右下角小圆标（对齐 xiao_chu，不暗化头像）
-      const cdR = petSize * 0.2;
-      const cdCx = petSize / 2 - cdR - 2;
-      const cdCy = petSize / 2 - cdR - 2;
-      const cdBadge = new PIXI.Graphics();
-      cdBadge.beginFill(0x000000, 0.75);
-      cdBadge.drawCircle(cdCx, cdCy, cdR);
-      cdBadge.endFill();
-      cdBadge.lineStyle(1, 0xffffff, 0.3);
-      cdBadge.drawCircle(cdCx, cdCy, cdR);
-      slot.addChild(cdBadge);
-      this._slotCdBadge.push(cdBadge);
-
-      const cdText = new PIXI.Text('', {
-        fontSize: Math.round(petSize * 0.22), fill: 0xffd700, fontWeight: 'bold',
-      });
-      cdText.anchor.set(0.5);
-      cdText.position.set(cdCx, cdCy);
-      slot.addChild(cdText);
-      this._slotCdText.push(cdText);
+      // 回合数 CD 圆标暂不展示（后续再加）；占位数组保持长度一致
+      this._slotCdBadge.push(new PIXI.Graphics());
+      this._slotCdText.push(makeText('', { size: 1 }));
 
       const readyFx = createPetSkillReadyFx(petSize, color);
       slot.addChild(readyFx.root);
@@ -150,15 +206,14 @@ export class BattlePetBar {
 
       if (this._ctrl.bannedElements.has(pet.def.element)) {
         const banMask = new PIXI.Graphics();
-        banMask.beginFill(0x000000, 0.55);
+        banMask.beginFill(COLORS.scrim, 0.5);
         banMask.drawRoundedRect(-petSize / 2, -petSize / 2, petSize, petSize, 16);
         banMask.endFill();
         slot.addChild(banMask);
-        const banText = new PIXI.Text('封', {
-          fontSize: 30, fill: 0xff6b6b, fontWeight: 'bold',
-          stroke: 0x000000, strokeThickness: 4,
+        const banText = makeText('封', {
+          size: 30, fill: 0xff6b6b, bold: true, anchor: 0.5,
+          strokeColor: 0x000000, strokeWidth: 4,
         });
-        banText.anchor.set(0.5);
         slot.addChild(banText);
       }
 
@@ -183,16 +238,15 @@ export class BattlePetBar {
     return this._slots[index];
   }
 
-  /** 刷新宠物槽技能状态（CD 数字 / 就绪动效） */
+  /** 刷新宠物槽技能状态（回合数暂隐藏；仅驱动就绪动效） */
   refreshCooldowns(): void {
     this._ctrl.team.forEach((pet, i) => {
+      const ready = pet.skillCdLeft <= 0;
+      // CD 数字/圆标暂不展示，后续再加
       const badge = this._slotCdBadge[i];
       const cdText = this._slotCdText[i];
-      if (!badge || !cdText) return;
-      const ready = pet.skillCdLeft <= 0;
-      badge.visible = !ready;
-      cdText.visible = !ready;
-      cdText.text = String(pet.skillCdLeft);
+      if (badge) badge.visible = false;
+      if (cdText) cdText.visible = false;
       if (ready && !this._slotWasReady[i]) {
         triggerPetSkillReadyFlash(this._slotReadyFx[i]);
       }

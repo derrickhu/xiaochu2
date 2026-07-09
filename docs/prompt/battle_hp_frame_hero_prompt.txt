@@ -1,0 +1,19 @@
+Game UI asset: player HP bar FRAME ONLY for a bright Q-version cream/gold mobile RPG battle UI.
+
+CRITICAL:
+- NO TEXT, no numbers, no labels, no captions, no writing anywhere
+- Transparent background outside the frame; hollow center fill slot transparent or pure black
+- Single wide horizontal frame sprite, landscape ~7:1 aspect (wide and short)
+- NO top center semicircle / hump / tab / peak / chevron notch — the TOP EDGE must be a clean straight horizontal line across the middle section
+- Do NOT add any upward bulge above the bar
+
+Design:
+- Horizontal HP bar outer frame with ORNATE decorative flourishes / scrollwork / wing-like end caps on BOTH left and right ends only
+- Middle section: flat cream/ivory bar with thin metallic gold inner rim around a hollow capsule slot for HP fill
+- Outer body: soft cream / parchment ivory with subtle bevel (lighter top edge, warmer bottom)
+- Left and right ends: symmetrical ornate cream-gold scroll flourishes that extend slightly beyond the bar ends (not plain semicircle capsule ends)
+- Flat top and bottom on the central bar — no crown, no tab, no half-circle on top
+- Clean vector-like mobile game UI, polished, bright
+- No shield icon, no characters, no scenery
+
+Use the reference images for end-cap styling only. Ignore any top-center tab in references. Do not copy any text.

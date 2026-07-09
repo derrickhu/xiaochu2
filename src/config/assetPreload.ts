@@ -18,6 +18,7 @@ import {
   UI_SHOP_IMAGES,
   UI_SCENE_IMAGES,
   UI_PANEL_IMAGES,
+  UI_BATTLE_IMAGES,
   RARITY_BADGE_IMAGES,
   battleBgImage,
   enemyImage,
@@ -117,6 +118,7 @@ export function battlePreloadImages(stageId: string, teamPetIds: readonly string
     ...Object.values(BOARD_IMAGES),
     ...Object.values(ORB_IMAGES),
     ...Object.values(PET_FRAME_IMAGES),
+    ...Object.values(UI_BATTLE_IMAGES),
     UI_PANEL_IMAGES.battleVictory,
     battleBgImage(stage.element),
   ];

@@ -1,0 +1,24 @@
+Game UI asset sheet: 6 match-3 puzzle ORBS / beads for a bright Q-version cream/gold mobile RPG.
+
+Layout: 3 columns x 2 rows, equal square cells, each cell contains ONE orb centered on a plain light gray (#d0d0d0) background.
+
+CRITICAL:
+- NO TEXT, no labels, no captions, no numbers, no writing anywhere
+- Each orb is a perfect circle, same size, same glossy glass-marble style
+- Transparent-friendly: solid light gray background only (no scenery)
+- Consistent lighting: bright white specular highlight top-left, soft shadow bottom-right
+- Soft candy / Puzzle & Dragons style, polished mobile game icons
+
+Use the reference board image for orb style and icon shapes ONLY. Do not copy the board frame or grid.
+
+Row 1 (left to right):
+1) GOLD / METAL — bright golden yellow sphere, center icon: stylized 4-pointed star / diamond with concave sides (darker gold icon)
+2) WOOD — vibrant emerald green sphere, center icon: simple rounded leaf with a center vein (darker green icon)
+3) WATER — bright sky blue sphere, center icon: classic teardrop water drop (darker blue icon)
+
+Row 2 (left to right):
+4) FIRE — deep crimson red sphere, center icon: stylized 3-tongue flame (darker red icon)
+5) EARTH — warm chocolate brown sphere, center icon: cluster of 2–3 jagged rock shapes (darker brown icon)
+6) HEART — bright bubblegum pink sphere, center icon: solid heart shape with slightly darker pink outline
+
+Each orb: glossy 3D glass marble, thin darker rim, embossed center symbol, no square tile behind the orb.

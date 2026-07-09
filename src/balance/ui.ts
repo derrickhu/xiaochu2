@@ -37,21 +37,53 @@ export const UI = {
 
   /** ── 战斗布局（设计坐标） ── */
   battle: {
-    /** 敌人立绘尺寸 */
-    enemySize: 260,
-    /** 敌人血条 */
-    enemyHpBarWidth: 360,
-    enemyHpBarHeight: 22,
-    /** 队伍栏头像间距（与棋盘 marginX 一起铺满 750 宽） */
-    petGap: 8,
+    /** 敌人立绘尺寸（布局占位；实际显示尺寸见 enemyDisplaySize） */
+    enemySize: 280,
+    /**
+     * 血条尺寸（对齐 mockup）：偏厚；玩家条略长于敌条
+     * 贴宠物板顶，勿铺满屏宽
+     */
+    enemyHpBarWidth: 480,
+    enemyHpBarHeight: 44,
+    heroHpBarWidth: 580,
+    heroHpBarHeight: 44,
+    /** 兼容旧字段 */
+    hpBarWidth: 580,
+    hpBarHeight: 44,
+    /** mockup 填充色：敌鲜红 / 我翠绿 */
+    enemyHpFill: 0xe74c3c,
+    enemyHpFillLow: 0xff5a4a,
+    heroHpFill: 0x5cb85c,
+    heroHpFillLow: 0xe8a33d,
+    /** 队伍栏头像间距 */
+    petGap: 10,
     /** 五行相框相对头像缩放（对齐 xiao_chu frameScale=1.12） */
     petFrameScale: 1.12,
-    /** 队伍栏距棋盘顶部距离（上方双箭头提示留白） */
-    teamBarOffset: 154,
+    /** 宠物栏底板底边与棋盘顶边的间距（对齐 mockup 留白） */
+    petBoardGap: 18,
+    /** 宠物栏 cream 底板左右内边距（宠物略小，露出底板边框） */
+    petBarPanelPadX: 18,
+    /** 宠物栏 cream 底板上下内边距 */
+    petBarPanelPadY: 14,
+    /** 相框下方星级行高度 */
+    petStarRowH: 28,
+    /** Q 版星标边长兜底；实际按 5 星铺满宠物格宽计算 */
+    petStarSize: 20,
+    /** 英雄血条压入宠物板顶边的重叠量（连体感） */
+    heroBarPanelOverlap: 10,
     /** 拖珠倒计时条 */
     dragBarHeight: 10,
-    /** 英雄血条 */
-    heroHpBarHeight: 26,
+    /** 英雄血条右侧护盾徽章（大于血条高度，底边与血条底对齐） */
+    shieldBadgeSize: 76,
+    /** 顶栏关卡匾宽度 / 高度（仅关卡名） */
+    stageBannerW: 520,
+    stageBannerH: 88,
+    /** 敌人名独立匾（关卡匾下方） */
+    enemyNamePlaqueW: 320,
+    enemyNamePlaqueH: 44,
+    /** 血条 → 倒计时 → 克制标签 的垂直间距 */
+    enemyHpToCdGap: 10,
+    enemyCdToTagGap: 14,
     /** 宠物上滑放技能阈值（设计像素，向上位移） */
     skillSwipeThreshold: 40,
     /** 上滑预览最大位移 */

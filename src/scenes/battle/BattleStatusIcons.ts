@@ -13,6 +13,7 @@ import { displayAlive, readScale, cancelDisplayTweens } from '@/core/animationGu
 import type { StatusInstance, StatusKind, StatusOwner } from '@/game/battle/BattleStatus';
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BattleLayout } from './BattleLayout';
+import { COLORS, FONT_SIZE } from '@/ui/theme';
 
 interface IconStyle {
   glyph: string;
@@ -64,10 +65,10 @@ export class BattleStatusIcons {
 
   build(parent: PIXI.Container): void {
     this._enemyRow = new PIXI.Container();
-    // 敌人血条下方（普攻倒计时文字之下）
+    // 克制标签行下方，避免与倒计时/克制重叠
     this._enemyRow.position.set(
       Game.logicWidth / 2,
-      this._layout.enemyHpBarY + UI.battle.enemyHpBarHeight + 44 + ICON_SIZE / 2,
+      this._layout.enemyTagY + 28 + ICON_SIZE / 2,
     );
     parent.addChild(this._enemyRow);
 
@@ -150,22 +151,22 @@ export class BattleStatusIcons {
     const c = new PIXI.Container();
     const bg = new PIXI.Graphics();
     const half = ICON_SIZE / 2;
-    bg.beginFill(0x1a1126, 0.9);
-    bg.lineStyle(2, style.debuff ? 0xc06cf0 : style.color, 0.9);
+    bg.beginFill(COLORS.panelBg, 0.95);
+    bg.lineStyle(2, style.debuff ? 0xc06cf0 : style.color, 0.95);
     bg.drawRoundedRect(-half, -half, ICON_SIZE, ICON_SIZE, 8);
     bg.endFill();
     c.addChild(bg);
 
     const glyph = new PIXI.Text(style.glyph, {
-      fontSize: 20, fill: style.color, fontWeight: 'bold',
+      fontSize: FONT_SIZE.xxs + 5, fill: style.color, fontWeight: 'bold',
     });
     glyph.anchor.set(0.5);
     glyph.position.set(0, -1);
     c.addChild(glyph);
 
     const turnsText = new PIXI.Text('', {
-      fontSize: 15, fill: 0xffffff, fontWeight: 'bold',
-      stroke: 0x000000, strokeThickness: 3,
+      fontSize: FONT_SIZE.xxs, fill: COLORS.textMain, fontWeight: 'bold',
+      stroke: COLORS.panelBg, strokeThickness: 3,
     });
     turnsText.anchor.set(1, 1);
     turnsText.position.set(half + 2, half + 4);

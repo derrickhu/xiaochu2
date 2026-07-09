@@ -49,7 +49,7 @@ describe('封印珠机制', () => {
     const b = new BoardModel(seededRng(9));
     b.set(2, 2, 'wood');
     b.seal(2, 2);
-    b.convertRandom('metal', 36); // 尝试转化全盘
+    b.convertRandom('metal', 30); // 尝试转化全盘（5×6）
     // 被封印的木珠不应被转化
     expect(b.get(2, 2)).toBe('wood');
     expect(b.isLocked(2, 2)).toBe(true);

@@ -1,0 +1,28 @@
+Mobile game BATTLE SCREEN UI mockup, STRICT portrait 9:16 phone screen for xiaochu2 Chinese fantasy match-3 RPG.
+
+EDIT previous battle mockup. Keep bamboo forest, cream-gold UI, slime enemy, orb board.
+
+KEEP PREVIOUS FIXES:
+1. NO HP / green bars under pet portraits.
+2. Counter tags ONLY ONCE under enemy: "拖金珠克制" + "抵抗土珠".
+
+NEW — PET STAR RATING (required):
+Each of the 5 pet slots MUST show star rank clearly.
+Design: small gold ★★★☆☆ (or filled stars matching rank) under OR overlapping bottom of each pet portrait frame.
+Examples: Lv.12 pets with 2–3 gold stars. Stars are tiny, readable, warm gold #E8A33D.
+Do NOT put stars on the enemy. Stars only on player pets.
+
+PET SLOT CONTENTS (each):
+- square portrait in element frame
+- element icon top-left
+- level badge bottom-right "Lv.12"
+- star row (2–3 gold stars) just below portrait or on bottom edge of frame
+- NO health bar
+
+KEEP REST:
+- Top: 返回 | 1-1 青苔林边 / 杂兵 · 木域软泥 | 设置
+- Enemy slime + HP 620/620 + "1 回合后攻击" + one pair of counter tags
+- Shared hero HP only: 1809/1809 + shield +217
+- 6x5 elemental orb board
+
+Bright Q版修仙 cream #FDF3DF gold #E8A33D. Chinese UI text. NO watermark. 9:16.

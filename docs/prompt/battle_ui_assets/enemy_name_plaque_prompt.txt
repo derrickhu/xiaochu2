@@ -1,0 +1,14 @@
+Mobile game UI asset ONLY: small horizontal cream NAME PLAQUE for enemy subtitle under stage banner.
+
+Match the cream-gold parchment style from the reference battle UI mockup.
+
+Design:
+- Short wide rounded rectangle / soft capsule
+- Warm cream fill #FDF3DF, subtle paper texture
+- Thin gold-bronze border #C9A063
+- Clean empty center for overlay text like "杂兵 · 木域软泥"
+- Transparent outside
+- NO TEXT, no labels, no writing
+- Bright Q-version Chinese fantasy UI
+
+Aspect about 4:1. Single centered plaque.

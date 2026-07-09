@@ -1,0 +1,17 @@
+Mobile game UI asset ONLY: EMPTY hero/player HP BAR FRAME for Chinese fantasy match-3 RPG.
+
+Match the GREEN player health bar FRAME from the reference battle UI mockup (top edge of the cream pet panel).
+
+CRITICAL:
+- Longer horizontal rounded rectangle bar FRAME
+- Clean thin gold-bronze border, soft cream outer edge
+- NO circular end caps, NO dots, NO ornate wing tips, NO anchor balls
+- Flat clean ends, slightly rounded corners only
+- Interior channel EMPTY / transparent (green fill drawn in code)
+- Looks integrated with cream pet panel aesthetic
+- Bright Q-version UI, game-ready PNG
+- Transparent outside the frame
+- NO TEXT, no numbers, no labels, no writing
+- NO shield icon in this asset
+
+Aspect roughly 12:1 wide. Single centered empty HP frame.

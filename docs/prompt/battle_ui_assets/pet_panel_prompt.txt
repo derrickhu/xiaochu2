@@ -1,0 +1,17 @@
+Mobile game UI asset ONLY: wide cream PET TEAM BACKGROUND PANEL for battle screen.
+
+Match the flat cream rounded rectangle BEHIND the five pet portraits in the reference mockup.
+
+CRITICAL shape:
+- Simple wide horizontal rounded rectangle
+- NO top arch, NO crown tab, NO upward bump, NO notch
+- Flat top edge with large rounded corners only
+- Warm cream fill #FDF3DF, subtle paper texture
+- Thin gold/bronze border #C9A063
+- Completely empty center
+- Soft drop shadow optional
+- Transparent outside panel
+- NO TEXT, no labels, no pets, no stars, no HP bar, no writing
+- Bright Q-version Chinese fantasy UI
+
+Aspect 21:9 wide. Single centered panel PNG.

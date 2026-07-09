@@ -23,25 +23,25 @@ export const ENEMY_TIER_LABEL: Readonly<Record<EnemyDisplayTier, string>> = {
 };
 
 export const ENEMY_TIER_COLOR: Readonly<Record<EnemyDisplayTier, number>> = {
-  mob: 0x8a939e,
-  elite: 0xffb74d,
-  miniBoss: 0xb388ff,
-  boss: 0xff5252,
+  mob: 0x5a4632,
+  elite: 0xb5701f,
+  miniBoss: 0x7345ad,
+  boss: 0xc0392b,
 };
 
-/** 战斗立绘目标边长（设计坐标 px） */
+/** 战斗立绘目标边长（设计坐标 px；Q 版亮色 UI 下整体放大） */
 export function enemyDisplaySize(tier: EnemyDisplayTier): number {
   switch (tier) {
-    case 'mob': return 190;
-    case 'elite': return 230;
-    case 'miniBoss': return 270;
-    case 'boss': return 300;
+    case 'mob': return 260;
+    case 'elite': return 290;
+    case 'miniBoss': return 320;
+    case 'boss': return 340;
   }
 }
 
-/** 杂兵略压饱和，避免与灵宠立绘同款「收藏感」 */
-export function enemySpriteTint(tier: EnemyDisplayTier): number {
-  return tier === 'mob' ? 0xd8dde3 : 0xffffff;
+/** Q 版亮色战斗：杂兵不再压灰，保持原色 */
+export function enemySpriteTint(_tier: EnemyDisplayTier): number {
+  return 0xffffff;
 }
 
 export function enemyDisplayTierOf(def: EnemyDef): EnemyDisplayTier {

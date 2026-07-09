@@ -14,14 +14,13 @@ function setBoard(board: BoardModel, layout: string[]): void {
   }
 }
 
-/** 构造无现成消除的基底盘面（双色棋盘格交错） */
+/** 构造无现成消除的基底盘面（双色棋盘格交错，5×6） */
 const NEUTRAL: string[] = [
   'MWMWMW',
   'WMWMWM',
   'MWMWMW',
   'WMWMWM',
   'MWMWMW',
-  'WMWMWM',
 ];
 
 function neutralBoard(): BoardModel {
@@ -57,7 +56,6 @@ describe('findMatches', () => {
       'MWMWMW',
       'WMWMWM',
       'MWMWMW',
-      'WMWMWM',
     ]);
     const groups = b.findMatches();
     expect(groups).toHaveLength(1);
@@ -73,7 +71,6 @@ describe('findMatches', () => {
       'EWMWMW',
       'EMWMWM',
       'MWMWMW',
-      'WMWMWM',
     ]);
     const groups = b.findMatches();
     expect(groups).toHaveLength(1);
@@ -89,7 +86,6 @@ describe('findMatches', () => {
       'MHHHMW',
       'WMHMWM',
       'MWMWMW',
-      'WMWMWM',
     ]);
     const groups = b.findMatches();
     expect(groups).toHaveLength(1);
@@ -106,7 +102,6 @@ describe('findMatches', () => {
       'MWMFFF',
       'WMWMWM',
       'MWMWMW',
-      'WMWMWM',
     ]);
     const groups = b.findMatches();
     expect(groups).toHaveLength(2);
@@ -121,7 +116,6 @@ describe('findMatches', () => {
       'MWMWMW',
       'WMWMWM',
       'AAAWMW',
-      'WMWMWM',
     ]);
     const groups = b.findMatches();
     expect(groups).toHaveLength(2);
@@ -144,7 +138,6 @@ describe('clearCells + collapse', () => {
       'EEEWMW',
       'WMWMWM',
       'MWMWMW',
-      'WMWMWM',
     ]);
     const groups = b.findMatches();
     expect(groups).toHaveLength(1);
@@ -179,26 +172,25 @@ describe('clearCells + collapse', () => {
 
   it('整列消除时新珠按 spawnAbove 递增堆叠', () => {
     const b = neutralBoard();
-    const cells = Array.from({ length: 6 }, (_, r) => ({ r, c: 3 }));
+    const cells = Array.from({ length: 5 }, (_, r) => ({ r, c: 3 }));
     b.clearCells(cells);
     const moves = b.collapse();
     const colMoves = moves.filter((m) => m.col === 3);
-    expect(colMoves).toHaveLength(6);
+    expect(colMoves).toHaveLength(5);
     expect(colMoves.every((m) => m.fromRow === null)).toBe(true);
     const spawns = colMoves.map((m) => m.spawnAbove).sort((a, b2) => a - b2);
-    expect(spawns).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(spawns).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('连锁：下落后可再次 findMatches', () => {
     const b = neutralBoard();
-    // 消除 r3 行 EEE 后，r2 的 F 落到 r3，与 r3 既有 FF 形成新 3 连
+    // 消除 r3 行 EEE 后，r2 的 F 落到 r3
     setBoard(b, [
       'MWMWMW',
       'WMWMWM',
       'FWMWMW',
       'EEEWAM',
       'MWFFMW',
-      'WMWMWM',
     ]);
     const first = b.findMatches();
     expect(first).toHaveLength(1);
@@ -209,9 +201,7 @@ describe('clearCells + collapse', () => {
     // （collapse 内部用构造时传入的 rng=()=>0，恒生成 ORB_TYPES[0]='metal'）
     b.collapse();
 
-    // F 从 (2,0) 落到 (3,0)，与 (4,2)(4,3) 不相邻——改为检查直接纵列连锁
     const second = b.findMatches();
-    // 连锁组中必然包含 fire 或新生 metal 组（取决于补珠），至少验证盘面无空洞且可继续检测
     expect(Array.isArray(second)).toBe(true);
     for (let r = 0; r < b.rows; r++) {
       for (let c = 0; c < b.cols; c++) {

@@ -1,0 +1,20 @@
+Mobile game BATTLE VICTORY settlement UI mockup, portrait 9:16 (750x1334), full screen for xiaochu2 approval.
+
+ART STYLE (match shop_ui_mockup / xiaochu2 Q版修仙 bright国风):
+- Cream parchment #FDF3DF, warm gold #E8A33D, deep brown text #3A2E22
+- Bright cheerful xianxia, NOT dark fantasy
+- Background: dimmed battle scene (forest, orb grid, pet bar) at ~65% black overlay
+
+CENTER PANEL (ivory-gold scroll frame, cloud ends, jade accents, mountain ink wash bottom):
+1. Title "战斗胜利！" — large gold-orange, glow
+2. ★★★ three gold stars, sparkle
+3. "回合数 N（三星 ≤3 · 二星 ≤6）"
+4. Reward inset card:
+   - 灵宠币 icon + "+48 (持有 186)"
+   - 经验 icon + "+208"
+   - optional 碎片 +N
+5. Buttons (top→bottom): 下一关 (red-gold primary), 再打一次, 返回主页 (purple secondary)
+
+Faint top HUD: 返回, 关卡名, 敌人名.
+
+NO watermark. Chinese placeholder text required.

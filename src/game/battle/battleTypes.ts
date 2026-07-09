@@ -14,6 +14,7 @@ export type BattleState =
 
 export interface TeamPet {
   def: PetDef;
+  level: number;
   star: number;
   skill: SkillDef;
   atk: number;

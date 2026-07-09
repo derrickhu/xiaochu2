@@ -1,0 +1,14 @@
+Mobile game UI icon ONLY: single cute Q-version GOLD STAR for pet rating under pet portraits.
+
+Match the small bright yellow-gold stars under the five pet frames in the reference battle UI mockup.
+
+Design:
+- One five-pointed star, centered
+- Bright warm gold / yellow (#F5C84A to #E8A33D), glossy candy Q-version look
+- Soft highlight on top, slight depth, clean outline
+- Friendly cute mobile game UI style
+- Transparent background outside the star
+- NO TEXT, no numbers, no labels
+- Single star only, not a row
+
+Square 1:1, star fills most of frame with small padding.

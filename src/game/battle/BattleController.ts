@@ -128,6 +128,7 @@ export class BattleController {
       const profile = petSelfCombatProfile(m.def, m.star);
       return {
         def: m.def,
+        level: m.level,
         star: m.star,
         skill: skillForPet(m.def, m.star),
         atk: petAtkInTeam(members, m),

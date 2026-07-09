@@ -1,0 +1,14 @@
+Mobile game UI asset ONLY: small cream PARCHMENT TAG PLATE for battle counter hints.
+
+Match the two small tags under the enemy HP bar in the reference mockup ("拖金珠克制" / "抵抗土珠" backgrounds).
+
+Design:
+- Horizontal rounded rectangle / soft pill tag
+- Neutral cream / parchment fill #FDF3DF (NO red, NO green, NO elemental color fill)
+- Thin warm brown-gold border #C9A063
+- Completely empty center for overlay text + icon
+- Transparent outside
+- NO TEXT, no icons, no beads, no writing
+- Bright Q-version UI, clear readable size
+
+Aspect about 3:1. Single centered empty tag plate.

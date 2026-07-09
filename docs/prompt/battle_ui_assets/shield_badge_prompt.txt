@@ -1,0 +1,17 @@
+Mobile game UI asset ONLY: large prominent SHIELD BADGE icon for battle HP bar, Chinese fantasy match-3 RPG.
+
+STRICT: Match the blue shield on the right of the green hero HP bar in the reference battle UI mockup. Must look BIG, glossy, eye-catching.
+
+Design requirements:
+- Classic heraldic shield silhouette, slightly tall (about 4:5)
+- Bright sky-blue to cyan gradient fill (#3BA7E8 to #6EC8F5), glossy 3D plastic/Q-version look
+- Thick white/silver rim highlight, soft outer glow
+- Subtle inner highlight near top for shiny candy-like finish
+- Center area mostly clean for overlay number text like +217 (leave empty middle)
+- Warm fantasy game UI, cream-gold world compatible
+- Transparent background outside the shield
+- NO TEXT, no numbers, no labels, no writing anywhere
+- NO characters, NO weapons sticking out
+- Single centered shield icon, game-ready PNG, large and readable at phone UI size
+
+Square canvas 1:1 with shield centered and generous padding.

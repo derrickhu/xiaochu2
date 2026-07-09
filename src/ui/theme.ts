@@ -33,6 +33,22 @@ export const COLORS = {
   textDisabled: 0x9c8c70,
   /** 标题强调金（用于浅底上的标题点缀） */
   textTitle: 0xb5701f,
+  /** 战斗关卡匾正文（mockup 深棕墨） */
+  battlePlaqueText: 0x3f2408,
+  /** 敌人名匾底板（截图采样浅金奶油 #eddbac） */
+  battleEnemyNameBg: 0xeddbac,
+  /** 敌人名匾描边（截图采样） */
+  battleEnemyNameBorder: 0xb9a075,
+  /** 敌人名匾文字（截图采样深棕 #452605） */
+  battleEnemyNameText: 0x452605,
+  /** 战斗克制标签底板（截图采样深棕金 #6f5a2a） */
+  battleTagBg: 0x6f5a2a,
+  /** 战斗克制标签描边（截图采样浅金边 #decea1） */
+  battleTagBorder: 0xdecea1,
+  /** 战斗克制标签文字（截图采样奶油白 #eddfb4） */
+  battleTagText: 0xeddfb4,
+  /** 战斗克制标签文字描边（深棕） */
+  battleTagTextStroke: 0x3a2c10,
 
   // ── 强调 ──
   accent: 0xe8a33d,

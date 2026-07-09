@@ -21,7 +21,7 @@ import { enemyDisplayTierOf } from '@/balance/enemyDisplay';
 import { isComboMilestone } from './battle/ComboDisplay';
 import { GMManager } from '@/core/GMManager';
 import { battlePreloadImages, battlePetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
-import { UI_FX_IMAGES } from '@/config/Assets';
+import { UI_FX_IMAGES, battleBgImage } from '@/config/Assets';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
@@ -31,7 +31,7 @@ import { BoardView } from '@/game/board/BoardView';
 import { BattleController, type PetAttack, type TurnResolution } from '@/game/battle/BattleController';
 import type { EnemyActResult } from '@/game/battle/battleTypes';
 import { PlayerData } from '@/game/PlayerData';
-import { makeButton, delay } from './battle/battleWidgets';
+import { delay } from './battle/battleWidgets';
 import { computeBattleLayout, type BattleLayout } from './battle/BattleLayout';
 import { BattleFx, type TurnPetDamageSummary } from './battle/BattleFx';
 import { BattleHud } from './battle/BattleHud';
@@ -44,22 +44,11 @@ import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 import {
   guardedPromise, guardedTween, minigameFallback, once, startMinigamePresentLoop,
 } from '@/core/animationGuard';
+import { makeButton, makeCoverBackground } from '@/ui';
+import { COLORS } from '@/ui/theme';
 
 export interface BattleEnterData {
   stageId: string;
-}
-
-function lerpColor(a: number, b: number, t: number): number {
-  const ar = (a >> 16) & 0xff;
-  const ag = (a >> 8) & 0xff;
-  const ab = a & 0xff;
-  const br = (b >> 16) & 0xff;
-  const bg = (b >> 8) & 0xff;
-  const bb = b & 0xff;
-  const r = Math.round(ar + (br - ar) * t);
-  const g = Math.round(ag + (bg - ag) * t);
-  const bl = Math.round(ab + (bb - ab) * t);
-  return (r << 16) | (g << 8) | bl;
 }
 
 /** 汇总本回合各宠物累计伤害，供总伤害出现时槽位常驻展示 */
@@ -201,36 +190,29 @@ export class BattleScene implements Scene {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
 
-    // 全屏暗色渐变底（对齐 xiao_chu drawBattleBg，棋盘区不贴图）
-    const bg = new PIXI.Graphics();
-    const steps = 32;
-    for (let i = 0; i < steps; i++) {
-      const t = i / (steps - 1);
-      const color = t < 0.5
-        ? lerpColor(0x0e0b15, 0x161220, t * 2)
-        : lerpColor(0x161220, 0x0a0810, (t - 0.5) * 2);
-      bg.beginFill(color);
-      bg.drawRect(0, (h / steps) * i, w, h / steps + 1);
-      bg.endFill();
-    }
-    this.container.addChild(bg);
+    // 全屏清晰章节大背景（按关卡属性，对齐 mockup 亮色 Q 版场景）
+    this.container.addChild(makeCoverBackground(battleBgImage(this._ctrl.stage.element), w, h));
+    // 底部 cream 柔化，让棋盘/宠物栏更干净
+    this.container.addChild(this._makeBottomCreamWash(w, h));
 
-    // 敌人区属性背景（最底层）
+    // 敌人区轻量遮罩（不再压暗章节图）
     this._hud.buildEnemyBg(this.container);
 
-    // 顶栏：返回 + 关卡名（与 xiao_chu 一样画在敌人区背景之上）
+    // 顶栏：cream 圆钮返回
     const headerY = this._layout.headerY;
-    const backBtn = makeButton('返回', 130, 56, 0x4a3a72, () => {
-      SceneManager.switchTo('title');
+    const backBtn = makeButton({
+      label: '返回', width: 110, height: 52, variant: 'ghost',
+      onTap: () => { SceneManager.switchTo('title'); },
     });
-    backBtn.position.set(85, headerY);
+    backBtn.position.set(70, headerY);
     this.container.addChild(backBtn);
 
     if (GMManager.isEnabled) {
-      const gmSkip = makeButton('GM跳过', 120, 48, 0xc81e3c, () => {
-        GMManager.executeCommand('instant_clear');
+      const gmSkip = makeButton({
+        label: 'GM', width: 88, height: 48, variant: 'danger',
+        onTap: () => { GMManager.executeCommand('instant_clear'); },
       });
-      gmSkip.position.set(220, headerY);
+      gmSkip.position.set(180, headerY);
       this.container.addChild(gmSkip);
     }
 
@@ -238,13 +220,12 @@ export class BattleScene implements Scene {
     this._hud.buildEnemyArea(this.container);
     this._hud.refreshEnemy(false);
 
-    this._hud.buildHeroBar(this.container);
-
-    // 队伍栏 + buff 状态行
+    // 宠物 cream 底板先画，英雄血条压在板顶形成连体（对齐 mockup）
     this._petBar.build(this.container, {
       onSkillCast: (i) => void this._onSkillCast(i),
       isBusy: () => this._busy,
     });
+    this._hud.buildHeroBar(this.container);
     this._hud.buildStatus(this.container);
     this._statusIcons.build(this.container);
 
@@ -295,6 +276,22 @@ export class BattleScene implements Scene {
     this._petBar.refreshCooldowns();
     this._hud.refreshStatus();
     this._statusIcons.refresh();
+  }
+
+  /** 屏幕下半 cream 柔化，突出棋盘/宠物栏，章节上半仍清晰可见 */
+  private _makeBottomCreamWash(w: number, h: number): PIXI.Graphics {
+    const g = new PIXI.Graphics();
+    const top = h * 0.42;
+    const washH = h - top;
+    const steps = 24;
+    for (let i = 0; i < steps; i++) {
+      const t = i / (steps - 1);
+      const a = 0.08 + t * 0.55;
+      g.beginFill(COLORS.bgFallback, a);
+      g.drawRect(0, top + (washH / steps) * i, w, washH / steps + 1);
+      g.endFill();
+    }
+    return g;
   }
 
   // ════════════ 回合演出序列 ════════════

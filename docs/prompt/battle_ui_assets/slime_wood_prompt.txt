@@ -1,0 +1,14 @@
+Game character sprite ONLY: cute Q-version (chibi) wood slime monster for mobile match-3 RPG.
+
+Match the green slime enemy in the reference battle UI mockup EXACTLY in style:
+- Teardrop / blob slime body, glossy candy-like 3D
+- Soft bright green body with lighter green highlights
+- Small sprout / leaf on top of head
+- Simple cute smiling face (two eyes + small mouth)
+- Friendly Q-pet aesthetic, same cute style as player pets
+- Full body centered, standing pose
+- Transparent background
+- NO TEXT, no UI, no health bar, no labels
+- NO dark realistic style — must be bright cute chibi
+
+Square 1:1, character fills most of frame with small padding.
