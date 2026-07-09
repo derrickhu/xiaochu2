@@ -229,9 +229,6 @@ export class BattleScene implements Scene {
     this._hud.buildStatus(this.container);
     this._statusIcons.build(this.container);
 
-    // 拖珠倒计时条
-    this._hud.buildDragBar(this.container);
-
     // 特效层（粒子 / 飘字 / 闪光）—— 先加，珠盘后加以保证跟手珠不被挡住
     this._fx.build(this.container, w, h);
 
@@ -246,6 +243,9 @@ export class BattleScene implements Scene {
     });
     this._boardView.container.position.set(this._layout.boardX, this._layout.boardY);
     this.container.addChild(this._boardView.container);
+
+    // 转珠倒计时条（叠在棋盘 cream 框顶边之上）
+    this._hud.buildDragBar(this.container);
 
     // Combo 大字（棋盘中央，叠在珠盘与粒子之上）
     this._hud.buildCombo(this.container);

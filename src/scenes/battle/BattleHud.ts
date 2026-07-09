@@ -56,6 +56,7 @@ export class BattleHud {
   private _shieldBadge!: PIXI.Container;
   private _shieldText!: PIXI.Text;
   private _dragBar!: PIXI.Graphics;
+  private _dragClock: PIXI.Sprite | null = null;
   private _combo!: ComboDisplay;
   private _statusText!: PIXI.Text;
 
@@ -290,6 +291,17 @@ export class BattleHud {
   buildDragBar(parent: PIXI.Container): void {
     this._dragBar = new PIXI.Graphics();
     parent.addChild(this._dragBar);
+    const clockTex = TextureCache.get(UI_BATTLE_IMAGES.dragClock);
+    if (clockTex) {
+      const clock = new PIXI.Sprite(clockTex);
+      clock.anchor.set(0.5);
+      const sz = UI.battle.dragClockSize;
+      clock.width = sz;
+      clock.height = sz;
+      clock.visible = false;
+      parent.addChild(clock);
+      this._dragClock = clock;
+    }
   }
 
   buildCombo(parent: PIXI.Container): void {
@@ -443,18 +455,50 @@ export class BattleHud {
   redrawDragBar(boardView: BoardView | null): void {
     const g = this._dragBar;
     g.clear();
-    if (!boardView?.dragging) return;
+    const clock = this._dragClock;
+    if (!boardView?.dragging) {
+      if (clock) clock.visible = false;
+      return;
+    }
     const left = boardView.dragTimeLeft;
-    const w = boardView.boardWidth * left;
-    const y = this._layout.boardY - UI.battle.dragBarHeight - 4;
-    g.beginFill(COLORS.trackBg, 0.95);
-    g.lineStyle(1.5, COLORS.panelBorder, 0.8);
-    g.drawRoundedRect(this._layout.boardX, y, boardView.boardWidth, UI.battle.dragBarHeight, 5);
+    const pad = UI.battle.boardFramePad;
+    const barH = UI.battle.dragBarHeight;
+    const clockSz = UI.battle.dragClockSize;
+    const inset = UI.battle.dragBarInset;
+    // 倒计时在棋盘框顶边内侧，比棋盘短一截并居中（对齐截图）
+    const barW = boardView.boardWidth - inset * 2;
+    const barX = this._layout.boardX + inset;
+    const barY = this._layout.boardY - pad + Math.round((pad - barH) / 2);
+    const fillW = Math.max(8, barW * left);
+    const radius = Math.floor(barH / 2);
+    const low = left <= 0.25;
+
+    g.beginFill(COLORS.battleDragTrack, 1);
+    g.lineStyle(2.5, COLORS.battleDragBorder, 0.95);
+    g.drawRoundedRect(barX, barY, barW, barH, radius);
     g.endFill();
     g.lineStyle(0);
-    g.beginFill(left > 0.3 ? COLORS.trackFillFull : COLORS.btnDangerBg);
-    g.drawRoundedRect(this._layout.boardX, y, Math.max(w, 8), UI.battle.dragBarHeight, 5);
+    // 截图：左暖橙 → 右亮黄；将尽时整条改警示色
+    g.beginFill(low ? COLORS.battleDragFillLow : COLORS.battleDragFill, 1);
+    g.drawRoundedRect(barX, barY, fillW, barH, radius);
     g.endFill();
+    if (!low && fillW > 16) {
+      const brightW = Math.min(fillW, Math.max(12, fillW * 0.55));
+      g.beginFill(COLORS.battleDragFillBright, 1);
+      g.drawRoundedRect(barX + fillW - brightW, barY, brightW, barH, radius);
+      g.endFill();
+      // 顶部高光，贴近截图立体感
+      g.beginFill(0xffffff, 0.22);
+      g.drawRoundedRect(barX + 3, barY + 2, Math.max(0, fillW - 6), Math.max(3, barH * 0.32), radius / 2);
+      g.endFill();
+    }
+
+    if (clock) {
+      clock.visible = true;
+      clock.position.set(barX + 2, barY + barH / 2);
+      clock.width = clockSz;
+      clock.height = clockSz;
+    }
   }
 
   /** 血条补间：主条快速跟随，掉血时白条延迟收缩展示刚损失的部分 */

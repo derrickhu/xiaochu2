@@ -147,16 +147,17 @@ export class BattlePetBar {
       badge.position.set(-petSize / 2 + 14, -petSize / 2 + 14);
       slot.addChild(badge);
 
-      // Lv 角标：右下（不再叠 CD 回合数）
+      // Lv 角标：右下，对齐 mockup（白字 + 深棕描边）
+      const lvSize = Math.max(16, Math.round(petSize * 0.18));
       const lvText = makeText(`Lv.${pet.level}`, {
-        size: Math.max(11, Math.round(petSize * 0.12)),
-        fill: starUi.levelColor,
+        size: lvSize,
+        fill: COLORS.white,
         bold: true,
         anchor: [1, 1],
-        strokeColor: COLORS.panelBg,
-        strokeWidth: 3,
+        strokeColor: COLORS.textMain,
+        strokeWidth: Math.max(4, Math.round(lvSize * 0.22)),
       });
-      lvText.position.set(petSize / 2 - 3, petSize / 2 - 2);
+      lvText.position.set(petSize / 2 - 2, petSize / 2 - 1);
       slot.addChild(lvText);
 
       // Q 版星级：固定 5 槽铺满宠物格宽，按星级点亮
@@ -195,9 +196,30 @@ export class BattlePetBar {
         slot.addChild(starRow);
       }
 
-      // 回合数 CD 圆标暂不展示（后续再加）；占位数组保持长度一致
-      this._slotCdBadge.push(new PIXI.Graphics());
-      this._slotCdText.push(makeText('', { size: 1 }));
+      // 技能 CD 回合圆标：右上角（对齐 mockup_v2 深棕圆 + 白字）
+      const cdR = Math.max(14, Math.round(petSize * UI.battle.petCdBadgeRatio / 2));
+      const cdBadge = new PIXI.Graphics();
+      cdBadge.beginFill(COLORS.battleCdBadgeBg, 1);
+      cdBadge.lineStyle(2.5, COLORS.battleCdBadgeRing, 1);
+      cdBadge.drawCircle(0, 0, cdR);
+      cdBadge.endFill();
+      cdBadge.position.set(petSize / 2 - 2, -petSize / 2 + 2);
+      slot.addChild(cdBadge);
+      this._slotCdBadge.push(cdBadge);
+
+      const cdFont = Math.max(16, Math.round(cdR * 1.35));
+      const cdText = makeText(pet.skillCdLeft > 0 ? String(pet.skillCdLeft) : '', {
+        size: cdFont,
+        fill: COLORS.white,
+        bold: true,
+        anchor: 0.5,
+        strokeColor: COLORS.battleCdBadgeBg,
+        strokeWidth: Math.max(3, Math.round(cdFont * 0.18)),
+      });
+      cdText.position.set(0, 0);
+      cdBadge.addChild(cdText);
+      this._slotCdText.push(cdText);
+      cdBadge.visible = pet.skillCdLeft > 0;
 
       const readyFx = createPetSkillReadyFx(petSize, color);
       slot.addChild(readyFx.root);
@@ -238,15 +260,20 @@ export class BattlePetBar {
     return this._slots[index];
   }
 
-  /** 刷新宠物槽技能状态（回合数暂隐藏；仅驱动就绪动效） */
+  /** 刷新宠物槽技能 CD 圆标与就绪动效 */
   refreshCooldowns(): void {
     this._ctrl.team.forEach((pet, i) => {
       const ready = pet.skillCdLeft <= 0;
-      // CD 数字/圆标暂不展示，后续再加
       const badge = this._slotCdBadge[i];
       const cdText = this._slotCdText[i];
-      if (badge) badge.visible = false;
-      if (cdText) cdText.visible = false;
+      if (badge && cdText) {
+        if (ready) {
+          badge.visible = false;
+        } else {
+          badge.visible = true;
+          cdText.text = String(pet.skillCdLeft);
+        }
+      }
       if (ready && !this._slotWasReady[i]) {
         triggerPetSkillReadyFlash(this._slotReadyFx[i]);
       }

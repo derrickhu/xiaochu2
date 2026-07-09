@@ -59,8 +59,8 @@ export const UI = {
     petGap: 10,
     /** 五行相框相对头像缩放（对齐 xiao_chu frameScale=1.12） */
     petFrameScale: 1.12,
-    /** 宠物栏底板底边与棋盘顶边的间距（对齐 mockup 留白） */
-    petBoardGap: 18,
+    /** 宠物栏底板底边与棋盘顶边的间距（含厚 cream 框，对齐 mockup） */
+    petBoardGap: 42,
     /** 宠物栏 cream 底板左右内边距（宠物略小，露出底板边框） */
     petBarPanelPadX: 18,
     /** 宠物栏 cream 底板上下内边距 */
@@ -71,8 +71,16 @@ export const UI = {
     petStarSize: 20,
     /** 英雄血条压入宠物板顶边的重叠量（连体感） */
     heroBarPanelOverlap: 10,
-    /** 拖珠倒计时条 */
-    dragBarHeight: 10,
+    /** 拖珠倒计时条高度（对齐截图加厚） */
+    dragBarHeight: 22,
+    /** 倒计时条相对棋盘左右各缩进（比棋盘短，对齐截图） */
+    dragBarInset: 58,
+    /** 倒计时左侧时钟图标边长 */
+    dragClockSize: 40,
+    /** 棋盘 cream 外框内边距（对齐 mockup 厚框） */
+    boardFramePad: 24,
+    /** 宠物技能 CD 圆标直径相对头像宽 */
+    petCdBadgeRatio: 0.28,
     /** 英雄血条右侧护盾徽章（大于血条高度，底边与血条底对齐） */
     shieldBadgeSize: 76,
     /** 顶栏关卡匾宽度 / 高度（仅关卡名） */

@@ -91,6 +91,22 @@ export const COLORS = {
   trackFill: 0xe8a33d,
   trackFillFull: 0x6aa84f,
 
+  // ── 战斗：转珠倒计时 / 技能 CD（对齐 battle_ui_mockup_v2 采样） ──
+  /** 转珠倒计时轨道底（截图深棕灰，衬托亮填充） */
+  battleDragTrack: 0x5f4b3a,
+  /** 转珠倒计时填充左端（截图暖橙 #e3a250） */
+  battleDragFill: 0xe3a250,
+  /** 转珠倒计时填充右端高光（截图亮黄 #f6d16e） */
+  battleDragFillBright: 0xf6d16e,
+  /** 转珠倒计时将尽（深橙） */
+  battleDragFillLow: 0xd86a4a,
+  /** 转珠倒计时描边（截图深棕） */
+  battleDragBorder: 0x6c5011,
+  /** 宠物技能 CD 圆标底（深棕） */
+  battleCdBadgeBg: 0x3e2812,
+  /** 宠物技能 CD 圆标外环（奶油） */
+  battleCdBadgeRing: 0xf2e3c5,
+
   // ── 导航栏（紫祥云底，浅字） ──
   navText: 0xfdf3df,
   navTextActive: 0xffe9a6,

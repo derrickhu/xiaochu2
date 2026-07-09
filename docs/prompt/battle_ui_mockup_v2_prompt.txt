@@ -1,0 +1,64 @@
+Mobile game BATTLE SCREEN UI mockup, STRICT portrait 9:16 phone screen for xiaochu2 Chinese fantasy match-3 RPG.
+
+EDIT the attached reference battle mockup. Keep the SAME overall layout, art style, colors, characters, and composition. Do NOT redesign from scratch — only ADD two missing UI elements described below.
+
+KEEP UNCHANGED:
+- Soft bamboo forest background (green/yellow blur)
+- Cream-gold Q版修仙 UI: cream #FDF3DF, gold #E8A33D
+- Top bar: 返回 | 1-1 青苔林边 / 杂兵 · 木域软泥 | 设置齿轮
+- Cute green wood slime enemy with sprout, HP 620/620, "1 回合后攻击", tags "拖金珠克制" + "抵抗土珠" (tags ONLY ONCE under enemy)
+- Shared hero HP bar 1809/1809 + shield +217
+- Five pet portraits in a row (gold rhino, wood fox archer, water griffin, fire fox, earth golem), each with element icon top-left, Lv.12 bottom-right, gold star row under portrait, NO HP bars under pets
+- 6×5 elemental orb board (gold/wood/water/fire/earth/heart orbs with symbols)
+- Chinese UI text, NO watermark, NO English labels except Lv.
+
+══════════════════════════════════════
+NEW ELEMENT A — PET SKILL CD TURN BADGE (required on all 5 pet slots)
+══════════════════════════════════════
+Each pet portrait must show skill cooldown as remaining TURN COUNT (回合数), like Puzzle & Dragons style.
+
+Design:
+- Small circular badge, dark brown / deep ink fill (#3A2A18) with thin gold rim (#E8A33D)
+- Large white bold number in center = remaining CD turns
+- Position: TOP-RIGHT corner of each pet portrait frame (do NOT cover element icon top-left, do NOT cover Lv bottom-right, do NOT cover star row)
+- Size: about 22–28% of portrait width, clearly readable
+
+Show mixed states across the 5 pets (left → right):
+1. Gold rhino: badge "3" (cooling)
+2. Wood fox: badge "1" (almost ready)
+3. Water griffin: NO number badge — instead show SKILL READY state: soft gold glow ring around portrait + small upward double-chevron ▲▲ above the slot (ready to swipe up)
+4. Fire fox: badge "2"
+5. Earth golem: badge "4"
+
+Badge must look like a game HUD chip, not a sticker floating randomly.
+
+══════════════════════════════════════
+NEW ELEMENT B — ORB DRAG COUNTDOWN TIMER BAR (required)
+══════════════════════════════════════
+Show the player MID-DRAG turn: a horizontal countdown timer bar for orb-moving time limit.
+
+Placement:
+- Directly ABOVE the orb board, spanning the full board width
+- Thin gap (~4–8px) between timer bar and top edge of the board
+- Do NOT overlap pet portraits or hero HP bar
+
+Design (match cream-gold UI):
+- Track: rounded capsule, cream/dark-cream fill (#E8D9B8), thin gold border
+- Fill: warm gold-to-amber gradient (#E8A33D → #F0C060), about 55–65% remaining (mid-drag)
+- Height: slim, ~10–14px, polished game HUD bar
+- Optional tiny clock / hourglass icon on the LEFT of the bar OR small remaining seconds text "5.2s" in white with dark stroke at the RIGHT end of the bar — keep it minimal, one or the other, not both cluttered
+- Soft shadow under the bar so it reads as a distinct HUD layer
+
+Also show subtle "dragging" context on the board:
+- One finger-path highlight: a short soft glow trail across 3–4 adjacent orbs (as if currently dragging), without covering the whole board
+- Do NOT add extra panels, combo popups, or damage numbers
+
+══════════════════════════════════════
+QUALITY RULES
+══════════════════════════════════════
+- Same fidelity as the reference: polished mobile game mockup, not sketch
+- Keep all previous Chinese text readable and correct
+- Do not add pet HP bars
+- Do not duplicate enemy counter tags
+- Do not add watermarks, logos, or UI chrome outside the phone battle screen
+- Aspect ratio 9:16 portrait

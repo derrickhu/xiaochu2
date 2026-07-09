@@ -1,11 +1,16 @@
 import * as PIXI from 'pixi.js';
+import { TextureCache } from '@/core/TextureCache';
+import { UI } from '@/balance/ui';
+import { UI_BATTLE_IMAGES } from '@/config/Assets';
 import { COLORS, RADIUS } from '@/ui/theme';
 
-/** 亮色 Q 版棋盘格（对齐 battle_ui_mockup：cream 外框 + 浅色棋盘格） */
+/** 亮色 Q 版棋盘格（对齐 battle_ui_mockup_v2：厚 cream 外框 + 浅色棋盘格） */
 const TILE_A = 0xf5ecd8;
 const TILE_B = 0xe8d5b0;
-const FRAME_PAD = 10;
-const FRAME_RADIUS = 22;
+
+export function boardFramePad(): number {
+  return UI.battle.boardFramePad;
+}
 
 export function buildBoardBackground(
   container: PIXI.Container,
@@ -13,20 +18,33 @@ export function buildBoardBackground(
   cols: number,
   cell: number,
 ): void {
-  const pad = FRAME_PAD;
+  const pad = boardFramePad();
   const w = cols * cell + pad * 2;
   const h = rows * cell + pad * 2;
 
-  // 外层 cream 底板 + 金棕描边
-  const frame = new PIXI.Graphics();
-  frame.beginFill(COLORS.panelBg, 0.96);
-  frame.lineStyle(4, COLORS.panelBorder, 1);
-  frame.drawRoundedRect(-pad, -pad, w, h, FRAME_RADIUS);
-  frame.endFill();
-  // 内描边（层次感）
-  frame.lineStyle(1.5, COLORS.panelBorderSoft, 0.85);
-  frame.drawRoundedRect(-pad + 5, -pad + 5, w - 10, h - 10, FRAME_RADIUS - 4);
-  container.addChild(frame);
+  const panelTex = TextureCache.get(UI_BATTLE_IMAGES.boardPanel);
+  if (panelTex) {
+    const panel = new PIXI.Sprite(panelTex);
+    panel.anchor.set(0.5);
+    panel.width = w;
+    panel.height = h;
+    panel.position.set(cols * cell / 2, rows * cell / 2);
+    container.addChild(panel);
+  } else {
+    // 回退：程序绘制厚 cream 框（对齐 mockup 采样色）
+    const frame = new PIXI.Graphics();
+    frame.beginFill(COLORS.panelBg, 0.98);
+    frame.lineStyle(4, COLORS.panelBorder, 1);
+    frame.drawRoundedRect(-pad, -pad, w, h, 28);
+    frame.endFill();
+    frame.lineStyle(2, COLORS.panelBorderSoft, 0.9);
+    frame.drawRoundedRect(-pad + 6, -pad + 6, w - 12, h - 12, 24);
+    frame.beginFill(0xfbe8bc, 1);
+    frame.lineStyle(0);
+    frame.drawRoundedRect(0, 0, cols * cell, rows * cell, RADIUS.small);
+    frame.endFill();
+    container.addChild(frame);
+  }
 
   // 棋盘格裁剪到圆角内区
   const tiles = new PIXI.Container();
@@ -46,7 +64,6 @@ export function buildBoardBackground(
       cellG.beginFill(isA ? TILE_A : TILE_B, 1);
       cellG.drawRect(x, y, cell, cell);
       cellG.endFill();
-      // 极淡格线
       cellG.lineStyle(1, COLORS.panelBorderSoft, 0.35);
       cellG.drawRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
       tiles.addChild(cellG);

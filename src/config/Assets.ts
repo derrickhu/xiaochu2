@@ -154,6 +154,10 @@ export const UI_IMAGES = {
 export const UI_BATTLE_IMAGES = {
   stageBanner: `${IMG}/ui/battle/battle_stage_banner.png`,
   petPanel: `${IMG}/ui/battle/battle_pet_panel.png`,
+  /** 棋盘 cream 外框（对齐 mockup_v2） */
+  boardPanel: `${IMG}/ui/battle/battle_board_panel.png`,
+  /** 转珠倒计时左侧时钟图标 */
+  dragClock: `${IMG}/ui/battle/battle_drag_clock.png`,
   shieldBadge: `${IMG}/ui/battle/battle_shield_badge.png`,
   /** 敌人血条外框（短、两端卷饰，无圆点锚点） */
   hpFrameEnemy: `${IMG}/ui/battle/battle_hp_frame_enemy.png`,
