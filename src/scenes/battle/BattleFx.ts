@@ -705,11 +705,12 @@ export class BattleFx {
     const color = ORB_COLOR[element];
     // 飞行略慢于旧圆珠弹道；爆炸总时长见 impactDur
     const flyDur = opts?.duration ?? Math.max(0.34, UI.anim.projectile * 1.2);
-    const impactDur = 0.24;
+    const impactDur = UI.anim.bladeImpact;
     const baseW = 128;
     const baseH = 76;
-    const startScale = 0.38;
-    const endScale = 1.28;
+    // 起飞偏小，飞行中逐步放大，临近命中更明显
+    const startScale = 0.28;
+    const endScale = 1.58;
     const midX = (fromX + toX) / 2;
     const midY = Math.min(fromY, toY) - 95;
 
@@ -755,7 +756,9 @@ export class BattleFx {
           const x = u * u * fromX + 2 * u * t * midX + t * t * toX;
           const y = u * u * fromY + 2 * u * t * midY + t * t * toY;
           blade.position.set(x, y);
-          const scale = startScale + (endScale - startScale) * t;
+          // 前缓后快放大，飞行越久体量感越强
+          const growT = t * t;
+          const scale = startScale + (endScale - startScale) * growT;
           blade.width = baseW * scale;
           blade.height = baseH * scale;
           const dx = 2 * u * (midX - fromX) + 2 * t * (toX - midX);

@@ -7,7 +7,7 @@
  *   - BattleResultOverlay 胜负结算浮层
  *
  * 演出序列（async/await 驱动）：
- *   拖珠松手 → 逐组消除(Combo 跳动) → 下落连锁 → 宠物依次冲刺攻击
+ *   拖珠松手 → 逐组消除(Combo 跳动) → 下落连锁 → 宠物错峰起飞攻击
  *   → 敌人受击闪烁/抖动 + 伤害飘字 → 敌人回合(属性弹道→英雄受击反馈) → 回到玩家回合
  */
 import * as PIXI from 'pixi.js';
@@ -453,31 +453,44 @@ export class BattleScene implements Scene {
     let appliedDamage = 0;
     let waveAdvanced = false;
     const appliedAttacks: PetAttack[] = [];
+    let killed = false;
 
+    // 错峰起飞：每隔约一个爆炸时长启动下一只，飞行/命中可重叠
+    const tasks: Promise<void>[] = [];
     for (let i = 0; i < res.attacks.length; i++) {
-      if (isStale()) return waveAdvanced;
+      if (isStale() || killed) break;
       const attack = res.attacks[i];
-      await this._playPetAttack(attack, i, res.attacks.length, isStale);
-      if (isStale()) return waveAdvanced;
-      const { enemyDead } = this._ctrl.applyPetAttack(attack);
-      appliedAttacks.push(attack);
-      appliedDamage += attack.damage;
-      this._hud.refreshEnemyHp();
-      if (enemyDead) {
-        // 击杀路径：把本回合已出手伤害带入，先播「总伤害」再弹结算
-        const battleEnded = await this._handleEnemyDefeat(isStale, {
-          total: appliedDamage,
-          combo: res.combo,
-          hitCount: appliedAttacks.length,
-          petSummaries: buildTurnPetSummaries(appliedAttacks, this._petBar),
-        });
-        if (battleEnded || isStale()) return waveAdvanced;
-        waveAdvanced = true;
-        break;
+      const orderIdx = i;
+      const hitCount = res.attacks.length;
+      tasks.push((async () => {
+        await this._playPetAttack(attack, orderIdx, hitCount, isStale);
+        if (isStale() || killed) return;
+        if (this._ctrl.enemy.hp <= 0) return;
+        const { enemyDead } = this._ctrl.applyPetAttack(attack);
+        appliedAttacks.push(attack);
+        appliedDamage += attack.damage;
+        this._hud.refreshEnemyHp();
+        if (enemyDead) killed = true;
+      })());
+
+      if (i < res.attacks.length - 1) {
+        await delay(UI.anim.petAttackStagger);
+        if (isStale() || killed || this._ctrl.enemy.hp <= 0) break;
       }
-      await delay(UI.anim.attackGap);
     }
+    await Promise.all(tasks);
     if (isStale()) return waveAdvanced;
+
+    if (killed || this._ctrl.enemy.hp <= 0) {
+      const battleEnded = await this._handleEnemyDefeat(isStale, {
+        total: appliedDamage,
+        combo: res.combo,
+        hitCount: appliedAttacks.length,
+        petSummaries: buildTurnPetSummaries(appliedAttacks, this._petBar),
+      });
+      if (battleEnded || isStale()) return waveAdvanced;
+      waveAdvanced = true;
+    }
 
     if (appliedDamage > 0 && res.attacks.length > 0 && !waveAdvanced) {
       if (UI.anim.turnTotalLeadIn > 0) {
