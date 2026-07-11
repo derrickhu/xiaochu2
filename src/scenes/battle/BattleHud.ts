@@ -17,6 +17,7 @@ import {
   enemyDisplaySize,
   enemyDisplayTierOf,
   enemyShowsTierRing,
+  enemySpriteCenterY,
   enemySpriteScale,
   enemySpriteTint,
   enemyTierRingRadius,
@@ -38,6 +39,10 @@ import { makeText } from '@/ui/text';
 export class BattleHud {
   private _stageTitleText!: PIXI.Text;
   private _stageSubText!: PIXI.Text;
+  /** 关卡匾贴图（宽随标题自适应） */
+  private _stageBannerSprite: PIXI.Sprite | null = null;
+  /** 关卡匾 Graphics 回退 */
+  private _stageBannerFallback: PIXI.Graphics | null = null;
   /** 敌人名匾底板（随文字宽度动态重绘） */
   private _enemyNameBg!: PIXI.Graphics;
   private _waveText!: PIXI.Text;
@@ -91,38 +96,30 @@ export class BattleHud {
    */
   buildStageHeader(parent: PIXI.Container): void {
     const w = Game.logicWidth;
-    const { stageBannerW, stageBannerH } = UI.battle;
     const cy = this._layout.headerY;
 
     const plaqueTex = TextureCache.get(UI_BATTLE_IMAGES.stageBanner);
     if (plaqueTex) {
       const plaque = new PIXI.Sprite(plaqueTex);
       plaque.anchor.set(0.5);
-      const scale = stageBannerW / plaqueTex.width;
-      plaque.scale.set(scale);
-      if (plaque.height > stageBannerH) {
-        plaque.scale.set(stageBannerH / plaqueTex.height);
-      }
       plaque.position.set(w / 2, cy);
       parent.addChild(plaque);
+      this._stageBannerSprite = plaque;
+      this._stageBannerFallback = null;
     } else {
       const fallback = new PIXI.Graphics();
-      fallback.beginFill(COLORS.panelBg, 0.96);
-      fallback.lineStyle(4, COLORS.panelBorder, 1);
-      fallback.drawRoundedRect(
-        w / 2 - stageBannerW / 2, cy - stageBannerH / 2,
-        stageBannerW, stageBannerH, 28,
-      );
-      fallback.endFill();
       parent.addChild(fallback);
+      this._stageBannerSprite = null;
+      this._stageBannerFallback = fallback;
     }
 
     // 关卡匾只放关卡名（居中；mockup 深棕墨字，非金色）
     this._stageTitleText = makeText(this._stageTitleLabel(), {
-      size: FONT_SIZE.md, fill: COLORS.battlePlaqueText, bold: true, anchor: 0.5,
+      size: FONT_SIZE.sm, fill: COLORS.battlePlaqueText, bold: true, anchor: 0.5,
     });
     this._stageTitleText.position.set(w / 2, cy);
     parent.addChild(this._stageTitleText);
+    this._fitStageBannerAndTitle();
 
     // 敌人名：关卡匾下方独立匾，宽随文字动态适应（截图浅金底 + 深棕字）
     const nameY = this._layout.enemyNameY;
@@ -162,10 +159,59 @@ export class BattleHud {
   refreshStageHeader(): void {
     if (displayAlive(this._stageTitleText)) {
       this._stageTitleText.text = this._stageTitleLabel();
+      this._fitStageBannerAndTitle();
     }
     if (displayAlive(this._stageSubText)) {
       this._stageSubText.text = this._stageSubLabel();
       this._layoutEnemyNamePlaque();
+    }
+  }
+
+  /**
+   * 关卡匾 + 标题自适应：
+   * 默认用较小字号；匾宽不超过默认值，避免压到返回/GM；文字落在花边内侧。
+   */
+  private _fitStageBannerAndTitle(): void {
+    if (!displayAlive(this._stageTitleText)) return;
+    const { stageBannerW, stageBannerH } = UI.battle;
+    const t = this._stageTitleText;
+    t.scale.set(1);
+    t.style.fontSize = FONT_SIZE.sm;
+    try { t.updateText(true); } catch { /* 部分运行时无 updateText */ }
+
+    // 左右花边约占匾宽，文字只用中间约 66%
+    const innerRatio = 0.66;
+    // 返回钮右缘约 125、GM 左缘约 W-114，匾面勿再加宽
+    const maxBannerW = Math.min(stageBannerW, Game.logicWidth - 300);
+    const minBannerW = Math.min(stageBannerW, maxBannerW);
+
+    const textW0 = Math.max(1, t.width);
+    const bannerW = Math.min(maxBannerW, Math.max(minBannerW, textW0 / innerRatio));
+    const innerMax = bannerW * innerRatio;
+    if (t.width > innerMax) {
+      t.scale.set(innerMax / t.width);
+    }
+    this._applyStageBannerSize(bannerW, stageBannerH);
+    t.position.set(Game.logicWidth / 2, this._layout.headerY);
+  }
+
+  private _applyStageBannerSize(bannerW: number, bannerH: number): void {
+    const cx = Game.logicWidth / 2;
+    const cy = this._layout.headerY;
+    if (this._stageBannerSprite && displayAlive(this._stageBannerSprite)) {
+      const tex = this._stageBannerSprite.texture;
+      // 横向拉宽、纵向保持设计高度，避免加宽时整匾变胖
+      this._stageBannerSprite.scale.set(bannerW / Math.max(1, tex.width), bannerH / Math.max(1, tex.height));
+      this._stageBannerSprite.position.set(cx, cy);
+      return;
+    }
+    if (this._stageBannerFallback && displayAlive(this._stageBannerFallback)) {
+      const g = this._stageBannerFallback;
+      g.clear();
+      g.beginFill(COLORS.panelBg, 0.96);
+      g.lineStyle(4, COLORS.panelBorder, 1);
+      g.drawRoundedRect(cx - bannerW / 2, cy - bannerH / 2, bannerW, bannerH, 28);
+      g.endFill();
     }
   }
 
@@ -527,15 +573,27 @@ export class BattleHud {
     const enemy = this._ctrl.enemy;
     const def = enemy.def;
     const tier = enemyDisplayTierOf(def);
-    const displaySize = enemyDisplaySize(tier);
+    const { spriteZoneTop, spriteZoneBottom, enemyCenterX } = this._layout;
+    // 预留头顶空隙，避免 Boss 晶体顶到名匾
+    const zoneH = Math.max(40, spriteZoneBottom - spriteZoneTop - 20);
     const tex = TextureCache.get(def.image ?? enemyImage(def.id));
+    let displaySize = enemyDisplaySize(tier);
     if (tex && displayAlive(this._enemySprite)) {
       this._enemySprite.texture = tex;
       const s = readScale(this._enemySprite);
       if (s) {
-        s.set(enemySpriteScale(tex.width, tex.height, tier));
+        const scale = enemySpriteScale(tex.width, tex.height, tier, zoneH);
+        s.set(scale);
+        displaySize = tex.height * scale;
       }
       this._enemySprite.tint = enemySpriteTint(tier);
+    } else {
+      displaySize = Math.min(displaySize, zoneH);
+    }
+    // 按实际显示高度贴立绘区下沿，头顶不顶进名匾
+    this._layout.enemyCenterY = enemySpriteCenterY(spriteZoneTop, spriteZoneBottom, displaySize);
+    if (displayAlive(this._enemyContainer)) {
+      this._enemyContainer.position.set(enemyCenterX, this._layout.enemyCenterY);
     }
     this._enemyTierRing.clear();
     if (enemyShowsTierRing(tier)) {

@@ -55,20 +55,38 @@ export function enemyDisplayMaxWidth(tier: EnemyDisplayTier): number {
 
 /**
  * 敌人立绘缩放：优先对齐目标高度（与 1-1 史莱姆同体量），
- * 过宽时再按 maxWidth 回压。
+ * 过宽时再按 maxWidth 回压；可选 maxHeight 限制在立绘区内，避免顶穿名匾。
  */
 export function enemySpriteScale(
   texWidth: number,
   texHeight: number,
   tier: EnemyDisplayTier,
+  maxHeight?: number,
 ): number {
   const w = Math.max(1, texWidth);
   const h = Math.max(1, texHeight);
   const targetH = enemyDisplaySize(tier);
   const maxW = enemyDisplayMaxWidth(tier);
-  let s = targetH / h;
+  const cappedH = maxHeight != null && maxHeight > 0
+    ? Math.min(targetH, maxHeight)
+    : targetH;
+  let s = cappedH / h;
   if (w * s > maxW) s = maxW / w;
+  if (maxHeight != null && maxHeight > 0 && h * s > maxHeight) {
+    s = maxHeight / h;
+  }
   return s;
+}
+
+/** 立绘中心 Y：底边贴立绘区下沿，保证头顶不越过区顶 */
+export function enemySpriteCenterY(
+  spriteZoneTop: number,
+  spriteZoneBottom: number,
+  displayHeight: number,
+): number {
+  const zoneH = Math.max(1, spriteZoneBottom - spriteZoneTop);
+  const h = Math.min(Math.max(1, displayHeight), zoneH);
+  return spriteZoneBottom - h / 2;
 }
 
 /** Q 版亮色战斗：杂兵不再压灰，保持原色 */

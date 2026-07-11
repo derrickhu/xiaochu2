@@ -221,7 +221,8 @@ export class BattleScene implements Scene {
         label: 'GM', width: 88, height: 48, variant: 'danger',
         onTap: () => { GMManager.executeCommand('instant_clear'); },
       });
-      gmSkip.position.set(180, headerY);
+      // 放到右侧，避免压住关卡匾标题
+      gmSkip.position.set(w - 70, headerY);
       this.container.addChild(gmSkip);
     }
 

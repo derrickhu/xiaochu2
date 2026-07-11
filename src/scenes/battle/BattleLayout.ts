@@ -26,6 +26,10 @@ export interface BattleLayout {
   headerY: number;
   /** 敌人名匾中心 Y（关卡匾下方独立板） */
   enemyNameY: number;
+  /** 立绘区上沿（名匾下沿 + 间距） */
+  spriteZoneTop: number;
+  /** 立绘区下沿（血条上沿 - 间距） */
+  spriteZoneBottom: number;
   /** 克制标签行中心 Y */
   enemyTagY: number;
   /** 倒计时文字中心 Y */
@@ -90,9 +94,10 @@ export function computeBattleLayout(): BattleLayout {
   // 敌人名独立匾：紧贴关卡匾下方
   const enemyNameY = headerY + stageBannerH / 2 + 8 + enemyNamePlaqueH / 2;
 
-  // 立绘：名匾下沿 ~ 血条上沿
-  const spriteZoneTop = enemyNameY + enemyNamePlaqueH / 2 + 8;
+  // 立绘：名匾下沿 ~ 血条上沿（加大间距，避免 Boss 头顶顶进名匾）
+  const spriteZoneTop = enemyNameY + enemyNamePlaqueH / 2 + 20;
   const spriteZoneBottom = enemyHpBarY - 8;
+  // 布局占位先按杂兵体量；实际中心在 refreshEnemy 按档位/贴图重算
   const enemyCenterY = Math.min(
     (spriteZoneTop + spriteZoneBottom) / 2,
     enemyHpBarY - enemySize / 2 - 4,
@@ -105,6 +110,8 @@ export function computeBattleLayout(): BattleLayout {
     enemyAreaBottom,
     headerY,
     enemyNameY,
+    spriteZoneTop,
+    spriteZoneBottom,
     enemyTagY,
     enemyCdY,
     enemyHpBarY,
