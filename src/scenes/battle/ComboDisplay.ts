@@ -203,26 +203,9 @@ export class ComboDisplay {
     }
   }
 
-  private _drawRing(combo: number, style: ComboStyle, timer: number): void {
-    const g = this._ring;
-    g.clear();
-    if (!isComboMilestone(combo) || timer >= 22) return;
-
-    const S = dmgFloatScale();
-    const ringP = timer / 22;
-    const ringR = style.baseSz * (0.58 + ringP * 3.9);
-    const ringAlpha = (1 - ringP) * 0.88;
-    const ringColor = style.isMega ? 0xff2050 : style.isSuper ? 0xff4d6a : 0xffd700;
-
-    g.lineStyle((7 - ringP * 4.8) * S, ringColor, ringAlpha);
-    g.drawCircle(0, 0, ringR);
-
-    if (timer > 3) {
-      const ringP2 = (timer - 3) / 22;
-      const ringR2 = style.baseSz * (0.34 + ringP2 * 3.25);
-      g.lineStyle((4.5 - ringP2 * 3.2) * S, ringColor, Math.max(0, 1 - ringP2) * 0.58);
-      g.drawCircle(0, 0, ringR2);
-    }
+  private _drawRing(_combo: number, _style: ComboStyle, _timer: number): void {
+    // 不再画里程碑扩散双圈（6/9/… 连会像全屏外圈特效）
+    this._ring.clear();
   }
 
   private _spawnVfx(combo: number, fx: BattleFx): void {
@@ -231,13 +214,7 @@ export class ComboDisplay {
     const isTierBreak = isComboMilestone(combo);
     const center = this._comboCenter(combo);
 
-    // 普通连击不再全屏闪：真机上会像「文字下的底色板」。仅里程碑轻闪。
-    if (isTierBreak) {
-      const flashMax = tier >= 4 ? 18 : 14;
-      const flashAlpha = tier >= 4 ? 0.28 : 0.18;
-      fx.flash(0xfffff0, flashMax / UI.fps.battle, flashAlpha);
-    }
-
+    // 不要全屏闪 / 震屏；仅保留局部轻粒子
     const palettes = tier >= 4
       ? ['#ff2050', '#ff6040', '#ffaa00', '#ffffff']
       : tier >= 3
@@ -248,21 +225,19 @@ export class ComboDisplay {
             ? ['#4d88ff', '#ffd700', '#ffffff', '#8ec5ff']
             : ['#ffd700', '#ffe066', '#ffffff'];
 
-    const baseCount = (tier >= 4 ? 30 : tier >= 3 ? 24 : tier >= 2 ? 18 : tier >= 1 ? 13 : 8) + (isTierBreak ? 12 : 0);
-    const count = Math.min(38, baseCount);
+    const baseCount = (tier >= 4 ? 18 : tier >= 3 ? 14 : tier >= 2 ? 12 : tier >= 1 ? 10 : 6) + (isTierBreak ? 4 : 0);
+    const count = Math.min(22, baseCount);
     fx.burst({
       x: center.x,
       y: center.y,
       color: hex(palettes[tier] ?? palettes[0]),
       count,
-      speed: 240 + tier * 40,
-      gravity: -90,
-      size: 10 + tier * 2,
-      life: 0.5,
-      alpha: 0.88,
+      speed: 180 + tier * 24,
+      gravity: -70,
+      size: 8 + tier,
+      life: 0.4,
+      alpha: 0.8,
     });
-
-    if (isTierBreak) fx.shakeLight();
   }
 
   /** 每组消除 +1 时调用（xiao_chu：combo≥2 才显示文字，VFX 每连都播） */

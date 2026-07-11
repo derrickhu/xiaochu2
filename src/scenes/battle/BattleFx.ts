@@ -15,7 +15,7 @@ import { ScreenShake } from '@/core/ScreenShake';
 import { FlashOverlay } from '@/core/FlashOverlay';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
-import { ORB_IMAGES, UI_FX_IMAGES } from '@/config/Assets';
+import { ELEMENT_BLADE_IMAGES, ELEMENT_IMPACT_IMAGES, ORB_IMAGES, UI_FX_IMAGES } from '@/config/Assets';
 import {
   applyDmgRenderStyle,
   buildPetDmgLabel,
@@ -682,83 +682,213 @@ export class BattleFx {
   }
 
   /**
-   * 星爆命中（pkg-fx starburst，ADD 混合）：UR 招牌技命中的高光反馈。
-   * 贴图未加载（分包懒加载中 / 低端真机跳过）时降级为大号白色粒子 burst。
+   * 属性普攻：一道元素刃飞向敌人（金/木/水/火/土共用节奏）。
+   * 飞行中逐步放大 → 命中后短暂停住 → 再播爆炸并消失。
    */
-  spawnStarburst(x: number, y: number, color: number): void {
-    const tex = TextureCache.get(UI_FX_IMAGES.starburst);
-    if (!tex) {
-      this.burst({ x, y, color: 0xffffff, count: 14, speed: 480, size: 18, life: 0.5 });
-      this.burst({ x, y, color, count: 10, speed: 360, size: 14, life: 0.45 });
-      return;
+  fireElementBladeVolley(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    element: Element,
+    opts?: { duration?: number },
+  ): Promise<void> {
+    const bladeTex = TextureCache.get(ELEMENT_BLADE_IMAGES[element]);
+    if (!bladeTex) {
+      return this.fireProjectileBetween(fromX, fromY, toX, toY, element, {
+        size: 52,
+        duration: opts?.duration ?? UI.anim.projectile + 0.06,
+      });
     }
-    const sp = new PIXI.Sprite(tex);
-    sp.anchor.set(0.5);
-    sp.blendMode = PIXI.BLEND_MODES.ADD;
-    sp.tint = color;
-    sp.position.set(x, y);
-    setScaleSafe(sp, 0.25);
-    sp.alpha = 1;
-    this._scopeChildren.set(sp, this._scopeId);
-    this._fx.container.addChild(sp);
-    const cleanup = once(() => {
-      this._scopeChildren.delete(sp);
-      if (displayAlive(sp)) sp.destroy();
+
+    const impactTex = TextureCache.get(ELEMENT_IMPACT_IMAGES[element]);
+    const color = ORB_COLOR[element];
+    // 飞行略慢于旧圆珠弹道；爆炸总时长见 impactDur
+    const flyDur = opts?.duration ?? Math.max(0.34, UI.anim.projectile * 1.2);
+    const impactDur = 0.24;
+    const baseW = 128;
+    const baseH = 76;
+    const startScale = 0.38;
+    const endScale = 1.28;
+    const midX = (fromX + toX) / 2;
+    const midY = Math.min(fromY, toY) - 95;
+
+    return new Promise((resolve) => {
+      const done = once(() => resolve());
+      minigameFallback(flyDur + 0.2, done, 120);
+
+      const blade = new PIXI.Sprite(bladeTex);
+      blade.anchor.set(0.5);
+      blade.blendMode = PIXI.BLEND_MODES.ADD;
+      blade.width = baseW * startScale;
+      blade.height = baseH * startScale;
+      blade.alpha = 1;
+      blade.position.set(fromX, fromY);
+      const scopeId = this._scopeId;
+      this._projectiles.set(blade, scopeId);
+      this._fx.container.addChild(blade);
+
+      const state = { t: 0 };
+      let frame = 0;
+
+      /** 命中瞬间：刃立刻消失并切爆炸；Promise 在命中时 resolve（不跟爆炸播完），便于震屏/飘字同步 */
+      const finishBladeAndImpact = once(() => {
+        TweenManager.cancelTarget(state);
+        this._projectiles.delete(blade);
+        if (displayAlive(blade)) {
+          blade.destroy();
+        }
+        void this._playElementImpact(toX, toY, element, impactTex, impactDur);
+        done();
+      });
+
+      minigameFallback(flyDur + 0.12, finishBladeAndImpact, 90);
+      TweenManager.to({
+        target: state,
+        props: { t: 1 },
+        duration: flyDur,
+        ease: Ease.easeInQuad,
+        onUpdate: () => {
+          if (!displayAlive(blade)) return;
+          const t = state.t;
+          const u = 1 - t;
+          const x = u * u * fromX + 2 * u * t * midX + t * t * toX;
+          const y = u * u * fromY + 2 * u * t * midY + t * t * toY;
+          blade.position.set(x, y);
+          const scale = startScale + (endScale - startScale) * t;
+          blade.width = baseW * scale;
+          blade.height = baseH * scale;
+          const dx = 2 * u * (midX - fromX) + 2 * t * (toX - midX);
+          const dy = 2 * u * (midY - fromY) + 2 * t * (toY - midY);
+          blade.rotation = Math.atan2(dy, dx);
+          if (++frame % 2 === 0) {
+            this._fx.burst({
+              x, y, color,
+              count: 1, speed: 28, gravity: 0, size: 8, life: 0.16, alpha: 0.7,
+            });
+          }
+        },
+        onComplete: finishBladeAndImpact,
+      });
     });
-    void tweenScale(sp, { x: 1.5, y: 1.5 }, {
-      duration: 0.4, ease: Ease.easeOutCubic,
-    }, { onFallback: cleanup });
-    void guardedTween({
-      target: sp, props: { alpha: 0, rotation: 0.5 },
-      duration: 0.45, ease: Ease.easeOutQuad,
-      onComplete: cleanup,
-    }, { onFallback: cleanup });
+  }
+
+  /** @deprecated 请用 fireElementBladeVolley */
+  fireWaterBladeVolley(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    opts?: { duration?: number },
+  ): Promise<void> {
+    return this.fireElementBladeVolley(fromX, fromY, toX, toY, 'water', opts);
+  }
+
+  /** 元素刃命中爆炸：放大停留 → 再淡出；Promise 在消失后 resolve */
+  private _playElementImpact(
+    x: number,
+    y: number,
+    element: Element,
+    tex: PIXI.Texture | null,
+    duration: number,
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      const done = once(() => resolve());
+      minigameFallback(duration + 0.25, done, 140);
+
+      this._fx.burst({
+        x, y, color: ORB_COLOR[element],
+        count: 8, speed: 220, size: 10, life: 0.32,
+      });
+
+      if (!tex) {
+        done();
+        return;
+      }
+
+      const sp = new PIXI.Sprite(tex);
+      sp.anchor.set(0.5);
+      sp.blendMode = PIXI.BLEND_MODES.ADD;
+      sp.position.set(x, y);
+      setScaleSafe(sp, 0.55);
+      sp.alpha = 1;
+      this._scopeChildren.set(sp, this._scopeId);
+      this._fx.container.addChild(sp);
+
+      const cleanup = once(() => {
+        this._scopeChildren.delete(sp);
+        if (displayAlive(sp)) sp.destroy();
+        done();
+      });
+
+      // 爆炸放大 → 短停留 → 淡出
+      void tweenScale(sp, { x: 1.25, y: 1.25 }, {
+        duration: duration * 0.25, ease: Ease.easeOutCubic,
+        onComplete: () => {
+          void guardedTween({
+            target: sp,
+            props: { alpha: 0 },
+            duration: duration * 0.38,
+            delay: duration * 0.37,
+            ease: Ease.easeInQuad,
+            onComplete: cleanup,
+          }, { onFallback: cleanup });
+        },
+      }, { onFallback: cleanup });
+    });
   }
 
   /**
-   * 光环扩散（pkg-fx aura_ring，ADD 混合）：buff / 治疗 / 护盾类技能的我方反馈。
-   * 贴图未加载时降级为上升粒子 burst。
+   * 星爆命中：改为局部粒子，避免 ADD 大图扩开展成全屏震光。
    */
+  spawnStarburst(x: number, y: number, color: number): void {
+    this.burst({ x, y, color: 0xffffff, count: 8, speed: 280, size: 12, life: 0.32 });
+    this.burst({ x, y, color, count: 6, speed: 220, size: 10, life: 0.28 });
+  }
+
   /**
-   * 英雄受击冲击（敌人弹道命中血条）：属性星爆 + 红橙扩散环 + 火花飞溅。
-   * 比纯粒子 burst 更显眼，便于感知「被打到了」。
+   * 光环扩散已关闭（aura_ring + ADD 放大像全屏外圈震光）。
+   */
+  spawnAuraRing(_x: number, _y: number, _color: number): void {
+    // no-op
+  }
+
+  /**
+   * 英雄受击冲击：仅局部粒子，不要星爆/光环铺屏。
    */
   spawnHeroHitImpact(x: number, y: number, element: Element, heavy = false): void {
     const elColor = ORB_COLOR[element];
     const impactColor = heavy ? 0xff1744 : 0xff5252;
-    this.spawnStarburst(x, y, impactColor);
-    this.spawnAuraRing(x, y, heavy ? 0xff5722 : 0xff7043);
     this.burst({
       x, y,
       color: elColor,
-      count: heavy ? 14 : 10,
-      speed: heavy ? 420 : 320,
-      size: heavy ? 18 : 14,
-      life: 0.45,
+      count: heavy ? 12 : 8,
+      speed: heavy ? 320 : 240,
+      size: heavy ? 14 : 11,
+      life: 0.36,
     });
     this.burst({
       x, y,
       color: impactColor,
-      count: heavy ? 10 : 7,
-      speed: 260,
-      size: heavy ? 14 : 11,
-      life: 0.38,
+      count: heavy ? 8 : 5,
+      speed: 200,
+      size: heavy ? 12 : 9,
+      life: 0.3,
     });
-    this._spawnSparkBurst(x, y, heavy ? 8 : 5, impactColor);
+    this._spawnSparkBurst(x, y, heavy ? 5 : 3, impactColor);
   }
 
-  /** 护盾全挡：蓝色护环 + 轻量火花（仍要有受击反馈） */
+  /** 护盾全挡：局部蓝粒子（仍要有受击反馈） */
   spawnHeroShieldImpact(x: number, y: number): void {
-    this.spawnAuraRing(x, y, 0x8fd4ff);
     this.burst({
       x, y,
       color: 0x8fd4ff,
-      count: 10,
-      speed: 220,
-      size: 14,
-      life: 0.36,
+      count: 8,
+      speed: 180,
+      size: 11,
+      life: 0.3,
     });
-    this._spawnSparkBurst(x, y, 4, 0xb3e5fc);
+    this._spawnSparkBurst(x, y, 3, 0xb3e5fc);
   }
 
   /** particleSpark 贴图散射（无贴图时降级为 burst） */
@@ -794,35 +924,6 @@ export class BattleFx {
         onComplete: cleanup,
       }, { onFallback: cleanup });
     }
-  }
-
-  spawnAuraRing(x: number, y: number, color: number): void {
-    const tex = TextureCache.get(UI_FX_IMAGES.auraRing);
-    if (!tex) {
-      this.burst({ x, y, color, count: 12, speed: 280, gravity: -200, size: 14, life: 0.55 });
-      return;
-    }
-    const sp = new PIXI.Sprite(tex);
-    sp.anchor.set(0.5);
-    sp.blendMode = PIXI.BLEND_MODES.ADD;
-    sp.tint = color;
-    sp.position.set(x, y);
-    setScaleSafe(sp, 0.3);
-    sp.alpha = 0.95;
-    this._scopeChildren.set(sp, this._scopeId);
-    this._fx.container.addChild(sp);
-    const cleanup = once(() => {
-      this._scopeChildren.delete(sp);
-      if (displayAlive(sp)) sp.destroy();
-    });
-    void tweenScale(sp, { x: 1.9, y: 1.9 }, {
-      duration: 0.5, ease: Ease.easeOutCubic,
-    }, { onFallback: cleanup });
-    void guardedTween({
-      target: sp, props: { alpha: 0 },
-      duration: 0.55, ease: Ease.easeInQuad,
-      onComplete: cleanup,
-    }, { onFallback: cleanup });
   }
 
   /** 技能名横幅：放大弹入 → 短暂停留 → 淡出 */

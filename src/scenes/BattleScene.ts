@@ -21,7 +21,12 @@ import { enemyDisplayTierOf } from '@/balance/enemyDisplay';
 import { isComboMilestone } from './battle/ComboDisplay';
 import { GMManager } from '@/core/GMManager';
 import { battlePreloadImages, battlePetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
-import { UI_FX_IMAGES, battleBgImage } from '@/config/Assets';
+import {
+  ELEMENT_BLADE_IMAGES,
+  ELEMENT_IMPACT_IMAGES,
+  UI_FX_IMAGES,
+  battleBgImage,
+} from '@/config/Assets';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
@@ -137,7 +142,11 @@ export class BattleScene implements Scene {
     await ensurePetAvatars(battlePetAvatarEntries(stageId, PlayerData.team));
     // pkg-fx 特效贴图懒加载：不阻塞进场；失败/加载中时演出自动降级为纯白粒子
     void ensureAssets([
-      UI_FX_IMAGES.starburst, UI_FX_IMAGES.auraRing, UI_FX_IMAGES.particleSpark,
+      UI_FX_IMAGES.starburst,
+      UI_FX_IMAGES.auraRing,
+      UI_FX_IMAGES.particleSpark,
+      ...Object.values(ELEMENT_BLADE_IMAGES),
+      ...Object.values(ELEMENT_IMPACT_IMAGES),
     ]).catch(() => { /* 降级路径：BattleFx 内按贴图缺失回退粒子 */ });
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'battle', () => {
@@ -694,7 +703,7 @@ export class BattleScene implements Scene {
       this._spawnDamageFloat(attack, orderIdx, hitCount);
     });
 
-    minigameFallback(UI.anim.petDash + UI.anim.projectile + 0.42, finishHit);
+    minigameFallback(UI.anim.petDash + UI.anim.projectile + 0.45, finishHit);
 
     if (Platform.isMinigame) {
       slot.y = baseY - 46;
@@ -714,28 +723,29 @@ export class BattleScene implements Scene {
     }
 
     if (isStale()) return;
-    await guardedPromise(
-      this._fx.fireProjectileBetween(
-        slot.x, slot.y - 60, this._layout.enemyCenterX, this._layout.enemyCenterY, attack.element,
-      ),
-      UI.anim.projectile + 0.15,
+    const fly = this._fx.fireElementBladeVolley(
+      slot.x,
+      slot.y - 60,
+      this._layout.enemyCenterX,
+      this._layout.enemyCenterY,
+      attack.element,
     );
+    await guardedPromise(fly, UI.anim.projectile + 0.45);
     if (isStale() || slot.destroyed) return;
     finishHit();
   }
 
-  /** 伤害数字：显示在出手宠物槽位上方，便于对应哪只宠物打了多少 */
-  private _spawnDamageFloat(attack: PetAttack, orderIdx: number, _hitCount: number): void {
-    const slot = this._petBar.slotAt(attack.petIndex);
-    if (!slot || slot.destroyed) return;
-    this._fx.spawnPetDamageFloat({
-      slotX: slot.x,
-      slotY: slot.y,
+  /** 伤害数字：打在敌人身上（对齐宠物→怪物伤害特效样例） */
+  private _spawnDamageFloat(attack: PetAttack, orderIdx: number, hitCount: number): void {
+    this._fx.spawnEnemyHitDamage({
+      enemyX: this._layout.enemyCenterX,
+      enemyY: this._layout.enemyCenterY,
       element: attack.element,
       damage: attack.damage,
       isCrit: attack.isCrit,
       counter: attack.counter,
       orderIdx,
+      hitCount,
     });
   }
 

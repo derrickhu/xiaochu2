@@ -206,7 +206,36 @@ export const UI_FX_IMAGES = {
   starburst: `${PKG.fx}/images/ui/fx/fx_starburst.png`,
   auraRing: `${PKG.fx}/images/ui/fx/fx_aura_ring.png`,
   particleSpark: `${PKG.fx}/images/ui/fx/p_spark.png`,
+  /** 属性普攻刃 / 命中（对齐水刃样例节奏） */
+  metalBlade: `${PKG.fx}/images/ui/fx/fx_metal_blade.png`,
+  metalImpact: `${PKG.fx}/images/ui/fx/fx_metal_impact.png`,
+  woodBlade: `${PKG.fx}/images/ui/fx/fx_wood_blade.png`,
+  woodImpact: `${PKG.fx}/images/ui/fx/fx_wood_impact.png`,
+  waterBlade: `${PKG.fx}/images/ui/fx/fx_water_blade.png`,
+  waterImpact: `${PKG.fx}/images/ui/fx/fx_water_impact.png`,
+  fireBlade: `${PKG.fx}/images/ui/fx/fx_fire_blade.png`,
+  fireImpact: `${PKG.fx}/images/ui/fx/fx_fire_impact.png`,
+  earthBlade: `${PKG.fx}/images/ui/fx/fx_earth_blade.png`,
+  earthImpact: `${PKG.fx}/images/ui/fx/fx_earth_impact.png`,
 } as const;
+
+/** 属性普攻刃贴图 */
+export const ELEMENT_BLADE_IMAGES: Readonly<Record<Element, string>> = {
+  metal: UI_FX_IMAGES.metalBlade,
+  wood: UI_FX_IMAGES.woodBlade,
+  water: UI_FX_IMAGES.waterBlade,
+  fire: UI_FX_IMAGES.fireBlade,
+  earth: UI_FX_IMAGES.earthBlade,
+};
+
+/** 属性普攻命中贴图 */
+export const ELEMENT_IMPACT_IMAGES: Readonly<Record<Element, string>> = {
+  metal: UI_FX_IMAGES.metalImpact,
+  wood: UI_FX_IMAGES.woodImpact,
+  water: UI_FX_IMAGES.waterImpact,
+  fire: UI_FX_IMAGES.fireImpact,
+  earth: UI_FX_IMAGES.earthImpact,
+};
 
 /** 启动主包预加载（Title + 导航 + 棋盘珠） */
 export const MAIN_PRELOAD_IMAGES: readonly string[] = [

@@ -1,0 +1,17 @@
+Mobile game BATTLE DAMAGE VFX sample, STRICT portrait 9:16 for xiaochu2.
+
+EDIT the attached battle UI reference. Keep SAME layout, cream-gold Q版修仙 HUD, bamboo forest, green wood slime, 5 pets, cream board with elemental orbs. Chinese HUD only. NO watermark. NO English except Lv.
+
+ONE frozen attack beat: damage VFX flies FROM the active PET portrait UP TO the enemy slime.
+NOT from board orbs. Board orbs stay static. Do NOT redesign HUD.
+
+ELEMENT — WATER sample (prototype):
+- Active pet: 3rd slot (white water griffin / bird). Soft cyan glow ring on its portrait = attack origin.
+- PROJECTILES: 3–4 sharp cyan water-crescent blades / aqua energy sickles mid-flight.
+  Clear path: start at water pet → arc upward → hit slime.
+  Color cyan #5AD4FF → teal #2A8FD4, white highlights, short glowing trail + sparkles, motion blur.
+  Must NOT look like round puzzle orbs / water-drop gems.
+- IMPACT: 1–2 blades hitting slime — cyan-white starburst, splash droplets, soft rings. Slime slight hurt squash/flash.
+- FEEDBACK: floating "-486" cyan/white thin dark outline, NO opaque text plate. Enemy HP ~134/620 with white trailing damage segment.
+
+Soft painterly Q版 xianxia marketing mockup. Clear readable VFX silhouette. Only in-game Chinese HUD + damage number.
