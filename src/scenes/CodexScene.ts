@@ -14,7 +14,7 @@ import { PETS, type PetDef } from '@/balance/pets';
 import { STAGES } from '@/balance/stages';
 import { CHAPTER_NAME } from '@/balance/stages';
 import {
-  BACKGROUND_IMAGES, UI_IMAGES, UI_SCENE_IMAGES,
+  BACKGROUND_IMAGES, UI_IMAGES, petCardPortraitImage,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import {
@@ -205,7 +205,6 @@ export class CodexScene implements Scene {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     const { S, cols, cardGap, cardW, cardH, marginX } = petPoolGrid(w);
-    const cardBgTex = TextureCache.get(UI_SCENE_IMAGES.petCardPortrait);
 
     // 两态分组：已拥有 → 未获得（按 PETS 顺序稳定）
     const stateOf = (p: PetDef): CodexState =>
@@ -232,10 +231,11 @@ export class CodexScene implements Scene {
 
       const item = new PIXI.Container();
       item.position.set(x, y);
+      const cardBgTex = TextureCache.get(petCardPortraitImage(pet.rarity));
       if (state === 'owned') {
         buildOwnedCodexCard(item, pet, cardW, cardH, S, cardBgTex);
       } else {
-        buildLockedCodexCard(item, pet, cardW, cardH, S);
+        buildLockedCodexCard(item, pet, cardW, cardH, S, cardBgTex);
       }
 
       item.eventMode = 'static';

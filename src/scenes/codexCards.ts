@@ -16,19 +16,29 @@ import {
   makeText,
 } from '@/ui';
 
-/** 未拥有卡：剪影 + 获取提示占位。 */
+/** 未拥有卡：稀有度底板 + 剪影 + 获取提示。 */
 export function buildLockedCodexCard(
   item: PIXI.Container,
   pet: PetDef,
   cardW: number,
   cardH: number,
   S: number,
+  cardBgTex: PIXI.Texture | null = null,
 ): void {
-  item.addChild(makePanel({
-    width: cardW, height: cardH, radius: 8 * S, centered: false,
-    bg: COLORS.panelBgAlt, bgAlpha: 0.9,
-    border: COLORS.panelBorderSoft,
-  }));
+  if (cardBgTex) {
+    const bg = new PIXI.Sprite(cardBgTex);
+    bg.width = cardW;
+    bg.height = cardH;
+    bg.tint = 0xb0b0b0;
+    bg.alpha = 0.92;
+    item.addChild(bg);
+  } else {
+    item.addChild(makePanel({
+      width: cardW, height: cardH, radius: 8 * S, centered: false,
+      bg: COLORS.panelBgAlt, bgAlpha: 0.9,
+      border: COLORS.panelBorderSoft,
+    }));
+  }
 
   const orbTex = TextureCache.get(ORB_IMAGES[pet.element]);
   if (orbTex) {

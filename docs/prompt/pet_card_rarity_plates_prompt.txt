@@ -1,0 +1,7 @@
+Pet codex card background plates — empty UI frames only.
+NO TEXT, no labels, no badges (R/SR/SSR/UR letters), no pet creatures, no stars, no icons.
+Vertical portrait card ~3:4, soft Q-version Eastern fantasy cream parchment UI.
+Rounded corners, ornate gold scroll borders, auspicious cloud ornaments.
+Match existing pet_portrait.png structure: cream center fill + decorative frame.
+Empty center for avatar+text overlay. Transparent or clean outer edge OK.
+NO TEXT anywhere.

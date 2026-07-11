@@ -195,9 +195,22 @@ export const UI_PANEL_IMAGES = {
 
 /** 场景卡片 UI（pkg-scene） */
 export const UI_SCENE_IMAGES = {
+  /** @deprecated 统一底板；请用 RARITY_PET_CARD_IMAGES */
   petCardPortrait: `${PKG.scene}/images/ui/card/pet_portrait.png`,
   petCardTeamRow: `${PKG.scene}/images/ui/card/pet_team_row.png`,
 } as const;
+
+/** 灵宠图鉴竖卡底板（按稀有度：R 素雅 → UR 金辉） */
+export const RARITY_PET_CARD_IMAGES: Readonly<Record<Rarity, string>> = {
+  1: `${PKG.scene}/images/ui/card/pet_portrait_r.png`,
+  2: `${PKG.scene}/images/ui/card/pet_portrait_sr.png`,
+  3: `${PKG.scene}/images/ui/card/pet_portrait_ssr.png`,
+  4: `${PKG.scene}/images/ui/card/pet_portrait_ur.png`,
+};
+
+export function petCardPortraitImage(rarity: Rarity): string {
+  return RARITY_PET_CARD_IMAGES[rarity] ?? RARITY_PET_CARD_IMAGES[1];
+}
 
 /** UI 特效（pkg-fx） */
 export const UI_FX_IMAGES = {
