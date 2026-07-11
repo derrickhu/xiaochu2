@@ -12,14 +12,14 @@ export const ELEMENT_NAME: Readonly<Record<Element, string>> = {
   earth: '土',
 };
 
-/** 属性主题色（含心珠） */
+/** 属性主题色（含心珠）— 单独加深后的 Q 实心珠配色 */
 export const ORB_COLOR: Readonly<Record<OrbType, number>> = {
-  metal: 0xffd75e,
-  wood: 0x6fd86a,
-  water: 0x5db9ff,
-  fire: 0xff7a5c,
-  earth: 0xc98e5a,
-  heart: 0xff8fc4,
+  metal: 0xd9a008,
+  wood: 0x0d8a22,
+  water: 0x0a5ef0,
+  fire: 0xd6453a,
+  earth: 0x8f5a36,
+  heart: 0xf6658e,
 };
 
 export const UI = {

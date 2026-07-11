@@ -1,24 +1,20 @@
-Game UI asset sheet: 6 match-3 puzzle ORBS / beads for a bright Q-version cream/gold mobile RPG.
+Game UI asset sheet: 6 match-3 ORBS, Q-version glossy candy style.
 
-Layout: 3 columns x 2 rows, equal square cells, each cell contains ONE orb centered on a plain light gray (#d0d0d0) background.
+Layout: 3x2 on light gray (#d0d0d0). One orb per cell. NO TEXT.
 
-CRITICAL:
-- NO TEXT, no labels, no captions, no numbers, no writing anywhere
-- Each orb is a perfect circle, same size, same glossy glass-marble style
-- Transparent-friendly: solid light gray background only (no scenery)
-- Consistent lighting: bright white specular highlight top-left, soft shadow bottom-right
-- Soft candy / Puzzle & Dragons style, polished mobile game icons
+STYLE: Soft Puzzle & Dragons candy glass-marble. Same icons (star, leaf, drop, flame, rocks, heart). Same-hue embossed icons (NOT white fill, NOT thick black outlines). Soft specular top-left, thin darker rim.
 
-Use the reference board image for orb style and icon shapes ONLY. Do not copy the board frame or grid.
+COLOR TARGET — MIDDLE GROUND (稍微深一点，不要过亮也不要过深):
+Richer than neon-bright candy, but still lively Q版 — NOT deep crimson, NOT charcoal brown, NOT pale washed pastels.
 
-Row 1 (left to right):
-1) GOLD / METAL — bright golden yellow sphere, center icon: stylized 4-pointed star / diamond with concave sides (darker gold icon)
-2) WOOD — vibrant emerald green sphere, center icon: simple rounded leaf with a center vein (darker green icon)
-3) WATER — bright sky blue sphere, center icon: classic teardrop water drop (darker blue icon)
+Row1 L→R:
+1) METAL: warm medium gold (#F0C040) — rich gold-yellow, slightly deeper than lemon-bright
+2) WOOD: medium vivid green (#45C45A) — fresh green, a bit deeper than neon lime
+3) WATER: medium clear blue (#3A9AE8) — clear blue, slightly deeper than ice-cyan
 
-Row 2 (left to right):
-4) FIRE — deep crimson red sphere, center icon: stylized 3-tongue flame (darker red icon)
-5) EARTH — warm chocolate brown sphere, center icon: cluster of 2–3 jagged rock shapes (darker brown icon)
-6) HEART — bright bubblegum pink sphere, center icon: solid heart shape with slightly darker pink outline
+Row2 L→R:
+4) FIRE: medium warm red (#EF5A4A) — lively red-coral, NOT deep burgundy, NOT pale peach
+5) EARTH: medium warm brown (#B07848) — readable cocoa-tan, NOT dark charcoal, NOT yellow-gold
+6) HEART: soft medium pink (#FF8AB8) — candy pink, lighter than fire, not neon magenta
 
-Each orb: glossy 3D glass marble, thin darker rim, embossed center symbol, no square tile behind the orb.
+Soft candy gradients. Balanced saturation. Cute Q版. Easy to tell apart.

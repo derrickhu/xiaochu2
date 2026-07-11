@@ -53,11 +53,11 @@ const TITLE_COLOR: Readonly<Record<Element, number>> = {
 };
 
 const HIGHLIGHT_COLOR: Readonly<Record<Element, number>> = {
-  metal: 0xd4a017,
-  wood: 0x3a9a4a,
+  metal: 0xf0c040,
+  wood: 0x45c45a,
   water: SKILL_UI.highlight,
-  fire: 0xe85a3a,
-  earth: 0xc98e5a,
+  fire: 0xd6453a,
+  earth: 0x8f5a36,
 };
 
 export { TAP_SLOP };
