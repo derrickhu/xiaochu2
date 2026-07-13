@@ -104,32 +104,36 @@ export class GachaScene implements Scene {
     back.position.set(80, Game.safeHeaderCenterY);
     this._page.addChild(back);
 
-    this._buildTitlePlaque(w, Game.safeHeaderCenterY, '灵宠召唤');
+    const titleY = Game.safeHeaderCenterY;
+    const plaqueH = this._buildTitlePlaque(w, titleY, '灵宠召唤');
 
-    // 灵玉右上角胶囊（避开平台菜单胶囊）
+    // 灵玉：居中放在标题匾下方（不再右对齐挤顶栏）
     const balance = makeCurrencyLabel('lingyu', PlayerData.lingyu);
-    const balPadX = 14;
-    const balH = 44;
-    const balW = Math.ceil(balance.width) + balPadX * 2;
-    const balBg = makePanel({
-      width: balW, height: balH, radius: balH / 2, centered: false,
+    const balPadX = 18;
+    const balH = 48;
+    const balW = Math.max(120, Math.ceil(balance.width) + balPadX * 2);
+    const balBg = new PIXI.Container();
+    balBg.addChild(makePanel({
+      width: balW, height: balH, radius: balH / 2, centered: true,
       bg: COLORS.panelBg, bgAlpha: 0.92, border: COLORS.panelBorderSoft, borderWidth: 2,
-    });
-    const balRight = Game.contentRightX(12);
-    balBg.position.set(balRight - balW, Game.safeHeaderCenterY - balH / 2);
-    balance.position.set(balPadX, (balH - 38) / 2);
+    }));
+    // IconLabel 原点在左缘垂直中心 → 整组水平居中于胶囊
+    balance.position.set(-Math.ceil(balance.width) / 2, 0);
     balBg.addChild(balance);
+    const balY = titleY + plaqueH / 2 + 10 + balH / 2;
+    balBg.position.set(w / 2, balY);
     this._page.addChild(balBg);
 
-    this._buildPity(w, Game.safeTop + 28);
+    // 保底区接在灵玉胶囊下方，避免与标题叠压
+    this._buildPity(w, balY + balH / 2 + 18);
 
-    // 对齐原型：白字轻阴影，现代字重，不做米黄粗描边
+    // 对齐原型：偏金标题字 + 深棕轻阴影（非纯白）
     const tip = makeText('敲碎金蛋，召唤仙灵', {
       size: FONT_SIZE.lg,
       fill: COLORS.gachaEggTip,
       bold: true,
       anchor: 0.5,
-      dropShadow: { color: 0x1a2a28, blur: 4, distance: 2, alpha: 0.45 },
+      dropShadow: { color: 0x5a3a12, blur: 3, distance: 2, alpha: 0.55 },
     });
     tip.position.set(w / 2, h - 270);
     this._page.addChild(tip);
@@ -202,11 +206,14 @@ export class GachaScene implements Scene {
     this._page.addChild(floorNote);
   }
 
-  private _buildTitlePlaque(w: number, centerY: number, label: string): void {
-    // 对齐召唤原型：奶油云纹短匾 + 深棕字，不用战斗横匾（易显厚重老土）
+  /** @returns 匾高度，供下方灵玉/保底区排布 */
+  private _buildTitlePlaque(w: number, centerY: number, label: string): number {
+    // title 九宫左右切片各 140：匾宽过窄时中段奶油被挤没，字会「溢出」到花边外
+    // 原型短匾需 ≥ ~520，给中段留足可读区
+    const plaqueW = Math.min(560, Math.max(520, w - 100));
     const plaque = makeNamePlaque({
       text: label,
-      width: Math.min(420, w - 160),
+      width: plaqueW,
       size: 'lg',
       plate: 'title',
       fill: COLORS.btnBackText,
@@ -214,6 +221,8 @@ export class GachaScene implements Scene {
     });
     plaque.position.set(w / 2, centerY);
     this._page.addChild(plaque);
+    const view = plaque as { plaqueH?: number };
+    return view.plaqueH ?? 72;
   }
 
   private _buildPullButtons(w: number, h: number): void {

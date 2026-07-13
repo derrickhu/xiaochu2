@@ -170,20 +170,32 @@ export class TeamScene implements Scene {
     this.container.addChild(this._summaryHost);
     y += trayH + 12;
 
-    const pickTitle = makeSectionTitle('可选灵宠', panelW);
-    pickTitle.position.set(w / 2, y + 10);
-    this.container.addChild(pickTitle);
-    y += 26;
-
     const bottomBtnH = 104;
     const bottomPad = 16;
     const listBtnGap = 10;
     const listBottom = h - bottomPad - bottomBtnH - listBtnGap;
 
+    // 可选灵宠区：整块奶油外板（对齐 UI 原型，标题 + 双列卡都在板内）
+    const pickPadTop = 38;
+    const pickPadBot = 12;
+    const pickH = Math.max(120, listBottom - y);
+    const pickPanel = makePanel({
+      width: panelW, height: pickH, radius: 16,
+      bg: 0xfff8ec, bgAlpha: 0.96,
+      border: 0xe0c896, borderWidth: 2,
+      centered: false,
+    });
+    pickPanel.position.set((w - panelW) / 2, y);
+    this.container.addChild(pickPanel);
+
+    const pickTitle = makeSectionTitle('可选灵宠', panelW - 40);
+    pickTitle.position.set(w / 2, y + 18);
+    this.container.addChild(pickTitle);
+
     this._listContent = buildTeamPetList({
       container: this.container,
-      startY: y,
-      listBottom,
+      startY: y + pickPadTop,
+      listBottom: y + pickH - pickPadBot,
       compact: true,
       checks: this._listChecks,
       items: this._listItems,

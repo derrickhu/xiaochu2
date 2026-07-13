@@ -1,0 +1,21 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+Light airy painted scenery that is ALSO slightly Q/stylized (NOT realistic ink-wash landscape).
+FORBIDDEN: photorealistic, dark fantasy, heavy oil paint, cyberpunk neon, purple-on-white AI defaults, 3D PBR.
+Use reference images for STYLE / palette / egg mood ONLY — do not copy UI chrome or text.
+
+ASSET: Portrait 9:16 BACKGROUND ONLY for spirit-pet summon screen (runtime scene_gacha_egg).
+
+CRITICAL:
+- SHARP and CLEAR (not soft blurry mist painting)
+- STRONG Q / cute-chibi stylization for mountains, clouds, pavilion, egg
+- CENTER HERO: MUCH LARGER cracked glowing GOLDEN EGG (about 38–45% of image height), chubby round Q shell, crisp crack with warm light and tiny cute pet silhouette hint
+- Soft white cloud nest + simple teal jade platform under egg
+- Soft mint Q mountains + airy clouds + small cute pavilion on right mid-ground
+- Floating soft cyan spirit wisps
+- Leave soft empty sky at top and soft lower cloud space for UI overlays
+- Full-bleed edge to edge
+
+STRICT: NO TEXT, no labels, no buttons, no banners, no UI, no watermarks, no phone frame.

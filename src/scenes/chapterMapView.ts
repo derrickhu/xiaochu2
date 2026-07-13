@@ -16,6 +16,7 @@ import {
 import { ChapterMapLayoutStore } from '@/game/chapterMapLayoutStore';
 import { getStageType } from '@/balance/stageTypes';
 import type { StageDef } from '@/balance/stages';
+import { CHAPTER_REWARD_PET } from '@/balance/stages';
 import { PET_MAP } from '@/balance/pets';
 import { PlayerData } from '@/game/PlayerData';
 import { BACKGROUND_IMAGES, MAP_UI_IMAGES } from '@/config/Assets';
@@ -27,6 +28,8 @@ import { ScrollListController } from '@/ui/ScrollList';
 const SHIELD_H = 88;
 const SHIELD_W = 64;
 const NODE_HIT_R = 52;
+/** Boss 节点上的守关灵宠立绘边长 */
+const BOSS_PET_SIZE = 92;
 /** 关卡路径整体下移（屏幕像素），与顶栏资源图标留出呼吸间距 */
 const TITLE_MAP_TOP_INSET = 32;
 
@@ -163,12 +166,7 @@ function buildStageNode(
   wrap.addChild(nameText);
 
   if (stage.isBoss) {
-    const cap = makeText('掉落', {
-      size: FONT_SIZE.xxs, fill: COLORS.accent, bold: true, anchor: 0.5,
-      strokeColor: 0x2a3444, strokeWidth: 2,
-    });
-    cap.position.set(SHIELD_W * 0.28, -SHIELD_H * 0.62);
-    wrap.addChild(cap);
+    attachBossGuardianPet(wrap, stage.chapter, opts.unlocked);
   } else if (opts.unlocked && stage.type !== 'normal') {
     const badge = makeText(getStageType(stage.type).name, {
       size: FONT_SIZE.xxs, fill: getStageType(stage.type).color, bold: true, anchor: 0.5,
@@ -203,6 +201,54 @@ function buildStageNode(
   }
 
   return wrap;
+}
+
+/**
+ * Boss 关节点：叠放本章守关灵宠立绘 + BOSS 标（对齐 home_hub_v4）。
+ * 立绘取 CHAPTER_REWARD_PET，与编队敌情「守关」同源。
+ */
+function attachBossGuardianPet(
+  wrap: PIXI.Container,
+  chapter: number,
+  unlocked: boolean,
+): void {
+  const petId = CHAPTER_REWARD_PET[chapter];
+  const petY = -SHIELD_H * 0.95;
+
+  const host = new PIXI.Container();
+  host.position.set(0, petY);
+  if (!unlocked) host.alpha = 0.55;
+  wrap.addChild(host);
+
+  const applyTex = (tex: PIXI.Texture | null): void => {
+    host.removeChildren().forEach((c) => c.destroy({ children: true }));
+    if (tex) {
+      const spr = new PIXI.Sprite(tex);
+      spr.anchor.set(0.5, 1);
+      const scale = BOSS_PET_SIZE / Math.max(tex.width, tex.height);
+      spr.scale.set(scale);
+      host.addChild(spr);
+    } else {
+      const ph = new PIXI.Graphics();
+      ph.beginFill(0xc9a063, 0.85);
+      ph.drawCircle(0, -BOSS_PET_SIZE * 0.35, BOSS_PET_SIZE * 0.35);
+      ph.endFill();
+      host.addChild(ph);
+    }
+    const tag = makeText('BOSS', {
+      size: FONT_SIZE.xxs, fill: 0xfff4c8, bold: true, anchor: 0.5,
+      strokeColor: 0x8a5a18, strokeWidth: 3,
+    });
+    tag.position.set(BOSS_PET_SIZE * 0.42, -BOSS_PET_SIZE * 0.72);
+    host.addChild(tag);
+  };
+
+  applyTex(petId ? getPetAvatarTexture(petId, 1) : null);
+  if (petId) {
+    void loadPetAvatarTexture(petId, 1).then((tex) => {
+      if (!host.destroyed) applyTex(tex);
+    });
+  }
 }
 
 function buildPlayerMarker(teamPetId: string | undefined): PIXI.Container {

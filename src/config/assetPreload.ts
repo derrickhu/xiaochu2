@@ -6,13 +6,14 @@
 import { getDropTable } from '@/balance/drops';
 import { resolveEncounter } from '@/balance/enemies';
 import { PET_MAP, PETS } from '@/balance/pets';
-import { STAGE_MAP, STAGES } from '@/balance/stages';
+import { STAGE_MAP, STAGES, CHAPTER_REWARD_PET } from '@/balance/stages';
 import { PlayerData } from '@/game/PlayerData';
 import {
   BACKGROUND_IMAGES,
   BOARD_IMAGES,
   ORB_IMAGES,
   PET_FRAME_IMAGES,
+  ENEMY_PORTRAIT_FRAME,
   UI_FX_IMAGES,
   UI_IMAGES,
   UI_SHOP_IMAGES,
@@ -55,6 +56,7 @@ export const TEAM_SHELL_IMAGES: readonly string[] = [
   UI_IMAGES.iconStatHp,
   UI_IMAGES.iconStatAtk,
   UI_BATTLE_IMAGES.petStar,
+  ENEMY_PORTRAIT_FRAME,
 ];
 
 export const GACHA_SHELL_IMAGES: readonly string[] = [
@@ -217,7 +219,21 @@ export function petDetailAvatarEntry(petId: string): PetAvatarPreloadEntry | nul
   return { petId, star: PlayerData.petStar(petId) };
 }
 
-/** 主界面：预加载编队队长头像（地图「从这里出发」标记） */
+/** 主界面：编队队长头像 + 本章守关灵宠（Boss 节点） */
+export function titleHomePetAvatarEntries(chapter: number): PetAvatarPreloadEntry[] {
+  const entries: PetAvatarPreloadEntry[] = [];
+  const lead = PlayerData.team[0];
+  if (lead && PET_MAP.has(lead)) {
+    entries.push({ petId: lead, star: PlayerData.petStar(lead) });
+  }
+  const bossPetId = CHAPTER_REWARD_PET[chapter];
+  if (bossPetId && PET_MAP.has(bossPetId) && bossPetId !== lead) {
+    entries.push({ petId: bossPetId, star: 1 });
+  }
+  return entries;
+}
+
+/** @deprecated 用 titleHomePetAvatarEntries */
 export function titleLeadPetAvatarEntry(): PetAvatarPreloadEntry | null {
   const lead = PlayerData.team[0];
   if (!lead) return null;

@@ -1,0 +1,20 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+FORBIDDEN: photorealistic, dark fantasy, heavy oil paint, neon, purple AI defaults, 3D PBR.
+Use reference home_hub_v4 for STYLE of bottom-nav icons ONLY — do not copy the whole screen.
+
+ASSET: ONE icon sheet, strict 5 columns × 1 row, equal square cells, thin dark separators.
+Each cell: ONE cute Q icon centered on flat solid #1e2a32 background only.
+NO TEXT, no labels, no Chinese characters, no numbers anywhere.
+
+STYLE: Soft Q chibi, readable at 72px, consistent lighting, soft gold accents where natural.
+Outside icon subject: only solid #1e2a32 (will be keyed transparent). Prefer icons that already look circular-friendly / cutout-ready.
+
+CELLS left→right:
+1) 灵宠 Pets: cute small green dragon-like Q spirit pet head/bust
+2) 召唤 Summon: white/cream egg with soft green spots on leafy nest
+3) 主线 Mainline: cute Q fairy/goddess with antlers holding a staff (chibi bust), soft gold circular feel
+4) 商店 Shop: tiny traditional Chinese shop stall with golden lanterns
+5) 编队 Formation: cute white-and-grey fluffy winged Q creature bust

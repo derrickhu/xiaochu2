@@ -35,12 +35,12 @@ const FREE_CARD_W = 330;
 const FREE_CARD_H = 148;
 const FREE_AVATAR = 74;
 
-/** 战前可选区：更小双列横卡（对齐 UI 图） */
+/** 战前可选区：更小双列横卡（对齐 UI 图；卡面略亮于外板，避免融进奶油底） */
 const PREP_CARD_W = 300;
 const PREP_CARD_H = 108;
 const PREP_AVATAR = 72;
-const PREP_PLATE_BG = 0xfff8ec;
-const PREP_PLATE_BORDER = 0xe0c896;
+const PREP_CARD_BG = 0xfffdf8;
+const PREP_CARD_BORDER = 0xd4b87a;
 
 const CARD_TEX_W = 660;
 const CARD_TEX_H = 296;
@@ -236,8 +236,8 @@ function buildListItem(
   if (compact) {
     item.addChild(makePanel({
       width: cardW, height: cardH, radius: 14,
-      bg: PREP_PLATE_BG, bgAlpha: 0.96,
-      border: PREP_PLATE_BORDER, borderWidth: 2,
+      bg: PREP_CARD_BG, bgAlpha: 0.98,
+      border: PREP_CARD_BORDER, borderWidth: 2,
       centered: true,
     }));
   } else if (scrollTex) {

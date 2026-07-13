@@ -29,6 +29,9 @@ export function petFrameImage(element: Element): string {
   return PET_FRAME_IMAGES[element];
 }
 
+/** 编队敌情：怪物立绘奶油金框（透明窗 + 描金角饰） */
+export const ENEMY_PORTRAIT_FRAME = `${IMG}/ui/frame/enemy_portrait.png`;
+
 /** 棋盘格贴图（主包） */
 export const BOARD_IMAGES = {
   dark: `${IMG}/board/tile_dark.jpg`,
@@ -145,6 +148,11 @@ export const UI_IMAGES = {
   navTeam: `${IMG}/ui/icon/nav_team.png`,
   /** 底栏「主线」= 首页章节地图 */
   navHome: `${IMG}/ui/icon/nav_home.png`,
+  /** 左侧玩法栏：签到 / 通天塔 / 日常 / 活动（对齐 home_hub_v4） */
+  railCheckin: `${IMG}/ui/icon/rail_checkin.png`,
+  railTower: `${IMG}/ui/icon/rail_tower.png`,
+  railDaily: `${IMG}/ui/icon/rail_daily.png`,
+  railEvent: `${IMG}/ui/icon/rail_event.png`,
   iconCoin: `${IMG}/ui/icon/currency_coin.png`,
   iconExp: `${IMG}/ui/icon/currency_exp.png`,
   iconLingyu: `${IMG}/ui/icon/currency_lingyu.png`,

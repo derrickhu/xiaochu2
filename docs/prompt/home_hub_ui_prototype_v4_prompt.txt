@@ -1,0 +1,55 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+Light airy painted scenery that is ALSO slightly Q/stylized (NOT realistic ink-wash landscape).
+Pets/monsters/UI chrome must match the same cute family as existing prototypes.
+FORBIDDEN: photorealistic, dark fantasy, heavy oil paint, cyberpunk neon, purple-on-white AI defaults, 3D PBR.
+Use reference images for STYLE / palette / button & plaque chrome ONLY — do not copy their exact layout.
+
+CRITICAL STYLE DIRECTION (v4 — lighter than v3):
+Wife feedback: previous home hub felt TOO COMPLEX / too heavy / too ornate.
+Make this LIGHTWEIGHT Q-UI:
+- MORE flat soft cel-shading, LESS metallic bevel, LESS carved filigree, LESS dense painterly texture
+- UI chrome like the summon/gacha reference: thin soft-gold lines, simple cream pills, airy mint mist, generous breathing room
+- Background: simplified cute Q mountains + soft clouds + light mint water (NOT a busy realistic landscape painting)
+- Icons: simple cute Q glyphs, not mini oil paintings
+- Fewer decorative layers; clean readable hierarchy; soft shadows only
+- Still premium cute, never childish scribble, never dark/heavy
+
+Create ONE COMPLETE mobile HOME HUB UI prototype (phone 9:16 portrait, fully finished top-to-bottom).
+
+INFORMATION ARCHITECTURE (keep locked from v3):
+- CENTER = MAINLINE CHAPTER CAMPAIGN map only (core loop)
+- BOTTOM CENTER TAB label「主线」(SELECTED) = this home screen
+- LEFT RAIL = extensible SECONDARY modes: 签到 / 通天塔 / 日常 / 活动
+- 「通天塔」≠ mainline stages
+- NO player level, NO EXP bar, NO mail button
+
+COMPOSITION:
+
+1) TOP BAR
+- Left: cute Q pet avatar in simple thin gold circle + nickname「仙灵小萌新」only
+- Right: two simple cream currency pills 灵玉「1680」+ 灵宠币「32.6w」with「+」
+
+2) CHAPTER HEADER
+- Simple cream-gold plaque「第3章 · 玄龟试炼」with soft left/right arrows (not heavy carved scroll)
+
+3) HERO — MAINLINE STAGE MAP (~55%)
+- Soft Q mint path, lightly stylized hills, airy space
+- Circular mint nodes 1–6; stars under cleared; soft lock on locked
+- Cute chubby Q stone-turtle BOSS (round, soft, simple) + small「BOSS」tag
+- Leave left margin for rail
+- Optional tiny soft reward chip bottom-right (simple, not ornate chest shrine)
+
+4) LEFT RAIL (narrow)
+Simple cream rounded squares / soft circles + short labels:
+签到(red-dot) / 通天塔 / 日常 / 活动
+Visual room implying more icons later
+
+5) BOTTOM NAV (fully visible, simple cream cloud bar — not heavy gold pedestal)
+灵宠 | 召唤 | 主线(SELECTED, larger, soft gold halo) | 商店 | 编队
+Center tab MUST read「主线」not「冒险」.
+Icons: simple cute Q, flat-ish
+
+Readable Chinese labels as listed. Soft, light, Q, airy.

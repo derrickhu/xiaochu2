@@ -34,8 +34,8 @@ export const COLORS = {
   gachaPityText: 0x4a453c,
   /** 召唤页保底剩余次数（亮橙，对齐原型数字强调） */
   gachaPityRemain: 0xff8c22,
-  /** 召唤页砸蛋引导（白字 + 阴影，见 makeText dropShadow） */
-  gachaEggTip: 0xffffff,
+  /** 召唤页砸蛋引导（偏金，对齐原型；深棕轻阴影保证可读） */
+  gachaEggTip: 0xf0c45a,
   /** 深底（如紫色导航栏）上的浅色文字 */
   textInverse: 0xfdf3df,
   /** 不可用态文字 */
@@ -126,11 +126,11 @@ export const COLORS = {
   /** 宠物技能 CD 圆标外环（奶油） */
   battleCdBadgeRing: 0xf2e3c5,
 
-  // ── 导航栏（紫祥云底，浅字） ──
-  navText: 0xfdf3df,
-  navTextActive: 0xffe9a6,
-  /** 导航栏贴图缺失时的回退底色（祥云紫） */
-  navBarFallback: 0x5a3f7a,
+  // ── 导航栏（奶油祥云底，深棕字 — 对齐 home_hub_v4） ──
+  navText: 0x5a3f28,
+  navTextActive: 0xb5701f,
+  /** 导航栏贴图缺失时的回退底色（奶油） */
+  navBarFallback: 0xfdf3df,
 
   // ── 通用 ──
   white: 0xffffff,

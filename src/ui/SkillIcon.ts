@@ -52,15 +52,25 @@ export function makeSkillIcon(opts: SkillIconOpts): PIXI.Container {
   const tex = path ? TextureCache.get(path) : null;
 
   if (tex) {
+    const art = new PIXI.Container();
     const sp = new PIXI.Sprite(tex);
     sp.anchor.set(0.5);
-    const s = size / Math.max(tex.width, tex.height);
+    // 略放大，避免圆遮罩裁掉金边
+    const s = (size * 1.04) / Math.max(tex.width, tex.height);
     sp.scale.set(s);
     if (locked) {
       sp.tint = 0x7a7a7a;
       sp.alpha = 0.72;
     }
-    c.addChild(sp);
+    art.addChild(sp);
+    // 强制正圆扣底，杜绝方底/残角露在奶油面板上
+    const mask = new PIXI.Graphics();
+    mask.beginFill(0xffffff);
+    mask.drawCircle(0, 0, size / 2);
+    mask.endFill();
+    art.addChild(mask);
+    art.mask = mask;
+    c.addChild(art);
   } else {
     const g = new PIXI.Graphics();
     g.beginFill(opts.fallbackFill ?? (locked ? 0x8a8a8a : COLORS.panelBgAlt), 1);

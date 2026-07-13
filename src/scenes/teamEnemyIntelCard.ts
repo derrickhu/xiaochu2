@@ -1,17 +1,19 @@
 /**
- * 战前编队 · 敌情 Intel（对齐 team_prep UI 截图）
+ * 战前编队 · 敌情 Intel（对齐 team_prep UI 原型）
  *
- * 一块淡奶油外板；左侧金框立绘「全图铺满」；右侧名/三维/技能图标/克制/提示。
+ * 奶油外板；左侧生图金框立绘全图铺满；右侧名/三维/技能圆标/克制/本关提示分层，互不重叠。
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
-import { enemyImage } from '@/config/Assets';
-import { counterElementOf, resistedElementOf } from '@/balance/combat';
+import { ENEMY_PORTRAIT_FRAME, enemyImage } from '@/config/Assets';
+import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
 import { resolveEncounter, type EnemyDef } from '@/balance/enemies';
 import { formatEnemyBattleName } from '@/balance/enemyDisplay';
 import { skillForEnemy } from '@/game/battle/SkillEngine';
 import { enemyStats } from '@/formulas/growth';
 import type { StageDef } from '@/balance/stages';
+import { ELEMENT_NAME } from '@/balance/ui';
+import type { SkillDef } from '@/balance/skills';
 import {
   COLORS, FONT_SIZE,
   makeElementOrb, makePanel, makeSkillIcon, makeStatIcon, makeText,
@@ -26,14 +28,17 @@ export interface TeamEnemyIntelHandle {
 
 const PLATE_BG = 0xfff8ec;
 const PLATE_BORDER = 0xd4b87a;
-const FRAME_BORDER = 0xc9a063;
 /** 立绘框：略竖，贴近 UI 左栏 */
 const PORTRAIT_W = 248;
 const PORTRAIT_H = 268;
+/** 金框内窗 inset（立绘 cover 区域） */
+const FRAME_INSET = 18;
 const OUTER_PAD = 14;
 const GAP = 16;
 const TAB_H = 28;
 const TAB_GAP = 6;
+/** 克制行与本关提示之间的最小间距（避免重叠） */
+const TIP_GAP = 14;
 
 export function buildTeamEnemyIntelCard(opts: {
   stage: StageDef;
@@ -46,18 +51,24 @@ export function buildTeamEnemyIntelCard(opts: {
   const root = new PIXI.Container();
   const tabsH = waveCount > 1 ? TAB_H + 8 : 0;
   const leftInnerH = PORTRAIT_H + tabsH;
-  const cardH = Math.max(leftInnerH + OUTER_PAD * 2, 300);
   const leftColW = PORTRAIT_W;
   const rightX = OUTER_PAD + leftColW + GAP;
   const infoInnerW = width - rightX - OUTER_PAD;
 
-  // 统一外板（对齐截图：一块奶油金边）
-  root.addChild(makePanel({
+  // 先按各波内容估高，避免右侧顶穿后把「本关」夹进克制行
+  let cardH = Math.max(
+    leftInnerH + OUTER_PAD * 2,
+    ...encounters.map((enc) => estimateInfoHeight(enc.def, stage) + OUTER_PAD * 2),
+    300,
+  );
+
+  const plate = makePanel({
     width, height: cardH, radius: 18,
     bg: PLATE_BG, bgAlpha: 0.97,
     border: PLATE_BORDER, borderWidth: 2.5,
     centered: false,
-  }));
+  });
+  root.addChild(plate);
 
   const portraitHost = new PIXI.Container();
   portraitHost.position.set(OUTER_PAD + PORTRAIT_W / 2, OUTER_PAD + PORTRAIT_H / 2);
@@ -76,24 +87,22 @@ export function buildTeamEnemyIntelCard(opts: {
   const paintPortrait = (def: EnemyDef): void => {
     portraitHost.removeChildren().forEach((c) => c.destroy({ children: true }));
 
-    // 内底
+    // 内底（金框贴图未就绪时的兜底）
     portraitHost.addChild(makePanel({
-      width: PORTRAIT_W, height: PORTRAIT_H, radius: 14,
+      width: PORTRAIT_W - 8, height: PORTRAIT_H - 8, radius: 12,
       bg: 0xf0e2c4, bgAlpha: 1,
-      border: FRAME_BORDER, borderWidth: 3,
+      border: 0xc9a063, borderWidth: 2,
       centered: true,
     }));
 
     const path = def.image ?? enemyImage(def.id);
     const tex = TextureCache.get(path);
+    const iw = PORTRAIT_W - FRAME_INSET * 2;
+    const ih = PORTRAIT_H - FRAME_INSET * 2;
     if (tex) {
       const art = new PIXI.Container();
       const spr = new PIXI.Sprite(tex);
       spr.anchor.set(0.5);
-      // 全图铺满边框（cover），不再缩小成战斗头像比例
-      const inset = 6;
-      const iw = PORTRAIT_W - inset * 2;
-      const ih = PORTRAIT_H - inset * 2;
       const cover = Math.max(iw / tex.width, ih / tex.height);
       spr.scale.set(cover);
       art.addChild(spr);
@@ -107,11 +116,20 @@ export function buildTeamEnemyIntelCard(opts: {
       portraitHost.addChild(art);
     }
 
-    // 金边压在立绘之上，保证框线清晰
-    const rim = new PIXI.Graphics();
-    rim.lineStyle(3, FRAME_BORDER, 1);
-    rim.drawRoundedRect(-PORTRAIT_W / 2, -PORTRAIT_H / 2, PORTRAIT_W, PORTRAIT_H, 14);
-    portraitHost.addChild(rim);
+    // 生图奶油金框叠在立绘之上
+    const frameTex = TextureCache.get(ENEMY_PORTRAIT_FRAME);
+    if (frameTex) {
+      const frame = new PIXI.Sprite(frameTex);
+      frame.anchor.set(0.5);
+      frame.width = PORTRAIT_W;
+      frame.height = PORTRAIT_H;
+      portraitHost.addChild(frame);
+    } else {
+      const rim = new PIXI.Graphics();
+      rim.lineStyle(3, 0xc9a063, 1);
+      rim.drawRoundedRect(-PORTRAIT_W / 2, -PORTRAIT_H / 2, PORTRAIT_W, PORTRAIT_H, 14);
+      portraitHost.addChild(rim);
+    }
   };
 
   const paintInfo = (def: EnemyDef): void => {
@@ -143,7 +161,7 @@ export function buildTeamEnemyIntelCard(opts: {
       const skillBox = buildSkillBox(skillIds, infoInnerW);
       skillBox.position.set(0, y);
       infoHost.addChild(skillBox);
-      y += skillBox.boxH + 8;
+      y += skillBox.boxH + 10;
     }
 
     const weak = counterElementOf(def.element);
@@ -151,25 +169,14 @@ export function buildTeamEnemyIntelCard(opts: {
     const counterRow = buildCounterRow(weak, resist, infoInnerW);
     counterRow.position.set(0, y);
     infoHost.addChild(counterRow);
-    y += 36;
+    y += counterRow.rowH + TIP_GAP;
 
     const tip = stage.hintText
       ?? (stage.hintTags?.length ? `本关：${stage.hintTags.join(' · ')}` : null);
     if (tip) {
-      const tipBg = makePanel({
-        width: infoInnerW, height: 34, radius: 10,
-        bg: 0xf3e6c8, bgAlpha: 0.98,
-        border: PLATE_BORDER, borderWidth: 1,
-        centered: false,
-      });
-      tipBg.position.set(0, Math.min(y, cardH - OUTER_PAD - 36 - OUTER_PAD));
-      infoHost.addChild(tipBg);
-      const tipText = makeText(tip.startsWith('本关') ? tip : `本关：${tip}`, {
-        size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-        wordWrapWidth: infoInnerW - 16,
-      });
-      tipText.position.set(10, 17);
-      tipBg.addChild(tipText);
+      const tipBlock = buildStageTip(tip.startsWith('本关') ? tip : `本关：${tip}`, infoInnerW);
+      tipBlock.position.set(0, y);
+      infoHost.addChild(tipBlock);
     }
   };
 
@@ -226,6 +233,27 @@ export function buildTeamEnemyIntelCard(opts: {
   return handle;
 }
 
+/** 右侧内容高度估算（与 paintInfo 节奏一致） */
+function estimateInfoHeight(def: EnemyDef, stage: StageDef): number {
+  let y = 2 + 32 + 52;
+  const skillIds = (def.skillIds ?? []).slice(0, 2);
+  if (skillIds.length > 0) {
+    y += skillBoxHeight(skillIds.length) + 10;
+  }
+  y += 34 + TIP_GAP;
+  const tip = stage.hintText
+    ?? (stage.hintTags?.length ? `本关：${stage.hintTags.join(' · ')}` : null);
+  if (tip) y += 36;
+  return Math.max(y, 120);
+}
+
+function skillBoxHeight(count: number): number {
+  const iconSize = 44;
+  const rowH = Math.max(52, iconSize + 8);
+  const pad = 10;
+  return pad * 2 + count * rowH + Math.max(0, count - 1) * 6;
+}
+
 function buildStatChips(hp: number, atk: number, interval: number, maxW: number): PIXI.Container {
   const row = new PIXI.Container();
   const gap = 6;
@@ -277,37 +305,45 @@ function buildStatChips(hp: number, atk: number, interval: number, maxW: number)
   return row;
 }
 
-function buildCounterRow(
-  weak: ReturnType<typeof counterElementOf>,
-  resist: ReturnType<typeof resistedElementOf>,
-  width: number,
-): PIXI.Container {
-  const row = new PIXI.Container();
-  const gap = 8;
-  const boxW = Math.floor((width - gap) / 2);
-  const boxH = 32;
+interface CounterRow extends PIXI.Container {
+  rowH: number;
+}
 
-  const makeBox = (label: string, el: typeof weak, x: number): void => {
-    const box = new PIXI.Container();
-    box.position.set(x, 0);
-    box.addChild(makePanel({
-      width: boxW, height: boxH, radius: 10,
-      bg: 0xfffdf8, bgAlpha: 0.98,
-      border: PLATE_BORDER, borderWidth: 1,
-      centered: false,
-    }));
+function buildCounterRow(
+  weak: Element,
+  resist: Element,
+  width: number,
+): CounterRow {
+  const row = new PIXI.Container() as CounterRow;
+  const boxH = 34;
+  row.rowH = boxH;
+
+  // 原型：一整条浅奶油横条，克制/抵抗并排
+  row.addChild(makePanel({
+    width, height: boxH, radius: 10,
+    bg: 0xf3e6c8, bgAlpha: 0.95,
+    border: PLATE_BORDER, borderWidth: 1,
+    centered: false,
+  }));
+
+  const half = width / 2;
+  const place = (label: string, el: Element, x0: number): void => {
     const t = makeText(label, {
       size: FONT_SIZE.xxs, fill: COLORS.textSub, bold: true, anchor: [0, 0.5],
     });
-    t.position.set(10, boxH / 2);
-    box.addChild(t);
+    t.position.set(x0 + 10, boxH / 2);
+    row.addChild(t);
     const o = makeElementOrb(el, 22);
-    o.position.set(boxW - 18, boxH / 2);
-    box.addChild(o);
-    row.addChild(box);
+    o.position.set(x0 + 10 + t.width + 16, boxH / 2);
+    row.addChild(o);
+    const name = makeText(ELEMENT_NAME[el], {
+      size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+    });
+    name.position.set(o.x + 16, boxH / 2);
+    row.addChild(name);
   };
-  makeBox('克制', weak, 0);
-  makeBox('抵抗', resist, boxW + gap);
+  place('克制', weak, 0);
+  place('抵抗', resist, half);
   return row;
 }
 
@@ -316,12 +352,13 @@ interface SkillBox extends PIXI.Container {
 }
 
 function buildSkillBox(skillIds: readonly string[], width: number): SkillBox {
-  const iconSize = 40;
-  const rowH = 48;
-  const pad = 8;
-  const boxH = pad * 2 + skillIds.length * rowH + Math.max(0, skillIds.length - 1) * 4;
+  const iconSize = 44;
+  const rowH = Math.max(52, iconSize + 8);
+  const pad = 10;
+  const boxH = skillBoxHeight(skillIds.length);
   const box = new PIXI.Container() as SkillBox;
   box.boxH = boxH;
+  // 浅凹槽技能区（对齐原型奶油内板）
   box.addChild(makePanel({
     width, height: boxH, radius: 12,
     bg: 0xfffdf8, bgAlpha: 0.96,
@@ -331,41 +368,120 @@ function buildSkillBox(skillIds: readonly string[], width: number): SkillBox {
 
   skillIds.forEach((id, i) => {
     const skill = skillForEnemy(id);
-    const y = pad + i * (rowH + 4) + rowH / 2;
+    const y = pad + i * (rowH + 6) + rowH / 2;
+
+    // 棕色圆底托，技能正圆图标叠上（扣底后无方块）
+    const disc = new PIXI.Graphics();
+    disc.beginFill(0x8b6914, 0.22);
+    disc.drawCircle(0, 0, iconSize / 2 + 2);
+    disc.endFill();
+    disc.position.set(12 + iconSize / 2, y);
+    box.addChild(disc);
+
     const icon = makeSkillIcon({
       skillId: id,
       size: iconSize,
       fallbackFill: 0xb8843c,
       fallbackGlyph: skill.name.charAt(0),
     });
-    icon.position.set(10 + iconSize / 2, y);
+    icon.position.set(12 + iconSize / 2, y);
     box.addChild(icon);
 
-    const textX = 10 + iconSize + 10;
-    const short = shortSkillLine(skill.desc);
-    const title = makeText(`${skill.name}：${short}`, {
+    const textX = 12 + iconSize + 12;
+    const { title: titleStr, sub: subStr } = skillDisplayLines(skill);
+    const title = makeText(titleStr, {
       size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-      wordWrapWidth: width - textX - 8,
+      wordWrapWidth: width - textX - 10,
     });
-    title.position.set(textX, y - 9);
+    title.position.set(textX, y - 10);
     box.addChild(title);
-    const sub = makeText(
-      skill.desc.length > 22 ? `${skill.desc.slice(0, 22)}…` : skill.desc,
-      { size: 12, fill: COLORS.textSub, anchor: [0, 0.5], wordWrapWidth: width - textX - 8 },
-    );
-    sub.position.set(textX, y + 10);
+    const sub = makeText(subStr, {
+      size: 12, fill: COLORS.textSub, anchor: [0, 0.5],
+      wordWrapWidth: width - textX - 10,
+    });
+    sub.position.set(textX, y + 11);
     box.addChild(sub);
 
     if (i < skillIds.length - 1) {
       const line = new PIXI.Graphics();
-      line.lineStyle(1, PLATE_BORDER, 0.65);
-      const ly = pad + (i + 1) * (rowH + 4) - 2;
-      line.moveTo(10, ly);
-      line.lineTo(width - 10, ly);
+      line.lineStyle(1, PLATE_BORDER, 0.55);
+      const ly = pad + (i + 1) * (rowH + 6) - 3;
+      line.moveTo(12, ly);
+      line.lineTo(width - 12, ly);
       box.addChild(line);
     }
   });
   return box;
+}
+
+/** 本关提示：分割线 + 小松标 + 文案（独立于克制行） */
+function buildStageTip(text: string, width: number): PIXI.Container {
+  const c = new PIXI.Container();
+  const line = new PIXI.Graphics();
+  line.lineStyle(1.5, PLATE_BORDER, 0.75);
+  line.moveTo(0, 0);
+  line.lineTo(width, 0);
+  c.addChild(line);
+
+  const pine = drawPineMark(9);
+  pine.position.set(10, 20);
+  c.addChild(pine);
+
+  const tipText = makeText(text, {
+    size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+    wordWrapWidth: width - 28,
+  });
+  tipText.position.set(22, 20);
+  c.addChild(tipText);
+  return c;
+}
+
+function skillDisplayLines(skill: SkillDef): { title: string; sub: string } {
+  const effect = compactEnemySkillEffect(skill);
+  const title = `${skill.name}：${effect}`;
+  // 副行：完整 desc，若与短效重复则给温和补语
+  let sub = skill.desc;
+  if (sub.includes(effect) || sub.length <= effect.length + 2) {
+    const tag = skill.tags?.[0];
+    sub = tag ? `${tag}类技能` : sub;
+  }
+  if (sub.length > 22) sub = `${sub.slice(0, 22)}…`;
+  return { title, sub };
+}
+
+function compactEnemySkillEffect(skill: SkillDef): string {
+  const e = skill.effects[0];
+  if (e) {
+    if (e.kind === 'status' && e.status === 'enemyDamageReduction'
+      && typeof e.reduction === 'number' && typeof e.turns === 'number') {
+      return `${e.turns}回合减伤${Math.round(e.reduction * 100)}%`;
+    }
+    if (e.kind === 'heal' && 'pct' in e && typeof e.pct === 'number') {
+      return `回血${Math.round(e.pct * 100)}%`;
+    }
+    if (e.kind === 'charge' && 'multiplier' in e) {
+      return `蓄力重击×${e.multiplier}`;
+    }
+    if (e.kind === 'sealOrbs' && 'count' in e) {
+      return `封印${e.count}珠`;
+    }
+    if (e.kind === 'timeSqueeze' && 'seconds' in e && 'turns' in e) {
+      return `${e.turns}回合限时-${e.seconds}秒`;
+    }
+    if (e.kind === 'healBlock' && 'mult' in e && 'turns' in e) {
+      return `${e.turns}回合禁疗`;
+    }
+    if (e.kind === 'enrage' && 'atkMult' in e) {
+      return `狂暴攻×${e.atkMult}`;
+    }
+    if (e.kind === 'skillSeal' && 'turns' in e) {
+      return `封技${e.turns}回合`;
+    }
+    if (e.kind === 'dot' && 'turns' in e) {
+      return `${e.turns}回合中毒`;
+    }
+  }
+  return shortSkillLine(skill.desc);
 }
 
 function shortSkillLine(desc: string): string {
@@ -383,6 +499,25 @@ function drawHourglass(r: number): PIXI.Graphics {
   g.lineTo(-r * 0.7, r);
   g.lineTo(-r * 0.15, r * 0.15);
   g.closePath();
+  g.endFill();
+  return g;
+}
+
+/** 本关提示左侧小松标 */
+function drawPineMark(r: number): PIXI.Graphics {
+  const g = new PIXI.Graphics();
+  g.beginFill(0x3d7a4a, 1);
+  g.moveTo(0, -r);
+  g.lineTo(r * 0.75, r * 0.15);
+  g.lineTo(r * 0.28, r * 0.15);
+  g.lineTo(r * 0.55, r * 0.85);
+  g.lineTo(-r * 0.55, r * 0.85);
+  g.lineTo(-r * 0.28, r * 0.15);
+  g.lineTo(-r * 0.75, r * 0.15);
+  g.closePath();
+  g.endFill();
+  g.beginFill(0x6b4a2a, 1);
+  g.drawRect(-r * 0.12, r * 0.55, r * 0.24, r * 0.45);
   g.endFill();
   return g;
 }

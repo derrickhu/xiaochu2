@@ -1,0 +1,32 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+Light airy painted scenery ALSO slightly Q/stylized.
+FORBIDDEN: photorealistic, dark fantasy, heavy oil paint, neon, purple AI defaults, 3D PBR.
+Use references for STYLE / palette / light chrome ONLY — do not copy layouts.
+
+CRITICAL STYLE DIRECTION (v2 — LIGHTWEIGHT):
+Previous victory panel felt TOO HEAVY (thick carved gold borders, dense metallic bevels, busy ornament).
+Make this LIGHT Q-UI like gacha_v2 / home_hub_v4:
+- Thin soft-gold line borders (1–2px feel), simple rounded cream card, LITTLE filigree
+- Flat soft cel panels, airy whitespace, soft shadows only
+- NO thick multi-layer metallic frames, NO heavy baroque ruyi carving, NO oily 3D stars
+- Cute simple Q pet accents only
+
+ONE COMPLETE phone 9:16 BATTLE VICTORY settlement UI. Full screen finished.
+
+COMPOSITION (modal over soft dimmed Q battle bg):
+1) Soft mint Q battle backdrop faintly visible (not heavy landscape painting)
+2) CENTER light cream rounded panel, thin gold edge:
+   - Title「战斗胜利！」warm brown, clean modern rounded Chinese (not heavy brush calligraphy)
+   - Three simple flat-ish gold stars ★★★ (soft, cute, not chunky 3D metal)
+   -「回合数 4（三星 ≤3 · 二星 ≤6）」
+   - Reward inset: 灵宠币 +48（持有 186）/ 经验 +208 / 碎片 ×3
+   - Soft chip「新章节已解锁」
+3) Buttons (unified soft capsules):
+   - Primary warm gold/orange「下一关」
+   - Cream「再打一次」
+   - Cream「返回主页」
+Optional tiny cute Q pet peeking at top (simple, not ornate frame decoration).
+Readable Chinese. Sharp, light, cute.

@@ -1,0 +1,18 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+FORBIDDEN: photorealistic, dark fantasy, heavy oil paint, neon, purple AI defaults, 3D PBR.
+Use reference home_hub_v4 for STYLE of left-rail icons ONLY — do not copy the whole screen.
+
+ASSET: ONE icon sheet, strict 4 columns × 1 row, equal square cells, thin dark separators.
+Each cell: ONE cute simple Q icon centered on flat solid #1e2a32 background only.
+NO TEXT, no labels, no Chinese characters, no numbers anywhere.
+
+STYLE: Soft Q, flat-ish premium mobile icons matching cream/gold/mint home hub. Readable at 56px.
+
+CELLS left→right:
+1) 签到 Check-in: green calendar with gold corner and small checkmark (no digits)
+2) 通天塔 Tower: cute green tiered pagoda tower
+3) 日常 Daily: open cream scroll / bamboo slip
+4) 活动 Event: orange gift box with green ribbon

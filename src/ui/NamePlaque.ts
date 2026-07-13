@@ -64,13 +64,14 @@ const PLATE_STYLE: Record<NamePlaquePlate, PlateStyle> = {
   title: {
     path: UI_IMAGES.titlePlaque,
     // 显示高度须大于上下九宫帽之和，否则中段被挤没 → 看起来像「只有字没有匾」
-    height: 68,
-    innerRatio: 0.68,
+    height: 72,
+    // 可读中段约占匾宽；过低会导致标题被过度缩小或视觉溢出花边
+    innerRatio: 0.55,
     sliceLr: 140,
     sliceTb: 18,
     defaultFill: COLORS.textTitle,
     defaultStroke: true,
-    defaultMaxW: 520,
+    defaultMaxW: 560,
   },
   banner: {
     path: UI_IMAGES.textBanner,

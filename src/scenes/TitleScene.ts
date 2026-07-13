@@ -10,7 +10,7 @@ import { UI } from '@/balance/ui';
 import { CHAPTERS, CHAPTER_NAME, stagesOfChapter } from '@/balance/stages';
 import { PlayerData } from '@/game/PlayerData';
 import {
-  makeCurrencyLabel, makeChapterNavArrow, CURRENCY_ICON_SIZE,
+  makeCurrencyLabel, makeChapterNavArrow,
   makeNamePlaque, namePlaqueWidth,
   buildBottomNav, BOTTOM_NAV_RESERVE,
   buildHomeLeftRail,
@@ -23,7 +23,7 @@ import type { TeamEnterData } from './TeamScene';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { buildTitleScreenWorld } from './chapterMapView';
 import { attachChapterMapEditor } from './chapterMapEditor';
-import { ensurePetAvatars, titleLeadPetAvatarEntry } from '@/config/assetPreload';
+import { ensurePetAvatars, titleHomePetAvatarEntries } from '@/config/assetPreload';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { SidebarEntryButton } from '@/ui/SidebarEntryButton';
 import { DesktopShortcutEntryButton } from '@/ui/DesktopShortcutEntryButton';
@@ -76,8 +76,7 @@ export class TitleScene implements Scene {
     this._chapter = enter?.chapter ?? this._latestUnlockedChapter();
     if (SceneManager.current?.name !== 'title') return;
     this._rebuild();
-    const leadEntry = titleLeadPetAvatarEntry();
-    if (leadEntry) void ensurePetAvatars([leadEntry]);
+    void ensurePetAvatars(titleHomePetAvatarEntries(this._chapter));
     void Game.warmScenePresent();
   }
 
@@ -88,6 +87,7 @@ export class TitleScene implements Scene {
     this._worldRoot = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
     this._build();
+    void ensurePetAvatars(titleHomePetAvatarEntries(this._chapter));
   }
 
   private _latestUnlockedChapter(): number {
@@ -225,8 +225,9 @@ export class TitleScene implements Scene {
     const rightLimit = Game.contentRightX(16);
     const rowRight = Math.min(w - padX, rightLimit);
     const rowX = rowRight - totalW;
-    lingyu.position.set(rowX, centerY - CURRENCY_ICON_SIZE / 2);
-    coins.position.set(rowX + lingyu.width + gap, centerY - CURRENCY_ICON_SIZE / 2);
+    // IconLabel 原点在图标垂直中心，与头像/昵称共用 centerY
+    lingyu.position.set(rowX, centerY);
+    coins.position.set(rowX + lingyu.width + gap, centerY);
     this.container.addChild(lingyu, coins);
   }
 
