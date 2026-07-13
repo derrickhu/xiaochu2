@@ -11,6 +11,7 @@ import {
 } from './passives';
 import { getRarityAttribPower, getRarityPassivePower, type Rarity } from './rarity';
 import { ELEMENT_NAME } from './ui';
+import { passiveIconIdFromName } from './passiveIcons';
 
 export type EffectScope = 'self' | 'team';
 
@@ -39,6 +40,8 @@ export interface PassiveDisplayLine {
   text: string;
   unlocked?: boolean;
   color?: number;
+  /** 被动图标 id（Assets.PASSIVE_ICON_ID_BY_NAME） */
+  iconKey?: string;
 }
 
 export interface PassiveEffectBundle {
@@ -350,6 +353,7 @@ function buildDisplayLines(
       text: e.source === 'star' ? describeStarEffect(e) : EFFECT_REGISTRY[e.kind].describe(e),
       unlocked: e.unlocked,
       color: e.unlocked ? EFFECT_REGISTRY[e.kind].uiColor(e) : undefined,
+      iconKey: passiveIconIdFromName(e.displayName),
     }));
 }
 

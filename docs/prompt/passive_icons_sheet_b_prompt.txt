@@ -1,0 +1,20 @@
+Game UI PASSIVE skill icon sheet for Chinese fantasy mobile pet game (xiaochu2).
+
+LAYOUT: Strict 4 columns × 2 rows, equal square cells, thin dark separators.
+Each cell: ONE circular emblem with polished golden metallic rim, centered. Outside circle: flat solid dark teal #1e2a32 only.
+NO TEXT, no labels, no Chinese characters, no numbers anywhere.
+
+STYLE: Cute Q-version Chinese fantasy, vibrant, readable at 64px, consistent gold rim. Soft blue-teal passive feel.
+
+CELL CONTENTS (left→right, top→bottom):
+
+1) Sweet rain (甘霖): gentle turquoise rain drops falling on glowing leaves.
+2) Universal aid (普济): wide green healing wave/halo spreading outward.
+3) Bedrock (磐石): solid brown-grey stone shield rising from earth.
+4) Thick wall (厚壁): layered thick fortress wall with earth glow.
+5) Immovable (不动): rooted mountain stance / unshakable stone pillar.
+6) Blessing (庇佑): golden blessing light rays shielding allies.
+7) Harmony (协律): musical jade notes swirling in harmony glow.
+8) Unity (万众一心): multiple glowing silhouettes joining as one radiant ring.
+
+NO TEXT anywhere.

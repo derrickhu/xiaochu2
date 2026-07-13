@@ -1,0 +1,17 @@
+Game UI PASSIVE skill icon sheet for Chinese fantasy mobile pet game (xiaochu2).
+
+LAYOUT: Strict 4 columns × 1 row (or 4 columns × 2 rows with bottom row empty/dark), equal square cells.
+Prefer: 4 columns × 1 row of 4 icons if possible; otherwise 2×2 grid of 4 icons.
+Each cell: ONE circular emblem with polished golden metallic rim, centered. Outside circle: flat solid dark teal #1e2a32 only.
+NO TEXT, no labels, no Chinese characters, no numbers anywhere.
+
+STYLE: Cute Q-version Chinese fantasy, vibrant, readable at 64px, consistent gold rim.
+
+CELL CONTENTS (left→right):
+
+1) Critical heart (会心): bright yellow critical-hit star burst / heart pierce spark.
+2) Berserk (狂暴): fierce red glowing eyes with rage aura.
+3) Mountain immovable (不动如山): majestic mountain silhouette with earth aura.
+4) Guardian (守护): soft blue-green guardian shield with protective cross/leaf.
+
+NO TEXT anywhere.

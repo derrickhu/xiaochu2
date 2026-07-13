@@ -19,8 +19,7 @@ import {
   updatePetSkillReadyFx,
   type PetSkillReadyFxView,
 } from '@/game/battle/PetSkillReadyFx';
-import { getGrowthUi } from '@/balance/growth';
-import { makeText, makePanel, COLORS } from '@/ui';
+import { makeText, makePanel, makeStarRow, COLORS } from '@/ui';
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BattleLayout } from './BattleLayout';
 import { showPetSkillPreview, TAP_SLOP, type PetSkillPreviewHandle } from './PetSkillPreviewBubble';
@@ -62,7 +61,6 @@ export class BattlePetBar {
     const startX = petBarSidePad + petSize / 2;
     const y = petBarCenterY;
     const frameSize = petSize * petFrameScale;
-    const starUi = getGrowthUi('panel');
     const w = Game.logicWidth;
 
     // cream 宠物栏底板贴图（Gemini，对齐 mockup；缺图回退程序面板）
@@ -99,7 +97,6 @@ export class BattlePetBar {
       UI.battle.petStarSize,
       Math.floor((petSize - (MAX_STARS - 1) * starGap) / MAX_STARS),
     );
-    const starTex = TextureCache.get(UI_BATTLE_IMAGES.petStar);
 
     this._slots = this._ctrl.team.map((pet, i) => {
       const slot = new PIXI.Container();
@@ -160,41 +157,17 @@ export class BattlePetBar {
       lvText.position.set(petSize / 2 - 2, petSize / 2 - 1);
       slot.addChild(lvText);
 
-      // Q 版星级：固定 5 槽铺满宠物格宽，按星级点亮
-      {
-        const filled = Math.min(Math.max(pet.star, 0), MAX_STARS);
-        const starRow = new PIXI.Container();
-        const rowW = MAX_STARS * starSize + (MAX_STARS - 1) * starGap;
-        for (let s = 0; s < MAX_STARS; s++) {
-          const lit = s < filled;
-          if (starTex) {
-            const star = new PIXI.Sprite(starTex);
-            star.anchor.set(0.5);
-            star.width = starSize;
-            star.height = starSize;
-            if (!lit) {
-              star.tint = 0x9a8a70;
-              star.alpha = 0.35;
-            }
-            star.position.set(-rowW / 2 + starSize / 2 + s * (starSize + starGap), 0);
-            starRow.addChild(star);
-          } else {
-            const fallback = makeText('★', {
-              size: starSize,
-              fill: lit ? 0xf5c84a : starUi.starEmpty,
-              bold: true,
-              anchor: 0.5,
-              strokeColor: lit ? 0xb5701f : 0x8a7a60,
-              strokeWidth: 2,
-            });
-            if (!lit) fallback.alpha = 0.45;
-            fallback.position.set(-rowW / 2 + starSize / 2 + s * (starSize + starGap), 0);
-            starRow.addChild(fallback);
-          }
-        }
-        starRow.position.set(0, petSize / 2 + starSize / 2 + 2);
-        slot.addChild(starRow);
-      }
+      // Q 版星级：与详情页共用 makeStarRow(sprite)
+      const starRow = makeStarRow({
+        star: pet.star,
+        maxStar: MAX_STARS,
+        style: 'sprite',
+        starSize,
+        gap: starGap,
+        anchor: 'center',
+      });
+      starRow.position.set(0, petSize / 2 + starSize / 2 + 2);
+      slot.addChild(starRow);
 
       // 技能 CD 回合圆标：右上角（对齐 mockup_v2 深棕圆 + 白字）
       const cdR = Math.max(14, Math.round(petSize * UI.battle.petCdBadgeRatio / 2));

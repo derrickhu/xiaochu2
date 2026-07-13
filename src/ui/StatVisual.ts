@@ -18,6 +18,60 @@ function statLabel(stat: StatKey, style: StatLabelStyle): string {
   return style === 'short' ? def.shortLabel : def.longLabel;
 }
 
+/**
+ * 属性小图标（对齐详情页原型）：
+ * 生命=红心 / 攻击=交叉双剑 / 回复=绿加号圆
+ */
+export function makeStatIcon(stat: StatKey, size = 28): PIXI.Container {
+  const c = new PIXI.Container();
+  const g = new PIXI.Graphics();
+  const s = size / 2;
+
+  if (stat === 'hp') {
+    // 红心
+    g.beginFill(0xe85a5a, 1);
+    g.moveTo(0, s * 0.35);
+    g.bezierCurveTo(-s * 0.95, -s * 0.35, -s * 0.95, s * 0.45, 0, s * 0.95);
+    g.bezierCurveTo(s * 0.95, s * 0.45, s * 0.95, -s * 0.35, 0, s * 0.35);
+    g.closePath();
+    g.endFill();
+  } else if (stat === 'atk') {
+    // 交叉双剑（橙）
+    const drawBlade = (rot: number) => {
+      const blade = new PIXI.Graphics();
+      blade.beginFill(0xf0a040, 1);
+      blade.drawRoundedRect(-s * 0.14, -s * 0.85, s * 0.28, s * 1.35, s * 0.08);
+      blade.endFill();
+      blade.beginFill(0xe8d8b0, 1);
+      blade.moveTo(0, -s * 0.95);
+      blade.lineTo(s * 0.22, -s * 0.55);
+      blade.lineTo(-s * 0.22, -s * 0.55);
+      blade.closePath();
+      blade.endFill();
+      blade.beginFill(0xc9822a, 1);
+      blade.drawRoundedRect(-s * 0.28, s * 0.15, s * 0.56, s * 0.18, 3);
+      blade.endFill();
+      blade.rotation = rot;
+      c.addChild(blade);
+    };
+    drawBlade(-Math.PI / 4.2);
+    drawBlade(Math.PI / 4.2);
+    return c;
+  } else {
+    // 绿加号圆
+    g.beginFill(0x4caf70, 1);
+    g.drawCircle(0, 0, s * 0.92);
+    g.endFill();
+    g.beginFill(0xffffff, 1);
+    g.drawRoundedRect(-s * 0.14, -s * 0.55, s * 0.28, s * 1.1, 3);
+    g.drawRoundedRect(-s * 0.55, -s * 0.14, s * 1.1, s * 0.28, 3);
+    g.endFill();
+  }
+
+  c.addChild(g);
+  return c;
+}
+
 function appendStatSegment(
   cont: PIXI.Container,
   x: number,

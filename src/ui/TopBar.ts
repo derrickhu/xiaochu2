@@ -1,10 +1,11 @@
 /**
  * 顶栏：左返回按钮 + 居中标题 + 可选副信息。
  * Team / Codex / PetDetail 共用，消除各场景重复的顶栏三联。
+ * 返回钮统一走 makeBackButton（奶油胶囊 + 箭头图标）。
  */
 import * as PIXI from 'pixi.js';
 import { COLORS, FONT_SIZE } from './theme';
-import { makeButton } from './Button';
+import { makeBackButton } from './BackButton';
 import { makeText } from './text';
 
 export interface TopBarOpts {
@@ -22,13 +23,7 @@ export interface TopBarOpts {
 export function makeTopBar(opts: TopBarOpts): PIXI.Container {
   const bar = new PIXI.Container();
 
-  const back = makeButton({
-    label: '返回',
-    width: 120,
-    height: 54,
-    variant: 'ghost',
-    onTap: opts.onBack,
-  });
+  const back = makeBackButton({ onTap: opts.onBack });
   back.position.set(80, opts.centerY);
   bar.addChild(back);
 

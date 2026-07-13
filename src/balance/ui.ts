@@ -19,7 +19,7 @@ export const ORB_COLOR: Readonly<Record<OrbType, number>> = {
   water: 0x0a5ef0,
   fire: 0xd6453a,
   earth: 0x8f5a36,
-  heart: 0xf6658e,
+  heart: 0xff8fb8,
 };
 
 export const UI = {

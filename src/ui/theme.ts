@@ -86,6 +86,16 @@ export const COLORS = {
   /** 幽灵按钮（浅底）上的文字 */
   btnGhostText: 0x5a4632,
 
+  // ── 全局返回按钮（对齐原型：奶油胶囊 + 棕箭头/字） ──
+  /** 返回钮底（近白奶油） */
+  btnBackBg: 0xfff8ec,
+  /** 返回钮描边（浅金棕） */
+  btnBackBorder: 0xd2b48c,
+  /** 返回钮文字与箭头 */
+  btnBackText: 0x7a4f2e,
+  /** 返回钮外圈淡青晕（衬托浅底） */
+  btnBackGlow: 0xdceeea,
+
   // ── 进度条 ──
   trackBg: 0xd8c4a0,
   trackFill: 0xe8a33d,

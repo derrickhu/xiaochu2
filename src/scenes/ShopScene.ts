@@ -23,7 +23,7 @@ import {
 } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE,
-  makeButton, makeCoverBackground, makePanel, makeText,
+  makeBackButton, makeButton, makeCoverBackground, makePanel, makeText,
   attachRarityBadge, makeIconLabel,
   SceneFx, staggerIn, pulse,
   buildBottomNav, BOTTOM_NAV_RESERVE,
@@ -411,8 +411,7 @@ export class ShopScene implements Scene {
 
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.shop, w, h));
 
-    const back = makeButton({
-      label: '返回', width: 120, height: 54, variant: 'ghost',
+    const back = makeBackButton({
       onTap: () => SceneManager.switchTo('title'),
     });
     back.position.set(80, Game.safeTop + 36);

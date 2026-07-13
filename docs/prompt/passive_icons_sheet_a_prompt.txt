@@ -1,0 +1,20 @@
+Game UI PASSIVE skill icon sheet for Chinese fantasy mobile pet game (xiaochu2).
+
+LAYOUT: Strict 4 columns × 2 rows, equal square cells, thin dark separators.
+Each cell: ONE circular emblem with polished golden metallic rim, centered. Outside circle: flat solid dark teal #1e2a32 only.
+NO TEXT, no labels, no Chinese characters, no numbers anywhere.
+
+STYLE: Cute Q-version Chinese fantasy, vibrant, readable at 64px, consistent gold rim. Soft blue-teal passive feel (slightly calmer than active skills).
+
+CELL CONTENTS (left→right, top→bottom):
+
+1) Sharp eye (锐眼): glowing golden eye with crit crosshair sparkles.
+2) Iron wall (铁壁): heavy iron fortress wall/shield plates.
+3) Protect heart (庇心): emerald protective heart with soft heal aura.
+4) Inspire (激励): rising war banner with golden team-boost light.
+5) Battle will (战意): flaming orange sword aura / battle spirit.
+6) Sharp will (锐意): gleaming silver blade edge with focus spark.
+7) Death resolve (决死): desperate crimson flame clenched fist/blade.
+8) Endless life (生生不息): green sprout cycle / rebirth vine loop.
+
+NO TEXT anywhere.

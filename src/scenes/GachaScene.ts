@@ -25,7 +25,7 @@ import {
 } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
-  makeButton, makeCoverBackground, makePanel, makeText,
+  makeBackButton, makeButton, makeCoverBackground, makePanel, makeText,
   attachRarityBadge, makeCurrencyLabel, makeProgressBar,
   SceneFx, type ButtonHandle,
 } from '@/ui';
@@ -107,8 +107,7 @@ export class GachaScene implements Scene {
 
     this._page.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
 
-    const back = makeButton({
-      label: '返回', width: 120, height: 54, variant: 'ghost',
+    const back = makeBackButton({
       onTap: () => SceneManager.switchTo('title'),
     });
     back.position.set(80, Game.safeTop + 36);

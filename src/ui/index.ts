@@ -7,6 +7,8 @@ export * from './text';
 export * from './motion';
 export * from './SceneFx';
 export * from './Button';
+export * from './BackButton';
+export * from './SkillIcon';
 export * from './IconButton';
 export * from './Panel';
 export * from './ProgressBar';

@@ -25,7 +25,10 @@ import {
   enemyImage,
   petAvatarLoadPaths,
   petFrameImage,
+  skillIconImage,
+  passiveIconImage,
 } from '@/config/Assets';
+import { resolvePetPassiveBundle } from '@/balance/passiveEffects';
 import { loadSubpackagesForPaths } from '@/config/Subpackages';
 import { preloadPetAvatarTextures } from '@/config/petAvatarTexture';
 
@@ -66,8 +69,10 @@ export const SHOP_SHELL_IMAGES: readonly string[] = [
 ];
 
 export const PET_DETAIL_SHELL_IMAGES: readonly string[] = [
-  BACKGROUND_IMAGES.petDetail,
+  /** 与灵宠图鉴/编队页共用 scene_pet_pool，详情页视觉连贯 */
+  BACKGROUND_IMAGES.petPool,
   UI_IMAGES.titlePlaque,
+  UI_BATTLE_IMAGES.petStar,
   UI_FX_IMAGES.starburst,
   UI_FX_IMAGES.auraRing,
   UI_FX_IMAGES.particleSpark,
@@ -127,6 +132,10 @@ export function battlePreloadImages(stageId: string, teamPetIds: readonly string
     const { def } = resolveEncounter(ref);
     paths.push(def.image ?? enemyImage(def.id));
   }
+  for (const petId of teamPetIds) {
+    const pet = PET_MAP.get(petId);
+    if (pet) paths.push(skillIconImage(pet.skillId));
+  }
   return unique(paths);
 }
 
@@ -165,12 +174,17 @@ export function shopPetAvatarEntries(): PetAvatarPreloadEntry[] {
   }));
 }
 
-/** 灵宠详情：壳 + 当前灵宠头像与相框 */
+/** 灵宠详情：壳 + 当前灵宠头像与相框 + 主动/被动技能图标 */
 export function petDetailPreloadImages(petId: string): readonly string[] {
   const pet = PET_MAP.get(petId);
   const paths = [...PET_DETAIL_SHELL_IMAGES];
   if (pet) {
-    paths.push(petFrameImage(pet.element));
+    paths.push(petFrameImage(pet.element), skillIconImage(pet.skillId));
+    const star = PlayerData.petStar(petId);
+    const lines = resolvePetPassiveBundle(pet.role, pet.rarity, star, { includeStarInDisplay: true }).displayLines;
+    for (const line of lines) {
+      if (line.iconKey) paths.push(passiveIconImage(line.iconKey));
+    }
   }
   return unique(paths);
 }

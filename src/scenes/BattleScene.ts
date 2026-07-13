@@ -49,7 +49,7 @@ import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 import {
   guardedPromise, guardedTween, minigameFallback, once, startMinigamePresentLoop,
 } from '@/core/animationGuard';
-import { makeButton, makeCoverBackground } from '@/ui';
+import { makeBackButton, makeButton, makeCoverBackground } from '@/ui';
 import { COLORS } from '@/ui/theme';
 
 export interface BattleEnterData {
@@ -207,13 +207,12 @@ export class BattleScene implements Scene {
     // 敌人区轻量遮罩（不再压暗章节图）
     this._hud.buildEnemyBg(this.container);
 
-    // 顶栏：cream 圆钮返回
+    // 顶栏：全局统一返回钮（奶油胶囊 + 箭头）
     const headerY = this._layout.headerY;
-    const backBtn = makeButton({
-      label: '返回', width: 110, height: 52, variant: 'ghost',
+    const backBtn = makeBackButton({
       onTap: () => { SceneManager.switchTo('title'); },
     });
-    backBtn.position.set(70, headerY);
+    backBtn.position.set(80, headerY);
     this.container.addChild(backBtn);
 
     if (GMManager.isEnabled) {

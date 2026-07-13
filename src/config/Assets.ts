@@ -212,6 +212,19 @@ export function petCardPortraitImage(rarity: Rarity): string {
   return RARITY_PET_CARD_IMAGES[rarity] ?? RARITY_PET_CARD_IMAGES[1];
 }
 
+/** 技能图标（pkg-fx，按 skillId 命名；未生成时 TextureCache 返回 null 走占位） */
+export function skillIconImage(skillId: string): string {
+  return `${PKG.fx}/images/ui/skill/${skillId}.png`;
+}
+
+/** 被动图标（与主动技同目录，id 形如 passive_ruiyan） */
+export function passiveIconImage(iconId: string): string {
+  return `${PKG.fx}/images/ui/skill/${iconId}.png`;
+}
+
+/** @deprecated 锁定态改为原图标灰显叠锁，保留路径兼容旧资源 */
+export const SKILL_LOCKED_ICON = `${PKG.fx}/images/ui/skill/skill_locked.png`;
+
 /** UI 特效（pkg-fx） */
 export const UI_FX_IMAGES = {
   lightPillar: `${PKG.fx}/images/ui/fx/fx_light_pillar.png`,

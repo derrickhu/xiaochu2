@@ -19,7 +19,7 @@ import {
 import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS, FONT_SIZE,
-  makeButton, makeCoverBackground, makeIconLabel, makeText,
+  makeBackButton, makeCoverBackground, makeIconLabel, makeText,
   staggerIn,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -120,8 +120,7 @@ export class CodexScene implements Scene {
 
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
 
-    const back = makeButton({
-      label: '返回', width: 120, height: 54, variant: 'ghost',
+    const back = makeBackButton({
       onTap: () => SceneManager.switchTo('title'),
     });
     back.position.set(80, Game.safeTop + 36);

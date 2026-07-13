@@ -12,6 +12,7 @@ import { ORB_IMAGES } from '@/config/Assets';
 import type { Element } from '@/balance/combat';
 import type { TeamPet } from '@/game/battle/battleTypes';
 import { makeText } from '@/ui/text';
+import { makeSkillIcon } from '@/ui/SkillIcon';
 import { COLORS } from '@/ui/theme';
 
 const AUTO_DISMISS_SEC = 4;
@@ -86,9 +87,14 @@ export function showPetSkillPreview(
   const content = new PIXI.Container();
   let y = PAD_TOP;
 
-  // 顶栏：属性圆标 + 技能名 + CD，整组水平居中
+  // 顶栏：技能圆标 + 技能名 + CD，整组水平居中
   const header = new PIXI.Container();
-  const icon = buildElementIcon(el, accent);
+  const icon = makeSkillIcon({
+    skillId: skill.id,
+    size: 40,
+    fallbackFill: accent,
+    fallbackGlyph: skill.name,
+  });
   header.addChild(icon);
 
   const nameText = makeText(skill.name, {

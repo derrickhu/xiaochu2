@@ -27,7 +27,7 @@ import { PlayerData } from '@/game/PlayerData';
 import type { BattleEnterData } from './BattleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
-  makeButton, makeCoverBackground, makePanel, makeText,
+  makeBackButton, makeButton, makeCoverBackground, makePanel, makeText,
   staggerIn, popIn, fadeIn, attachRarityBadge,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -105,8 +105,7 @@ export class TeamScene implements Scene {
 
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
 
-    const back = makeButton({
-      label: '返回', width: 120, height: 54, variant: 'ghost',
+    const back = makeBackButton({
       onTap: () => SceneManager.switchTo('title'),
     });
     back.position.set(80, Game.safeTop + 36);

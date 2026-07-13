@@ -1,0 +1,19 @@
+Game UI skill icon sheet for a Chinese fantasy mobile match-3 pet game (xiaochu2).
+
+LAYOUT: Strict 4 columns × 2 rows grid, equal square cells, thin dark separators.
+Each cell: ONE circular skill emblem with a polished golden metallic rim (like premium mobile RPG skill icons). Center the circle in the cell. Outside the circle: flat solid dark teal background #1e2a32 only. NO TEXT, no labels, no captions, no writing, no numbers, no Chinese characters anywhere.
+
+STYLE: Cute Q-version Chinese fantasy, vibrant saturated colors, soft rim light, readable at small size (64–96px), premium polished icon look matching soft cream UI. High contrast silhouette. Consistent gold rim thickness across all 8 icons.
+
+CELL CONTENTS (left→right, top→bottom):
+
+1) Armor-break charge: glowing orange-gold impact explosion with cracked armor plates and a sharp horn silhouette — fierce, bright orange core.
+2) Sword dance slash: multiple silver-gold sword light trails swirling like a dance, sparkles, metal element.
+3) Vine crossbow volley: green jade vines forming a bow/crossbow firing glowing leaf-arrows.
+4) Spirit wood spring heal: luminous emerald tree/leaf burst with soft green healing particles and warm glow.
+5) Ice seal freeze: crystalline blue ice lock/seal with frost shards and cold mist.
+6) Mystic ice arrow storm: swarm of pale-blue ice arrows raining from a frosty vortex.
+7) Karma fire burn: swirling orange-red foxfire flames with ember sparks (DOT burn feel).
+8) Sky-scorching inferno: massive towering crimson-gold fire column consuming the sky, UR-tier intensity.
+
+NO TEXT anywhere in the image.
