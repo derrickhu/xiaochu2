@@ -1,5 +1,5 @@
 /**
- * 队伍栏：宠物槽位（头像 / 相框 / 属性角标 / 封印罩）、技能 CD 与就绪动效、
+ * 队伍栏：宠物槽位（头像 / 五行相框 / 封印罩）、技能 CD 与就绪动效、
  * 上滑施法手势输入、受击后撤动效。
  *
  * 拥有槽位显示对象与手势监听；读取 BattleController 取队伍/技能状态，
@@ -11,7 +11,7 @@ import { Platform } from '@/core/PlatformService';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
-import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
+import { UI, ORB_COLOR } from '@/balance/ui';
 import { petFrameImage, UI_BATTLE_IMAGES } from '@/config/Assets';
 import {
   createPetSkillReadyFx,
@@ -131,18 +131,7 @@ export class BattlePetBar {
         frame.height = frameSize;
         slot.addChild(frame);
       }
-
-      // 属性角标：左上
-      const badge = makeText(ELEMENT_NAME[pet.def.element], {
-        size: Math.max(14, Math.round(petSize * 0.17)),
-        fill: COLORS.white,
-        bold: true,
-        anchor: 0.5,
-        strokeColor: 0x000000,
-        strokeWidth: 3,
-      });
-      badge.position.set(-petSize / 2 + 14, -petSize / 2 + 14);
-      slot.addChild(badge);
+      // 五行相框已内嵌属性角标，不再叠「金/木/水…」文字（与图标重复）
 
       // Lv 角标：右下，对齐 mockup（白字 + 深棕描边）
       const lvSize = Math.max(16, Math.round(petSize * 0.18));

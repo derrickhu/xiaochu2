@@ -36,7 +36,7 @@ function petStat(pet: PetDef, stat: StatKey, level: number, star: number): numbe
   return Math.floor(
     base
     * Math.pow(1 + growth, effLevel - 1)
-    * selfStatMultiplier(pet, star, stat),
+    * selfStatMultiplier(pet, star, stat, effLevel),
   );
 }
 

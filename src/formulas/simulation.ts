@@ -82,14 +82,14 @@ export function simulateBattle(
   const stage: StageDef = found;
 
   const team: SimPet[] = members.map((m) => {
-    const profile = petSelfCombatProfile(m.def, m.star);
+    const profile = petSelfCombatProfile(m.def, m.star, m.level);
     return {
       def: m.def,
-      skill: skillForPet(m.def, m.star),
+      skill: skillForPet(m.def, m.star, m.level),
       atk: petAtkInTeam(members, m),
       critRate: profile.critRate,
       critDamage: profile.critDamage,
-      skillCdLeft: skillCdForPet(m.def, m.star),
+      skillCdLeft: skillCdForPet(m.def, m.star, m.level),
     };
   });
   const heroMaxHp = teamMaxHp(members);

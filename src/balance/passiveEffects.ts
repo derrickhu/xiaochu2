@@ -12,6 +12,11 @@ import {
 import { getRarityAttribPower, getRarityPassivePower, type Rarity } from './rarity';
 import { ELEMENT_NAME } from './ui';
 import { passiveIconIdFromName } from './passiveIcons';
+import {
+  isRequirementMet, requirementHint, maxedPetProgress,
+  type PetProgress, type UnlockRequirement,
+} from './progression/requirements';
+import { PASSIVE_L0_UNLOCK, passiveLadderRequirement } from './skillGrowth';
 
 export type EffectScope = 'self' | 'team';
 
@@ -30,6 +35,8 @@ export interface PassiveEffect {
   source: EffectSource;
   unlocked: boolean;
   unlockHint?: string;
+  /** 解锁条件（progression 框架；未解锁时供 UI 判定「差一点解锁」） */
+  requirement?: UnlockRequirement;
   displayName?: string;
   statScope?: 'self' | 'team';
   stat?: StatKey;
@@ -42,6 +49,8 @@ export interface PassiveDisplayLine {
   color?: number;
   /** 被动图标 id（Assets.PASSIVE_ICON_ID_BY_NAME） */
   iconKey?: string;
+  /** 未解锁时的条件（UI 高亮临近解锁用） */
+  requirement?: UnlockRequirement;
 }
 
 export interface PassiveEffectBundle {
@@ -116,6 +125,12 @@ function describeStarEffect(e: PassiveEffect): string {
   const prefix = e.displayName ? `${e.displayName}：` : '';
   const hint = e.unlocked ? '' : `（${e.unlockHint ?? '未解锁'}）`;
   return `${prefix}${body}${hint}`;
+}
+
+function describeGatedEffect(e: PassiveEffect): string {
+  const body = EFFECT_REGISTRY[e.kind].describe(e);
+  if (e.unlocked) return body;
+  return `${body}（${e.unlockHint ?? '未解锁'}）`;
 }
 
 function describeLadderTrigger(kind: PassiveEffectKind, value: number): string {
@@ -208,30 +223,46 @@ function scaleAttribValue(kind: PassiveEffectKind, raw: number): number {
   return round4(Math.max(0, raw));
 }
 
-function l0EffectToPassive(layer: typeof ROLE_PASSIVE_L0[PetRole], rarity: Rarity): PassiveEffect {
+function l0EffectToPassive(
+  layer: typeof ROLE_PASSIVE_L0[PetRole],
+  rarity: Rarity,
+  progress: PetProgress,
+): PassiveEffect {
   const e = layer.effect;
   const power = getRarityAttribPower(rarity);
   const kind = e.kind as PassiveEffectKind;
   const value = scaleAttribValue(kind, e.base * power);
+  const unlocked = isRequirementMet(PASSIVE_L0_UNLOCK, progress);
   return {
     kind,
     scope: ATTRIB_SCOPE[kind as AttribKey],
     value,
     source: 'signature',
-    unlocked: true,
+    unlocked,
+    unlockHint: unlocked ? undefined : requirementHint(PASSIVE_L0_UNLOCK),
+    requirement: PASSIVE_L0_UNLOCK,
     displayName: layer.name,
   };
 }
 
-/** 战斗属性块（L0 + star × RARITY_ATTRIB_POWER，与旧 petCombatAttribs 等价） */
-export function computePetCombatAttribs(role: PetRole, rarity: Rarity, star: number): CombatAttribBlock {
+/**
+ * 战斗属性块（L0 + star × RARITY_ATTRIB_POWER）
+ * @param level 宠物等级；L0 签名被动按等级里程碑解锁。缺省视为全解锁（预览口径）
+ */
+export function computePetCombatAttribs(
+  role: PetRole,
+  rarity: Rarity,
+  star: number,
+  level = Number.MAX_SAFE_INTEGER,
+): CombatAttribBlock {
   const l0 = ROLE_PASSIVE_L0[role] ?? ROLE_PASSIVE_L0.attacker;
+  const l0Unlocked = isRequirementMet(PASSIVE_L0_UNLOCK, { level, star });
   const e0 = l0.effect;
-  let critRate = e0.kind === 'critRate' ? e0.base : 0;
-  let critDamage = e0.kind === 'critDamage' ? e0.base : 0;
-  let damageReduction = e0.kind === 'damageReduction' ? e0.base : 0;
-  let healBonus = e0.kind === 'healBonus' ? e0.base : 0;
-  let teamDamageBonus = e0.kind === 'teamDamageBonus' ? e0.base : 0;
+  let critRate = l0Unlocked && e0.kind === 'critRate' ? e0.base : 0;
+  let critDamage = l0Unlocked && e0.kind === 'critDamage' ? e0.base : 0;
+  let damageReduction = l0Unlocked && e0.kind === 'damageReduction' ? e0.base : 0;
+  let healBonus = l0Unlocked && e0.kind === 'healBonus' ? e0.base : 0;
+  let teamDamageBonus = l0Unlocked && e0.kind === 'teamDamageBonus' ? e0.base : 0;
 
   for (const layer of unlockedStarEffects(role, star)) {
     if (layer.attrib === 'critRate') critRate += layer.base;
@@ -251,8 +282,8 @@ export function computePetCombatAttribs(role: PetRole, rarity: Rarity, star: num
   };
 }
 
-function expandL0Signature(role: PetRole, rarity: Rarity): PassiveEffect[] {
-  return [l0EffectToPassive(ROLE_PASSIVE_L0[role] ?? ROLE_PASSIVE_L0.attacker, rarity)];
+function expandL0Signature(role: PetRole, rarity: Rarity, progress: PetProgress): PassiveEffect[] {
+  return [l0EffectToPassive(ROLE_PASSIVE_L0[role] ?? ROLE_PASSIVE_L0.attacker, rarity, progress)];
 }
 
 function expandStarEffects(role: PetRole, rarity: Rarity, star: number): PassiveEffect[] {
@@ -261,13 +292,15 @@ function expandStarEffects(role: PetRole, rarity: Rarity, star: number): Passive
   for (const layer of ROLE_STAR_EFFECTS[role] ?? ROLE_STAR_EFFECTS.attacker) {
     const unlocked = isStarEffectUnlocked(layer, star);
     const kind = layer.attrib as PassiveEffectKind;
+    const requirement: UnlockRequirement = { kind: 'star', star: layer.star };
     effects.push({
       kind,
       scope: ATTRIB_SCOPE[layer.attrib],
       value: scaleAttribValue(kind, layer.base * power),
       source: 'star',
       unlocked,
-      unlockHint: unlocked ? undefined : `★${layer.star}解锁`,
+      unlockHint: unlocked ? undefined : requirementHint(requirement),
+      requirement,
       displayName: layer.name,
     });
   }
@@ -323,15 +356,24 @@ function expandLadderEffect(e: PassiveLayerEffect, v: number, displayName: strin
   }
 }
 
-function expandLadderLayers(role: PetRole, rarity: Rarity): PassiveEffect[] {
+function expandLadderLayers(role: PetRole, rarity: Rarity, progress: PetProgress): PassiveEffect[] {
   const ladder = ROLE_PASSIVE_LADDER[role] ?? ROLE_PASSIVE_LADDER.attacker;
   const slots = passiveSlotsForRarity(rarity);
   const rp = getRarityPassivePower(rarity);
   const effects: PassiveEffect[] = [];
-  for (const layer of ladder.slice(0, slots)) {
+  ladder.slice(0, slots).forEach((layer, slotIndex) => {
     const v = round3(layer.effect.base * rp);
-    effects.push(...expandLadderEffect(layer.effect, v, layer.name));
-  }
+    const requirement = passiveLadderRequirement(slotIndex);
+    const unlocked = isRequirementMet(requirement, progress);
+    for (const e of expandLadderEffect(layer.effect, v, layer.name)) {
+      effects.push({
+        ...e,
+        unlocked,
+        unlockHint: unlocked ? undefined : requirementHint(requirement),
+        requirement,
+      });
+    }
+  });
   return effects;
 }
 
@@ -344,29 +386,40 @@ function buildDisplayLines(
   const includeStar = options?.includeStar ?? false;
   return effects
     .filter((e) => includeStar || e.source !== 'star')
-    .filter((e) => {
-      if (e.source === 'star' && includeStar) return true;
-      return e.unlocked && e.value > 0;
-    })
+    .filter((e) => e.value > 0)
     .sort((a, b) => SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source])
     .map((e) => ({
-      text: e.source === 'star' ? describeStarEffect(e) : EFFECT_REGISTRY[e.kind].describe(e),
+      text: e.source === 'star' ? describeStarEffect(e) : describeGatedEffect(e),
       unlocked: e.unlocked,
       color: e.unlocked ? EFFECT_REGISTRY[e.kind].uiColor(e) : undefined,
       iconKey: passiveIconIdFromName(e.displayName),
+      ...(e.unlocked || !e.requirement ? {} : { requirement: e.requirement }),
     }));
 }
 
+/** 兼容旧口径：仅给 star 时视为预览（等级门槛全解锁） */
+function normalizeProgress(progress: number | PetProgress): PetProgress {
+  if (typeof progress === 'number') {
+    return { ...maxedPetProgress(), star: progress };
+  }
+  return progress;
+}
+
+/**
+ * 被动解析单一出口。
+ * @param progress 传 PetProgress 时按等级+星级双轨解锁；传 number（star）为预览口径，等级门槛全开
+ */
 export function resolvePetPassiveBundle(
   role: PetRole,
   rarity: Rarity,
-  star: number,
+  progress: number | PetProgress,
   options?: { includeStarInDisplay?: boolean },
 ): PassiveEffectBundle {
+  const p = normalizeProgress(progress);
   const effects: PassiveEffect[] = [
-    ...expandL0Signature(role, rarity),
-    ...expandLadderLayers(role, rarity),
-    ...expandStarEffects(role, rarity, star),
+    ...expandL0Signature(role, rarity, p),
+    ...expandLadderLayers(role, rarity, p),
+    ...expandStarEffects(role, rarity, p.star),
   ];
   const statEffects = effects.filter(
     (e) => (e.kind === 'statBonus' || e.kind === 'teamAura') && e.unlocked,

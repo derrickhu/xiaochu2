@@ -25,7 +25,7 @@ export interface TeamEffectBundle {
   regenPct: number;
 }
 
-/** 队伍级被动效果聚合 */
+/** 队伍级被动效果聚合（被动按 level+star 双轨解锁） */
 export function teamEffectAggregate(members: readonly TeamMember[]): TeamEffectBundle {
   let drSum = 0;
   let healSum = 0;
@@ -34,12 +34,12 @@ export function teamEffectAggregate(members: readonly TeamMember[]): TeamEffectB
   let regenSum = 0;
 
   for (const m of members) {
-    const attribs = computePetCombatAttribs(m.def.role, m.def.rarity, m.star);
+    const attribs = computePetCombatAttribs(m.def.role, m.def.rarity, m.star, m.level);
     drSum += attribs.damageReduction;
     healSum += attribs.healBonus;
     dmgBonusSum += attribs.teamDamageBonus;
 
-    const bundle = resolvePetPassiveBundle(m.def.role, m.def.rarity, m.star);
+    const bundle = resolvePetPassiveBundle(m.def.role, m.def.rarity, { level: m.level, star: m.star });
     for (const e of bundle.effects) {
       if (!e.unlocked) continue;
       if (e.kind === 'teamDamageBonus' && e.source === 'ladder') dmgBonusSum += e.value;
@@ -57,12 +57,13 @@ export function teamEffectAggregate(members: readonly TeamMember[]): TeamEffectB
   };
 }
 
-/** 个体暴击（不队伍聚合） */
+/** 个体暴击（不队伍聚合）；level 缺省为预览口径（等级门槛全开） */
 export function petSelfCombatProfile(
   pet: PetDef,
   star: number,
+  level = Number.MAX_SAFE_INTEGER,
 ): { critRate: number; critDamage: number } {
-  const a = computePetCombatAttribs(pet.role, pet.rarity, star);
+  const a = computePetCombatAttribs(pet.role, pet.rarity, star, level);
   return { critRate: a.critRate, critDamage: a.critDamage };
 }
 
@@ -101,7 +102,9 @@ export function teamStatMultiplier(
 ): number {
   let mult = 1;
   for (const source of members) {
-    const bundle = resolvePetPassiveBundle(source.def.role, source.def.rarity, source.star);
+    const bundle = resolvePetPassiveBundle(
+      source.def.role, source.def.rarity, { level: source.level, star: source.star },
+    );
     for (const e of bundle.statEffects) {
       if (statBonusMatches(e, stat, target.def, source.def)) {
         mult *= 1 + e.value;
@@ -114,10 +117,15 @@ export function teamStatMultiplier(
   return mult;
 }
 
-/** 个体 statBonus self 乘区（替代 selfStatTraitMultiplier） */
-export function selfStatMultiplier(pet: PetDef, star: number, stat: StatKey): number {
+/** 个体 statBonus self 乘区（替代 selfStatTraitMultiplier）；level 缺省为预览口径 */
+export function selfStatMultiplier(
+  pet: PetDef,
+  star: number,
+  stat: StatKey,
+  level = Number.MAX_SAFE_INTEGER,
+): number {
   let mult = 1;
-  const bundle = resolvePetPassiveBundle(pet.role, pet.rarity, star);
+  const bundle = resolvePetPassiveBundle(pet.role, pet.rarity, { level, star });
   for (const e of bundle.statEffects) {
     if (e.kind !== 'statBonus' || e.statScope !== 'self') continue;
     if (e.stat !== stat) continue;

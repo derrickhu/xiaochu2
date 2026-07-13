@@ -3,6 +3,7 @@ import { teamMaxHp, teamRcv, teamElements, petHpInTeam, type TeamMember } from '
 import { COMBAT } from '@/balance/combat';
 import { PET_MAP, DEFAULT_TEAM } from '@/balance/pets';
 import { resolvePetPassiveBundle } from '@/balance/passiveEffects';
+import { PASSIVE_LADDER_UNLOCKS } from '@/balance/skillGrowth';
 import { petHp, petRcv } from '../growth';
 
 function makeTeam(ids: readonly string[], level = 1, star = 1): TeamMember[] {
@@ -64,25 +65,34 @@ describe('teamElements', () => {
 describe('support 阵容协同光环（条件=队中输出≥2）', () => {
   // 同一目标宠在两套队伍里的队内生命对比，隔离出 support 光环的乘区效果。
   // pet_001=辅助(光环 hp)，pet_003 / pet_007=输出，pet_005=辅助。
+  // Ladder L1 被动按 skillGrowth 门槛解锁，用达标等级测试。
+  const L1_REQ = PASSIVE_LADDER_UNLOCKS[0];
+  const AURA_LV = L1_REQ.kind === 'level' ? L1_REQ.level : 1;
   const target = (members: TeamMember[]): TeamMember =>
     members.find((m) => m.def.id === 'pet_003')!;
 
   it('队中输出不足 2 只：support 光环不触发', () => {
     // 1 辅助 + 1 输出 → 输出数=1 < 2，光环不生效
-    const team = makeTeam(['pet_001', 'pet_003']);
+    const team = makeTeam(['pet_001', 'pet_003'], AURA_LV);
     const t = target(team);
     expect(petHpInTeam(team, t)).toBe(petHp(t.def, t.level, t.star));
   });
 
   it('队中输出满 2 只：support 光环触发，全队生命被放大', () => {
     // 1 辅助 + 2 输出 → 输出数=2，光环生效，目标输出宠的队内生命应高于裸生命
-    const team = makeTeam(['pet_001', 'pet_003', 'pet_007']);
+    const team = makeTeam(['pet_001', 'pet_003', 'pet_007'], AURA_LV);
     const t = target(team);
     expect(petHpInTeam(team, t)).toBeGreaterThan(petHp(t.def, t.level, t.star));
   });
 
+  it('未到 Ladder L1 门槛等级：光环未解锁，同队不生效', () => {
+    const team = makeTeam(['pet_001', 'pet_003', 'pet_007'], AURA_LV - 1);
+    const t = target(team);
+    expect(petHpInTeam(team, t)).toBe(petHp(t.def, t.level, t.star));
+  });
+
   it('无 support 时同队不触发该光环（确认增益来自 support 而非输出自身）', () => {
-    const team = makeTeam(['pet_003', 'pet_007']);
+    const team = makeTeam(['pet_003', 'pet_007'], AURA_LV);
     const t = target(team);
     expect(petHpInTeam(team, t)).toBe(petHp(t.def, t.level, t.star));
   });

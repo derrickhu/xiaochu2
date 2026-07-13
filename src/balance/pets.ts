@@ -37,9 +37,13 @@ function petView(c: CreatureDef): PetDef {
   };
 }
 
-/** 按 runtime star 解析 PassiveEffect bundle */
-export function passiveBundleFor(pet: PetDef, star: number, options?: { includeStarInDisplay?: boolean }) {
-  return resolvePetPassiveBundle(pet.role, pet.rarity, star, options);
+/** 按 runtime 进度解析 PassiveEffect bundle（number = star 预览口径） */
+export function passiveBundleFor(
+  pet: PetDef,
+  progress: number | { level: number; star: number },
+  options?: { includeStarInDisplay?: boolean },
+) {
+  return resolvePetPassiveBundle(pet.role, pet.rarity, progress, options);
 }
 
 export { resolvePetPassiveBundle };

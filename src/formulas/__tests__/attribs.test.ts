@@ -138,13 +138,21 @@ describe('单调性', () => {
 });
 
 describe('teamEffectAggregate', () => {
-  it('单宠队伍等于自身贡献', () => {
+  it('单宠队伍等于自身贡献（同等级口径）', () => {
     const def = PETS[0];
     const members: TeamMember[] = [{ def, level: INITIAL_PET_LEVEL, star: 1 }];
-    const self = computePetCombatAttribs(def.role, def.rarity, 1);
+    const self = computePetCombatAttribs(def.role, def.rarity, 1, INITIAL_PET_LEVEL);
     const agg = teamEffectAggregate(members);
     expect(agg.damageReduction).toBeCloseTo(self.damageReduction, 4);
     expect(agg.healBonus).toBeCloseTo(self.healBonus, 4);
+  });
+
+  it('L0 签名被动 Lv.10 解锁：满级队 > Lv.1 队', () => {
+    const tank = PETS.find((p) => p.role === 'tank') ?? PETS[0];
+    const low: TeamMember[] = [{ def: tank, level: 1, star: 1 }];
+    const high: TeamMember[] = [{ def: tank, level: 10, star: 1 }];
+    expect(teamEffectAggregate(low).damageReduction).toBe(0);
+    expect(teamEffectAggregate(high).damageReduction).toBeGreaterThan(0);
   });
 
   it('多坦克减伤封顶', () => {
@@ -189,7 +197,9 @@ describe('teamStatMultiplier', () => {
       for (const stat of ['atk', 'hp', 'rcv'] as const) {
         let legacyMult = 1;
         for (const source of members) {
-          const bundle = resolvePetPassiveBundle(source.def.role, source.def.rarity, source.star);
+          const bundle = resolvePetPassiveBundle(
+            source.def.role, source.def.rarity, { level: source.level, star: source.star },
+          );
           for (const e of bundle.statEffects) {
             if (e.kind === 'statBonus' && e.statScope === 'team' && e.stat === stat) {
               legacyMult *= 1 + e.value;

@@ -57,8 +57,8 @@ describe('teamEffectAggregate：统一求和口径', () => {
     ];
     let dmgSum = 0;
     for (const m of members) {
-      dmgSum += computePetCombatAttribs(m.def.role, m.def.rarity, m.star).teamDamageBonus;
-      const bundle = resolvePetPassiveBundle(m.def.role, m.def.rarity, m.star);
+      dmgSum += computePetCombatAttribs(m.def.role, m.def.rarity, m.star, m.level).teamDamageBonus;
+      const bundle = resolvePetPassiveBundle(m.def.role, m.def.rarity, { level: m.level, star: m.star });
       for (const e of bundle.effects) {
         if (e.kind === 'teamDamageBonus' && e.source === 'ladder' && e.unlocked) dmgSum += e.value;
       }
@@ -92,7 +92,9 @@ describe('teamStatMultiplier', () => {
       for (const stat of ['atk', 'hp', 'rcv'] as const) {
         let mult = 1;
         for (const source of members) {
-          const bundle = resolvePetPassiveBundle(source.def.role, source.def.rarity, source.star);
+          const bundle = resolvePetPassiveBundle(
+            source.def.role, source.def.rarity, { level: source.level, star: source.star },
+          );
           for (const e of bundle.statEffects) {
             if (e.kind === 'statBonus' && e.statScope === 'team' && e.stat === stat) mult *= 1 + e.value;
             if (e.kind === 'teamAura' && e.stat === stat && e.aura) {

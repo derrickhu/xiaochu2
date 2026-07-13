@@ -127,14 +127,24 @@ describe('铺垫关攻压：初始队会受伤（1~3 章）', () => {
 });
 
 describe('1-5 Boss：平滑养成（低手可过不三星，中手节奏适中）', () => {
-  it('低手默认队可通关 1-5，但拿不到三星', () => {
-    const r = sim(TEAMS.default, 'stage_1_5', COMBO_MODELS.low);
+  // 技能成长双轨后 L0 签名被动 Lv.5 解锁；按第一章经验曲线玩家打到 1-5 时 ≥ Lv.5（clearLevel=10）
+  const BOSS_1_5_LV = 5;
+  const sim15 = (model = COMBO_MODELS.mid) =>
+    simulateBattle(buildTeam(TEAMS.default, BOSS_1_5_LV, S), 'stage_1_5', model);
+
+  it('低手默认队（Lv.5，L0 被动已解锁）可通关 1-5，但拿不到三星', () => {
+    const r = sim15(COMBO_MODELS.low);
     expect(r.win).toBe(true);
     expect(r.stars).toBeLessThan(3);
   });
 
-  it('中手默认队约 8~12 回合通 1-5（允许 ±2 回合契约容差）', () => {
-    const r = sim(TEAMS.default, 'stage_1_5', COMBO_MODELS.mid);
+  it('未练级（Lv.1，被动全锁）低手打 1-5 会被拦截：解锁被动前有真实养成需求', () => {
+    const r = sim(TEAMS.default, 'stage_1_5', COMBO_MODELS.low);
+    expect(r.win).toBe(false);
+  });
+
+  it('中手默认队（Lv.5）约 8~12 回合通 1-5（允许 ±2 回合契约容差）', () => {
+    const r = sim15(COMBO_MODELS.mid);
     expect(r.win).toBe(true);
     expect(r.turnsUsed).toBeGreaterThanOrEqual(6);
     expect(r.turnsUsed).toBeLessThanOrEqual(14);

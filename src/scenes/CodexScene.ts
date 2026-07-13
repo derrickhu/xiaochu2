@@ -19,7 +19,7 @@ import {
 import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS, FONT_SIZE,
-  makeBackButton, makeCoverBackground, makeIconLabel, makeText,
+  makeBackButton, makeCoverBackground, makeIconLabel, makeText, makeNamePlaque,
   staggerIn,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -174,19 +174,13 @@ export class CodexScene implements Scene {
   }
 
   private _buildTitlePlaque(w: number, centerY: number): void {
-    const tex = TextureCache.get(UI_IMAGES.titlePlaque);
-    if (tex) {
-      const plaque = new PIXI.Sprite(tex);
-      plaque.anchor.set(0.5);
-      plaque.scale.set(480 / tex.width);
-      plaque.position.set(w / 2, centerY);
-      this.container.addChild(plaque);
-    }
-    const title = makeText('灵宠', {
-      size: FONT_SIZE.lg, fill: COLORS.textTitle, bold: true, anchor: 0.5,
+    const plaque = makeNamePlaque({
+      text: '灵宠',
+      width: Math.min(480, w - 80),
+      size: 'lg',
     });
-    title.position.set(w / 2, centerY);
-    this.container.addChild(title);
+    plaque.position.set(w / 2, centerY);
+    this.container.addChild(plaque);
   }
 
   private _buildPetList(startY: number): void {

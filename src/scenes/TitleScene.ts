@@ -4,13 +4,12 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
-import { TextureCache } from '@/core/TextureCache';
 import { UI } from '@/balance/ui';
 import { CHAPTERS, CHAPTER_NAME, stagesOfChapter } from '@/balance/stages';
 import { PlayerData } from '@/game/PlayerData';
 import {
-  COLORS, FONT_SIZE,
-  makeText, makeCurrencyRow, makeChapterNavArrow, CURRENCY_ICON_SIZE,
+  makeCurrencyRow, makeChapterNavArrow, CURRENCY_ICON_SIZE,
+  makeNamePlaque, namePlaqueWidth,
   buildBottomNav, BOTTOM_NAV_RESERVE,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -182,22 +181,26 @@ export class TitleScene implements Scene {
     const name = CHAPTER_NAME[this._chapter] ?? `第${this._chapter}章`;
     const idx = CHAPTERS.indexOf(this._chapter);
 
-    const label = makeText(name, {
-      size: FONT_SIZE.md, fill: chapterUnlocked ? COLORS.textTitle : COLORS.textDisabled,
-      bold: true, anchor: 0.5,
-      strokeColor: 0xfdf3df, strokeWidth: 3,
+    const plaque = makeNamePlaque({
+      text: name,
+      size: 'md',
+      disabled: !chapterUnlocked,
+      minWidth: 240,
+      maxWidth: Math.min(420, w - 160),
     });
-    label.position.set(w / 2, y);
+    plaque.position.set(w / 2, y);
     if (GMManager.isRuntimeAllowed) {
-      label.eventMode = 'static';
-      bindPointerTap(label, () => GMManager.onTitleTap());
+      plaque.eventMode = 'static';
+      plaque.cursor = 'pointer';
+      bindPointerTap(plaque, () => GMManager.onTitleTap());
     }
-    this.container.addChild(label);
+    this.container.addChild(plaque);
 
-    const arrowGap = 14;
+    const arrowGap = 10;
     const arrowHalf = 28;
-    const leftX = w / 2 - label.width / 2 - arrowGap - arrowHalf;
-    const rightX = w / 2 + label.width / 2 + arrowGap + arrowHalf;
+    const halfW = namePlaqueWidth(plaque) / 2;
+    const leftX = w / 2 - halfW - arrowGap - arrowHalf;
+    const rightX = w / 2 + halfW + arrowGap + arrowHalf;
 
     const mkArrow = (direction: 'left' | 'right', x: number, targetChapter: number | null): void => {
       const enabled = targetChapter !== null

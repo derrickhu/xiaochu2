@@ -12,7 +12,7 @@ import { TextureCache } from '@/core/TextureCache';
 import { flashWhite } from '@/core/FxLayer';
 import { Platform } from '@/core/PlatformService';
 import { guardedTween, displayAlive, readScale, resetScale, cancelDisplayTweens, tweenScale } from '@/core/animationGuard';
-import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
+import { UI, ORB_COLOR } from '@/balance/ui';
 import {
   enemyDisplaySize,
   enemyDisplayTierOf,
@@ -623,13 +623,9 @@ export class BattleHud {
     const resist = resistedElementOf(element);
     const gap = 14;
     const weakBanned = this._ctrl.bannedElements.has(weak);
-    const weakLabel = weakBanned
-      ? `拖${ELEMENT_NAME[weak]}珠克制·本关封印`
-      : `拖${ELEMENT_NAME[weak]}珠克制`;
+    const weakLabel = weakBanned ? '克制·本关封印' : '克制';
     const weakTag = this._makeElementCounterTag(weakLabel, weak, !weakBanned);
-    const resistTag = this._makeElementCounterTag(
-      `抵抗${ELEMENT_NAME[resist]}珠`, resist, false,
-    );
+    const resistTag = this._makeElementCounterTag('抵抗', resist, false);
     const totalW = weakTag.tagW + gap + resistTag.tagW;
     weakTag.position.set(-totalW / 2, -weakTag.tagH / 2);
     resistTag.position.set(-totalW / 2 + weakTag.tagW + gap, -resistTag.tagH / 2);

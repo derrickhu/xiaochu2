@@ -9,6 +9,7 @@ import type { SkillDef, SkillEffectDef, SkillVfxId, ConvertShape } from '@/balan
 import { getSkill, resolveSkillVfx, getSkillTierBonus, getSkillStarOverride } from '@/balance/skills';
 import { getStarProfile } from '@/balance/growth';
 import { getRaritySkillPower } from '@/balance/rarity';
+import { skillMasteryRank, masteryEffectMult } from '@/balance/skillGrowth';
 import type { StatusKind, StatusStackPolicy } from './BattleStatus';
 import { defenseReduction, expectedCritFactor } from '@/formulas/damage';
 
@@ -140,20 +141,30 @@ export interface SkillResult {
   enemyAttackDelay?: number;
 }
 
-export function skillForPet(pet: PetDef, star = 1): SkillDef {
+/**
+ * 宠物主动技解析：星级 skillTier（质变档）× 技能等级 mastery（等级渐进档）
+ * @param level 宠物等级，派生技能等级 Lv.1~5；缺省 1 = 基线
+ */
+export function skillForPet(pet: PetDef, star = 1, level = 1): SkillDef {
   const tier = getStarProfile(star).skillTier;
-  return applyPetSkillModifiers(getSkill(pet.skillId), pet, tier);
+  const masteryMult = masteryEffectMult(skillMasteryRank(level));
+  return applyPetSkillModifiers(getSkill(pet.skillId), pet, tier, masteryMult);
 }
 
-export function skillCdForPet(pet: PetDef, star = 1): number {
-  return skillForPet(pet, star).cd;
+export function skillCdForPet(pet: PetDef, star = 1, level = 1): number {
+  return skillForPet(pet, star, level).cd;
 }
 
 export function skillForEnemy(skillId: string): SkillDef {
   return getSkill(skillId);
 }
 
-export function applyPetSkillModifiers(skill: SkillDef, pet: PetDef, skillTier = 1): SkillDef {
+export function applyPetSkillModifiers(
+  skill: SkillDef,
+  pet: PetDef,
+  skillTier = 1,
+  masteryMult = 1,
+): SkillDef {
   const tierBonus = getSkillTierBonus(skillTier);
   const override = getSkillStarOverride(skill.id, skillTier);
 
@@ -162,6 +173,8 @@ export function applyPetSkillModifiers(skill: SkillDef, pet: PetDef, skillTier =
   let effectMult = override?.effectMult ?? (1 + tierBonus.effectPct);
   // 稀有度技能倍率（锚点 R=1.0，与星级 tier 独立叠乘，保证同 skillId 跨稀有单调）
   effectMult *= getRaritySkillPower(pet.rarity);
+  // 技能等级乘区（等级里程碑派生，独立于星级/稀有度）
+  effectMult *= masteryMult;
   let convertCountBonus = 0;
   for (const trait of pet.skillTraits ?? []) {
     if (trait.type !== 'skillModifier') continue;

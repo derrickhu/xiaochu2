@@ -17,10 +17,10 @@ import { getStarProfile, MAX_PET_STAR } from '@/balance/growth';
 import { getPetRole, getStatUi, type StatKey } from '@/balance/petRoles';
 import { getRarity } from '@/balance/rarity';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
-import { skillForPet } from '@/game/battle/SkillEngine';
-import { passiveDisplayLines } from './abilityInfo';
+import { resolvePetAbilities, diffAbilityUnlocks, type PetProgress } from '@/game/petAbilities';
+import { EventBus } from '@/core/EventBus';
 import {
-  petFrameImage, BACKGROUND_IMAGES, UI_FX_IMAGES, ORB_IMAGES,
+  petFrameImage, BACKGROUND_IMAGES, UI_FX_IMAGES,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import {
@@ -844,18 +844,7 @@ export class PetDetailScene implements Scene {
       avatar.scale.set((size * 0.78) / Math.max(avatar.width, avatar.height));
       holder.addChild(avatar);
     }
-
-    // 属性珠角标
-    const orbTex = TextureCache.get(ORB_IMAGES[pet.element]);
-    if (orbTex) {
-      const orb = new PIXI.Sprite(orbTex);
-      orb.anchor.set(0.5);
-      const orbSz = 44;
-      orb.width = orbSz;
-      orb.height = orbSz;
-      orb.position.set(-size / 2 + 18, -size / 2 + 18);
-      holder.addChild(orb);
-    }
+    // 五行相框左上角已内嵌属性角标，不再叠 ORB 珠（避免双图标）
 
     parent.addChild(holder);
     if (this._buildLive) {
@@ -884,37 +873,31 @@ export class PetDetailScene implements Scene {
     let y = 10;
 
     // 底板：对齐原型奶油面板（略浅于 panelBgAlt，近白奶油）
+    // 先铺内容再按真实高度铺底板，避免预估偏矮把末行图标裁半截
     const sheetBg = 0xfff8ec;
-    const bodyProbe = this._measureSheetBody(pet, star, sheetW - pad * 2);
-    const panelH = Math.max(sheetH - 8, bodyProbe + pad * 2);
-    const panel = makePanel({
-      width: sheetW, height: panelH, radius: 28, centered: false,
-      bg: sheetBg, bgAlpha: 0.98, border: COLORS.panelBorderSoft, borderWidth: 3,
-    });
-    panel.position.set(marginX, 0);
-    sheet.addChild(panel);
+    const panelPlaceholder = new PIXI.Container();
+    panelPlaceholder.position.set(marginX, 0);
+    sheet.addChild(panelPlaceholder);
 
     // 属性
     y = this._fillStatSection(sheet, pet, lv, star, marginX + pad, y + 8, sheetW - pad * 2);
     y += 18;
-    // 技能
-    y = this._fillSkillSection(sheet, pet, star, marginX + pad, y, sheetW - pad * 2);
+    // 技能（行高随文案自适应；返回值已含末行底部）
+    y = this._fillSkillSection(sheet, pet, lv, star, marginX + pad, y, sheetW - pad * 2);
 
-    const contentH = Math.max(panelH, y + pad);
-    if (panel.height < contentH) {
-      // 内容更高时拉长底板
-      panel.removeChildren();
-      const taller = makePanel({
-        width: sheetW, height: contentH, radius: 28, centered: false,
-        bg: sheetBg, bgAlpha: 0.98, border: COLORS.panelBorderSoft, borderWidth: 3,
-      });
-      sheet.removeChild(panel);
-      panel.destroy({ children: true });
-      taller.position.set(marginX, 0);
-      sheet.addChildAt(taller, 0);
-    }
+    // 底部留白：避免末行图标贴着裁切边/圆角被「咬」掉半截
+    const bottomPad = Math.max(pad, 36);
+    const contentH = Math.max(sheetH - 8, y + bottomPad);
+    const panel = makePanel({
+      width: sheetW, height: contentH, radius: 28, centered: false,
+      bg: sheetBg, bgAlpha: 0.98, border: COLORS.panelBorderSoft, borderWidth: 3,
+    });
+    panel.position.set(marginX, 0);
+    sheet.removeChild(panelPlaceholder);
+    panelPlaceholder.destroy({ children: true });
+    sheet.addChildAt(panel, 0);
 
-    // 视口遮罩 + 滚动
+    // 视口遮罩 + 滚动（内容高于视口时必须可滑，否则末行会被裁半截）
     const mask = new PIXI.Graphics();
     mask.beginFill(0xffffff);
     mask.drawRect(0, sheetTop, w, sheetH);
@@ -923,8 +906,8 @@ export class PetDetailScene implements Scene {
     sheet.mask = mask;
     if (this._buildLive) {
       this._sheetMask = mask;
-      const scrollMin = Math.min(sheetTop, sheetTop - (contentH - sheetH));
-      if (contentH > sheetH + 4) {
+      if (contentH > sheetH + 2) {
+        const scrollMin = sheetTop - (contentH - sheetH);
         this._scroll.attach({
           content: () => this._sheet,
           viewportTop: sheetTop,
@@ -935,25 +918,6 @@ export class PetDetailScene implements Scene {
         });
       }
     }
-  }
-
-  private _measureSheetBody(pet: PetDef, star: number, innerW: number): number {
-    const skill = skillForPet(pet, star);
-    const passives = passiveDisplayLines(pet, star);
-    const iconSz = 72;
-    const textW = Math.max(80, innerW - iconSz - 16);
-    const desc = makeText(skill.desc, { size: FONT_SIZE.sm, wordWrapWidth: textW });
-    // 主动行 ≈ icon + 标题行 + 描述；被动每行 ≈ max(icon, 文案)
-    let h = 44 + 3 * 56 + 28 + 44 + Math.max(iconSz, 40 + desc.height) + 16;
-    for (const line of passives) {
-      const body = makeText(line.text, {
-        size: FONT_SIZE.sm, wordWrapWidth: textW - 80,
-      });
-      h += Math.max(iconSz, body.height + 20) + 10;
-      body.destroy();
-    }
-    desc.destroy();
-    return h + 48;
   }
 
   private _sectionTitle(parent: PIXI.Container, label: string, x: number, y: number): number {
@@ -1002,7 +966,7 @@ export class PetDetailScene implements Scene {
 
     const order: StatKey[] = ['hp', 'atk', 'rcv'];
     const rowH = 58;
-    const iconSz = 30;
+    const iconSz = 34;
     const labelW = 100;
     const valW = 72;
     const barW = Math.max(140, innerW - labelW - valW - iconSz - 20);
@@ -1043,60 +1007,90 @@ export class PetDetailScene implements Scene {
   private _fillSkillSection(
     parent: PIXI.Container,
     pet: PetDef,
+    lv: number,
     star: number,
     x: number,
     y: number,
     innerW: number,
   ): number {
     y = this._sectionTitle(parent, '技能', x, y);
-    const skill = skillForPet(pet, star);
-    const iconSz = 72;
-    const gap = 14;
+    const abilities = resolvePetAbilities(pet, { level: lv, star });
+    const skill = abilities.active.skill;
+    // 略小于旧版 72，保证常见 1 主动 + 4 被动在首屏更易完整露出
+    const iconSz = 60;
+    const gap = 12;
     const textX = x + iconSz + gap;
     const textW = Math.max(80, innerW - iconSz - gap);
+    const rowGap = 16;
 
-    // —— 主动技：左圆图标 + 右标签/名/CD/描述 ——
+    // —— 主动技 ——
+    // 图标与「标题行」（标签+技能名）同一水平中线；描述/下一档提示在标题下自适应增高
     const activeIcon = makeSkillIcon({
       skillId: skill.id,
       size: iconSz,
       fallbackFill: COLORS.accentDeep,
       fallbackGlyph: skill.name,
     });
-    activeIcon.position.set(x + iconSz / 2, y + iconSz / 2);
     parent.addChild(activeIcon);
 
-    let ty = y + 4;
     const activeTag = this._makeTag('主动', 0xd86a4a, 0xfff0e8);
-    activeTag.position.set(textX, ty);
-    parent.addChild(activeTag);
-
+    const masteryTag = this._makeTag(`技Lv.${abilities.active.masteryRank}`, 0xd9a008, 0xfffbe8);
     const skillName = makeText(skill.name, {
       size: FONT_SIZE.md, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
     });
-    skillName.position.set(textX + activeTag.width + 10, ty + activeTag.height / 2);
-    parent.addChild(skillName);
-
     const cd = makeText(`CD ${skill.cd}`, {
       size: FONT_SIZE.sm, fill: COLORS.accentDeep, bold: true, anchor: [1, 0.5],
     });
-    cd.position.set(x + innerW, ty + activeTag.height / 2);
-    parent.addChild(cd);
-    ty += activeTag.height + 8;
-
     const desc = makeText(skill.desc, {
       size: FONT_SIZE.sm, fill: COLORS.textMain, anchor: [0, 0],
       wordWrapWidth: textW,
     });
+    // 强制刷新排版，避免 wordWrap 高度尚未计算导致行高偏矮
+    desc.updateText(true);
+
+    const next = abilities.active.nextMilestone;
+    const hint = next && next.requirement.kind === 'level'
+      ? makeText(
+        `Lv.${next.requirement.level} 解锁 技Lv.${next.rank}（效果 +${Math.round(next.effectPct * 100)}%）`,
+        { size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: [0, 0] },
+      )
+      : null;
+
+    const titleH = Math.max(activeTag.height, masteryTag.height, 34);
+    const belowH = desc.height + (hint ? hint.height + 6 : 0);
+    // 行高 = max(图标, 标题行) + 下方文案；整行随描述变长向下扩展
+    const headH = Math.max(iconSz, titleH);
+    const rowH = headH + (belowH > 0 ? 8 + belowH : 0);
+
+    const titleMidY = y + headH / 2;
+    activeIcon.position.set(x + iconSz / 2, titleMidY);
+    activeTag.position.set(textX, titleMidY - activeTag.height / 2);
+    masteryTag.position.set(textX + activeTag.width + 8, titleMidY - masteryTag.height / 2);
+    skillName.position.set(
+      textX + activeTag.width + masteryTag.width + 18,
+      titleMidY,
+    );
+    cd.position.set(x + innerW, titleMidY);
+    parent.addChild(activeTag, masteryTag, skillName, cd);
+
+    let ty = y + headH + 8;
     desc.position.set(textX, ty);
     parent.addChild(desc);
     ty += desc.height;
+    if (hint) {
+      hint.position.set(textX, ty + 6);
+      parent.addChild(hint);
+    }
 
-    y = Math.max(y + iconSz, ty) + 18;
+    y += rowH + rowGap;
 
-    // —— 被动：图标打底；锁定 = 灰显 + 叠锁 ——
-    const passives = passiveDisplayLines(pet, star);
-    for (const line of passives) {
+    // —— 被动：图标与「被动」标签+说明同一水平中线；文案换行时行高自适应 ——
+    for (const line of abilities.passiveLines) {
       const unlocked = line.unlocked !== false;
+      const nearUnlock = !unlocked
+        && line.requirement?.kind === 'level'
+        && line.requirement.level - lv <= 5;
+
       const pIcon = makeSkillIcon({
         iconId: line.iconKey,
         size: iconSz,
@@ -1104,28 +1098,32 @@ export class PetDetailScene implements Scene {
         fallbackFill: unlocked ? 0x6a8aad : 0x8a8a8a,
         fallbackGlyph: '被',
       });
-      pIcon.position.set(x + iconSz / 2, y + iconSz / 2);
-      parent.addChild(pIcon);
-
       const tag = this._makeTag(
         '被动',
         unlocked ? 0x6a8aad : 0x9a9a9a,
         unlocked ? 0xf0f4f8 : 0xffffff,
       );
-      tag.position.set(textX, y + 8);
-      parent.addChild(tag);
-
       const body = makeText(line.text, {
         size: FONT_SIZE.sm,
-        fill: unlocked ? (line.color ?? COLORS.textSub) : COLORS.textSub,
+        fill: unlocked
+          ? (line.color ?? COLORS.textSub)
+          : (nearUnlock ? COLORS.accentDeep : COLORS.textSub),
         anchor: [0, 0],
-        wordWrapWidth: textW - tag.width - 12,
+        wordWrapWidth: Math.max(60, textW - tag.width - 12),
       });
-      body.alpha = unlocked ? 1 : 0.5;
-      body.position.set(textX + tag.width + 10, y + 10);
-      parent.addChild(body);
+      body.updateText(true);
+      body.alpha = unlocked ? 1 : (nearUnlock ? 0.85 : 0.5);
 
-      y += Math.max(iconSz, Math.max(tag.height, body.height) + 16) + 12;
+      const textH = Math.max(tag.height, body.height);
+      const pRowH = Math.max(iconSz, textH);
+      const midY = y + pRowH / 2;
+
+      pIcon.position.set(x + iconSz / 2, midY);
+      tag.position.set(textX, midY - tag.height / 2);
+      body.position.set(textX + tag.width + 10, midY - body.height / 2);
+      parent.addChild(pIcon, tag, body);
+
+      y += pRowH + rowGap;
     }
 
     return y;
@@ -1260,6 +1258,7 @@ export class PetDetailScene implements Scene {
 
   private _onLevelUp(): void {
     const before = this._currentStats();
+    const beforeProgress = this._currentProgress();
     if (!PlayerData.levelUp(this._petId)) {
       Platform.showToast(PlayerData.levelUpCost(this._petId) === null ? '已满级' : '经验不足');
       return;
@@ -1267,10 +1266,12 @@ export class PetDetailScene implements Scene {
     Platform.vibrateShort('light');
     this._build();
     this._playGrowthFeedback(before, false);
+    this._notifyAbilityUnlocks(beforeProgress);
   }
 
   private _onStarUp(): void {
     const before = this._currentStats();
+    const beforeProgress = this._currentProgress();
     if (!PlayerData.starUp(this._petId)) {
       Platform.showToast(PlayerData.starUpCost(this._petId) === null ? '已满星' : '碎片不足');
       return;
@@ -1279,6 +1280,36 @@ export class PetDetailScene implements Scene {
     this._build();
     this._playGrowthFeedback(before, true);
     if (this._starRow) pulse(this._starRow, { peak: 1.22 });
+    this._notifyAbilityUnlocks(beforeProgress);
+  }
+
+  private _currentProgress(): PetProgress {
+    return {
+      level: PlayerData.petLevel(this._petId),
+      star: PlayerData.petStar(this._petId),
+    };
+  }
+
+  /** 升级/升星跨过里程碑时：Toast + 特效 + 全局事件（红点/成就/引导可订阅） */
+  private _notifyAbilityUnlocks(before: PetProgress): void {
+    const pet = PET_MAP.get(this._petId);
+    if (!pet) return;
+    const after = this._currentProgress();
+    const diff = diffAbilityUnlocks(pet, before, after);
+    if (diff.newPassives.length === 0 && !diff.masteryUp) return;
+
+    if (diff.newPassives.length > 0) {
+      const extra = diff.newPassives.length > 1 ? ` 等${diff.newPassives.length}项` : '';
+      Platform.showToast(`解锁新被动：${diff.newPassives[0]}${extra}`);
+    } else if (diff.masteryUp) {
+      Platform.showToast(`技能升级：技Lv.${diff.masteryUp.to}`);
+    }
+    this._burstAtAvatar(COLORS.accent, true);
+    EventBus.emit('pet:abilityUnlocked', {
+      petId: this._petId,
+      newPassives: diff.newPassives,
+      masteryUp: diff.masteryUp,
+    });
   }
 
   private _onToggleTeam(inTeam: boolean): void {

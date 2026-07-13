@@ -21,54 +21,75 @@ function statLabel(stat: StatKey, style: StatLabelStyle): string {
 /**
  * 属性小图标（对齐详情页原型）：
  * 生命=红心 / 攻击=交叉双剑 / 回复=绿加号圆
+ * 图形按正方形画布绘制，保证不扁、不拉伸。
  */
 export function makeStatIcon(stat: StatKey, size = 28): PIXI.Container {
   const c = new PIXI.Container();
-  const g = new PIXI.Graphics();
-  const s = size / 2;
+  // 统一落在 [-r, r] 正方形内，视觉重心居中
+  const r = size * 0.48;
 
   if (stat === 'hp') {
-    // 红心
+    // 红心：略高于宽，经典心形（旧路径过宽导致发扁）
+    const g = new PIXI.Graphics();
     g.beginFill(0xe85a5a, 1);
-    g.moveTo(0, s * 0.35);
-    g.bezierCurveTo(-s * 0.95, -s * 0.35, -s * 0.95, s * 0.45, 0, s * 0.95);
-    g.bezierCurveTo(s * 0.95, s * 0.45, s * 0.95, -s * 0.35, 0, s * 0.35);
+    g.moveTo(0, r * 0.72);
+    // 左瓣：底尖 → 左上叶
+    g.bezierCurveTo(-r * 0.15, r * 0.35, -r * 1.05, r * 0.15, -r * 0.95, -r * 0.25);
+    g.bezierCurveTo(-r * 0.85, -r * 0.75, -r * 0.25, -r * 0.85, 0, -r * 0.35);
+    // 右瓣：顶凹 → 右上叶 → 底尖
+    g.bezierCurveTo(r * 0.25, -r * 0.85, r * 0.85, -r * 0.75, r * 0.95, -r * 0.25);
+    g.bezierCurveTo(r * 1.05, r * 0.15, r * 0.15, r * 0.35, 0, r * 0.72);
     g.closePath();
     g.endFill();
+    // 高光，增加立体感
+    g.beginFill(0xffffff, 0.35);
+    g.drawCircle(-r * 0.32, -r * 0.28, r * 0.16);
+    g.endFill();
+    c.addChild(g);
   } else if (stat === 'atk') {
-    // 交叉双剑（橙）
+    // 交叉双剑（橙）：剑身偏长，交叉后仍接近正方形外接
     const drawBlade = (rot: number) => {
       const blade = new PIXI.Graphics();
+      // 剑身
       blade.beginFill(0xf0a040, 1);
-      blade.drawRoundedRect(-s * 0.14, -s * 0.85, s * 0.28, s * 1.35, s * 0.08);
+      blade.drawRoundedRect(-r * 0.12, -r * 0.78, r * 0.24, r * 1.25, r * 0.08);
       blade.endFill();
-      blade.beginFill(0xe8d8b0, 1);
-      blade.moveTo(0, -s * 0.95);
-      blade.lineTo(s * 0.22, -s * 0.55);
-      blade.lineTo(-s * 0.22, -s * 0.55);
+      // 剑尖
+      blade.beginFill(0xffd090, 1);
+      blade.moveTo(0, -r * 0.92);
+      blade.lineTo(r * 0.18, -r * 0.55);
+      blade.lineTo(-r * 0.18, -r * 0.55);
       blade.closePath();
       blade.endFill();
+      // 护手
       blade.beginFill(0xc9822a, 1);
-      blade.drawRoundedRect(-s * 0.28, s * 0.15, s * 0.56, s * 0.18, 3);
+      blade.drawRoundedRect(-r * 0.32, r * 0.12, r * 0.64, r * 0.16, 2);
+      blade.endFill();
+      // 握柄
+      blade.beginFill(0xa86a20, 1);
+      blade.drawRoundedRect(-r * 0.09, r * 0.26, r * 0.18, r * 0.28, 2);
       blade.endFill();
       blade.rotation = rot;
       c.addChild(blade);
     };
-    drawBlade(-Math.PI / 4.2);
-    drawBlade(Math.PI / 4.2);
-    return c;
+    drawBlade(-Math.PI / 4);
+    drawBlade(Math.PI / 4);
   } else {
-    // 绿加号圆
+    // 绿加号圆：正圆 + 等宽十字
+    const g = new PIXI.Graphics();
     g.beginFill(0x4caf70, 1);
-    g.drawCircle(0, 0, s * 0.92);
+    g.drawCircle(0, 0, r);
     g.endFill();
     g.beginFill(0xffffff, 1);
-    g.drawRoundedRect(-s * 0.14, -s * 0.55, s * 0.28, s * 1.1, 3);
-    g.drawRoundedRect(-s * 0.55, -s * 0.14, s * 1.1, s * 0.28, 3);
+    const arm = r * 0.22;
+    const len = r * 1.05;
+    g.drawRoundedRect(-arm / 2, -len / 2, arm, len, arm * 0.35);
+    g.drawRoundedRect(-len / 2, -arm / 2, len, arm, arm * 0.35);
     g.endFill();
+    c.addChild(g);
   }
 
-  c.addChild(g);
+  c.hitArea = new PIXI.Rectangle(-size / 2, -size / 2, size, size);
   return c;
 }
 

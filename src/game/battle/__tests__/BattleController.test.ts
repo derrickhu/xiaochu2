@@ -288,20 +288,31 @@ describe('怪物技能', () => {
 });
 
 describe('阶段十二·角色专属战斗属性（全队聚合）', () => {
+  // 被动按等级里程碑解锁（L0 Lv.10 / Ladder L1 Lv.25），用达标等级构造
+  const PASSIVE_LV = 25;
+  const makeLeveledCtrl = (teamIds: readonly string[]): BattleController =>
+    new BattleController(STAGE_ID, teamIds, noCritRng, () => ({ level: PASSIVE_LV, star: 1 }));
+
   it('治疗队伍 teamHealBonus > 0，纯输出队伍为 0', () => {
     // 灵鹿医者（healer）提供治疗强化；纯输出队伍无治疗强化
-    const healTeam = makeCtrl(['pet_004', 'pet_007']);
+    const healTeam = makeLeveledCtrl(['pet_004', 'pet_007']);
     expect(healTeam.teamHealBonus).toBeGreaterThan(0);
-    const atkTeam = makeCtrl(['pet_007', 'pet_008']);
+    const atkTeam = makeLeveledCtrl(['pet_007', 'pet_008']);
     expect(atkTeam.teamHealBonus).toBe(0);
   });
 
   it('辅助队伍 teamDamageMult > 1；纯输出队仅有 ladder 增伤、无治疗强化', () => {
-    const supTeam = makeCtrl(['pet_001', 'pet_007']);
+    const supTeam = makeLeveledCtrl(['pet_001', 'pet_007']);
     expect(supTeam.teamDamageMult).toBeGreaterThan(1);
-    const atkTeam = makeCtrl(['pet_007', 'pet_008']);
+    const atkTeam = makeLeveledCtrl(['pet_007', 'pet_008']);
     expect(atkTeam.teamDamageMult).toBeGreaterThan(1);
     expect(atkTeam.teamHealBonus).toBe(0);
+  });
+
+  it('Lv.1 队伍：被动尚未解锁，无全队聚合加成', () => {
+    const lowTeam = makeCtrl(['pet_004', 'pet_001', 'pet_007']);
+    expect(lowTeam.teamHealBonus).toBe(0);
+    expect(lowTeam.teamDamageMult).toBe(1);
   });
 
   it('resolveTurn 心珠回血按 teamHealBonus 放大（与 calcHeal 口径一致）', () => {

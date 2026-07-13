@@ -27,7 +27,7 @@ import { PlayerData } from '@/game/PlayerData';
 import type { BattleEnterData } from './BattleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
-  makeBackButton, makeButton, makeCoverBackground, makePanel, makeText,
+  makeBackButton, makeButton, makeCoverBackground, makePanel, makeText, makeNamePlaque,
   staggerIn, popIn, fadeIn, attachRarityBadge,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -330,19 +330,13 @@ export class TeamScene implements Scene {
   }
 
   private _buildTitlePlaque(w: number, centerY: number): void {
-    const tex = TextureCache.get(UI_IMAGES.titlePlaque);
-    if (tex) {
-      const plaque = new PIXI.Sprite(tex);
-      plaque.anchor.set(0.5);
-      plaque.scale.set(480 / tex.width);
-      plaque.position.set(w / 2, centerY);
-      this.container.addChild(plaque);
-    }
-    const title = makeText('编队', {
-      size: FONT_SIZE.lg, fill: COLORS.textTitle, bold: true, anchor: 0.5,
+    const plaque = makeNamePlaque({
+      text: '编队',
+      width: Math.min(480, w - 80),
+      size: 'lg',
     });
-    title.position.set(w / 2, centerY);
-    this.container.addChild(title);
+    plaque.position.set(w / 2, centerY);
+    this.container.addChild(plaque);
   }
 
   private _togglePet(petId: string): void {

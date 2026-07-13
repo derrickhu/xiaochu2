@@ -25,7 +25,7 @@ import {
 } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
-  makeBackButton, makeButton, makeCoverBackground, makePanel, makeText,
+  makeBackButton, makeButton, makeCoverBackground, makePanel, makeText, makeNamePlaque,
   attachRarityBadge, makeCurrencyLabel, makeProgressBar,
   SceneFx, type ButtonHandle,
 } from '@/ui';
@@ -213,19 +213,13 @@ export class GachaScene implements Scene {
   }
 
   private _buildTitlePlaque(w: number, centerY: number, label: string): void {
-    const tex = TextureCache.get(UI_IMAGES.titlePlaque);
-    if (tex) {
-      const plaque = new PIXI.Sprite(tex);
-      plaque.anchor.set(0.5);
-      plaque.scale.set(480 / tex.width);
-      plaque.position.set(w / 2, centerY);
-      this._page.addChild(plaque);
-    }
-    const title = makeText(label, {
-      size: FONT_SIZE.lg, fill: COLORS.textTitle, bold: true, anchor: 0.5,
+    const plaque = makeNamePlaque({
+      text: label,
+      width: Math.min(480, w - 80),
+      size: 'lg',
     });
-    title.position.set(w / 2, centerY);
-    this._page.addChild(title);
+    plaque.position.set(w / 2, centerY);
+    this._page.addChild(plaque);
   }
 
   /** 概率公示面板：按当前池（含五行筛选）动态归一化，保证公示 = 实际出货 */

@@ -15,6 +15,7 @@ export * from './ProgressBar';
 export * from './IconLabel';
 export * from './ResourceBar';
 export * from './TopBar';
+export * from './NamePlaque';
 export * from './ChapterNavArrow';
 export * from './SceneBackground';
 export * from './RarityVisual';

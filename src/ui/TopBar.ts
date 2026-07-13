@@ -1,12 +1,12 @@
 /**
- * 顶栏：左返回按钮 + 居中标题 + 可选副信息。
- * Team / Codex / PetDetail 共用，消除各场景重复的顶栏三联。
- * 返回钮统一走 makeBackButton（奶油胶囊 + 箭头图标）。
+ * 顶栏：左返回按钮 + 居中名匾标题 + 可选副信息。
+ * Team / Codex / PetDetail 共用；标题匾走全局 makeNamePlaque。
  */
 import * as PIXI from 'pixi.js';
 import { COLORS, FONT_SIZE } from './theme';
 import { makeBackButton } from './BackButton';
 import { makeText } from './text';
+import { makeNamePlaque } from './NamePlaque';
 
 export interface TopBarOpts {
   /** 居中标题 */
@@ -18,6 +18,11 @@ export interface TopBarOpts {
   /** 顶栏中心 Y */
   centerY: number;
   onBack: () => void;
+  /**
+   * 名匾固定宽度；不传则随标题自适应。
+   * 页面级标题（如「灵宠」）可传 420~480。
+   */
+  plaqueWidth?: number;
 }
 
 export function makeTopBar(opts: TopBarOpts): PIXI.Container {
@@ -27,14 +32,16 @@ export function makeTopBar(opts: TopBarOpts): PIXI.Container {
   back.position.set(80, opts.centerY);
   bar.addChild(back);
 
-  const title = makeText(opts.title, {
-    size: FONT_SIZE.lg,
-    fill: COLORS.textTitle,
-    bold: true,
-    anchor: 0.5,
+  // 标题匾：与章节名 / 页面标题同一套全局样式
+  const maxW = Math.min(opts.plaqueWidth ?? 480, opts.width - 200);
+  const plaque = makeNamePlaque({
+    text: opts.title,
+    ...(opts.plaqueWidth !== undefined ? { width: opts.plaqueWidth } : {}),
+    maxWidth: maxW,
+    size: 'lg',
   });
-  title.position.set(opts.width / 2, opts.centerY);
-  bar.addChild(title);
+  plaque.position.set(opts.width / 2, opts.centerY);
+  bar.addChild(plaque);
 
   if (opts.subtitle) {
     const sub = makeText(opts.subtitle, {
@@ -42,7 +49,7 @@ export function makeTopBar(opts: TopBarOpts): PIXI.Container {
       fill: COLORS.textSub,
       anchor: 0.5,
     });
-    sub.position.set(opts.width / 2, opts.centerY + 30);
+    sub.position.set(opts.width / 2, opts.centerY + 34);
     bar.addChild(sub);
   }
 
