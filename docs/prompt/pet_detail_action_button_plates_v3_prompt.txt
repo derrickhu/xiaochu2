@@ -1,0 +1,21 @@
+Create ONE image: 1 row x 2 columns equal panels for EMPTY premium mobile game UI button plates.
+
+GLOBAL:
+- Soft Chinese fantasy (xianxia) mobile UI, matching cream/gold summon buttons
+- Each panel: ONE empty wide stadium/pill button plate on solid gray #C8C8C8
+- Same size/shape both panels (wide capsule ~2.2:1), same corner radius
+- Premium AAA quality: multi-layer metallic GOLD trim, soft bevel, gentle top gloss, tiny auspicious cloud motifs at bottom-left and top-right corners, soft drop shadow
+- Fill must be SMOOTH continuous porcelain gradient — NO banding, NO hard two-tone split, NO horizontal stripes, NO scanlines
+- Subtle glass highlight only near top edge (thin), NOT a bright top half vs dark bottom half
+- NO TEXT, no icons, no numbers, no symbols, no watermark, no labels
+
+PANEL 1 (left) — secondary CREAM button (升星):
+- Warm ivory/cream fill, very gentle top→bottom (#FFFCF6 → #F0E2C4), almost uniform
+- Elegant gold-bronze ornate border + corner cloud flourishes
+
+PANEL 2 (right) — primary JADE GREEN button (升级):
+- Soft jade green fill, gentle continuous (#B8E08A → #5FA84A), NO harsh lime/olive split
+- Same gold ornate border language as panel 1 (matching pair), corner cloud flourishes
+- Soft top gloss, premium mobile game CTA look
+
+Keep button body fully opaque; gray only outside the plate silhouette.

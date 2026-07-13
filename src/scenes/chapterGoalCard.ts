@@ -10,7 +10,7 @@ import { getRarity } from '@/balance/rarity';
 import { ORB_COLOR } from '@/balance/ui';
 import { petFrameImage } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
-import { COLORS, FONT_SIZE, makeText } from '@/ui';
+import { COLORS, FONT_SIZE, makeText, attachPetFrameOrb } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { Game } from '@/core/Game';
 
@@ -75,6 +75,10 @@ export function buildChapterGoalCard(goal: ChapterGoalInfo, opts: ChapterGoalCar
     frame.position.set(avatarX, avatarY - 5);
     card.addChild(frame);
   }
+  attachPetFrameOrb(card, goal.elementKey, frameSz, {
+    frameAnchor: 'topLeft',
+    frameOffset: { x: avatarX, y: avatarY - 5 },
+  });
 
   const badgeW = Math.max(24, goal.rarityCode.length * 8 + 10);
   const badgeH = 14;

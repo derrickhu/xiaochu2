@@ -2,9 +2,12 @@
  * 三维 UI 组件 — 攻 / 血 / 复 统一引用 getStatUi() 配色。
  *
  * 单一真源：balance/petRoles.ts 的 STAT_UI；
+ * 图标贴图真源：UI_IMAGES.iconStatHp / Atk / Rcv（全局统一）。
  * 场景禁止再写 0x... 或裸字符串区分攻击/生命/回复。
  */
 import * as PIXI from 'pixi.js';
+import { TextureCache } from '@/core/TextureCache';
+import { UI_IMAGES } from '@/config/Assets';
 import { getGrowthUi, type GrowthUiVariant } from '@/balance/growth';
 import { getStatUi, type StatKey } from '@/balance/petRoles';
 import { makePanel } from './Panel';
@@ -18,79 +21,82 @@ function statLabel(stat: StatKey, style: StatLabelStyle): string {
   return style === 'short' ? def.shortLabel : def.longLabel;
 }
 
+const STAT_ICON_PATH: Readonly<Record<StatKey, string>> = {
+  hp: UI_IMAGES.iconStatHp,
+  atk: UI_IMAGES.iconStatAtk,
+  rcv: UI_IMAGES.iconStatRcv,
+};
+
 /**
- * 属性小图标（对齐详情页原型）：
- * 生命=红心 / 攻击=交叉双剑 / 回复=绿加号圆
- * 图形按正方形画布绘制，保证不扁、不拉伸。
+ * 属性小图标（详情 / 编队 / 总览等全局共用）。
+ * 优先贴图；未加载时回退程序绘制。
  */
 export function makeStatIcon(stat: StatKey, size = 28): PIXI.Container {
   const c = new PIXI.Container();
-  // 统一落在 [-r, r] 正方形内，视觉重心居中
-  const r = size * 0.48;
-
-  if (stat === 'hp') {
-    // 红心：略高于宽，经典心形（旧路径过宽导致发扁）
-    const g = new PIXI.Graphics();
-    g.beginFill(0xe85a5a, 1);
-    g.moveTo(0, r * 0.72);
-    // 左瓣：底尖 → 左上叶
-    g.bezierCurveTo(-r * 0.15, r * 0.35, -r * 1.05, r * 0.15, -r * 0.95, -r * 0.25);
-    g.bezierCurveTo(-r * 0.85, -r * 0.75, -r * 0.25, -r * 0.85, 0, -r * 0.35);
-    // 右瓣：顶凹 → 右上叶 → 底尖
-    g.bezierCurveTo(r * 0.25, -r * 0.85, r * 0.85, -r * 0.75, r * 0.95, -r * 0.25);
-    g.bezierCurveTo(r * 1.05, r * 0.15, r * 0.15, r * 0.35, 0, r * 0.72);
-    g.closePath();
-    g.endFill();
-    // 高光，增加立体感
-    g.beginFill(0xffffff, 0.35);
-    g.drawCircle(-r * 0.32, -r * 0.28, r * 0.16);
-    g.endFill();
-    c.addChild(g);
-  } else if (stat === 'atk') {
-    // 交叉双剑（橙）：剑身偏长，交叉后仍接近正方形外接
-    const drawBlade = (rot: number) => {
-      const blade = new PIXI.Graphics();
-      // 剑身
-      blade.beginFill(0xf0a040, 1);
-      blade.drawRoundedRect(-r * 0.12, -r * 0.78, r * 0.24, r * 1.25, r * 0.08);
-      blade.endFill();
-      // 剑尖
-      blade.beginFill(0xffd090, 1);
-      blade.moveTo(0, -r * 0.92);
-      blade.lineTo(r * 0.18, -r * 0.55);
-      blade.lineTo(-r * 0.18, -r * 0.55);
-      blade.closePath();
-      blade.endFill();
-      // 护手
-      blade.beginFill(0xc9822a, 1);
-      blade.drawRoundedRect(-r * 0.32, r * 0.12, r * 0.64, r * 0.16, 2);
-      blade.endFill();
-      // 握柄
-      blade.beginFill(0xa86a20, 1);
-      blade.drawRoundedRect(-r * 0.09, r * 0.26, r * 0.18, r * 0.28, 2);
-      blade.endFill();
-      blade.rotation = rot;
-      c.addChild(blade);
-    };
-    drawBlade(-Math.PI / 4);
-    drawBlade(Math.PI / 4);
+  const path = STAT_ICON_PATH[stat];
+  const tex = TextureCache.get(path);
+  if (tex) {
+    const s = new PIXI.Sprite(tex);
+    s.anchor.set(0.5);
+    s.width = size;
+    s.height = size;
+    c.addChild(s);
   } else {
-    // 绿加号圆：正圆 + 等宽十字
-    const g = new PIXI.Graphics();
-    g.beginFill(0x4caf70, 1);
-    g.drawCircle(0, 0, r);
-    g.endFill();
-    g.beginFill(0xffffff, 1);
-    const arm = r * 0.22;
-    const len = r * 1.05;
-    g.drawRoundedRect(-arm / 2, -len / 2, arm, len, arm * 0.35);
-    g.drawRoundedRect(-len / 2, -arm / 2, len, arm, arm * 0.35);
-    g.endFill();
-    c.addChild(g);
+    const r = size * 0.48;
+    if (stat === 'hp') drawFallbackHeart(c, r);
+    else if (stat === 'atk') drawFallbackSword(c, r);
+    else drawFallbackPlus(c, r);
   }
-
   c.hitArea = new PIXI.Rectangle(-size / 2, -size / 2, size, size);
   return c;
+}
+
+function drawFallbackHeart(parent: PIXI.Container, r: number): void {
+  const g = new PIXI.Graphics();
+  const lobeR = r * 0.5;
+  const lobeX = r * 0.36;
+  const lobeY = -r * 0.22;
+  const tipY = r * 0.82;
+  g.beginFill(0xe85a5a, 1);
+  g.drawCircle(-lobeX, lobeY, lobeR);
+  g.drawCircle(lobeX, lobeY, lobeR);
+  g.moveTo(-lobeX - lobeR * 0.78, lobeY + lobeR * 0.1);
+  g.quadraticCurveTo(-lobeX - lobeR * 0.15, lobeY + lobeR * 1.05, 0, tipY);
+  g.quadraticCurveTo(lobeX + lobeR * 0.15, lobeY + lobeR * 1.05, lobeX + lobeR * 0.78, lobeY + lobeR * 0.1);
+  g.closePath();
+  g.endFill();
+  parent.addChild(g);
+}
+
+function drawFallbackSword(parent: PIXI.Container, r: number): void {
+  const blade = new PIXI.Graphics();
+  blade.beginFill(0xf08a3a, 1);
+  blade.moveTo(0, -r * 0.95);
+  blade.lineTo(r * 0.14, -r * 0.2);
+  blade.lineTo(r * 0.18, r * 0.28);
+  blade.lineTo(-r * 0.18, r * 0.28);
+  blade.lineTo(-r * 0.14, -r * 0.2);
+  blade.closePath();
+  blade.endFill();
+  blade.beginFill(0xb85c20, 1);
+  blade.drawRoundedRect(-r * 0.4, r * 0.22, r * 0.8, r * 0.14, 2);
+  blade.endFill();
+  blade.rotation = -Math.PI / 4;
+  parent.addChild(blade);
+}
+
+function drawFallbackPlus(parent: PIXI.Container, r: number): void {
+  const g = new PIXI.Graphics();
+  g.beginFill(0x4caf70, 1);
+  g.drawCircle(0, 0, r);
+  g.endFill();
+  g.beginFill(0xffffff, 1);
+  const arm = r * 0.22;
+  const len = r * 1.05;
+  g.drawRoundedRect(-arm / 2, -len / 2, arm, len, arm * 0.4);
+  g.drawRoundedRect(-len / 2, -arm / 2, len, arm, arm * 0.4);
+  g.endFill();
+  parent.addChild(g);
 }
 
 function appendStatSegment(

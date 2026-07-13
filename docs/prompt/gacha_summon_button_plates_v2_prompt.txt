@@ -1,0 +1,23 @@
+Create ONE image: 1 row x 2 columns equal panels for EMPTY premium mobile game UI button plates.
+
+GLOBAL:
+- Soft xianxia / Chinese fantasy mobile UI, matching cream+gold spirit-pet summon screen
+- Each panel: ONE empty wide rounded-rectangle (stadium / pill) button plate on solid gray #C8C8C8
+- Same size/shape in both panels (wide capsule ~3.2:1), same corner radius
+- Premium AAA mobile game quality: thick gold trim, soft bevel, inner gloss, subtle cloud motif at corners, soft drop shadow
+- Smooth continuous porcelain gradient (NO banding, NO horizontal stripes, NO scanlines)
+- NO TEXT, no icons, no numbers, no symbols, no watermark, no labels
+
+PANEL 1 (left) — primary GOLD summon button:
+- Warm gold-to-amber vertical gradient (#FFE08A top → #E07A18 bottom)
+- Raised bevel, bright top gloss highlight band, soft inner light
+- Ornate thin gold metallic border with tiny cloud flourishes at bottom-left and top-right corners
+- Soft warm drop shadow
+
+PANEL 2 (right) — secondary CREAM summon button:
+- Cream / parchment fill (#FFFCF3 top → #EAD7B0 bottom)
+- Elegant gold-bronze border, gentle top gloss
+- Matching tiny cloud flourishes at corners
+- Soft drop shadow
+
+Keep plates fully opaque in the button body; transparent or clean gray only outside the plate silhouette.

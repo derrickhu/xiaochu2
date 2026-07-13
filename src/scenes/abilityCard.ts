@@ -3,17 +3,15 @@
  * 图鉴的「锁定预览」与抽卡/商店的详情复用同一函数，保证「看能力再抽/买」口径一致。
  */
 import * as PIXI from 'pixi.js';
-import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import type { PetDef } from '@/balance/pets';
 import { ELEMENT_NAME } from '@/balance/ui';
 import { INITIAL_PET_LEVEL, INITIAL_PET_STAR } from '@/balance/pets';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { skillForPet } from '@/game/battle/SkillEngine';
-import { ORB_IMAGES } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
-  makePanel, makeText, attachRarityBadge, makeRoleBadge,
+  makePanel, makeText, attachRarityBadge, makeRoleBadge, makeElementOrb,
 } from '@/ui';
 import { passiveDisplayLines } from './abilityInfo';
 
@@ -59,15 +57,11 @@ export function buildAbilityPanel(pet: PetDef, opts: AbilityCardOpts): PIXI.Cont
   }
   attachRarityBadge(cont, pet.rarity, padX, avatarTop, avatarSize, { variant: 'list' });
 
-  // 属性珠
-  const orbTex = TextureCache.get(ORB_IMAGES[pet.element]);
-  if (orbTex) {
-    const orb = new PIXI.Sprite(orbTex);
-    orb.width = 28;
-    orb.height = 28;
-    orb.position.set(padX, 24);
-    cont.addChild(orb);
-  }
+  // 属性珠（棋盘同源）
+  const orb = makeElementOrb(pet.element, 28);
+  orb.anchor.set(0);
+  orb.position.set(padX, 24);
+  cont.addChild(orb);
 
   const infoX = padX + avatarSize + 20;
   const name = makeText(pet.name, {

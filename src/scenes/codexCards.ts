@@ -1,9 +1,7 @@
 import * as PIXI from 'pixi.js';
-import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import type { PetDef } from '@/balance/pets';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
-import { ORB_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS,
@@ -14,6 +12,7 @@ import {
   makeRoleBadge,
   makeStarRow,
   makeText,
+  makeElementOrb,
 } from '@/ui';
 
 /** 未拥有卡：稀有度底板 + 剪影 + 获取提示。 */
@@ -40,16 +39,11 @@ export function buildLockedCodexCard(
     }));
   }
 
-  const orbTex = TextureCache.get(ORB_IMAGES[pet.element]);
-  if (orbTex) {
-    const orbSz = 18 * S;
-    const orb = new PIXI.Sprite(orbTex);
-    orb.width = orbSz;
-    orb.height = orbSz;
-    orb.position.set(10 * S, 10 * S);
-    orb.alpha = 0.4;
-    item.addChild(orb);
-  }
+  const orb = makeElementOrb(pet.element, 18 * S);
+  orb.anchor.set(0);
+  orb.alpha = 0.4;
+  orb.position.set(10 * S, 10 * S);
+  item.addChild(orb);
 
   const avatarSize = cardW * 0.62;
   const avatarLeft = (cardW - avatarSize) / 2;
@@ -106,15 +100,10 @@ export function buildOwnedCodexCard(
     }));
   }
 
-  const orbTex = TextureCache.get(ORB_IMAGES[pet.element]);
-  if (orbTex) {
-    const orbSz = 18 * S;
-    const orb = new PIXI.Sprite(orbTex);
-    orb.width = orbSz;
-    orb.height = orbSz;
-    orb.position.set(10 * S, 10 * S);
-    item.addChild(orb);
-  }
+  const orb = makeElementOrb(pet.element, 18 * S);
+  orb.anchor.set(0);
+  orb.position.set(10 * S, 10 * S);
+  item.addChild(orb);
 
   const avatarSize = cardW * 0.62;
   const avatarLeft = (cardW - avatarSize) / 2;

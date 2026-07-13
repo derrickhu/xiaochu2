@@ -1,0 +1,29 @@
+Create ONE high-fidelity mobile game UI prototype mockup (iPhone portrait frame optional), for a Chinese fantasy (xianxia) pet gacha / summon screen titled spirit-pet summon.
+
+Use the reference image for brand/layout language ONLY:
+- Soft mint-green + cream parchment palette, light airy xianxia clouds and pavilion atmosphere
+- Same top back button style and cream title plaque banner language
+- Keep overall serene mystical vibe, NOT dark mode, NOT purple neon
+
+CORE FANTASY — “smash golden eggs” dopamine:
+- Center of screen is a DOMINANT interactive golden egg (or a short nest of 1–3 eggs), glossy metallic gold shell with warm highlights, subtle cracks or glow when primed to smash
+- Soft radial glow + floating spirit motes / petals / spark particles around the egg (satisfying, premium)
+- Optional: one egg mid-crack with bright warm light leaking from the fissure (anticipation), silhouette of a cute pet barely hinted inside light — mysterious, not revealing the full roster
+- NO scrollable pet pool grid, NO owned 7/30 strip, NO element filter tabs — remove pool preview entirely to preserve mystery
+
+KEEP (simplified):
+- Top: back button + centered title plaque “灵宠召唤”
+- Small currency row: 灵玉 count
+- Thin pity progress: “距 SSR 及以上保底还需 N 抽”
+- Compact rate tip as a short line or tiny plaque (not a big rate card dominating the hero)
+- Bottom CTA group only: primary glossy orange-gold button “单抽 100 灵玉” + secondary cream button “十连 1000 灵玉” (match the premium beveled/glossy button texture from reference)
+
+COMPOSITION RULES:
+- First viewport = one clear composition: brand/title + one egg hero + one short supporting line + CTA group
+- Egg is the full visual anchor (edge-to-edge atmospheric background, not a small inset card)
+- No dashboard clutter, no dense lists, no multi-stat strips
+- Soft gradients / painted clouds for atmosphere; real golden egg as the main visual idea
+
+Typography: elegant Chinese UI titles on cream plaques; readable labels on buttons.
+NO watermark, no extra unexplained English, no UI chrome from other games.
+Aspect: tall mobile portrait UI mockup.

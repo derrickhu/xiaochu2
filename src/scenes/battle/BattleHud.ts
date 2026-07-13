@@ -25,7 +25,8 @@ import {
   formatEnemyBattleName,
 } from '@/balance/enemyDisplay';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
-import { enemyImage, ORB_IMAGES, UI_BATTLE_IMAGES } from '@/config/Assets';
+import { enemyImage, UI_BATTLE_IMAGES } from '@/config/Assets';
+import { makeElementOrb } from '@/ui';
 import { formatStageBattleHeader } from '@/balance/stages';
 import type { BattleController, EnemyActResult } from '@/game/battle/BattleController';
 import type { BoardView } from '@/game/board/BoardView';
@@ -641,7 +642,7 @@ export class BattleHud {
     _highlight: boolean,
   ): PIXI.Container & { tagW: number; tagH: number } {
     const color = ORB_COLOR[element];
-    const orbSize = 26;
+    const orbSize = 32;
     const padX = 14;
     const padY = 8;
     const gap = 6;
@@ -667,13 +668,10 @@ export class BattleHud {
     bg.endFill();
     tag.addChild(bg);
 
-    // 珠图标：直接用透明底 orb，不加外框/底色块
-    const orb = new PIXI.Sprite(TextureCache.get(ORB_IMAGES[element]) ?? PIXI.Texture.WHITE);
-    orb.width = orbSize;
-    orb.height = orbSize;
-    orb.anchor.set(0.5);
+    // 棋盘同源珠图标
+    const orb = makeElementOrb(element, orbSize);
     orb.position.set(padX + orbSize / 2, tagH / 2);
-    if (!orb.texture || orb.texture === PIXI.Texture.WHITE) orb.tint = color;
+    if (orb.texture === PIXI.Texture.WHITE) orb.tint = color;
     tag.addChild(orb);
 
     text.position.set(padX + orbSize + gap, (tagH - text.height) / 2);

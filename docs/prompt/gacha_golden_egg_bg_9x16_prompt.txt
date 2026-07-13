@@ -1,0 +1,14 @@
+Portrait mobile game BACKGROUND art ONLY for a Chinese fantasy (xianxia) spirit-pet summon screen.
+
+CRITICAL ASPECT: true phone 9:16 tall portrait. Composition must look NATURAL in 9:16 — tall sky, tall misty peaks, generous vertical breathing room. Do NOT design for 2:3 then crop. Do NOT squash / stretch / flatten landscape elements. Mountains should read as tall spires, not wide flat hills.
+
+Use the reference prototype for mood, palette, golden egg design, and pavilion placement ONLY. Do NOT copy any UI chrome.
+
+MUST INCLUDE:
+- Soft teal-green sky, tall misty mountain peaks, soft white cloud sea, traditional pavilion perched on a cliff to the RIGHT mid-ground
+- CENTER HERO: large cracked glowing golden egg (slightly tall oval, not wide), star-burst crack with cute pet silhouette inside
+- Teal carved jade platform with swirling white cloud nest under the egg
+- Floating blue spirit wisps and tiny golden petals
+- Full-bleed painted scene edge to edge; leave soft lower cloud space for UI buttons; leave soft upper sky for title
+
+STRICTLY NO TEXT, no labels, no buttons, no banners, no progress bars, no watermarks, no phone frame, no UI overlays.

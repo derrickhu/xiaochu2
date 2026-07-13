@@ -19,12 +19,12 @@ import { CHAPTERS, stagesOfChapter } from '@/balance/stages';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
 import {
-  BACKGROUND_IMAGES, UI_IMAGES, UI_SHOP_IMAGES, UI_FX_IMAGES, ORB_IMAGES,
+  BACKGROUND_IMAGES, UI_IMAGES, UI_SHOP_IMAGES, UI_FX_IMAGES,
 } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE,
   makeBackButton, makeButton, makeCoverBackground, makePanel, makeText,
-  attachRarityBadge, makeIconLabel,
+  attachRarityBadge, makeIconLabel, makeElementOrb,
   SceneFx, staggerIn, pulse,
   buildBottomNav, BOTTOM_NAV_RESERVE,
 } from '@/ui';
@@ -285,16 +285,11 @@ function buildCenteredInfoBlock(
 
   const nameRow = new PIXI.Container();
   let nx = 0;
-  const elTex = TextureCache.get(ORB_IMAGES[pet.element]);
-  if (elTex) {
-    const elIcon = new PIXI.Sprite(elTex);
-    elIcon.anchor.set(0, 0.5);
-    elIcon.width = elIconSize;
-    elIcon.height = elIconSize;
-    elIcon.position.set(0, 0);
-    nameRow.addChild(elIcon);
-    nx = elIconSize + 6;
-  }
+  const elIcon = makeElementOrb(pet.element, elIconSize);
+  elIcon.anchor.set(0, 0.5);
+  elIcon.position.set(0, 0);
+  nameRow.addChild(elIcon);
+  nx = elIconSize + 6;
 
   let displayName = pet.name;
   const name = makeText(displayName, {

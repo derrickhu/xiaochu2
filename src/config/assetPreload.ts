@@ -36,6 +36,9 @@ import { preloadPetAvatarTextures } from '@/config/petAvatarTexture';
 export const PET_POOL_SHELL_IMAGES: readonly string[] = [
   BACKGROUND_IMAGES.petPool,
   UI_IMAGES.titlePlaque,
+  UI_IMAGES.iconStatHp,
+  UI_IMAGES.iconStatAtk,
+  UI_IMAGES.iconStatRcv,
   UI_IMAGES.rarityBadgeSheet,
   ...Object.values(RARITY_BADGE_IMAGES),
 ];
@@ -48,10 +51,21 @@ export const CODEX_SHELL_IMAGES: readonly string[] = [
 export const TEAM_SHELL_IMAGES: readonly string[] = [
   ...PET_POOL_SHELL_IMAGES,
   UI_SCENE_IMAGES.petCardTeamRow,
+  UI_IMAGES.btnPlateSuccess,
+  UI_IMAGES.iconStatHp,
+  UI_IMAGES.iconStatAtk,
+  UI_BATTLE_IMAGES.petStar,
 ];
 
 export const GACHA_SHELL_IMAGES: readonly string[] = [
-  ...PET_POOL_SHELL_IMAGES,
+  BACKGROUND_IMAGES.gachaEgg,
+  UI_IMAGES.titlePlaque,
+  UI_IMAGES.btnPlateGold,
+  UI_IMAGES.btnPlateCream,
+  UI_IMAGES.progressFrame,
+  UI_IMAGES.iconLingyu,
+  UI_IMAGES.rarityBadgeSheet,
+  ...Object.values(RARITY_BADGE_IMAGES),
   UI_FX_IMAGES.lightPillar,
   UI_FX_IMAGES.summonCircle,
   UI_FX_IMAGES.starburst,
@@ -72,6 +86,11 @@ export const PET_DETAIL_SHELL_IMAGES: readonly string[] = [
   /** 与灵宠图鉴/编队页共用 scene_pet_pool，详情页视觉连贯 */
   BACKGROUND_IMAGES.petPool,
   UI_IMAGES.titlePlaque,
+  UI_IMAGES.btnPlateCream,
+  UI_IMAGES.btnPlateSuccess,
+  UI_IMAGES.iconStatHp,
+  UI_IMAGES.iconStatAtk,
+  UI_IMAGES.iconStatRcv,
   UI_BATTLE_IMAGES.petStar,
   UI_FX_IMAGES.starburst,
   UI_FX_IMAGES.auraRing,
@@ -95,7 +114,7 @@ export function codexPetAvatarEntries(): PetAvatarPreloadEntry[] {
   }));
 }
 
-/** 编队页：已拥有灵宠 + 可选本关敌人 */
+/** 编队页：已拥有灵宠 + 可选本关敌人（含敌技图标） */
 export function teamPreloadImages(stageId?: string): readonly string[] {
   const paths = [...TEAM_SHELL_IMAGES];
   if (stageId) {
@@ -104,6 +123,9 @@ export function teamPreloadImages(stageId?: string): readonly string[] {
       for (const ref of stage.encounters) {
         const { def } = resolveEncounter(ref);
         paths.push(def.image ?? enemyImage(def.id));
+        for (const sid of def.skillIds ?? []) {
+          paths.push(skillIconImage(sid));
+        }
       }
     }
   }

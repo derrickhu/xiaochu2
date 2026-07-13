@@ -1,0 +1,12 @@
+Portrait mobile game BACKGROUND art ONLY for a Chinese fantasy (xianxia) spirit-pet summon screen. 9:16 tall.
+
+Use the reference prototype for composition, lighting, color palette, and golden egg design ONLY. Do NOT copy any UI chrome.
+
+MUST INCLUDE:
+- Misty teal mountains, soft white clouds, traditional pavilion on the right, bright airy lighting
+- CENTER HERO: large cracked glowing golden egg on a teal carved stone platform with swirling white cloud nest
+- Bright warm light and a mysterious cute pet silhouette leaking from the star-shaped crack
+- Floating blue spirit wisps and golden petals around the egg
+- Full-bleed painted scene edge to edge
+
+STRICTLY NO TEXT, no labels, no buttons, no back button, no banners, no progress bars, no watermarks, no phone frame, no UI overlays.

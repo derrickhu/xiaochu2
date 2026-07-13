@@ -1,0 +1,21 @@
+Create ONE image: 1 row x 2 columns equal panels for mobile game UI button plates (EMPTY plates, no labels).
+
+GLOBAL:
+- Premium soft xianxia mobile UI, cream + jade green palette
+- Each panel: ONE empty rounded-rectangle button plate centered on solid light gray #D0D0D0 background (for cutout)
+- Smooth porcelain / soft plastic finish: subtle vertical gradient that is CONTINUOUS and buttery (NO banding, NO stripe artifacts, NO scanlines, NO horizontal line texture)
+- Soft inner top highlight (glass gloss), thin elegant border, very soft drop shadow under plate
+- Clean crisp rounded corners, high polish
+- NO TEXT, no Chinese, no English, no icons, no symbols, no watermarks, no UI chrome
+
+PANEL 1 (left) — secondary cream plate:
+- Warm cream / parchment fill (#F7EAD0 to #E8D4A8 soft vertical gradient)
+- Soft brown-gold thin border
+- Gentle top gloss, refined not flashy
+
+PANEL 2 (right) — primary jade-green plate:
+- Fresh jade green fill (#8FCF6A to #4F9038 soft vertical gradient)
+- Darker green thin border
+- Stronger porcelain top gloss highlight for CTA feel
+
+Keep both plates same size/shape (wide capsule / rounded rect, about 3.2:1 aspect), same corner radius language.

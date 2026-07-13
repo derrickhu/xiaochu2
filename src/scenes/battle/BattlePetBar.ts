@@ -19,7 +19,7 @@ import {
   updatePetSkillReadyFx,
   type PetSkillReadyFxView,
 } from '@/game/battle/PetSkillReadyFx';
-import { makeText, makePanel, makeStarRow, COLORS } from '@/ui';
+import { makeText, makePanel, makeStarRow, COLORS, attachPetFrameOrb } from '@/ui';
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BattleLayout } from './BattleLayout';
 import { showPetSkillPreview, TAP_SLOP, type PetSkillPreviewHandle } from './PetSkillPreviewBubble';
@@ -131,7 +131,8 @@ export class BattlePetBar {
         frame.height = frameSize;
         slot.addChild(frame);
       }
-      // 五行相框已内嵌属性角标，不再叠「金/木/水…」文字（与图标重复）
+      // 棋盘同源属性珠叠在相框左上角（相框 PNG 已去掉旧内嵌角标）
+      attachPetFrameOrb(slot, pet.def.element, frameSize);
 
       // Lv 角标：右下，对齐 mockup（白字 + 深棕描边）
       const lvSize = Math.max(16, Math.round(petSize * 0.18));

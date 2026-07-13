@@ -1,0 +1,54 @@
+Create ONE high-fidelity mobile game HOME / LOBBY UI prototype mockup.
+
+CRITICAL ASPECT: true phone 9:16 tall portrait (NOT 2:3). Natural proportions — tall sky, generous vertical space. Do NOT squash or flatten. Optional thin modern phone frame OK.
+
+Brand language (match existing xiaochu soft xianxia UI): soft mint-teal + cream parchment, gold accents, cream name plaques, rounded panels, light airy painted landscape. NOT dark mode, NOT purple neon, NOT cyberpunk.
+
+GOAL: Extensible home where MAINLINE STAGE CAMPAIGN is the clear core loop, while secondary modes (check-in, tower, etc.) sit as expandable entries without stealing focus.
+
+COMPOSITION (one clear hierarchy — first viewport = one composition):
+
+1) TOP BAR
+- Left: player avatar circle + short name
+- Center-right: currency pills (灵玉 / 灵宠币) with + 
+- Far right: 邮件 icon with red badge, 设置 gear
+
+2) CHAPTER HEADER (under top bar)
+- Cream plaque title「主线关卡」or「第3章 · 玄龟试炼」
+- Small left/right chapter arrows
+
+3) HERO CENTER — MAINLINE STAGE MAP (DOMINANT, ~55% of screen)
+- Soft painted misty mountain path background
+- Vertical winding path with 6–7 glowing stage nodes (stars on cleared, lock on locked)
+- Boss node emphasized at top
+- This MUST read as the product’s core gameplay; largest visual weight
+- Soft cloud / lotus atmosphere at edges
+
+4) LEFT FUNCTION RAIL — EXTENSIBLE SECONDARY MODES (industry pattern)
+Vertical stack of compact circular/rounded icon buttons with Chinese labels under each:
+- 签到 (calendar/check-in, red-dot badge)
+- 通天塔 (tower pagoda icon)
+- 日常 (daily quest scroll)
+- 活动 (event lantern) — slightly dimmer as “slot for future”
+Keep rail narrow on the LEFT so it does NOT compete with the stage map. Leave visual room implying more icons can be added later.
+
+5) BOTTOM NAV (5 tabs, industry meta systems)
+Cream/gold cloud bar with icons + labels:
+灵宠 | 召唤 | 冒险(SELECTED / highlighted larger) | 商店 | 编队
+「冒险」= this home / mainline campaign.
+
+READABILITY / EXTENSIBILITY RULES:
+- Mainline map is the hero; side modes are satellite entries
+- Premium button quality: gold trim, soft gloss, NO cheap two-tone flat splits
+- Clear Chinese labels as specified
+- No cluttered pill clusters over the map center
+- No English chrome, no watermark, no unrelated widgets
+
+Chinese UI text as specified above.
+
+---
+Delivered: docs/ui/home_hub_ui_prototype_v1.png (1080x1920 / 9:16)
+Structure locked:
+- Core: mainline stage path (center hero)
+- Extensible: left rail 签到 / 通天塔 / 日常 / 活动 (+ room to grow)
+- Meta: bottom 灵宠 | 召唤 | 冒险(sel) | 商店 | 编队

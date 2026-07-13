@@ -35,7 +35,7 @@ export const BOARD_IMAGES = {
   light: `${IMG}/board/tile_light.jpg`,
 } as const;
 
-/** 消除珠贴图（主包） */
+/** 消除珠贴图（主包）—— UI 属性珠唯一真源，与棋盘共用；禁止另引入旧角标图 */
 export const ORB_IMAGES: Readonly<Record<OrbType, string>> = {
   metal: `${IMG}/orb/orb_metal.png`,
   wood: `${IMG}/orb/orb_wood.png`,
@@ -115,6 +115,8 @@ export const BACKGROUND_IMAGES = {
   chapterMap: `${IMG}/bg/title_screen.jpg`,
   petDetail: `${PKG.scene}/images/bg/scene_pet_detail.jpg`,
   petPool: `${PKG.scene}/images/bg/scene_pet_pool.jpg`,
+  /** 灵宠召唤：砸金蛋主视觉背景（9:16） */
+  gachaEgg: `${PKG.scene}/images/bg/scene_gacha_egg.jpg`,
   /** 碎片商店专用背景（9:16 商铺内景） */
   shop: `${PKG.scene}/images/bg/scene_shop.jpg`,
 } as const;
@@ -145,7 +147,19 @@ export const UI_IMAGES = {
   iconExp: `${IMG}/ui/icon/currency_exp.png`,
   iconLingyu: `${IMG}/ui/icon/currency_lingyu.png`,
   iconRecruit: `${IMG}/ui/icon/action_recruit.png`,
+  /** 三维属性图标：生命 / 攻击 / 回复（全局统一） */
+  iconStatHp: `${IMG}/ui/icon/stat_hp.png`,
+  iconStatAtk: `${IMG}/ui/icon/stat_atk.png`,
+  iconStatRcv: `${IMG}/ui/icon/stat_rcv.png`,
   titlePlaque: `${IMG}/ui/plaque/title.png`,
+  /** 详情底栏行动按钮底板（奶油次按钮） */
+  btnPlateCream: `${IMG}/ui/button/plate_cream.png`,
+  /** 详情底栏行动按钮底板（翠绿主按钮） */
+  btnPlateSuccess: `${IMG}/ui/button/plate_success.png`,
+  /** 召唤单抽主按钮底板（金橙） */
+  btnPlateGold: `${IMG}/ui/button/plate_gold.png`,
+  /** 通用进度条外框（复用战斗英雄血条框） */
+  progressFrame: `${IMG}/ui/bar/progress_frame.png`,
   /** R/SR/SSR/UR 角标雪碧图（pkg-scene，优先读单张 rarity_*.png） */
   rarityBadgeSheet: `${PKG.scene}/images/ui/badge/rarity_sheet.png`,
 } as const;

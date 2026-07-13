@@ -27,6 +27,7 @@ import {
   COLORS, FONT_SIZE, RADIUS,
   makeButton, makeCoverBackground, makePanel, makeText, makeProgressBar, makeTopBar,
   makeStarRow, SceneFx, fadeIn, countUp, pulse, makeSkillIcon, makeStatIcon,
+  makeActionButton, attachPetFrameOrb,
   type ProgressBarHandle,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -302,7 +303,7 @@ export class PetDetailScene implements Scene {
     const portraitSize = Math.min(268, Math.floor(halfAvail * 0.78));
     const heroBottom = this._buildHeroRow(petId, pet, lv, star, marginX, heroTop, portraitSize, heroGap, w);
 
-    const dockH = this._preview ? 0 : 148;
+    const dockH = this._preview ? 0 : 168;
     const dockGap = 12;
     const sheetTop = heroBottom + 16;
     const sheetBottom = h - dockH - (this._preview ? 24 : dockGap);
@@ -844,7 +845,8 @@ export class PetDetailScene implements Scene {
       avatar.scale.set((size * 0.78) / Math.max(avatar.width, avatar.height));
       holder.addChild(avatar);
     }
-    // 五行相框左上角已内嵌属性角标，不再叠 ORB 珠（避免双图标）
+    // 棋盘同源属性珠（略缩小，避免大头像上角标显贴图感）
+    attachPetFrameOrb(holder, pet.element, size, { scale: 0.72 });
 
     parent.addChild(holder);
     if (this._buildLive) {
@@ -1164,8 +1166,9 @@ export class PetDetailScene implements Scene {
 
     const marginX = 28;
     const gap = 16;
-    const btnH = 88;
-    const cy = dockTop + dockH / 2 - 4;
+    // 略增高，贴近底板 2:1 比例，避免九宫竖向压出「上下两截色」
+    const btnH = 104;
+    const cy = dockTop + dockH / 2 - 2;
     const innerW = w - marginX * 2 - gap;
     const starW = Math.floor(innerW * 0.42);
     const lvW = innerW - starW;
@@ -1174,11 +1177,11 @@ export class PetDetailScene implements Scene {
     const canStar = PlayerData.canStarUp(petId);
     const shards = PlayerData.petShards(petId);
     const starSub = starCost === null ? '已满星' : `碎片 ${shards}/${starCost}`;
-    const starBtn = this._makeDockButton({
+    const starBtn = makeActionButton({
       width: starW, height: btnH,
       title: starCost === null ? '已满星' : '升星',
       subtitle: starSub,
-      variant: 'ghost',
+      variant: 'cream',
       enabled: this._buildLive && canStar,
       onTap: () => this._onStarUp(),
     });
@@ -1188,7 +1191,7 @@ export class PetDetailScene implements Scene {
     const lvCost = PlayerData.levelUpCost(petId);
     const canLv = PlayerData.canLevelUp(petId);
     const lvSub = lvCost === null ? '已满级' : `经验 ${PlayerData.exp}/${lvCost}`;
-    const lvBtn = this._makeDockButton({
+    const lvBtn = makeActionButton({
       width: lvW, height: btnH,
       title: lvCost === null ? '已满级' : '升级',
       subtitle: lvSub,
@@ -1198,60 +1201,6 @@ export class PetDetailScene implements Scene {
     });
     lvBtn.position.set(marginX + starW + gap + lvW / 2, cy);
     this._uiRoot().addChild(lvBtn);
-  }
-
-  private _makeDockButton(opts: {
-    width: number;
-    height: number;
-    title: string;
-    subtitle: string;
-    variant: 'success' | 'ghost';
-    enabled: boolean;
-    onTap: () => void;
-  }): PIXI.Container {
-    const { width, height, title, subtitle, variant, enabled, onTap } = opts;
-    const btn = new PIXI.Container();
-    const bg = new PIXI.Graphics();
-    const titleColor = !enabled
-      ? COLORS.textDisabled
-      : (variant === 'success' ? COLORS.textInverse : COLORS.textMain);
-    const subColor = !enabled
-      ? COLORS.textDisabled
-      : (variant === 'success' ? 0xe8f5e0 : COLORS.textSub);
-    const fill = !enabled
-      ? COLORS.btnDisabledBg
-      : (variant === 'success' ? COLORS.btnSuccessBg : COLORS.btnGhostBg);
-    const border = !enabled
-      ? COLORS.btnDisabledBorder
-      : (variant === 'success' ? COLORS.btnSuccessBorder : COLORS.btnGhostBorder);
-
-    bg.beginFill(fill);
-    bg.lineStyle(3, border, 1);
-    bg.drawRoundedRect(-width / 2, -height / 2, width, height, Math.min(RADIUS.button, height / 2));
-    bg.endFill();
-    btn.addChild(bg);
-
-    const t1 = makeText(title, {
-      size: FONT_SIZE.lg, fill: titleColor, bold: true, anchor: 0.5,
-    });
-    t1.position.set(0, -16);
-    btn.addChild(t1);
-
-    // 副文案（经验/碎片）对齐原型：明显可读，约标题 2/3 字号
-    const t2 = makeText(subtitle, {
-      size: FONT_SIZE.sm, fill: subColor, bold: true, anchor: 0.5,
-    });
-    t2.position.set(0, 20);
-    btn.addChild(t2);
-
-    if (enabled) {
-      btn.eventMode = 'static';
-      btn.cursor = 'pointer';
-      bindPointerTap(btn, onTap);
-    } else {
-      btn.eventMode = 'none';
-    }
-    return btn;
   }
 
   // ── 操作 + 反馈 ──

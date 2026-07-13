@@ -1,33 +1,27 @@
 /**
- * 编队场景：上阵 5 槽 + 已拥有宠物列表 + 队伍三维预览 + 属性覆盖提示
- *
- * 阶段七：复用 xiao_chu 灵宠池 UI（petpool_bg / 标题匾 / 卷轴卡片 / 五行相框），
- * 控件走 @/ui theme + 组件库。仅负责上下阵：点击列表或空槽切换编队；养成见灵宠页。
+ * 编队场景：战前按 team_prep_ui_prototype_v1 布局；
+ * 自由编队保留槽位 + 总览 + 宠物池。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
-import { TextureCache } from '@/core/TextureCache';
 import { teamPreloadImages, teamPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { Platform } from '@/core/PlatformService';
-import { UI, ORB_COLOR } from '@/balance/ui';
+import { UI } from '@/balance/ui';
 import {
   PET_MAP, TEAM_SIZE,
   type PetDef,
 } from '@/balance/pets';
-import { formatEnemyAbility, resolveEncounter } from '@/balance/enemies';
-import { ENEMY_TIER_COLOR, enemyDisplayTierOf, formatEnemyShortName } from '@/balance/enemyDisplay';
 import { STAGE_MAP, formatStageShortLabel, type StageDef } from '@/balance/stages';
 import type { TeamMember } from '@/formulas/team';
-import {
-  BACKGROUND_IMAGES, UI_IMAGES, enemyImage,
-} from '@/config/Assets';
+import { BACKGROUND_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import type { BattleEnterData } from './BattleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
-  makeBackButton, makeButton, makeCoverBackground, makePanel, makeText, makeNamePlaque,
+  makeActionButton, makeBackButton, makeCoverBackground, makePanel, makeText,
+  makeNamePlaque, makeStarRow,
   staggerIn, popIn, fadeIn, attachRarityBadge,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -36,8 +30,14 @@ import {
   type TeamOverviewSnapshot,
 } from './teamOverviewPanel';
 import { addTeamPetAvatar, buildTeamPetList } from './teamPetList';
+import { buildTeamEnemyIntelCard } from './teamEnemyIntelCard';
+import {
+  buildTeamPrepSummary,
+  makeSectionTitle,
+} from './teamPrepChrome';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
+
 /** 战前编队：传入 stageId 时展示本关敌人，确认后进入战斗；缺省为自由编队 */
 export interface TeamEnterData {
   stageId?: string;
@@ -49,24 +49,21 @@ export class TeamScene implements Scene {
 
   private _slotArea = new PIXI.Container();
   private _listChecks = new Map<string, PIXI.Container>();
-  /** 队伍总览面板内容层（每次换宠重建） */
   private _overview = new PIXI.Container();
   private _overviewW = 0;
   private _overviewH = 0;
-  /** 上次总览数值，用于换宠时高亮变化项 */
   private _prevAgg: TeamOverviewSnapshot | null = null;
-  /** 上次上阵阵容，用于只对变化槽位/勾选做入场动效 */
   private _prevTeam: string[] = [];
   private _prevChecked = new Set<string>();
   private _slotY = 0;
-  private _slotSize = 96;
-  /** 战前编队目标关卡；无则为底部导航进入的自由编队 */
+  private _slotSize = 108;
   private _prepStage?: StageDef;
-  /** 战前模式：宠物池滚动 + 点击（canvas 通道，对齐 CodexScene） */
   private _listContent: PIXI.Container | null = null;
   private _listItems = new Map<string, PIXI.Container>();
   private _listScroll = new ScrollListController();
   private readonly _enterSeq = new SceneEnterSeq();
+  private _summaryHost: PIXI.Container | null = null;
+  private _summaryW = 0;
 
   onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
@@ -91,6 +88,7 @@ export class TeamScene implements Scene {
     this._prevAgg = null;
     this._prevTeam = [];
     this._prevChecked.clear();
+    this._summaryHost = null;
     this._listScroll.detach();
     this._listContent = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
@@ -113,12 +111,100 @@ export class TeamScene implements Scene {
 
     this._buildTitlePlaque(w, Game.safeTop + 36);
 
-    const hint = makeText(
-      prep && this._prepStage
-        ? formatStageShortLabel(this._prepStage)
-        : '点击卡片或空槽调整上阵',
-      { size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: 0.5 },
-    );
+    if (prep && this._prepStage) {
+      this._buildPrepLayout(w, h, this._prepStage);
+    } else {
+      this._buildFreeLayout(w);
+    }
+
+    staggerIn([...this._listItems.values()], { stepDelay: 0.03, offsetY: 16, duration: 0.3 });
+    this._refreshTeamUi();
+  }
+
+  private _buildPrepLayout(w: number, h: number, stage: StageDef): void {
+    const panelW = 690;
+    let y = Game.safeTop + 96;
+
+    const stageLabel = makeText(formatStageShortLabel(stage), {
+      size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5,
+    });
+    stageLabel.position.set(w / 2, Game.safeTop + 72);
+    this.container.addChild(stageLabel);
+
+    const intel = buildTeamEnemyIntelCard({ stage, width: panelW });
+    intel.root.position.set((w - panelW) / 2, y);
+    this.container.addChild(intel.root);
+    y += intel.height + 14;
+
+    const teamTitle = makeSectionTitle('我的队伍', panelW);
+    teamTitle.position.set(w / 2, y + 12);
+    this.container.addChild(teamTitle);
+    y += 30;
+
+    const slotSize = 108;
+    this._slotSize = slotSize;
+    this._slotY = y;
+    this._slotArea = new PIXI.Container();
+    this.container.addChild(this._slotArea);
+    y += slotSize + 22;
+
+    this._summaryW = panelW;
+    this._summaryHost = new PIXI.Container();
+    this._summaryHost.position.set(w / 2, y + 10);
+    this.container.addChild(this._summaryHost);
+    y += 36;
+
+    const pickTitle = makeSectionTitle('可选灵宠', panelW);
+    pickTitle.position.set(w / 2, y + 10);
+    this.container.addChild(pickTitle);
+    y += 28;
+
+    const bottomBtnH = 88;
+    const bottomPad = 18;
+    const listBtnGap = 12;
+    const listBottom = h - bottomPad - bottomBtnH - listBtnGap;
+
+    this._listContent = buildTeamPetList({
+      container: this.container,
+      startY: y,
+      listBottom,
+      compact: true,
+      checks: this._listChecks,
+      items: this._listItems,
+      scroll: this._listScroll,
+      onToggle: (petId) => this._togglePet(petId),
+    });
+
+    const footTop = listBottom;
+    const footH = h - footTop;
+    const footShield = new PIXI.Container();
+    footShield.position.set(w / 2, footTop + footH / 2);
+    footShield.hitArea = new PIXI.Rectangle(-w / 2, -footH / 2, w, footH);
+    footShield.eventMode = 'static';
+    footShield.interactiveChildren = false;
+    footShield.addChild(makePanel({
+      width: w, height: footH, radius: 0,
+      bg: COLORS.panelBgAlt, bgAlpha: 0.92,
+      centered: true,
+    }));
+    bindPointerTap(footShield, () => { /* absorb */ });
+    this.container.addChild(footShield);
+
+    const startBtn = makeActionButton({
+      title: '开始战斗',
+      width: Math.min(640, w - 48),
+      height: bottomBtnH,
+      variant: 'success',
+      onTap: () => this._startBattle(),
+    });
+    startBtn.position.set(w / 2, h - bottomPad - bottomBtnH / 2);
+    this.container.addChild(startBtn);
+  }
+
+  private _buildFreeLayout(w: number): void {
+    const hint = makeText('点击卡片或空槽调整上阵', {
+      size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: 0.5,
+    });
     hint.position.set(w / 2, Game.safeTop + 82);
     this.container.addChild(hint);
 
@@ -127,18 +213,9 @@ export class TeamScene implements Scene {
 
     const slotSize = 96;
     this._slotSize = slotSize;
+    this._slotY = Game.safeTop + 118;
 
-    // 战前：敌人 → 编队 → 宠物池 → 底部开始；自由编队：沿用原布局
-    let y = Game.safeTop + 100;
-    if (prep && this._prepStage) {
-      y = this._buildEnemyPreview(this._prepStage, y);
-      y += 14;
-    } else {
-      y = Game.safeTop + 118;
-    }
-
-    this._slotY = y;
-    const panelTop = y + slotSize + 16;
+    const panelTop = this._slotY + slotSize + 16;
     const panelW = 690;
     const panelH = 166;
     const panelCenterY = panelTop + panelH / 2;
@@ -158,165 +235,14 @@ export class TeamScene implements Scene {
     panelRoot.addChild(this._overview);
     this.container.addChild(panelRoot);
 
-    const bottomBtnH = 72;
-    const bottomPad = 20;
-    const listBtnGap = 16;
-    if (prep) {
-      const listBottom = h - bottomPad - bottomBtnH - listBtnGap;
-      // 先建列表（带 mask 裁剪），再叠底栏遮罩与按钮，避免列表抢点「开始战斗」
-      this._listContent = buildTeamPetList({
-        container: this.container,
-        startY: listStartY,
-        listBottom,
-        checks: this._listChecks,
-        items: this._listItems,
-        scroll: this._listScroll,
-        onToggle: (petId) => this._togglePet(petId),
-      });
-
-      const footTop = listBottom;
-      const footH = h - footTop;
-      const footShield = new PIXI.Container();
-      footShield.position.set(w / 2, footTop + footH / 2);
-      footShield.hitArea = new PIXI.Rectangle(-w / 2, -footH / 2, w, footH);
-      footShield.eventMode = 'static';
-      footShield.interactiveChildren = false;
-      footShield.addChild(makePanel({
-        width: w, height: footH, radius: 0,
-        bg: COLORS.panelBgAlt, bgAlpha: 0.96,
-        centered: true,
-      }));
-      bindPointerTap(footShield, () => { /* 吸收底栏区点击，防止穿透到列表 */ });
-      this.container.addChild(footShield);
-
-      const startBtn = makeButton({
-        label: '开始战斗', width: 320, height: bottomBtnH, variant: 'danger',
-        onTap: () => this._startBattle(),
-      });
-      startBtn.position.set(w / 2, h - bottomPad - bottomBtnH / 2);
-      this.container.addChild(startBtn);
-    } else {
-      this._listContent = buildTeamPetList({
-        container: this.container,
-        startY: listStartY,
-        checks: this._listChecks,
-        items: this._listItems,
-        scroll: this._listScroll,
-        onToggle: (petId) => this._togglePet(petId),
-      });
-    }
-
-    // 宠物池卡片逐项入场
-    staggerIn([...this._listItems.values()], { stepDelay: 0.03, offsetY: 16, duration: 0.3 });
-
-    this._refreshTeamUi();
-  }
-
-  /** 战前模式：本关敌人头像行 + 能力摘要（复用编队页布局，仅多此区块） */
-  private _buildEnemyPreview(stage: StageDef, topY: number): number {
-    const w = Game.logicWidth;
-    const encounters = stage.encounters.map(resolveEncounter);
-    const waveCount = encounters.length;
-
-    const header = makeText(`本关敌人 · ${waveCount}波`, {
-      size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: 0.5,
+    this._listContent = buildTeamPetList({
+      container: this.container,
+      startY: listStartY,
+      checks: this._listChecks,
+      items: this._listItems,
+      scroll: this._listScroll,
+      onToggle: (petId) => this._togglePet(petId),
     });
-    header.position.set(w / 2, topY);
-    this.container.addChild(header);
-
-    const cardSize = 72;
-    const gap = 10;
-    const totalW = waveCount * cardSize + (waveCount - 1) * gap;
-    const startX = (w - totalW) / 2 + cardSize / 2;
-    const cardCenterY = topY + 22 + cardSize / 2;
-
-    encounters.forEach((enc, i) => {
-      const { def } = enc;
-      const tier = enemyDisplayTierOf(def);
-      const card = new PIXI.Container();
-      card.position.set(startX + i * (cardSize + gap), cardCenterY);
-
-      card.addChild(makePanel({
-        width: cardSize, height: cardSize, radius: RADIUS.chip,
-        bg: COLORS.panelBg, bgAlpha: 0.9,
-        border: ORB_COLOR[def.element], borderWidth: 2,
-        centered: true,
-      }));
-
-      const tex = TextureCache.get(def.image ?? enemyImage(def.id));
-      if (tex) {
-        const spr = new PIXI.Sprite(tex);
-        spr.anchor.set(0.5);
-        const scaleMul = tier === 'mob' ? 0.78 : tier === 'boss' ? 1.05 : 1;
-        spr.scale.set((cardSize - 18) / Math.max(tex.width, tex.height) * scaleMul);
-        if (tier === 'mob') spr.tint = 0xd8dde3;
-        card.addChild(spr);
-      }
-
-      if (tier !== 'mob') {
-        const tierBadge = makeText(
-          tier === 'boss' ? 'BOSS' : tier === 'miniBoss' ? '守关' : '精英',
-          { size: FONT_SIZE.xxs, fill: ENEMY_TIER_COLOR[tier], bold: true, anchor: 0.5,
-            strokeColor: 0x1a1126, strokeWidth: 3 },
-        );
-        tierBadge.position.set(cardSize / 2 - 10, -cardSize / 2 + 10);
-        card.addChild(tierBadge);
-      }
-
-      if (waveCount > 1) {
-        const badge = makeText(`${i + 1}`, {
-          size: FONT_SIZE.xxs, fill: COLORS.btnText, bold: true, anchor: 0.5,
-        });
-        const badgeBg = makePanel({
-          width: 22, height: 22, radius: 11,
-          bg: COLORS.accentDeep, border: COLORS.accent, borderWidth: 1,
-          centered: true,
-        });
-        badgeBg.position.set(-cardSize / 2 + 14, -cardSize / 2 + 14);
-        badge.position.set(-cardSize / 2 + 14, -cardSize / 2 + 14);
-        card.addChild(badgeBg, badge);
-      }
-
-      const name = makeText(formatEnemyShortName(def), {
-        size: FONT_SIZE.xxs, fill: COLORS.textMain, anchor: 0.5,
-      });
-      name.position.set(0, cardSize / 2 + 14);
-      card.addChild(name);
-
-      this.container.addChild(card);
-    });
-
-    const seen = new Set<string>();
-    const lines: string[] = [];
-    for (const { def } of encounters) {
-      if (seen.has(def.id)) continue;
-      seen.add(def.id);
-      lines.push(`${def.name}：${formatEnemyAbility(def)}`);
-    }
-
-    const panelW = 620;
-    const lineH = 22;
-    const panelH = Math.max(48, 16 + lines.length * lineH);
-    const panelY = cardCenterY + cardSize / 2 + 36 + panelH / 2;
-    const panel = new PIXI.Container();
-    panel.position.set(w / 2, panelY);
-    panel.addChild(makePanel({
-      width: panelW, height: panelH, radius: RADIUS.card,
-      bg: COLORS.panelBgAlt, bgAlpha: 0.92,
-      border: COLORS.panelBorderSoft, borderWidth: 1,
-      centered: true,
-    }));
-    lines.forEach((line, i) => {
-      const t = makeText(line, {
-        size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: [0, 0.5],
-        wordWrapWidth: panelW - 32,
-      });
-      t.position.set(-panelW / 2 + 16, -panelH / 2 + 16 + i * lineH);
-      panel.addChild(t);
-    });
-    this.container.addChild(panel);
-
-    return panelY + panelH / 2 + 12;
   }
 
   private _startBattle(): void {
@@ -332,7 +258,7 @@ export class TeamScene implements Scene {
   private _buildTitlePlaque(w: number, centerY: number): void {
     const plaque = makeNamePlaque({
       text: '编队',
-      width: Math.min(480, w - 80),
+      width: Math.min(420, w - 160),
       size: 'lg',
     });
     plaque.position.set(w / 2, centerY);
@@ -358,9 +284,10 @@ export class TeamScene implements Scene {
     const w = Game.logicWidth;
     const slotSize = this._slotSize;
     const slotY = this._slotY;
+    const prep = !!this._prepStage;
     this._slotArea.removeChildren().forEach((c) => c.destroy({ children: true }));
 
-    const gap = 10;
+    const gap = prep ? 12 : 10;
     const totalW = TEAM_SIZE * slotSize + (TEAM_SIZE - 1) * gap;
     const leftX = (w - totalW) / 2;
     const y = slotY;
@@ -368,7 +295,6 @@ export class TeamScene implements Scene {
     const team = PlayerData.team;
     for (let i = 0; i < TEAM_SIZE; i++) {
       const slot = new PIXI.Container();
-      // 与 makeButton 一致：position 在槽位中心 + 居中 hitArea
       const cx = leftX + i * (slotSize + gap) + slotSize / 2;
       const cy = y + slotSize / 2;
       slot.position.set(cx, cy);
@@ -378,6 +304,19 @@ export class TeamScene implements Scene {
       if (pet) {
         addTeamPetAvatar(slot, pet, 0, 0, slotSize);
         attachRarityBadge(slot, pet.rarity, -slotSize / 2, -slotSize / 2, slotSize, { variant: 'codex' });
+        if (prep) {
+          const lv = PlayerData.petLevel(pet.id);
+          const star = PlayerData.petStar(pet.id);
+          const lvText = makeText(`Lv.${lv}`, {
+            size: 14, fill: COLORS.btnText, bold: true, anchor: [0, 1],
+            strokeColor: 0x2a1a0c, strokeWidth: 3,
+          });
+          lvText.position.set(-slotSize / 2 + 6, slotSize / 2 - 4);
+          slot.addChild(lvText);
+          const stars = makeStarRow({ star, size: 12, anchor: 'center', style: 'sprite' });
+          stars.position.set(0, slotSize / 2 + 10);
+          slot.addChild(stars);
+        }
         slot.hitArea = new PIXI.Rectangle(-slotSize / 2, -slotSize / 2, slotSize, slotSize);
         slot.interactiveChildren = false;
         slot.eventMode = 'static';
@@ -385,14 +324,14 @@ export class TeamScene implements Scene {
         bindPointerTap(slot, () => this._togglePet(pet.id));
         if (this._prevTeam[i] !== petId) fadeIn(slot, { duration: 0.24 });
       } else {
-        slot.addChild(makePanel({
-          width: slotSize, height: slotSize, radius: RADIUS.chip,
-          bg: COLORS.panelBg, bgAlpha: 0.85,
-          border: COLORS.panelBorderSoft, borderWidth: 2,
-          centered: true,
-        }));
-        const plus = makeText('+', { size: FONT_SIZE.lg, fill: COLORS.textSub, anchor: 0.5 });
-        plus.position.set(0, 0);
+        const empty = new PIXI.Graphics();
+        empty.beginFill(COLORS.panelBg, 0.55);
+        empty.drawRoundedRect(-slotSize / 2, -slotSize / 2, slotSize, slotSize, 14);
+        empty.endFill();
+        empty.lineStyle(2.5, COLORS.panelBorderSoft, 0.95);
+        drawDashedRoundedRect(empty, -slotSize / 2, -slotSize / 2, slotSize, slotSize, 14, 8, 6);
+        slot.addChild(empty);
+        const plus = makeText('+', { size: 42, fill: COLORS.textSub, anchor: 0.5 });
         slot.addChild(plus);
         slot.hitArea = new PIXI.Rectangle(-slotSize / 2, -slotSize / 2, slotSize, slotSize);
         slot.interactiveChildren = false;
@@ -407,22 +346,74 @@ export class TeamScene implements Scene {
       .map((id) => PET_MAP.get(id))
       .filter((def): def is PetDef => !!def)
       .map((def) => ({ def, level: PlayerData.petLevel(def.id), star: PlayerData.petStar(def.id) }));
-    this._prevAgg = refreshTeamOverviewPanel(
-      this._overview,
-      this._overviewW,
-      this._overviewH,
-      members,
-      this._prevAgg,
-    );
+
+    if (prep && this._summaryHost) {
+      this._summaryHost.removeChildren().forEach((c) => c.destroy({ children: true }));
+      this._summaryHost.addChild(buildTeamPrepSummary(members, this._summaryW));
+    } else if (!prep) {
+      this._prevAgg = refreshTeamOverviewPanel(
+        this._overview,
+        this._overviewW,
+        this._overviewH,
+        members,
+        this._prevAgg,
+      );
+    }
 
     for (const [petId, check] of this._listChecks) {
       const checked = PlayerData.isInTeam(petId);
       check.visible = checked;
-      // 勾选 badge 从无到有时回弹入场
       if (checked && !this._prevChecked.has(petId)) popIn(check, { duration: 0.26 });
     }
 
     this._prevTeam = [...team];
     this._prevChecked = new Set(team);
+  }
+}
+
+function drawDashedRoundedRect(
+  g: PIXI.Graphics,
+  x: number, y: number, w: number, h: number,
+  r: number, dash: number, gap: number,
+): void {
+  const segments: Array<[number, number, number, number]> = [
+    [x + r, y, x + w - r, y],
+    [x + w, y + r, x + w, y + h - r],
+    [x + w - r, y + h, x + r, y + h],
+    [x, y + h - r, x, y + r],
+  ];
+  for (const [x0, y0, x1, y1] of segments) {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+    let t = 0;
+    let draw = true;
+    while (t < len) {
+      const seg = Math.min(draw ? dash : gap, len - t);
+      if (draw) {
+        g.moveTo(x0 + ux * t, y0 + uy * t);
+        g.lineTo(x0 + ux * (t + seg), y0 + uy * (t + seg));
+      }
+      t += seg;
+      draw = !draw;
+    }
+  }
+  const corners: Array<[number, number, number, number]> = [
+    [x + r, y + r, Math.PI, Math.PI * 1.5],
+    [x + w - r, y + r, Math.PI * 1.5, Math.PI * 2],
+    [x + w - r, y + h - r, 0, Math.PI * 0.5],
+    [x + r, y + h - r, Math.PI * 0.5, Math.PI],
+  ];
+  for (const [cx, cy, a0, a1] of corners) {
+    const steps = 6;
+    for (let i = 0; i < steps; i++) {
+      if (i % 2 === 1) continue;
+      const t0 = a0 + (a1 - a0) * (i / steps);
+      const t1 = a0 + (a1 - a0) * ((i + 1) / steps);
+      g.moveTo(cx + Math.cos(t0) * r, cy + Math.sin(t0) * r);
+      g.lineTo(cx + Math.cos(t1) * r, cy + Math.sin(t1) * r);
+    }
   }
 }

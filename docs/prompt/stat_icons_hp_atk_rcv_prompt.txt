@@ -1,0 +1,23 @@
+Create ONE image: 1 row x 3 columns equal square panels for mobile game STAT ICONS.
+
+GLOBAL STYLE:
+- Premium soft xianxia mobile UI icons, clean and readable at small size (28–48px)
+- Each panel: ONE icon centered on solid light gray #D0D0D0 background (for cutout)
+- Soft glossy finish, subtle highlight, crisp silhouette, consistent line weight across all 3
+- NO TEXT, no labels, no captions, no watermark, no UI frames, no circles behind heart/sword unless specified
+
+PANEL 1 (left) — HP / Life:
+- Classic STANDARD heart shape ♥ (two equal rounded lobes + sharp bottom point)
+- NOT a bean, NOT a balloon, NOT a droplet — must look like a normal app heart icon
+- Warm red (#E85A5A) with soft top-left white gloss
+
+PANEL 2 (middle) — ATK / Attack:
+- Single clear diagonal sword (about -40 degrees)
+- Visible pointed tip, blade, crossguard, handle, pommel — instantly readable as a sword
+- Orange-gold (#F08A3A) with soft metal highlight on blade
+
+PANEL 3 (right) — RCV / Recovery:
+- Green filled circle (#4CAF70) with bold white plus sign (+) centered
+- Soft gloss on circle, clean plus arms (equal thickness)
+
+All three icons same visual scale, same polish level, transparent-friendly edges.

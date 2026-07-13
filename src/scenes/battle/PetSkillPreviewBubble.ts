@@ -5,14 +5,13 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { TweenManager } from '@/core/TweenManager';
-import { TextureCache } from '@/core/TextureCache';
 import { computePetBarPetSize } from './BattleLayout';
 import { UI, ORB_COLOR } from '@/balance/ui';
-import { ORB_IMAGES } from '@/config/Assets';
 import type { Element } from '@/balance/combat';
 import type { TeamPet } from '@/game/battle/battleTypes';
 import { makeText } from '@/ui/text';
 import { makeSkillIcon } from '@/ui/SkillIcon';
+import { makeElementOrb } from '@/ui/ElementOrb';
 import { COLORS } from '@/ui/theme';
 
 const AUTO_DISMISS_SEC = 4;
@@ -228,20 +227,16 @@ function buildCaret(): PIXI.Graphics {
 function buildElementIcon(el: Element, accent: number): PIXI.Container {
   const c = new PIXI.Container();
   const size = 34;
-  const tex = TextureCache.get(ORB_IMAGES[el]);
-  if (tex) {
-    const orb = new PIXI.Sprite(tex);
-    orb.anchor.set(0.5);
-    orb.width = size;
-    orb.height = size;
-    c.addChild(orb);
-  } else {
+  const orb = makeElementOrb(el, size);
+  if (orb.texture === PIXI.Texture.WHITE) {
     const g = new PIXI.Graphics();
     g.beginFill(accent, 1);
     g.lineStyle(2.5, SKILL_UI.gold, 1);
     g.drawCircle(0, 0, size / 2);
     g.endFill();
     c.addChild(g);
+  } else {
+    c.addChild(orb);
   }
   return c;
 }

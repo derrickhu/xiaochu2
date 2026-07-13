@@ -1,0 +1,10 @@
+Game character sprite: earth crystal colossus boss (幽晶巨像).
+
+Use the reference image for character identity, pose, colors, and art style ONLY.
+Fix the clipping: the reference was cropped at the top — you MUST fully show complete crystal peaks on the head and ALL floating ice shards with clear transparent margin above them. Do not flatten or cut any crystal tip.
+
+Same creature: bulky dark-grey jagged rock golem, glowing orange magma cracks, glowing orange eyes, large faceted light-blue ice crystals on head/shoulders/fists/feet, small floating blue crystal shards around upper body, front-facing battle stance, fists forward.
+
+Full body visible with comfortable transparent padding on ALL sides (especially TOP). Clean transparent or pure solid dark void background. Premium mobile game boss sprite, sharp lines, high polish.
+
+NO TEXT, no labels, no captions, no watermark, no UI, no frame, no border.

@@ -1,0 +1,17 @@
+Create ONE image: 1 row x 2 columns equal panels for EMPTY mobile game UI button plates.
+
+GLOBAL:
+- Soft xianxia mobile UI, matching cream+gold summon screen
+- Each panel: ONE empty wide rounded-rectangle button plate on solid gray #D0D0D0
+- Smooth continuous porcelain gradient (NO banding/stripes), soft top gloss, thin border, soft drop shadow
+- NO TEXT, no icons, no symbols, no watermark
+
+PANEL 1 (left) — primary GOLD summon button:
+- Warm gold-to-orange vertical gradient (#FFD56A top → #E8922A bottom)
+- Soft darker gold border, strong top gloss highlight
+
+PANEL 2 (right) — secondary CREAM summon button:
+- Cream / parchment fill (#FFF8EC top → #E8D4A8 bottom)
+- Thin elegant gold-brown border, gentle top gloss
+
+Same size/shape (wide capsule ~3.2:1), same corner radius.
