@@ -21,7 +21,7 @@ import type { BattleEnterData } from './BattleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
   makeActionButton, makeBackButton, makeCoverBackground, makePanel, makeText,
-  makeNamePlaque, makeStarRow,
+  makeNamePlaque,
   staggerIn, popIn, fadeIn, attachRarityBadge,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -29,7 +29,7 @@ import {
   refreshTeamOverviewPanel,
   type TeamOverviewSnapshot,
 } from './teamOverviewPanel';
-import { addTeamPetAvatar, buildTeamPetList } from './teamPetList';
+import { addTeamPetAvatar, addTeamPrepSlotPet, buildTeamPetList } from './teamPetList';
 import { buildTeamEnemyIntelCard } from './teamEnemyIntelCard';
 import {
   buildTeamPrepSummary,
@@ -56,7 +56,8 @@ export class TeamScene implements Scene {
   private _prevTeam: string[] = [];
   private _prevChecked = new Set<string>();
   private _slotY = 0;
-  private _slotSize = 108;
+  private _slotW = 108;
+  private _slotH = 108;
   private _prepStage?: StageDef;
   private _listContent: PIXI.Container | null = null;
   private _listItems = new Map<string, PIXI.Container>();
@@ -106,10 +107,10 @@ export class TeamScene implements Scene {
     const back = makeBackButton({
       onTap: () => SceneManager.switchTo('title'),
     });
-    back.position.set(80, Game.safeTop + 36);
+    back.position.set(80, Game.safeHeaderCenterY);
     this.container.addChild(back);
 
-    this._buildTitlePlaque(w, Game.safeTop + 36);
+    this._buildTitlePlaque(w, Game.safeHeaderCenterY);
 
     if (prep && this._prepStage) {
       this._buildPrepLayout(w, h, this._prepStage);
@@ -123,12 +124,12 @@ export class TeamScene implements Scene {
 
   private _buildPrepLayout(w: number, h: number, stage: StageDef): void {
     const panelW = 690;
-    let y = Game.safeTop + 96;
+    let y = Game.safeTop + 24;
 
     const stageLabel = makeText(formatStageShortLabel(stage), {
       size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5,
     });
-    stageLabel.position.set(w / 2, Game.safeTop + 72);
+    stageLabel.position.set(w / 2, Game.safeHeaderCenterY + 36);
     this.container.addChild(stageLabel);
 
     const intel = buildTeamEnemyIntelCard({ stage, width: panelW });
@@ -141,27 +142,42 @@ export class TeamScene implements Scene {
     this.container.addChild(teamTitle);
     y += 30;
 
-    const slotSize = 108;
-    this._slotSize = slotSize;
-    this._slotY = y;
+    // 竖卡高度 = 托盘内容区高度（对齐原型：头像与背景板同高）
+    const slotW = 118;
+    const slotH = 168;
+    const trayPadX = 12;
+    const trayPadTop = 10;
+    const summaryH = 36;
+    const trayH = trayPadTop + slotH + summaryH + 8;
+    const tray = makePanel({
+      width: panelW, height: trayH, radius: 16,
+      bg: 0xfff8ec, bgAlpha: 0.96,
+      border: 0xe0c896, borderWidth: 2,
+      centered: false,
+    });
+    tray.position.set((w - panelW) / 2, y);
+    this.container.addChild(tray);
+
+    this._slotW = slotW;
+    this._slotH = slotH;
+    this._slotY = y + trayPadTop;
     this._slotArea = new PIXI.Container();
     this.container.addChild(this._slotArea);
-    y += slotSize + 22;
 
-    this._summaryW = panelW;
+    this._summaryW = panelW - trayPadX * 2;
     this._summaryHost = new PIXI.Container();
-    this._summaryHost.position.set(w / 2, y + 10);
+    this._summaryHost.position.set(w / 2, y + trayPadTop + slotH + summaryH / 2);
     this.container.addChild(this._summaryHost);
-    y += 36;
+    y += trayH + 12;
 
     const pickTitle = makeSectionTitle('可选灵宠', panelW);
     pickTitle.position.set(w / 2, y + 10);
     this.container.addChild(pickTitle);
-    y += 28;
+    y += 26;
 
-    const bottomBtnH = 88;
-    const bottomPad = 18;
-    const listBtnGap = 12;
+    const bottomBtnH = 104;
+    const bottomPad = 16;
+    const listBtnGap = 10;
     const listBottom = h - bottomPad - bottomBtnH - listBtnGap;
 
     this._listContent = buildTeamPetList({
@@ -182,9 +198,10 @@ export class TeamScene implements Scene {
     footShield.hitArea = new PIXI.Rectangle(-w / 2, -footH / 2, w, footH);
     footShield.eventMode = 'static';
     footShield.interactiveChildren = false;
+    // 与 UI 图一致：淡奶油底，避免深色脚垫
     footShield.addChild(makePanel({
       width: w, height: footH, radius: 0,
-      bg: COLORS.panelBgAlt, bgAlpha: 0.92,
+      bg: 0xfff8ec, bgAlpha: 0.94,
       centered: true,
     }));
     bindPointerTap(footShield, () => { /* absorb */ });
@@ -192,7 +209,7 @@ export class TeamScene implements Scene {
 
     const startBtn = makeActionButton({
       title: '开始战斗',
-      width: Math.min(640, w - 48),
+      width: Math.min(620, w - 56),
       height: bottomBtnH,
       variant: 'success',
       onTap: () => this._startBattle(),
@@ -205,15 +222,16 @@ export class TeamScene implements Scene {
     const hint = makeText('点击卡片或空槽调整上阵', {
       size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: 0.5,
     });
-    hint.position.set(w / 2, Game.safeTop + 82);
+    hint.position.set(w / 2, Game.safeTop + 12);
     this.container.addChild(hint);
 
     this._slotArea = new PIXI.Container();
     this.container.addChild(this._slotArea);
 
     const slotSize = 96;
-    this._slotSize = slotSize;
-    this._slotY = Game.safeTop + 118;
+    this._slotW = slotSize;
+    this._slotH = slotSize;
+    this._slotY = Game.safeTop + 48;
 
     const panelTop = this._slotY + slotSize + 16;
     const panelW = 690;
@@ -282,42 +300,38 @@ export class TeamScene implements Scene {
 
   private _refreshTeamUi(): void {
     const w = Game.logicWidth;
-    const slotSize = this._slotSize;
+    const slotW = this._slotW;
+    const slotH = this._slotH;
     const slotY = this._slotY;
     const prep = !!this._prepStage;
     this._slotArea.removeChildren().forEach((c) => c.destroy({ children: true }));
 
-    const gap = prep ? 12 : 10;
-    const totalW = TEAM_SIZE * slotSize + (TEAM_SIZE - 1) * gap;
+    const gap = prep ? 14 : 10;
+    const totalW = TEAM_SIZE * slotW + (TEAM_SIZE - 1) * gap;
     const leftX = (w - totalW) / 2;
     const y = slotY;
 
     const team = PlayerData.team;
     for (let i = 0; i < TEAM_SIZE; i++) {
       const slot = new PIXI.Container();
-      const cx = leftX + i * (slotSize + gap) + slotSize / 2;
-      const cy = y + slotSize / 2;
+      const cx = leftX + i * (slotW + gap) + slotW / 2;
+      const cy = y + slotH / 2;
       slot.position.set(cx, cy);
       const petId = team[i];
       const pet = petId ? PET_MAP.get(petId) : undefined;
 
       if (pet) {
-        addTeamPetAvatar(slot, pet, 0, 0, slotSize);
-        attachRarityBadge(slot, pet.rarity, -slotSize / 2, -slotSize / 2, slotSize, { variant: 'codex' });
         if (prep) {
-          const lv = PlayerData.petLevel(pet.id);
-          const star = PlayerData.petStar(pet.id);
-          const lvText = makeText(`Lv.${lv}`, {
-            size: 14, fill: COLORS.btnText, bold: true, anchor: [0, 1],
-            strokeColor: 0x2a1a0c, strokeWidth: 3,
-          });
-          lvText.position.set(-slotSize / 2 + 6, slotSize / 2 - 4);
-          slot.addChild(lvText);
-          const stars = makeStarRow({ star, size: 12, anchor: 'center', style: 'sprite' });
-          stars.position.set(0, slotSize / 2 + 10);
-          slot.addChild(stars);
+          addTeamPrepSlotPet(
+            slot, pet, slotW, slotH,
+            PlayerData.petLevel(pet.id),
+            PlayerData.petStar(pet.id),
+          );
+        } else {
+          addTeamPetAvatar(slot, pet, 0, 0, slotW);
+          attachRarityBadge(slot, pet.rarity, -slotW / 2, -slotH / 2, slotW, { variant: 'codex' });
         }
-        slot.hitArea = new PIXI.Rectangle(-slotSize / 2, -slotSize / 2, slotSize, slotSize);
+        slot.hitArea = new PIXI.Rectangle(-slotW / 2, -slotH / 2, slotW, slotH);
         slot.interactiveChildren = false;
         slot.eventMode = 'static';
         slot.cursor = 'pointer';
@@ -325,15 +339,15 @@ export class TeamScene implements Scene {
         if (this._prevTeam[i] !== petId) fadeIn(slot, { duration: 0.24 });
       } else {
         const empty = new PIXI.Graphics();
-        empty.beginFill(COLORS.panelBg, 0.55);
-        empty.drawRoundedRect(-slotSize / 2, -slotSize / 2, slotSize, slotSize, 14);
+        empty.beginFill(0xfff8ec, prep ? 0.55 : 0.55);
+        empty.drawRoundedRect(-slotW / 2, -slotH / 2, slotW, slotH, 12);
         empty.endFill();
-        empty.lineStyle(2.5, COLORS.panelBorderSoft, 0.95);
-        drawDashedRoundedRect(empty, -slotSize / 2, -slotSize / 2, slotSize, slotSize, 14, 8, 6);
+        empty.lineStyle(2.5, 0xe0c896, 0.95);
+        drawDashedRoundedRect(empty, -slotW / 2, -slotH / 2, slotW, slotH, 12, 8, 6);
         slot.addChild(empty);
-        const plus = makeText('+', { size: 42, fill: COLORS.textSub, anchor: 0.5 });
+        const plus = makeText('+', { size: prep ? 48 : 42, fill: COLORS.textSub, anchor: 0.5 });
         slot.addChild(plus);
-        slot.hitArea = new PIXI.Rectangle(-slotSize / 2, -slotSize / 2, slotSize, slotSize);
+        slot.hitArea = new PIXI.Rectangle(-slotW / 2, -slotH / 2, slotW, slotH);
         slot.interactiveChildren = false;
         slot.eventMode = 'static';
         slot.cursor = 'pointer';

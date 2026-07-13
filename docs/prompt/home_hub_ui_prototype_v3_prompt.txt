@@ -1,0 +1,46 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+Light airy painted scenery ALSO slightly Q/stylized. FORBIDDEN: photorealistic, dark fantasy, neon, purple AI defaults.
+Use references for STYLE / palette / chrome ONLY — do not copy their layouts.
+
+Create ONE COMPLETE mobile HOME HUB UI prototype (phone 9:16 portrait, fully finished top-to-bottom).
+
+INFORMATION ARCHITECTURE (critical — avoid overlap):
+- CENTER of screen = MAINLINE CHAPTER CAMPAIGN map only (core loop).
+- BOTTOM CENTER TAB label「主线」(SELECTED) = this home screen (NOT a second adventure mode).
+- LEFT RAIL = extensible SECONDARY modes that will grow later (not competing with mainline):
+  签到 / 通天塔 / 日常 / 活动
+- 「通天塔」= future climb/challenge mode (different from mainline stages). Do NOT make it look like another stage map.
+
+COMPOSITION:
+
+1) TOP BAR (no player level, no mail)
+- Left: cute Q pet avatar circle + nickname「仙灵小萌新」only (NO Lv, NO EXP bar)
+- Right: two currency pills 灵玉「1680」+ 灵宠币「32.6w」with「+」
+- NO 邮件 button
+
+2) CHAPTER HEADER
+- Cream-gold plaque「第3章 · 玄龟试炼」with left/right arrows
+
+3) HERO — MAINLINE STAGE MAP (~55%)
+- Q-stylized mint mountain path, nodes 1–6, stars on cleared, lock on locked
+- Cute Q BOSS (chubby stone-turtle) + small「BOSS」tag
+- Leave left margin for rail
+
+4) LEFT RAIL (narrow, expandable pattern)
+Circle icons + labels: 签到(red-dot) / 通天塔 / 日常 / 活动
+Visual room implying more icons can be added later
+
+5) BOTTOM NAV (fully visible)
+灵宠 | 召唤 | 主线(SELECTED, larger) | 商店 | 编队
+Center tab MUST read「主线」not「冒险」.
+
+Delivered: docs/ui/home_hub_ui_prototype_v3.png
+IA locked:
+- Bottom center「主线」= home chapter map (NOT「冒险」)
+- Left rail = extensible secondary modes (签到/通天塔/日常/活动…)
+- 通天塔 ≠ 主线关卡
+- No player Lv / EXP / mail
+

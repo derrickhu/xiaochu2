@@ -27,6 +27,15 @@ export const COLORS = {
   textMain: 0x3a2e22,
   /** 次要说明文字 */
   textSub: 0x7a6a52,
+  /**
+   * 召唤页保底正文（对齐 UI 原型：冷静炭灰，忌土黄粗描边）
+   * 截图：距离 / 灵宠必出还差 / 抽
+   */
+  gachaPityText: 0x4a453c,
+  /** 召唤页保底剩余次数（亮橙，对齐原型数字强调） */
+  gachaPityRemain: 0xff8c22,
+  /** 召唤页砸蛋引导（白字 + 阴影，见 makeText dropShadow） */
+  gachaEggTip: 0xffffff,
   /** 深底（如紫色导航栏）上的浅色文字 */
   textInverse: 0xfdf3df,
   /** 不可用态文字 */

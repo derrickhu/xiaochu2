@@ -1,22 +1,47 @@
-# 阶段十一 UI 美术风格指南
+# xiaochu2 UI / 原画 美术风格指南
+
+> Agent 生图前必读。对应 Cursor 规则：`.cursor/rules/ui-art-style.mdc`。
 
 ## 总基调
+
 - **统一 Q 版修仙**（cute-chibi xianxia guofeng）：与宠物/怪物 sprite 同一视觉家族，环境也稍 Q 版。
-- 明亮国风插画：圆胖简化造型、细线描边、柔和赛璐璐/平涂块面，对齐 `scene_pet_pool.jpg`。
+- 明亮国风插画：圆胖简化造型、细线描边、柔和赛璐璐/平涂块面，对齐 `scene_pet_pool.jpg` 与已定稿 `docs/ui/*_prototype_*.png`。
 - 主色：薄荷青 / 湖水绿 (#7fd3c6 ~ #a8e0d8)、宣纸米白 (#fdf3df)、描金 (#e8a33d / #b5701f)。
 - 笔触：轻水墨晕染 + 可爱圆润比例；忌厚重写实、忌暗黑恐怖、忌高饱和霓虹、忌 3D 写实渲染。
 
+## 必贴风格段（每个 prompt 开头粘贴）
+
+```
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+Light airy painted scenery that is ALSO slightly Q/stylized (NOT realistic ink-wash landscape).
+Pets/monsters/UI chrome must match the same cute family as existing prototypes.
+FORBIDDEN: photorealistic, dark fantasy, heavy oil paint, cyberpunk neon, purple-on-white AI defaults, 3D PBR.
+Use reference images for STYLE / palette / button & plaque chrome ONLY — do not copy their exact layout.
+```
+
+## 风格参考图（生图时 reference_image_paths）
+
+| 优先级 | 路径 | 借什么 |
+|--------|------|--------|
+| 1 | `docs/ui/gacha_golden_egg_ui_prototype_v1.png` | 奶油金边按钮、匾额、薄荷雾气 |
+| 2 | `docs/ui/pet_codex_ui_prototype_v4_q_ui.png` | Q 宠造型、浅色面板、圆角卡 |
+| 3 | `docs/ui/team_prep_ui_prototype_v2.png` | 编队页淡底板、分区节奏 |
+| 4 | `minigame/images/bg/scene_pet_pool.jpg` | 环境笔触/配色（仅风格） |
+
+整页 UI 原型：**至少 2 张**参考；单图标/板子：至少 1 张或写明对齐已有 `plate_*.png`。
+
 ## 出图通用规则
-- 所有 prompt 必含：`NO TEXT, no labels, no captions, no writing anywhere in the image`。
-- 风格参考图：`minigame/images/bg/scene_pet_pool.jpg`（用 `--image` 传入，仅借风格/笔触/配色，不复制具体元素）。
-- 光效/粒子类：在**纯黑底**上出图（`pure solid black background`），交给引擎用叠加（ADD）混合，黑色即透明，免抠图。
-- 卡框/图标类：需透明，出图后走 rembg 抠底。
 
-## 资产清单与用途
-| 批次 | 文件 | 出图底 | 处理 | 用途 |
-|------|------|--------|------|------|
-| gacha_fx | fx_light_pillar / fx_summon_circle / fx_starburst / fx_aura_ring | 纯黑 | 直接用(ADD) | 抽卡演出光柱/法阵/星爆/光环 |
-| particles | p_dot / p_spark / p_petal / p_wisp | 纯黑 | 直接用(ADD) | 通用粒子贴图，替代白图 tint |
+- UI 原型需要可读中文标签时，prompt **明确写出**要出现的汉字；纯资产贴图则写 `NO TEXT`。
+- 光效/粒子：纯黑底，引擎 ADD 混合。
+- 卡框/图标需透明：出图后走 rembg（见 `ui-asset-matting` 规则）。
+- **完整度**：竖屏 9:16 一屏结构齐全（顶栏、主内容、底栏/主按钮按需求），禁止裁切半截、缺模块。
 
-## 交付路径
-- 处理后 PNG 拷入 `minigame/images/ui/fx/`，在 `src/config/Assets.ts` 注册到 `UI_FX_IMAGES` 并按需加入预加载。
+## 交付
+
+- Prompt → `docs/prompt/{task}_prompt.txt`
+- UI 原型 → `docs/ui/`
+- 运行时资源 → `minigame/images/...` 后 `npm run build`

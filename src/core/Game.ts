@@ -31,8 +31,20 @@ class GameClass {
   screenHeight = 667;
   scale = 1;
   dpr = 1;
+
+  /**
+   * 顶栏以下内容起点（设计稿 Y）= 胶囊底边 + 间距。
+   * 章节匾、列表顶等用这个；顶栏本身请用 safeHeaderCenterY。
+   */
   safeTop = 0;
-  /** 微信胶囊左缘（设计稿坐标）；无胶囊时为 designWidth */
+  /** 底部安全区内缩（Home Indicator 等），设计稿坐标 */
+  safeBottom = 0;
+  /**
+   * 顶栏垂直中心（设计稿 Y）—— 与微信/抖音右上角「··· / 收起」胶囊垂直居中对齐。
+   * 返回钮、标题匾、货币条中心都应对齐此值。
+   */
+  safeHeaderCenterY = 48;
+  /** 胶囊左缘（设计稿）；右侧 UI 不得超过此值减间距 */
   safeCapsuleLeft = 750;
   safeCapsuleTop = 0;
   safeCapsuleBottom = 32;
@@ -51,37 +63,12 @@ class GameClass {
     const sysInfo = _api?.getSystemInfoSync?.();
 
     if (sysInfo) {
-      this.screenWidth = sysInfo.screenWidth;
-      this.screenHeight = sysInfo.screenHeight;
+      this.screenWidth = sysInfo.screenWidth ?? this.screenWidth;
+      this.screenHeight = sysInfo.screenHeight ?? this.screenHeight;
       this.dpr = sysInfo.pixelRatio || 2;
     }
 
-    let safeTopPx = 0;
-    const ratio = this.designWidth / this.screenWidth;
-    this.safeCapsuleLeft = this.designWidth;
-    this.safeCapsuleTop = 0;
-    this.safeCapsuleBottom = Math.round(32 * ratio);
-    try {
-      const capsule = _api?.getMenuButtonBoundingClientRect?.();
-      if (capsule && capsule.top) {
-        safeTopPx = capsule.top;
-        if (capsule.left > 0) {
-          this.safeCapsuleLeft = Math.round(capsule.left * ratio);
-          this.safeCapsuleTop = Math.round(capsule.top * ratio);
-          this.safeCapsuleBottom = Math.round(
-            (capsule.bottom ?? capsule.top + (capsule.height ?? 32)) * ratio,
-          );
-        }
-      } else if (sysInfo?.statusBarHeight) {
-        safeTopPx = sysInfo.statusBarHeight + 6;
-      }
-    } catch (_) { /* */ }
-    if (safeTopPx <= 0) safeTopPx = 40;
-    this.safeTop = Math.round(safeTopPx * ratio);
-    if (this.safeCapsuleTop <= 0) {
-      this.safeCapsuleTop = this.safeTop;
-      this.safeCapsuleBottom = this.safeTop + Math.round(32 * ratio);
-    }
+    this._applySafeArea(_api, sysInfo);
 
     this.scale = this.screenWidth / this.designWidth * this.dpr;
     const realWidth = this.screenWidth * this.dpr;
@@ -206,6 +193,91 @@ class GameClass {
 
   get logicHeight(): number {
     return this.screenHeight / this.screenWidth * this.designWidth;
+  }
+
+  /**
+   * 右侧可排版右缘（避开微信/抖音胶囊），设计稿 X。
+   * @param pad 与胶囊左缘的间距
+   */
+  contentRightX(pad = 12): number {
+    return Math.max(this.designWidth * 0.55, this.safeCapsuleLeft - pad);
+  }
+
+  /**
+   * 根据系统信息 / 胶囊按钮刷新安全区。
+   * 顶栏中线对齐胶囊；内容从胶囊下方开始；底部纳入 Home Indicator。
+   */
+  private _applySafeArea(_api: any, sysInfo: any): void {
+    const sw = this.screenWidth || 375;
+    const sh = this.screenHeight || 667;
+    const ratio = this.designWidth / sw;
+
+    let capTopPx = 0;
+    let capBottomPx = 0;
+    let capLeftPx = sw;
+    let capHeightPx = 32;
+
+    try {
+      const capsule = _api?.getMenuButtonBoundingClientRect?.();
+      // 注意：不能用 capsule.top 真值判断（少数环境 top 可能为 0），以 height 为准
+      if (capsule && typeof capsule.height === 'number' && capsule.height > 0) {
+        capTopPx = Number(capsule.top) || 0;
+        capHeightPx = capsule.height;
+        capBottomPx = Number(capsule.bottom) > 0
+          ? Number(capsule.bottom)
+          : capTopPx + capHeightPx;
+        if (typeof capsule.left === 'number' && capsule.left > 0) {
+          capLeftPx = capsule.left;
+        }
+      }
+    } catch (_) { /* */ }
+
+    if (capBottomPx <= capTopPx) {
+      const statusPx = Number(sysInfo?.statusBarHeight) > 0
+        ? Number(sysInfo.statusBarHeight)
+        : 20;
+      // 无胶囊时：状态栏下模拟一颗标准胶囊
+      capTopPx = statusPx + 6;
+      capHeightPx = 32;
+      capBottomPx = capTopPx + capHeightPx;
+      capLeftPx = sw - 100;
+    }
+
+    // 极端兜底：仍贴顶则按常见刘海机预留
+    if (capBottomPx < 24) {
+      capTopPx = 44;
+      capHeightPx = 32;
+      capBottomPx = capTopPx + capHeightPx;
+    }
+
+    this.safeCapsuleTop = Math.round(capTopPx * ratio);
+    this.safeCapsuleBottom = Math.round(capBottomPx * ratio);
+    this.safeCapsuleLeft = Math.round(capLeftPx * ratio);
+    this.safeHeaderCenterY = Math.round(((capTopPx + capBottomPx) / 2) * ratio);
+
+    // 内容区从胶囊下方开始，再加一点呼吸间距
+    const gapBelowCapsule = Math.round(10 * ratio);
+    this.safeTop = this.safeCapsuleBottom + gapBelowCapsule;
+
+    // 底部安全区（Home Indicator）
+    let bottomInsetPx = 0;
+    try {
+      const sa = sysInfo?.safeArea;
+      if (sa && typeof sa.bottom === 'number' && sh > 0) {
+        bottomInsetPx = Math.max(0, sh - sa.bottom);
+      } else if (typeof sysInfo?.safeAreaInsets?.bottom === 'number') {
+        bottomInsetPx = Math.max(0, sysInfo.safeAreaInsets.bottom);
+      }
+    } catch (_) { /* */ }
+    this.safeBottom = Math.round(bottomInsetPx * ratio);
+
+    try {
+      console.log(
+        `[Game] safeArea headerCenter=${this.safeHeaderCenterY} top=${this.safeTop} `
+        + `bottom=${this.safeBottom} capsule=${this.safeCapsuleTop}-${this.safeCapsuleBottom} `
+        + `left=${this.safeCapsuleLeft} screen=${sw}x${sh}`,
+      );
+    } catch (_) { /* */ }
   }
 
   /**

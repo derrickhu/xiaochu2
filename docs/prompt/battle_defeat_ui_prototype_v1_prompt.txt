@@ -1,0 +1,28 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette still cream parchment (#fdf3df) + soft gold (#e8a33d), but mood is softer / slightly misty teal-grey — still BRIGHT Q-cute, NOT dark fantasy, NOT purple horror, NOT muddy brown.
+FORBIDDEN: photorealistic, dark gothic defeat screens, neon, purple-on-white AI defaults, 3D PBR.
+Use references for STYLE / palette / chrome ONLY.
+
+Create ONE COMPLETE phone 9:16 BATTLE DEFEAT settlement UI prototype. Full screen finished.
+KEY FEATURE: support「看广告复活」(watch ad to revive).
+
+COMPOSITION (modal over dimmed soft battle scene):
+
+1) Soft dimmed Q battle background with gentle mist — calm, not scary.
+
+2) CENTER cream ornate panel with gold trim (same brand chrome as victory/gacha):
+- Title plaque「战斗失败」in deep brown (readable, not purple)
+- Small cute sad Q pet / wilted lotus motif (optional, soft)
+- Tip line「提示：消除克制属性珠子伤害更高」
+- Soft refund chip「保底经验 +52」
+- Optional guide strip when stuck:「卡关了？试试提升战力」with small pills 召唤 / 商店 / 编队
+
+3) BOTTOM CTA stack (critical hierarchy):
+- PRIMARY — large unified emerald/jade OR warm gold capsule「看广告复活」with small「广告」tag / play icon (must read as main action)
+- Secondary cream「重试」
+- Ghost cream「返回主页」
+
+Keep buttons unified oval plates (no split top/bottom seams).
+Chinese labels as specified. No watermark. Nothing cropped.

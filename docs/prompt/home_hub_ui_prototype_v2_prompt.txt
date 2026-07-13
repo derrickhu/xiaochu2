@@ -1,0 +1,51 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+Light airy painted scenery that is ALSO slightly Q/stylized (NOT realistic ink-wash landscape).
+Pets/monsters/UI chrome must match the same cute family as existing prototypes (gacha / pet codex / team prep).
+FORBIDDEN: photorealistic, dark fantasy, heavy oil paint, cyberpunk neon, purple-on-white AI defaults, 3D PBR.
+Use the reference images for STYLE / palette / button & plaque chrome ONLY — do not copy their exact layouts.
+
+Create ONE COMPLETE high-fidelity mobile game HOME / ADVENTURE HUB UI prototype.
+CRITICAL ASPECT: true phone 9:16 tall portrait. Full screen must be finished end-to-end — top bar, chapter header, mainline map, left rail, AND bottom nav all fully visible, nothing cropped or half-cut.
+
+GOAL: Mainline stage campaign is the clear core loop; secondary modes sit on a left rail without stealing focus.
+
+COMPLETE COMPOSITION (all modules required):
+
+1) TOP BAR (full width, readable)
+- Left: cute Q-style pet avatar circle + name「仙灵小萌新」+ Lv.45 + short green EXP bar
+- Center-right: two currency pills — mint drop「1680」and gold coin「32.6w」, each with small「+」
+- Far right:「邮件」icon with red badge (settings gear optional)
+
+2) CHAPTER HEADER
+- Cream-gold plaque「第3章 · 玄龟试炼」
+- Small left / right chapter arrows
+
+3) HERO CENTER — MAINLINE STAGE MAP (~55% height, dominant)
+- Soft Q-stylized misty mint mountain path (cute, not realistic)
+- Vertical winding stone path with 6 glowing circular stage nodes numbered 1–6
+- Cleared nodes show 3 small gold stars under them; locked optional node with lock
+- Cute Q-version BOSS creature at top (chubby stone-turtle / golem chibi), label「BOSS」
+- Soft lotus / spirit wisps near water at bottom of map area
+- Leave clear margins so left rail does not overlap nodes
+
+4) LEFT FUNCTION RAIL (narrow, complete stack)
+Vertical circle icons + Chinese labels, all four visible:
+- 签到
+- 通天塔
+- 日常
+- 活动
+Gold/cream rings, soft gloss, red-dot on 签到
+
+5) BOTTOM NAV (MUST be fully visible, never cropped)
+Cream/gold cloud bar with 5 tabs, icons + labels:
+灵宠 | 召唤 | 冒险(SELECTED, larger highlight) | 商店 | 编队
+「冒险」= this home / mainline campaign.
+
+QUALITY / COMPLETENESS:
+- Same premium cream+gold UI language as gacha/codex/team-prep references
+- All Chinese labels as specified, sharp and readable
+- No missing bottom bar, no cut-off icons, no empty unfinished regions
+- No English chrome, no watermark, no unrelated widgets

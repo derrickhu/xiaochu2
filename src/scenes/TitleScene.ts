@@ -1,5 +1,7 @@
 /**
- * 标题场景：全屏修仙背景 + 资源条 + 章节路径节点 + 底部导航
+ * 标题场景：主线章节地图首页 + 可扩展左侧玩法栏 + 五格底栏
+ *
+ * IA：底栏「主线」= 本页；左侧签到/通天塔/日常/活动 = 副玩法（可继续扩展）。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -8,9 +10,11 @@ import { UI } from '@/balance/ui';
 import { CHAPTERS, CHAPTER_NAME, stagesOfChapter } from '@/balance/stages';
 import { PlayerData } from '@/game/PlayerData';
 import {
-  makeCurrencyRow, makeChapterNavArrow, CURRENCY_ICON_SIZE,
+  makeCurrencyLabel, makeChapterNavArrow, CURRENCY_ICON_SIZE,
   makeNamePlaque, namePlaqueWidth,
   buildBottomNav, BOTTOM_NAV_RESERVE,
+  buildHomeLeftRail,
+  COLORS, FONT_SIZE, makePanel, makeText,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
 import { GMManager } from '@/core/GMManager';
@@ -20,12 +24,16 @@ import { bindPointerTap } from '@/utils/bindPointerTap';
 import { buildTitleScreenWorld } from './chapterMapView';
 import { attachChapterMapEditor } from './chapterMapEditor';
 import { ensurePetAvatars, titleLeadPetAvatarEntry } from '@/config/assetPreload';
+import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { SidebarEntryButton } from '@/ui/SidebarEntryButton';
 import { DesktopShortcutEntryButton } from '@/ui/DesktopShortcutEntryButton';
 import { DesktopShortcutService } from '@/core/DesktopShortcutService';
 import { Platform } from '@/core/PlatformService';
 
 declare const GameGlobal: any;
+
+/** 首页展示昵称（暂无账号系统） */
+const HOME_DISPLAY_NAME = '仙灵小萌新';
 
 export interface TitleEnterData {
   /** 进入时选中的章节（默认最新已解锁章） */
@@ -38,12 +46,11 @@ export class TitleScene implements Scene {
   readonly name = 'title';
   readonly container = new PIXI.Container();
 
-  /** 底部导航区高度（紫祥云底栏 + 三图标 + 文字标签） */
   private static readonly BOTTOM_RESERVE = BOTTOM_NAV_RESERVE;
 
-  /** 资源条底边 + 间距，章节导航紧贴其下，避免挡住路径顶部节点星级 */
+  /** 章节导航贴在顶栏下方 */
   private static chapterNavY(): number {
-    return Game.safeTop + 36 + CURRENCY_ICON_SIZE + 20;
+    return Game.safeTop + 28;
   }
 
   private _chapter = 1;
@@ -140,16 +147,27 @@ export class TitleScene implements Scene {
       this.container.addChild(editor.toolbar);
     }
 
-    this._buildResourceBar(w, Game.safeTop + 36);
+    this._buildTopBar(w, Game.safeHeaderCenterY);
     this._buildChapterNav(w, TitleScene.chapterNavY());
+    this._buildLeftRail(h);
     this._buildSidebarEntry(w, h);
     this._buildDesktopShortcutEntry(w, h);
     this._buildBottomNav(w, h);
   }
 
   private _buildBottomNav(w: number, h: number): void {
-    buildBottomNav(this.container, w, h);
+    buildBottomNav(this.container, w, h, 'home');
   }
+
+  private _buildLeftRail(h: number): void {
+    const top = TitleScene.chapterNavY() + 56;
+    const bottomLimit = h - TitleScene.BOTTOM_RESERVE - 24;
+    buildHomeLeftRail(this.container, {
+      x: 48,
+      y: Math.min(top, bottomLimit - 280),
+    });
+  }
+
   private _buildDesktopShortcutEntry(w: number, h: number): void {
     if (!DesktopShortcutService.isAvailable) return;
     const reserve = TitleScene.BOTTOM_RESERVE;
@@ -157,7 +175,6 @@ export class TitleScene implements Scene {
     this.container.addChild(btn);
   }
 
-  /** 抖音侧边栏复访入口（平台必接） */
   private _buildSidebarEntry(w: number, h: number): void {
     if (!Platform.isDouyin) return;
     const reserve = TitleScene.BOTTOM_RESERVE;
@@ -165,14 +182,52 @@ export class TitleScene implements Scene {
     this.container.addChild(btn);
   }
 
-  private _buildResourceBar(w: number, y: number): void {
-    const padX = 48;
-    this.container.addChild(makeCurrencyRow({
-      x: padX, y,
-      coins: PlayerData.coins,
-      exp: PlayerData.exp,
-      lingyu: PlayerData.lingyu,
+  /** 顶栏：左头像+昵称；右货币（避开胶囊，垂直对齐收起按钮） */
+  private _buildTopBar(w: number, centerY: number): void {
+    const padX = 28;
+    const profile = new PIXI.Container();
+    profile.position.set(padX, centerY);
+
+    const avSize = 52;
+    profile.addChild(makePanel({
+      width: avSize, height: avSize, radius: avSize / 2,
+      bg: COLORS.panelBg, bgAlpha: 0.95,
+      border: COLORS.panelBorder, borderWidth: 2,
+      centered: true,
     }));
+
+    const lead = PlayerData.team[0];
+    const tex = lead ? getPetAvatarTexture(lead, PlayerData.petStar(lead)) : null;
+    if (tex) {
+      const sp = new PIXI.Sprite(tex);
+      sp.anchor.set(0.5);
+      sp.scale.set((avSize - 8) / Math.max(tex.width, tex.height));
+      const mask = new PIXI.Graphics();
+      mask.beginFill(0xffffff);
+      mask.drawCircle(0, 0, (avSize - 6) / 2);
+      mask.endFill();
+      sp.mask = mask;
+      profile.addChild(sp, mask);
+    }
+
+    const name = makeText(HOME_DISPLAY_NAME, {
+      size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+    });
+    name.position.set(avSize / 2 + 12, 0);
+    profile.addChild(name);
+    this.container.addChild(profile);
+
+    const lingyu = makeCurrencyLabel('lingyu', PlayerData.lingyu);
+    const coins = makeCurrencyLabel('coin', PlayerData.coins);
+    const gap = 16;
+    const totalW = lingyu.width + gap + coins.width;
+    // 右缘不得超过胶囊左缘，避免被「··· / 收起」挡住
+    const rightLimit = Game.contentRightX(16);
+    const rowRight = Math.min(w - padX, rightLimit);
+    const rowX = rowRight - totalW;
+    lingyu.position.set(rowX, centerY - CURRENCY_ICON_SIZE / 2);
+    coins.position.set(rowX + lingyu.width + gap, centerY - CURRENCY_ICON_SIZE / 2);
+    this.container.addChild(lingyu, coins);
   }
 
   private _buildChapterNav(w: number, y: number): void {

@@ -1,11 +1,13 @@
 /**
- * 底部四格导航（灵宠 / 召唤 / 商店 / 编队）— 首页与商店等子页共用。
+ * 底部五格导航：灵宠 | 召唤 | 主线 | 商店 | 编队
  *
- * 选中态：图标略放大 + 金色标签，无光晕特效。
+ * 「主线」= 首页 TitleScene（章节地图），与左侧「通天塔」等副玩法不重叠。
+ * 选中态：图标略放大 + 金色标签。
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
 import { SceneManager } from '@/core/SceneManager';
+import { Game } from '@/core/Game';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
 import { UI_IMAGES } from '@/config/Assets';
@@ -13,16 +15,15 @@ import { COLORS } from './theme';
 import { makeIconButton } from './IconButton';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
-export type BottomNavTab = 'codex' | 'gacha' | 'shop' | 'team';
+export type BottomNavTab = 'codex' | 'gacha' | 'home' | 'shop' | 'team';
 
 /** 底栏占位高度（nav_bottom.png 750×275，按屏宽缩放后即为可见高度） */
 export const BOTTOM_NAV_RESERVE = 275;
 
-const NAV_ICON_SIZE = 82;
-const NAV_ICON_ACTIVE_SIZE = 96;
-const NAV_LABEL_SIZE = 26;
-const NAV_ACTIVE_LIFT = -6;
-/** 图标中心在底栏区域内的纵向位置（0=顶，1=底） */
+const NAV_ICON_SIZE = 72;
+const NAV_ICON_ACTIVE_SIZE = 92;
+const NAV_LABEL_SIZE = 24;
+const NAV_ACTIVE_LIFT = -8;
 const NAV_BTN_Y_IN_BAR = 0.54;
 
 function makeBottomNavTab(opts: {
@@ -63,7 +64,10 @@ export function buildBottomNav(
   active?: BottomNavTab,
 ): void {
   const reserve = BOTTOM_NAV_RESERVE;
+  // 底栏贴屏幕底；safeBottom 已计入 logicHeight 可视差异，图标略抬避免 Home Indicator
+  const lift = Math.min(Game.safeBottom, 24);
   const navTop = h - reserve;
+  const btnY = navTop + reserve * NAV_BTN_Y_IN_BAR - lift;
 
   const navTex = TextureCache.get(UI_IMAGES.navBar);
   if (navTex) {
@@ -80,8 +84,8 @@ export function buildBottomNav(
     parent.addChild(barBg);
   }
 
-  const btnY = navTop + reserve * NAV_BTN_Y_IN_BAR;
   const canGacha = PlayerData.lingyu >= ECONOMY.gacha.singleCost;
+  const xs = [0.1, 0.3, 0.5, 0.7, 0.9].map((r) => w * r);
   const slots: {
     tab: BottomNavTab;
     label: string;
@@ -91,20 +95,24 @@ export function buildBottomNav(
     onTap: () => void;
   }[] = [
     {
-      tab: 'codex', label: '灵宠', icon: UI_IMAGES.navPet, x: w * 0.125,
+      tab: 'codex', label: '灵宠', icon: UI_IMAGES.navPet, x: xs[0],
       onTap: () => { if (active !== 'codex') SceneManager.switchTo('codex'); },
     },
     {
-      tab: 'gacha', label: '召唤', icon: UI_IMAGES.iconRecruit, x: w * 0.375,
+      tab: 'gacha', label: '召唤', icon: UI_IMAGES.iconRecruit, x: xs[1],
       highlight: canGacha,
       onTap: () => { if (active !== 'gacha') SceneManager.switchTo('gacha'); },
     },
     {
-      tab: 'shop', label: '商店', icon: UI_IMAGES.navShop, x: w * 0.625,
+      tab: 'home', label: '主线', icon: UI_IMAGES.navHome, x: xs[2],
+      onTap: () => { if (active !== 'home') SceneManager.switchTo('title'); },
+    },
+    {
+      tab: 'shop', label: '商店', icon: UI_IMAGES.navShop, x: xs[3],
       onTap: () => { if (active !== 'shop') SceneManager.switchTo('shop'); },
     },
     {
-      tab: 'team', label: '编队', icon: UI_IMAGES.navTeam, x: w * 0.875,
+      tab: 'team', label: '编队', icon: UI_IMAGES.navTeam, x: xs[4],
       onTap: () => { if (active !== 'team') SceneManager.switchTo('team'); },
     },
   ];

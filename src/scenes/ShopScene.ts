@@ -88,7 +88,7 @@ function shopHeaderLayout(tex: PIXI.Texture | null): {
   listTop: number;
 } {
   const titleH = shopTitleDisplayH(tex);
-  const titleCenterY = Game.safeTop + SHOP_UI.titleY;
+  const titleCenterY = Game.safeHeaderCenterY;
   const titleBottom = titleCenterY + titleH / 2;
   const coinCenterY = titleBottom + SHOP_UI.titleCoinGap + SHOP_UI.coinBarH / 2;
   const listTop = coinCenterY + SHOP_UI.coinBarH / 2 + SHOP_UI.headerListGap;
@@ -409,7 +409,7 @@ export class ShopScene implements Scene {
     const back = makeBackButton({
       onTap: () => SceneManager.switchTo('title'),
     });
-    back.position.set(80, Game.safeTop + 36);
+    back.position.set(80, Game.safeHeaderCenterY);
     this.container.addChild(back);
 
     const titleTex = shopTexture(UI_SHOP_IMAGES.titlePlaque) ?? shopTexture(UI_IMAGES.titlePlaque);

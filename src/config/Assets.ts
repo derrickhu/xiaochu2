@@ -143,6 +143,8 @@ export const UI_IMAGES = {
   navPet: `${IMG}/ui/icon/nav_pet.png`,
   navShop: `${IMG}/ui/icon/nav_shop.png`,
   navTeam: `${IMG}/ui/icon/nav_team.png`,
+  /** 底栏「主线」= 首页章节地图 */
+  navHome: `${IMG}/ui/icon/nav_home.png`,
   iconCoin: `${IMG}/ui/icon/currency_coin.png`,
   iconExp: `${IMG}/ui/icon/currency_exp.png`,
   iconLingyu: `${IMG}/ui/icon/currency_lingyu.png`,
@@ -152,6 +154,10 @@ export const UI_IMAGES = {
   iconStatAtk: `${IMG}/ui/icon/stat_atk.png`,
   iconStatRcv: `${IMG}/ui/icon/stat_rcv.png`,
   titlePlaque: `${IMG}/ui/plaque/title.png`,
+  /**
+   * 文字背景匾（与战斗关卡匾同源）—— 召唤标题等页面级标题统一用此板。
+   */
+  textBanner: `${IMG}/ui/plaque/text_banner.png`,
   /** 详情底栏行动按钮底板（奶油次按钮） */
   btnPlateCream: `${IMG}/ui/button/plate_cream.png`,
   /** 详情底栏行动按钮底板（翠绿主按钮） */
@@ -228,7 +234,30 @@ export function petCardPortraitImage(rarity: Rarity): string {
 
 /** 技能图标（pkg-fx，按 skillId 命名；未生成时 TextureCache 返回 null 走占位） */
 export function skillIconImage(skillId: string): string {
-  return `${PKG.fx}/images/ui/skill/${skillId}.png`;
+  return `${PKG.fx}/images/ui/skill/${resolveSkillIconId(skillId)}.png`;
+}
+
+/**
+ * 敌技尚未单独出图时，映射到主题接近的宠技图标，保证编队敌情/战斗预览有圆形图标。
+ * 有独立 `enemy_*.png` 后从此表删除对应项即可。
+ */
+const SKILL_ICON_ALIASES: Readonly<Record<string, string>> = {
+  enemy_golem_guard: 'pet_earth_shield',
+  enemy_panda_guard: 'pet_frost_guard',
+  enemy_serpent_heal: 'pet_wood_heal',
+  enemy_panda_heal: 'pet_earth_heal',
+  enemy_blade_charge: 'pet_metal_slash',
+  enemy_lion_charge: 'pet_fire_burst',
+  enemy_seal_orbs: 'pet_shadow_purify',
+  enemy_poison_team: 'pet_fire_dot',
+  enemy_time_squeeze: 'pet_abyss_delay',
+  enemy_heal_block: 'pet_rift_shield',
+  enemy_enrage: 'pet_chaos_haste',
+  enemy_skill_seal: 'pet_skyfall_gravity',
+};
+
+function resolveSkillIconId(skillId: string): string {
+  return SKILL_ICON_ALIASES[skillId] ?? skillId;
 }
 
 /** 被动图标（与主动技同目录，id 形如 passive_ruiyan） */

@@ -60,6 +60,7 @@ export const TEAM_SHELL_IMAGES: readonly string[] = [
 export const GACHA_SHELL_IMAGES: readonly string[] = [
   BACKGROUND_IMAGES.gachaEgg,
   UI_IMAGES.titlePlaque,
+  UI_IMAGES.textBanner,
   UI_IMAGES.btnPlateGold,
   UI_IMAGES.btnPlateCream,
   UI_IMAGES.progressFrame,

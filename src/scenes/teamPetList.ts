@@ -24,19 +24,28 @@ import {
   makeShardBadge,
   makeText,
   attachPetFrameOrb,
+  makeElementOrb,
+  makeStarRow,
 } from '@/ui';
 import type { ScrollListController } from '@/ui/ScrollList';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
-const LIST_CARD_W = 330;
-const LIST_CARD_H = 148;
+/** 自由编队：较宽横卡 */
+const FREE_CARD_W = 330;
+const FREE_CARD_H = 148;
+const FREE_AVATAR = 74;
+
+/** 战前可选区：更小双列横卡（对齐 UI 图） */
+const PREP_CARD_W = 300;
+const PREP_CARD_H = 108;
+const PREP_AVATAR = 72;
+const PREP_PLATE_BG = 0xfff8ec;
+const PREP_PLATE_BORDER = 0xe0c896;
+
 const CARD_TEX_W = 660;
 const CARD_TEX_H = 296;
-const SCROLL_SCALE_X = LIST_CARD_W / CARD_TEX_W;
-const SCROLL_SCALE_Y = LIST_CARD_H / CARD_TEX_H;
-const LIST_AVATAR_SIZE = 74;
-const LIST_LEFT_PAD = 14;
-const LIST_TEXT_GAP = 14;
+const LIST_LEFT_PAD = 12;
+const LIST_TEXT_GAP = 12;
 
 export interface TeamPetListOpts {
   container: PIXI.Container;
@@ -54,11 +63,13 @@ export function buildTeamPetList(opts: TeamPetListOpts): PIXI.Container | null {
   const { container, startY, listBottom, compact, checks, items, scroll, onToggle } = opts;
   const w = Game.logicWidth;
   const cols = 2;
-  const gapX = 24;
-  const gapY = 14;
-  const gridW = cols * LIST_CARD_W + (cols - 1) * gapX;
-  const startX = (w - gridW) / 2 + LIST_CARD_W / 2;
-  const scrollTex = TextureCache.get(UI_SCENE_IMAGES.petCardTeamRow);
+  const cardW = compact ? PREP_CARD_W : FREE_CARD_W;
+  const cardH = compact ? PREP_CARD_H : FREE_CARD_H;
+  const gapX = compact ? 16 : 24;
+  const gapY = compact ? 10 : 14;
+  const gridW = cols * cardW + (cols - 1) * gapX;
+  const startX = (w - gridW) / 2 + cardW / 2;
+  const scrollTex = compact ? null : TextureCache.get(UI_SCENE_IMAGES.petCardTeamRow);
   const scrollable = listBottom !== undefined;
   const parent = scrollable ? new PIXI.Container() : container;
   if (scrollable) {
@@ -72,16 +83,16 @@ export function buildTeamPetList(opts: TeamPetListOpts): PIXI.Container | null {
     if (!pet) return;
     const lv = PlayerData.petLevel(petId);
     const star = PlayerData.petStar(petId);
-    const item = buildListItem(pet, lv, star, scrollTex, scroll, onToggle, !!compact, scrollable ? {
+    const item = buildListItem(pet, lv, star, scrollTex, scroll, onToggle, !!compact, cardW, cardH, scrollable ? {
       viewportTop: startY,
       viewportBottom: listBottom!,
     } : undefined);
 
     const col = i % cols;
     const row = Math.floor(i / cols);
-    const itemY = row * (LIST_CARD_H + gapY) + LIST_CARD_H / 2;
-    maxBottom = Math.max(maxBottom, itemY + LIST_CARD_H / 2);
-    item.position.set(startX + col * (LIST_CARD_W + gapX), scrollable ? itemY : startY + itemY);
+    const itemY = row * (cardH + gapY) + cardH / 2;
+    maxBottom = Math.max(maxBottom, itemY + cardH / 2);
+    item.position.set(startX + col * (cardW + gapX), scrollable ? itemY : startY + itemY);
     checks.set(pet.id, item.getChildByName('check') as PIXI.Container);
     items.set(pet.id, item);
     parent.addChild(item);
@@ -89,7 +100,7 @@ export function buildTeamPetList(opts: TeamPetListOpts): PIXI.Container | null {
 
   if (scrollable && listBottom !== undefined) {
     const viewportH = listBottom - startY;
-    const contentH = maxBottom + LIST_CARD_H / 2;
+    const contentH = maxBottom + cardH / 2;
     const scrollMin = Math.min(startY, startY - (contentH - viewportH));
     if (contentH > viewportH) {
       const mask = new PIXI.Graphics();
@@ -139,6 +150,74 @@ export function addTeamPetAvatar(
   attachPetFrameOrb(holder, pet.element, size);
 }
 
+/**
+ * 战前上阵竖卡：立绘铺满卡高（与托盘同高），属性珠左上，Lv+星叠在底部。
+ * 对齐 team_prep 原型截图（不再用方形相框把立绘缩小）。
+ */
+export function addTeamPrepSlotPet(
+  parent: PIXI.Container,
+  pet: PetDef,
+  slotW: number,
+  slotH: number,
+  level: number,
+  star: number,
+): void {
+  const border = 0xe0c896;
+  parent.addChild(makePanel({
+    width: slotW, height: slotH, radius: 12,
+    bg: 0xfff8ec, bgAlpha: 1,
+    border, borderWidth: 2,
+    centered: true,
+  }));
+
+  const inset = 3;
+  const iw = slotW - inset * 2;
+  const ih = slotH - inset * 2;
+  const art = new PIXI.Container();
+  const tex = getPetAvatarTexture(pet.id, star);
+  if (tex) {
+    const spr = new PIXI.Sprite(tex);
+    spr.anchor.set(0.5);
+    const cover = Math.max(iw / tex.width, ih / tex.height);
+    spr.scale.set(cover);
+    art.addChild(spr);
+  }
+  const mask = new PIXI.Graphics();
+  mask.beginFill(0xffffff);
+  mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, 10);
+  mask.endFill();
+  art.addChild(mask);
+  art.mask = mask;
+  parent.addChild(art);
+
+  // 底渐变托住 Lv / 星
+  const fade = new PIXI.Graphics();
+  fade.beginFill(0x2a1a0c, 0.45);
+  fade.drawRoundedRect(-iw / 2, ih / 2 - 36, iw, 36, 8);
+  fade.endFill();
+  parent.addChild(fade);
+
+  const orb = makeElementOrb(pet.element, 26);
+  orb.position.set(-slotW / 2 + 16, -slotH / 2 + 16);
+  parent.addChild(orb);
+
+  const lvText = makeText(`Lv.${level}`, {
+    size: 14, fill: COLORS.btnText, bold: true, anchor: [0, 1],
+    strokeColor: 0x2a1a0c, strokeWidth: 3,
+  });
+  lvText.position.set(-slotW / 2 + 8, slotH / 2 - 18);
+  parent.addChild(lvText);
+
+  const stars = makeStarRow({ star, size: 11, anchor: 'center', style: 'sprite' });
+  stars.position.set(0, slotH / 2 - 10);
+  parent.addChild(stars);
+
+  const rim = new PIXI.Graphics();
+  rim.lineStyle(2, border, 1);
+  rim.drawRoundedRect(-slotW / 2, -slotH / 2, slotW, slotH, 12);
+  parent.addChild(rim);
+}
+
 function buildListItem(
   pet: PetDef,
   lv: number,
@@ -147,50 +226,64 @@ function buildListItem(
   scroll: ScrollListController,
   onToggle: (petId: string) => void,
   compact: boolean,
+  cardW: number,
+  cardH: number,
   viewport?: { viewportTop: number; viewportBottom: number },
 ): PIXI.Container {
   const item = new PIXI.Container();
-  if (scrollTex) {
+  const avatarSize = compact ? PREP_AVATAR : FREE_AVATAR;
+
+  if (compact) {
+    item.addChild(makePanel({
+      width: cardW, height: cardH, radius: 14,
+      bg: PREP_PLATE_BG, bgAlpha: 0.96,
+      border: PREP_PLATE_BORDER, borderWidth: 2,
+      centered: true,
+    }));
+  } else if (scrollTex) {
+    const sx = cardW / CARD_TEX_W;
+    const sy = cardH / CARD_TEX_H;
     const scrollBg = new PIXI.Sprite(scrollTex);
     scrollBg.anchor.set(0.5);
-    scrollBg.scale.set(SCROLL_SCALE_X, SCROLL_SCALE_Y);
+    scrollBg.scale.set(sx, sy);
     item.addChild(scrollBg);
     item.addChild(makeRarityCardBorder({
-      width: LIST_CARD_W, height: LIST_CARD_H, tier: pet.rarity,
+      width: cardW, height: cardH, tier: pet.rarity,
       radius: RADIUS.card, centered: true, borderWidth: 3,
     }));
   } else {
     item.addChild(makePanel({
-      width: LIST_CARD_W, height: LIST_CARD_H, radius: RADIUS.card,
+      width: cardW, height: cardH, radius: RADIUS.card,
       bg: COLORS.panelBg, border: getRarity(pet.rarity).color,
       centered: true,
     }));
   }
 
-  const frameLeft = -LIST_CARD_W / 2;
-  const frameTop = -LIST_CARD_H / 2;
-  const avatarX = -LIST_CARD_W / 2 + LIST_LEFT_PAD + LIST_AVATAR_SIZE / 2;
-  addTeamPetAvatar(item, pet, avatarX, compact ? 0 : 4, LIST_AVATAR_SIZE);
-  attachRarityBadge(item, pet.rarity, frameLeft, frameTop, LIST_AVATAR_SIZE, { variant: 'codex' });
+  const frameLeft = -cardW / 2;
+  const frameTop = -cardH / 2;
+  const avatarX = -cardW / 2 + LIST_LEFT_PAD + avatarSize / 2;
+  addTeamPetAvatar(item, pet, avatarX, 0, avatarSize);
   if (!compact) {
+    attachRarityBadge(item, pet.rarity, frameLeft, frameTop, avatarSize, { variant: 'codex' });
     const shardBadge = makeShardBadge({ shards: PlayerData.petShards(pet.id) });
-    shardBadge.position.set(avatarX, 4 + LIST_AVATAR_SIZE / 2 + 14);
+    shardBadge.position.set(avatarX, 4 + avatarSize / 2 + 14);
     item.addChild(shardBadge);
   }
 
-  const textX = -LIST_CARD_W / 2 + LIST_LEFT_PAD + LIST_AVATAR_SIZE + LIST_TEXT_GAP;
+  const textX = -cardW / 2 + LIST_LEFT_PAD + avatarSize + LIST_TEXT_GAP;
   const nameText = makeText(pet.name, {
-    size: FONT_SIZE.xs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+    size: compact ? FONT_SIZE.xxs : FONT_SIZE.xs,
+    fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
   });
-  nameText.position.set(textX, compact ? -28 : -30);
+  nameText.position.set(textX, compact ? -22 : -30);
   item.addChild(nameText);
 
   if (compact) {
-    const badge = makeRoleBadge({ role: pet.role, scale: 1.6 });
-    badge.position.set(LIST_CARD_W / 2 - 72, -28);
+    const badge = makeRoleBadge({ role: pet.role, scale: 1.35 });
+    badge.position.set(cardW / 2 - 58, -22);
     item.addChild(badge);
     const line3 = makeLevelStarLine({ level: lv, star, size: FONT_SIZE.xxs, variant: 'panel', filledOnly: true });
-    line3.position.set(textX, 8);
+    line3.position.set(textX, 14);
     item.addChild(line3);
   } else {
     const line2 = makeElementRoleLine(pet.element, pet.role, { size: FONT_SIZE.xxs });
@@ -211,10 +304,10 @@ function buildListItem(
 
   const check = buildCheckMark();
   check.name = 'check';
-  check.position.set(LIST_CARD_W / 2 - 22, -LIST_CARD_H / 2 + 22);
+  check.position.set(cardW / 2 - 18, -cardH / 2 + 18);
   item.addChild(check);
 
-  item.hitArea = new PIXI.Rectangle(-LIST_CARD_W / 2, -LIST_CARD_H / 2, LIST_CARD_W, LIST_CARD_H);
+  item.hitArea = new PIXI.Rectangle(-cardW / 2, -cardH / 2, cardW, cardH);
   item.eventMode = 'static';
   item.cursor = 'pointer';
   item.interactiveChildren = false;
@@ -233,7 +326,7 @@ function buildCheckMark(): PIXI.Container {
   const check = new PIXI.Container();
   check.visible = false;
   check.addChild(makePanel({
-    width: 36, height: 36, radius: 18,
+    width: 32, height: 32, radius: 16,
     bg: COLORS.btnSuccessBg, border: COLORS.btnSuccessBorder, borderWidth: 2,
   }));
   check.addChild(makeText('上', {

@@ -1,38 +1,39 @@
 /**
- * 战前编队 · 敌情 Intel Card（对齐 team_prep_ui_prototype_v1）
+ * 战前编队 · 敌情 Intel（对齐 team_prep UI 截图）
  *
- * 左：大立绘 + 波次 Tab；右：名/三维/技能/克制抵抗/本关提示。
+ * 一块淡奶油外板；左侧金框立绘「全图铺满」；右侧名/三维/技能图标/克制/提示。
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
 import { enemyImage } from '@/config/Assets';
 import { counterElementOf, resistedElementOf } from '@/balance/combat';
 import { resolveEncounter, type EnemyDef } from '@/balance/enemies';
-import {
-  enemyDisplayTierOf,
-  enemySpriteScale,
-  formatEnemyBattleName,
-} from '@/balance/enemyDisplay';
+import { formatEnemyBattleName } from '@/balance/enemyDisplay';
 import { skillForEnemy } from '@/game/battle/SkillEngine';
 import { enemyStats } from '@/formulas/growth';
 import type { StageDef } from '@/balance/stages';
 import {
-  COLORS, FONT_SIZE, RADIUS,
+  COLORS, FONT_SIZE,
   makeElementOrb, makePanel, makeSkillIcon, makeStatIcon, makeText,
 } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
 export interface TeamEnemyIntelHandle {
   root: PIXI.Container;
-  /** 卡片总高度 */
   height: number;
   setWave(index: number): void;
 }
 
-const PORTRAIT = 200;
-const CARD_PAD = 16;
-const TAB_H = 32;
-const TAB_GAP = 8;
+const PLATE_BG = 0xfff8ec;
+const PLATE_BORDER = 0xd4b87a;
+const FRAME_BORDER = 0xc9a063;
+/** 立绘框：略竖，贴近 UI 左栏 */
+const PORTRAIT_W = 248;
+const PORTRAIT_H = 268;
+const OUTER_PAD = 14;
+const GAP = 16;
+const TAB_H = 28;
+const TAB_GAP = 6;
 
 export function buildTeamEnemyIntelCard(opts: {
   stage: StageDef;
@@ -43,88 +44,103 @@ export function buildTeamEnemyIntelCard(opts: {
   const waveCount = Math.max(1, encounters.length);
 
   const root = new PIXI.Container();
-  const contentH = CARD_PAD + PORTRAIT + 12 + (waveCount > 1 ? TAB_H : 0) + CARD_PAD;
-  // 右栏内容通常更高：名+chip+技能+克制+tip ≈ 280+；与左栏取 max
-  const cardH = Math.max(contentH, 300);
+  const tabsH = waveCount > 1 ? TAB_H + 8 : 0;
+  const leftInnerH = PORTRAIT_H + tabsH;
+  const cardH = Math.max(leftInnerH + OUTER_PAD * 2, 300);
+  const leftColW = PORTRAIT_W;
+  const rightX = OUTER_PAD + leftColW + GAP;
+  const infoInnerW = width - rightX - OUTER_PAD;
 
+  // 统一外板（对齐截图：一块奶油金边）
   root.addChild(makePanel({
-    width, height: cardH, radius: RADIUS.card,
-    bg: COLORS.panelBgAlt, bgAlpha: 0.94,
-    border: COLORS.panelBorderSoft, borderWidth: 2,
+    width, height: cardH, radius: 18,
+    bg: PLATE_BG, bgAlpha: 0.97,
+    border: PLATE_BORDER, borderWidth: 2.5,
     centered: false,
   }));
 
-  const leftX = CARD_PAD;
-  const rightX = CARD_PAD + PORTRAIT + 16;
-  const rightW = width - rightX - CARD_PAD;
-
   const portraitHost = new PIXI.Container();
-  portraitHost.position.set(leftX + PORTRAIT / 2, CARD_PAD + PORTRAIT / 2);
+  portraitHost.position.set(OUTER_PAD + PORTRAIT_W / 2, OUTER_PAD + PORTRAIT_H / 2);
   root.addChild(portraitHost);
 
   const tabRow = new PIXI.Container();
-  tabRow.position.set(leftX, CARD_PAD + PORTRAIT + 10);
+  tabRow.position.set(OUTER_PAD, OUTER_PAD + PORTRAIT_H + 6);
   root.addChild(tabRow);
 
   const infoHost = new PIXI.Container();
-  infoHost.position.set(rightX, CARD_PAD);
+  infoHost.position.set(rightX, OUTER_PAD);
   root.addChild(infoHost);
 
   let selected = 0;
 
   const paintPortrait = (def: EnemyDef): void => {
     portraitHost.removeChildren().forEach((c) => c.destroy({ children: true }));
+
+    // 内底
     portraitHost.addChild(makePanel({
-      width: PORTRAIT, height: PORTRAIT, radius: 18,
-      bg: COLORS.panelBg, bgAlpha: 0.96,
-      border: 0xc9a45a, borderWidth: 3,
+      width: PORTRAIT_W, height: PORTRAIT_H, radius: 14,
+      bg: 0xf0e2c4, bgAlpha: 1,
+      border: FRAME_BORDER, borderWidth: 3,
       centered: true,
     }));
+
     const path = def.image ?? enemyImage(def.id);
     const tex = TextureCache.get(path);
     if (tex) {
-      const tier = enemyDisplayTierOf(def);
+      const art = new PIXI.Container();
       const spr = new PIXI.Sprite(tex);
       spr.anchor.set(0.5);
-      const maxInner = PORTRAIT - 24;
-      spr.scale.set(enemySpriteScale(tex.width, tex.height, tier, maxInner));
-      const bw = spr.width;
-      const bh = spr.height;
-      if (bw > maxInner || bh > maxInner) {
-        const s = Math.min(maxInner / bw, maxInner / bh);
-        spr.scale.set(spr.scale.x * s);
-      }
-      portraitHost.addChild(spr);
+      // 全图铺满边框（cover），不再缩小成战斗头像比例
+      const inset = 6;
+      const iw = PORTRAIT_W - inset * 2;
+      const ih = PORTRAIT_H - inset * 2;
+      const cover = Math.max(iw / tex.width, ih / tex.height);
+      spr.scale.set(cover);
+      art.addChild(spr);
+
+      const mask = new PIXI.Graphics();
+      mask.beginFill(0xffffff);
+      mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, 10);
+      mask.endFill();
+      art.addChild(mask);
+      art.mask = mask;
+      portraitHost.addChild(art);
     }
+
+    // 金边压在立绘之上，保证框线清晰
+    const rim = new PIXI.Graphics();
+    rim.lineStyle(3, FRAME_BORDER, 1);
+    rim.drawRoundedRect(-PORTRAIT_W / 2, -PORTRAIT_H / 2, PORTRAIT_W, PORTRAIT_H, 14);
+    portraitHost.addChild(rim);
   };
 
   const paintInfo = (def: EnemyDef): void => {
     infoHost.removeChildren().forEach((c) => c.destroy({ children: true }));
-    let y = 0;
+    let y = 2;
 
     const nameRow = new PIXI.Container();
     const name = makeText(formatEnemyBattleName(def), {
       size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-      wordWrapWidth: rightW - 40,
+      wordWrapWidth: infoInnerW - 40,
     });
     name.position.set(0, 0);
     nameRow.addChild(name);
     const orb = makeElementOrb(def.element, 28);
-    orb.position.set(Math.min(name.width + 18, rightW - 14), 0);
+    orb.position.set(Math.min(name.width + 14, infoInnerW - 14), 0);
     nameRow.addChild(orb);
     nameRow.position.set(0, y + 10);
     infoHost.addChild(nameRow);
-    y += 28;
+    y += 32;
 
     const stats = enemyStats(def, stage.chapter, stage.difficulty);
-    const chipRow = buildStatChips(stats.hp, stats.atk, def.attackInterval, rightW);
+    const chipRow = buildStatChips(stats.hp, stats.atk, def.attackInterval, infoInnerW);
     chipRow.position.set(0, y);
     infoHost.addChild(chipRow);
     y += 52;
 
     const skillIds = (def.skillIds ?? []).slice(0, 2);
     if (skillIds.length > 0) {
-      const skillBox = buildSkillBox(skillIds, rightW);
+      const skillBox = buildSkillBox(skillIds, infoInnerW);
       skillBox.position.set(0, y);
       infoHost.addChild(skillBox);
       y += skillBox.boxH + 8;
@@ -132,42 +148,27 @@ export function buildTeamEnemyIntelCard(opts: {
 
     const weak = counterElementOf(def.element);
     const resist = resistedElementOf(def.element);
-    const counterRow = new PIXI.Container();
-    let cx = 0;
-    const addCounter = (label: string, el: typeof weak): void => {
-      const t = makeText(label, {
-        size: FONT_SIZE.xxs, fill: COLORS.textSub, bold: true, anchor: [0, 0.5],
-      });
-      t.position.set(cx, 0);
-      counterRow.addChild(t);
-      cx += t.width + 4;
-      const o = makeElementOrb(el, 22);
-      o.position.set(cx + 11, 0);
-      counterRow.addChild(o);
-      cx += 28 + 16;
-    };
-    addCounter('克制', weak);
-    addCounter('抵抗', resist);
-    counterRow.position.set(0, y + 8);
+    const counterRow = buildCounterRow(weak, resist, infoInnerW);
+    counterRow.position.set(0, y);
     infoHost.addChild(counterRow);
-    y += 28;
+    y += 36;
 
     const tip = stage.hintText
       ?? (stage.hintTags?.length ? `本关：${stage.hintTags.join(' · ')}` : null);
     if (tip) {
       const tipBg = makePanel({
-        width: rightW, height: 36, radius: 10,
-        bg: 0xe8d9b8, bgAlpha: 0.92,
-        border: 0xc4a574, borderWidth: 1,
+        width: infoInnerW, height: 34, radius: 10,
+        bg: 0xf3e6c8, bgAlpha: 0.98,
+        border: PLATE_BORDER, borderWidth: 1,
         centered: false,
       });
-      tipBg.position.set(0, y);
+      tipBg.position.set(0, Math.min(y, cardH - OUTER_PAD - 36 - OUTER_PAD));
       infoHost.addChild(tipBg);
       const tipText = makeText(tip.startsWith('本关') ? tip : `本关：${tip}`, {
         size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-        wordWrapWidth: rightW - 20,
+        wordWrapWidth: infoInnerW - 16,
       });
-      tipText.position.set(10, 18);
+      tipText.position.set(10, 17);
       tipBg.addChild(tipText);
     }
   };
@@ -175,26 +176,25 @@ export function buildTeamEnemyIntelCard(opts: {
   const paintTabs = (): void => {
     tabRow.removeChildren().forEach((c) => c.destroy({ children: true }));
     if (waveCount <= 1) return;
-    const tabW = Math.floor((PORTRAIT - (waveCount - 1) * TAB_GAP) / waveCount);
+    const tabW = Math.floor((PORTRAIT_W - (waveCount - 1) * TAB_GAP) / waveCount);
     for (let i = 0; i < waveCount; i++) {
       const active = i === selected;
       const tab = new PIXI.Container();
       tab.position.set(i * (tabW + TAB_GAP) + tabW / 2, TAB_H / 2);
       tab.addChild(makePanel({
         width: tabW, height: TAB_H, radius: TAB_H / 2,
-        bg: active ? COLORS.btnSuccessBg : COLORS.panelBg,
-        bgAlpha: 0.95,
-        border: active ? COLORS.btnSuccessBorder : COLORS.panelBorderSoft,
+        bg: active ? COLORS.btnSuccessBg : 0xfffdf8,
+        bgAlpha: 0.98,
+        border: active ? COLORS.btnSuccessBorder : PLATE_BORDER,
         borderWidth: 2,
         centered: true,
       }));
-      const label = makeText(`${i + 1}/${waveCount}`, {
+      tab.addChild(makeText(`${i + 1}/${waveCount}`, {
         size: FONT_SIZE.xxs,
         fill: active ? COLORS.btnText : COLORS.textMain,
         bold: true,
         anchor: 0.5,
-      });
-      tab.addChild(label);
+      }));
       tab.eventMode = 'static';
       tab.cursor = 'pointer';
       tab.hitArea = new PIXI.Rectangle(-tabW / 2, -TAB_H / 2, tabW, TAB_H);
@@ -228,49 +228,86 @@ export function buildTeamEnemyIntelCard(opts: {
 
 function buildStatChips(hp: number, atk: number, interval: number, maxW: number): PIXI.Container {
   const row = new PIXI.Container();
-  const gap = 8;
+  const gap = 6;
   const chipW = Math.floor((maxW - gap * 2) / 3);
   const chipH = 46;
-  const items: { kind: 'hp' | 'atk' | 'turn'; label: string }[] = [
-    { kind: 'hp', label: '生命' },
-    { kind: 'atk', label: '攻击' },
-    { kind: 'turn', label: `每${interval}回合` },
+  const items: { kind: 'hp' | 'atk' | 'turn'; label: string; value: string }[] = [
+    { kind: 'hp', label: '生命', value: `${hp}` },
+    { kind: 'atk', label: '攻击', value: `${atk}` },
+    { kind: 'turn', label: `每${interval}回合`, value: '行动一次' },
   ];
-  const values = [`${hp}`, `${atk}`, '行动一次'];
   items.forEach((it, i) => {
     const chip = new PIXI.Container();
     chip.position.set(i * (chipW + gap), 0);
     chip.addChild(makePanel({
       width: chipW, height: chipH, radius: 10,
-      bg: COLORS.panelBg, bgAlpha: 0.95,
-      border: COLORS.panelBorderSoft, borderWidth: 1,
+      bg: 0xfffdf8, bgAlpha: 0.98,
+      border: PLATE_BORDER, borderWidth: 1,
       centered: false,
     }));
     if (it.kind === 'turn') {
-      const hg = drawHourglass(12);
-      hg.position.set(14, chipH / 2);
+      const hg = drawHourglass(11);
+      hg.position.set(12, chipH / 2);
       chip.addChild(hg);
       const lab = makeText(it.label, {
-        size: 14, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+        size: 12, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
       });
-      lab.position.set(28, chipH / 2);
-      chip.addChild(lab);
+      lab.position.set(26, chipH / 2 - 8);
+      const val = makeText(it.value, {
+        size: 12, fill: COLORS.textSub, bold: true, anchor: [0, 0.5],
+      });
+      val.position.set(26, chipH / 2 + 9);
+      chip.addChild(lab, val);
     } else {
-      const icon = makeStatIcon(it.kind, 20);
-      icon.position.set(14, chipH / 2);
+      const icon = makeStatIcon(it.kind, 18);
+      icon.position.set(12, chipH / 2);
       chip.addChild(icon);
       const lab = makeText(it.label, {
-        size: 14, fill: COLORS.textSub, bold: true, anchor: [0, 0.5],
+        size: 12, fill: COLORS.textSub, bold: true, anchor: [0, 0.5],
       });
-      lab.position.set(28, chipH / 2 - 9);
-      const val = makeText(values[i], {
-        size: 15, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+      lab.position.set(26, chipH / 2 - 8);
+      const val = makeText(it.value, {
+        size: 14, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
       });
-      val.position.set(28, chipH / 2 + 9);
+      val.position.set(26, chipH / 2 + 9);
       chip.addChild(lab, val);
     }
     row.addChild(chip);
   });
+  return row;
+}
+
+function buildCounterRow(
+  weak: ReturnType<typeof counterElementOf>,
+  resist: ReturnType<typeof resistedElementOf>,
+  width: number,
+): PIXI.Container {
+  const row = new PIXI.Container();
+  const gap = 8;
+  const boxW = Math.floor((width - gap) / 2);
+  const boxH = 32;
+
+  const makeBox = (label: string, el: typeof weak, x: number): void => {
+    const box = new PIXI.Container();
+    box.position.set(x, 0);
+    box.addChild(makePanel({
+      width: boxW, height: boxH, radius: 10,
+      bg: 0xfffdf8, bgAlpha: 0.98,
+      border: PLATE_BORDER, borderWidth: 1,
+      centered: false,
+    }));
+    const t = makeText(label, {
+      size: FONT_SIZE.xxs, fill: COLORS.textSub, bold: true, anchor: [0, 0.5],
+    });
+    t.position.set(10, boxH / 2);
+    box.addChild(t);
+    const o = makeElementOrb(el, 22);
+    o.position.set(boxW - 18, boxH / 2);
+    box.addChild(o);
+    row.addChild(box);
+  };
+  makeBox('克制', weak, 0);
+  makeBox('抵抗', resist, boxW + gap);
   return row;
 }
 
@@ -279,15 +316,16 @@ interface SkillBox extends PIXI.Container {
 }
 
 function buildSkillBox(skillIds: readonly string[], width: number): SkillBox {
-  const rowH = 44;
-  const pad = 10;
+  const iconSize = 40;
+  const rowH = 48;
+  const pad = 8;
   const boxH = pad * 2 + skillIds.length * rowH + Math.max(0, skillIds.length - 1) * 4;
   const box = new PIXI.Container() as SkillBox;
   box.boxH = boxH;
   box.addChild(makePanel({
     width, height: boxH, radius: 12,
-    bg: COLORS.panelBg, bgAlpha: 0.9,
-    border: COLORS.panelBorderSoft, borderWidth: 1,
+    bg: 0xfffdf8, bgAlpha: 0.96,
+    border: PLATE_BORDER, borderWidth: 1,
     centered: false,
   }));
 
@@ -296,39 +334,34 @@ function buildSkillBox(skillIds: readonly string[], width: number): SkillBox {
     const y = pad + i * (rowH + 4) + rowH / 2;
     const icon = makeSkillIcon({
       skillId: id,
-      size: 36,
+      size: iconSize,
       fallbackFill: 0xb8843c,
       fallbackGlyph: skill.name.charAt(0),
     });
-    icon.position.set(22, y);
+    icon.position.set(10 + iconSize / 2, y);
     box.addChild(icon);
 
+    const textX = 10 + iconSize + 10;
     const short = shortSkillLine(skill.desc);
     const title = makeText(`${skill.name}：${short}`, {
       size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-      wordWrapWidth: width - 56,
+      wordWrapWidth: width - textX - 8,
     });
-    const showSub = skill.desc !== short && skill.desc.length > short.length;
-    title.position.set(46, showSub ? y - 8 : y);
+    title.position.set(textX, y - 9);
     box.addChild(title);
-
-    if (showSub) {
-      const sub = makeText(
-        skill.desc.length > 22 ? `${skill.desc.slice(0, 22)}…` : skill.desc,
-        {
-          size: 14, fill: COLORS.textSub, anchor: [0, 0.5],
-          wordWrapWidth: width - 56,
-        },
-      );
-      sub.position.set(46, y + 10);
-      box.addChild(sub);
-    }
+    const sub = makeText(
+      skill.desc.length > 22 ? `${skill.desc.slice(0, 22)}…` : skill.desc,
+      { size: 12, fill: COLORS.textSub, anchor: [0, 0.5], wordWrapWidth: width - textX - 8 },
+    );
+    sub.position.set(textX, y + 10);
+    box.addChild(sub);
 
     if (i < skillIds.length - 1) {
       const line = new PIXI.Graphics();
-      line.lineStyle(1, COLORS.panelBorderSoft, 0.7);
-      line.moveTo(12, pad + (i + 1) * (rowH + 4) - 2);
-      line.lineTo(width - 12, pad + (i + 1) * (rowH + 4) - 2);
+      line.lineStyle(1, PLATE_BORDER, 0.65);
+      const ly = pad + (i + 1) * (rowH + 4) - 2;
+      line.moveTo(10, ly);
+      line.lineTo(width - 10, ly);
       box.addChild(line);
     }
   });
@@ -350,10 +383,6 @@ function drawHourglass(r: number): PIXI.Graphics {
   g.lineTo(-r * 0.7, r);
   g.lineTo(-r * 0.15, r * 0.15);
   g.closePath();
-  g.endFill();
-  g.beginFill(0xf0d9a0, 0.85);
-  g.drawEllipse(0, -r * 0.45, r * 0.35, r * 0.22);
-  g.drawEllipse(0, r * 0.45, r * 0.35, r * 0.22);
   g.endFill();
   return g;
 }

@@ -29,3 +29,4 @@ export * from './SidebarEntryButton';
 export * from './DesktopShortcutPanel';
 export * from './DesktopShortcutEntryButton';
 export * from './BottomNav';
+export * from './HomeLeftRail';

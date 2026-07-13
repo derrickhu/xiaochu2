@@ -1,0 +1,29 @@
+---
+description: xiaochu2 生图/UI原型必须统一 Q 版国风，禁止写实厚重风
+alwaysApply: true
+---
+
+# xiaochu2 美术风格（生图强制）
+
+凡本项目中的 **UI 原型、背景、图标、立绘、按钮板、VFX** 出图（`GenerateImage` / Gemini / game-art-pipeline），**必须**对齐统一风格，不得临时换画风。
+
+## 总基调（必读）
+
+- **统一 Q 版修仙 / cute-chibi xianxia guofeng**（偏可爱圆润，不是写实武侠）。
+- 圆胖简化造型、细线描边、柔和赛璐璐/平涂；环境也略 Q，忌厚重写实山水、忌暗黑恐怖、忌高饱和霓虹、忌 3D 写实 PBR。
+- 主色：薄荷青 / 湖水绿、宣纸米白 `#fdf3df`、描金 `#e8a33d` / `#b5701f`。
+- 完整文字指南：`docs/prompt/stage11_style.md`（出图前先读）。
+
+## 每次生图必做
+
+1. **读** `docs/prompt/stage11_style.md`，把其中「必贴风格段」写入 prompt。
+2. **参考图**：至少传 1 张已定稿 UI（优先 `docs/ui/gacha_golden_egg_ui_prototype_v1.png`、`docs/ui/pet_codex_ui_prototype_v4_q_ui.png`、`docs/ui/team_prep_ui_prototype_v2.png`），或 `minigame/images/bg/scene_pet_pool.jpg`；说明 *style / palette / UI chrome only, do not copy layout*。
+3. Prompt **显式写**：`Q-version cute chibi xianxia`、`soft cel-shaded`、`NOT realistic`、`NOT dark fantasy`。
+4. **完整度**：手机竖屏一屏内结构齐全（顶栏/主区/底栏等按需求），禁止半截、缺底栏、缺按钮、缺标注的「残图」。
+5. Prompt 落盘到 `docs/prompt/{task}_prompt.txt`；原型图落到 `docs/ui/`。
+
+## 禁止
+
+- 不写风格段就生图
+- 不带参考图就出「整页 UI 原型」
+- 写实厚涂、暗黑修仙、赛博霓虹、紫白渐变 AI 默认脸

@@ -95,7 +95,7 @@ export class CodexScene implements Scene {
     await ensurePetAvatars(codexPetAvatarEntries());
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'codex') return;
-    this._buildPetList(Game.safeTop + 192);
+    this._buildPetList(Game.safeTop + 118);
     await Game.warmScenePresent();
   }
 
@@ -123,27 +123,27 @@ export class CodexScene implements Scene {
     const back = makeBackButton({
       onTap: () => SceneManager.switchTo('title'),
     });
-    back.position.set(80, Game.safeTop + 36);
+    back.position.set(80, Game.safeHeaderCenterY);
     this.container.addChild(back);
 
-    this._buildTitlePlaque(w, Game.safeTop + 36);
+    this._buildTitlePlaque(w, Game.safeHeaderCenterY);
 
     const expRow = makeIconLabel({
       iconPath: UI_IMAGES.iconExp, iconSize: 32,
       text: `经验池 ${PlayerData.exp} · 点击灵宠进入养成`,
       size: FONT_SIZE.xs, fill: COLORS.textSub,
     });
-    expRow.position.set(w / 2 - expRow.width / 2, Game.safeTop + 82);
+    expRow.position.set(w / 2 - expRow.width / 2, Game.safeTop + 8);
     this.container.addChild(expRow);
 
     const countText = makeText(
       `已拥有 ${PlayerData.ownedPets.length} / 共 ${PETS.length} 只 · 点击查看`,
       { size: FONT_SIZE.xs, fill: COLORS.accent, bold: true, anchor: 0.5 },
     );
-    countText.position.set(w / 2, Game.safeTop + 118);
+    countText.position.set(w / 2, Game.safeTop + 44);
     this.container.addChild(countText);
 
-    this._buildMilestoneBar(w, Game.safeTop + 148);
+    this._buildMilestoneBar(w, Game.safeTop + 74);
   }
 
   /** 图鉴里程碑进度条：拥有进度与灵玉奖励均在图鉴页结算 */

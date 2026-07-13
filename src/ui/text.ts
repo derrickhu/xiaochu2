@@ -18,6 +18,14 @@ export interface MakeTextOpts {
   /** 描边色（用于亮底上的强调标题），不传则无描边 */
   strokeColor?: number;
   strokeWidth?: number;
+  /** 轻投影（召唤引导白字等，对齐原型；勿叠粗描边） */
+  dropShadow?: boolean | {
+    color?: number;
+    blur?: number;
+    distance?: number;
+    alpha?: number;
+    angle?: number;
+  };
 }
 
 export function makeText(content: string, opts: MakeTextOpts = {}): PIXI.Text {
@@ -35,6 +43,15 @@ export function makeText(content: string, opts: MakeTextOpts = {}): PIXI.Text {
   if (opts.strokeColor !== undefined) {
     style.stroke = opts.strokeColor;
     style.strokeThickness = opts.strokeWidth ?? 4;
+  }
+  if (opts.dropShadow) {
+    const ds = opts.dropShadow === true ? {} : opts.dropShadow;
+    style.dropShadow = true;
+    style.dropShadowColor = ds.color ?? 0x2a1a0c;
+    style.dropShadowBlur = ds.blur ?? 3;
+    style.dropShadowDistance = ds.distance ?? 2;
+    style.dropShadowAlpha = ds.alpha ?? 0.4;
+    style.dropShadowAngle = ds.angle ?? Math.PI / 4;
   }
   const t = new PIXI.Text(content, style);
   if (opts.anchor !== undefined) {

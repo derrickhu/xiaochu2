@@ -15,10 +15,10 @@ import { ensureAssets } from '@/config/Subpackages';
 import { UI, ELEMENT_NAME } from '@/balance/ui';
 import { PET_MAP } from '@/balance/pets';
 import type { Element } from '@/balance/combat';
-import { RARITIES, getRarity } from '@/balance/rarity';
+import { getRarity } from '@/balance/rarity';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
-import { poolGachaRates, type PullOutcome } from '@/game/gacha/Gacha';
+import { type PullOutcome } from '@/game/gacha/Gacha';
 import { gachaPoolPets } from '@/game/playerGacha';
 import {
   BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES,
@@ -101,12 +101,12 @@ export class GachaScene implements Scene {
     const back = makeBackButton({
       onTap: () => SceneManager.switchTo('title'),
     });
-    back.position.set(80, Game.safeTop + 36);
+    back.position.set(80, Game.safeHeaderCenterY);
     this._page.addChild(back);
 
-    this._buildTitlePlaque(w, Game.safeTop + 36, '灵宠召唤');
+    this._buildTitlePlaque(w, Game.safeHeaderCenterY, '灵宠召唤');
 
-    // 灵玉右上角胶囊
+    // 灵玉右上角胶囊（避开平台菜单胶囊）
     const balance = makeCurrencyLabel('lingyu', PlayerData.lingyu);
     const balPadX = 14;
     const balH = 44;
@@ -115,18 +115,23 @@ export class GachaScene implements Scene {
       width: balW, height: balH, radius: balH / 2, centered: false,
       bg: COLORS.panelBg, bgAlpha: 0.92, border: COLORS.panelBorderSoft, borderWidth: 2,
     });
-    balBg.position.set(w - balW - 24, Game.safeTop + 16);
+    const balRight = Game.contentRightX(12);
+    balBg.position.set(balRight - balW, Game.safeHeaderCenterY - balH / 2);
     balance.position.set(balPadX, (balH - 38) / 2);
     balBg.addChild(balance);
     this._page.addChild(balBg);
 
-    this._buildPity(w, Game.safeTop + 100);
+    this._buildPity(w, Game.safeTop + 28);
 
+    // 对齐原型：白字轻阴影，现代字重，不做米黄粗描边
     const tip = makeText('敲碎金蛋，召唤仙灵', {
-      size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: 0.5,
-      strokeColor: 0xfff8ec, strokeWidth: 4,
+      size: FONT_SIZE.lg,
+      fill: COLORS.gachaEggTip,
+      bold: true,
+      anchor: 0.5,
+      dropShadow: { color: 0x1a2a28, blur: 4, distance: 2, alpha: 0.45 },
     });
-    tip.position.set(w / 2, h - 250);
+    tip.position.set(w / 2, h - 270);
     this._page.addChild(tip);
 
     // 金蛋热区：点击 = 单抽
@@ -143,67 +148,69 @@ export class GachaScene implements Scene {
     this._buildPullButtons(w, h);
   }
 
-  /** 保底进度：对齐原型「距离 SSR 灵宠必出还差 N 抽」 */
+  /**
+   * 保底进度：对齐 UI 原型截图
+   * - 正文冷静炭灰（非土黄粗墨）
+   * - SSR 稀有紫、剩余次数亮橙，同行同字号，无描边
+   * - 底注浅灰细字含 UR 提示
+   */
   private _buildPity(w: number, y: number): void {
     const pity = ECONOMY.gacha.pitySSR;
     const cur = Math.min(pity, PlayerData.gachaSinceHigh);
     const remain = Math.max(0, pity - cur);
     const ssrColor = getRarity(3).color;
+    const body = COLORS.gachaPityText;
+    const fontSize = FONT_SIZE.sm;
 
     const row = new PIXI.Container();
     const prefix = makeText('距离 ', {
-      size: FONT_SIZE.xs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+      size: fontSize, fill: body, bold: true, anchor: [0, 0.5],
     });
     const ssr = makeText('SSR', {
-      size: FONT_SIZE.xs, fill: ssrColor, bold: true, anchor: [0, 0.5],
+      size: fontSize, fill: ssrColor, bold: true, anchor: [0, 0.5],
     });
-    const rest = makeText(` 灵宠必出还差 ${remain} 抽`, {
-      size: FONT_SIZE.xs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+    const mid = makeText(' 灵宠必出还差 ', {
+      size: fontSize, fill: body, bold: true, anchor: [0, 0.5],
     });
-    prefix.position.set(0, 0);
-    ssr.position.set(prefix.width, 0);
-    rest.position.set(prefix.width + ssr.width, 0);
-    row.addChild(prefix, ssr, rest);
-    row.position.set(w / 2 - (prefix.width + ssr.width + rest.width) / 2, y);
+    const num = makeText(`${remain}`, {
+      size: fontSize, fill: COLORS.gachaPityRemain, bold: true, anchor: [0, 0.5],
+    });
+    const suffix = makeText(' 抽', {
+      size: fontSize, fill: body, bold: true, anchor: [0, 0.5],
+    });
+    let x = 0;
+    for (const t of [prefix, ssr, mid, num, suffix]) {
+      t.position.set(x, 0);
+      row.addChild(t);
+      x += t.width;
+    }
+    row.position.set(w / 2 - x / 2, y);
     this._page.addChild(row);
 
-    // 复用战斗英雄血条外框，内槽铺金进度
-    const barW = 480;
+    const barW = 520;
     const barH = 40;
     const bar = makeProgressBar({
       width: barW, height: barH, ratio: cur / pity, frame: true,
     });
-    bar.position.set(w / 2 - barW / 2, y + 18);
+    bar.position.set(w / 2 - barW / 2, y + 26);
     this._page.addChild(bar);
 
     const floorNote = makeText('十连必出 SR 或以上 · UR 概率更高', {
-      size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: 0.5,
+      size: FONT_SIZE.xs, fill: COLORS.textSub, bold: false, anchor: 0.5,
     });
-    floorNote.position.set(w / 2, y + 68);
+    floorNote.position.set(w / 2, y + 80);
     this._page.addChild(floorNote);
-
-    // 紧凑概率一行（与配置一致：UR 3.5 / SSR 10 / SR 26.5 / R 60）
-    const rates = poolGachaRates(gachaPoolPets(this._activePoolElement()));
-    const parts: string[] = [];
-    for (const tier of [...RARITIES].reverse()) {
-      const rate = rates.get(tier);
-      if (rate === undefined) continue;
-      parts.push(`${getRarity(tier).code} ${(rate * 100).toFixed(1)}%`);
-    }
-    if (parts.length) {
-      const rateLine = makeText(parts.join('  ·  '), {
-        size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: 0.5,
-      });
-      rateLine.position.set(w / 2, y + 90);
-      this._page.addChild(rateLine);
-    }
   }
 
   private _buildTitlePlaque(w: number, centerY: number, label: string): void {
+    // 对齐召唤原型：奶油云纹短匾 + 深棕字，不用战斗横匾（易显厚重老土）
     const plaque = makeNamePlaque({
       text: label,
-      width: Math.min(480, w - 80),
+      width: Math.min(420, w - 160),
       size: 'lg',
+      plate: 'title',
+      fill: COLORS.btnBackText,
+      stroke: false,
     });
     plaque.position.set(w / 2, centerY);
     this._page.addChild(plaque);
@@ -211,11 +218,11 @@ export class GachaScene implements Scene {
 
   private _buildPullButtons(w: number, h: number): void {
     const g = ECONOMY.gacha;
-    // 底板约 2.2:1，略增高避免九宫拉伸压扁云纹边框
-    const btnW = 310;
-    const btnH = 128;
-    const gap = 18;
-    const y = h - 132;
+    // 贴近底板约 2.1:1，减少纵向压扁
+    const btnW = 320;
+    const btnH = 148;
+    const gap = 16;
+    const y = h - 140;
 
     this._singlePullBtn = makeActionButton({
       title: '单抽',
@@ -312,11 +319,11 @@ export class GachaScene implements Scene {
     const heading = makeText(outcomes.length > 1 ? '十连结果' : '召唤结果', {
       size: FONT_SIZE.lg, fill: COLORS.textInverse, bold: true, anchor: 0.5,
     });
-    heading.position.set(w / 2, Game.safeTop + 70);
+    heading.position.set(w / 2, Game.safeTop + 24);
 
     stage.addChild(fxBack, heading, cardsLayer, fxFront);
 
-    const gridTop = Game.safeTop + 120;
+    const gridTop = Game.safeTop + 72;
     const cards = this._buildResultCards(outcomes, gridTop);
     cards.forEach((c) => cardsLayer.addChild(c));
 
@@ -330,7 +337,7 @@ export class GachaScene implements Scene {
       label: '跳过', width: 110, height: 48, variant: 'ghost',
       onTap: () => this._reveal?.skip(),
     });
-    skipBtn.position.set(w - 90, Game.safeTop + 40);
+    skipBtn.position.set(Math.min(w - 90, Game.contentRightX(20)), Game.safeHeaderCenterY);
     overlay.addChild(skipBtn);
 
     const centerY = gridTop + (outcomes.length > 1 ? 180 : 230);

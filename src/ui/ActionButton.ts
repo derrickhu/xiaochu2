@@ -1,7 +1,8 @@
 /**
  * 质感行动按钮（详情升星/升级、召唤单抽/十连）。
  *
- * 底板贴图：cream / success / gold（平滑渐变 + 干净透明边，九宫拉伸）。
+ * 底板贴图：cream / success / gold —— 一律整图 Sprite 拉满宽高，
+ * 保持贴图原有胶囊/椭圆轮廓，避免九宫在矮按钮上切出异形或上下接缝。
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
@@ -29,13 +30,6 @@ const PLATE_PATH: Record<ActionButtonVariant, string> = {
   gold: UI_IMAGES.btnPlateGold,
 };
 
-/** 九宫左右帽 / 上下帽：奶油/翠绿/金橙同套金边云纹底板 */
-const SLICE: Record<ActionButtonVariant, { lr: number; tb: number }> = {
-  cream: { lr: 150, tb: 95 },
-  gold: { lr: 160, tb: 90 },
-  success: { lr: 150, tb: 95 },
-};
-
 interface TextStyle {
   title: number;
   subtitle: number;
@@ -55,7 +49,6 @@ const DISABLED_TEXT: TextStyle = {
 function makeFallbackPlate(w: number, h: number, variant: ActionButtonVariant, disabled: boolean): PIXI.Graphics {
   const g = new PIXI.Graphics();
   const r = Math.min(RADIUS.button, h / 2);
-  // 单色实底 + 金边，避免程序绘制上下两截色差
   const fill = disabled
     ? COLORS.btnDisabledBg
     : (variant === 'success'
@@ -71,7 +64,6 @@ function makeFallbackPlate(w: number, h: number, variant: ActionButtonVariant, d
   g.lineStyle(4, border, 1);
   g.drawRoundedRect(-w / 2, -h / 2, w, h, r);
   g.endFill();
-  // 顶部细高光（单条，不造两截色块）
   if (!disabled) {
     g.beginFill(0xffffff, variant === 'cream' ? 0.22 : 0.16);
     g.drawRoundedRect(-w / 2 + 6, -h / 2 + 4, w - 12, Math.max(8, h * 0.18), r * 0.45);
@@ -107,13 +99,13 @@ export function makeActionButton(opts: ActionButtonOpts): ActionButtonHandle {
     plateHost.removeChildren().forEach((c) => c.destroy());
     const tex = TextureCache.get(PLATE_PATH[variant]);
     if (tex) {
-      const { lr, tb } = SLICE[variant];
-      const plane = new PIXI.NineSlicePlane(tex, lr, tb, lr, tb);
-      plane.width = width;
-      plane.height = height;
-      plane.pivot.set(width / 2, height / 2);
-      if (!enabled) plane.alpha = 0.55;
-      plateHost.addChild(plane);
+      // 整图拉伸：cream/gold/success 均为胶囊底板，保持椭圆外形一致
+      const sp = new PIXI.Sprite(tex);
+      sp.anchor.set(0.5);
+      sp.width = width;
+      sp.height = height;
+      if (!enabled) sp.alpha = 0.55;
+      plateHost.addChild(sp);
     } else {
       const fb = makeFallbackPlate(width, height, variant, !enabled);
       plateHost.addChild(fb);

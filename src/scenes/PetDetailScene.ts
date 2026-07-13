@@ -288,7 +288,7 @@ export class PetDetailScene implements Scene {
     const star = this._preview ? INITIAL_PET_STAR : PlayerData.petStar(petId);
 
     slide.addChild(makeTopBar({
-      title: pet.name, width: w, centerY: Game.safeTop + 36,
+      title: pet.name, width: w, centerY: Game.safeHeaderCenterY,
       onBack: () => SceneManager.switchTo(this._backScene, this._backData),
     }));
     if (!live) {
@@ -297,7 +297,7 @@ export class PetDetailScene implements Scene {
     }
 
     const marginX = 28;
-    const heroTop = Game.safeTop + 88;
+    const heroTop = Game.safeTop + 16;
     const heroGap = 16;
     const halfAvail = Math.floor((w - marginX * 2 - heroGap) / 2);
     const portraitSize = Math.min(268, Math.floor(halfAvail * 0.78));
@@ -1166,40 +1166,38 @@ export class PetDetailScene implements Scene {
 
     const marginX = 28;
     const gap = 16;
-    // 略增高，贴近底板 2:1 比例，避免九宫竖向压出「上下两截色」
+    // 与升级同为椭圆胶囊：等宽等高，整图底板拉满（见 makeActionButton）
     const btnH = 104;
     const cy = dockTop + dockH / 2 - 2;
-    const innerW = w - marginX * 2 - gap;
-    const starW = Math.floor(innerW * 0.42);
-    const lvW = innerW - starW;
+    const btnW = Math.floor((w - marginX * 2 - gap) / 2);
 
     const starCost = PlayerData.starUpCost(petId);
     const canStar = PlayerData.canStarUp(petId);
     const shards = PlayerData.petShards(petId);
     const starSub = starCost === null ? '已满星' : `碎片 ${shards}/${starCost}`;
     const starBtn = makeActionButton({
-      width: starW, height: btnH,
+      width: btnW, height: btnH,
       title: starCost === null ? '已满星' : '升星',
       subtitle: starSub,
       variant: 'cream',
       enabled: this._buildLive && canStar,
       onTap: () => this._onStarUp(),
     });
-    starBtn.position.set(marginX + starW / 2, cy);
+    starBtn.position.set(marginX + btnW / 2, cy);
     this._uiRoot().addChild(starBtn);
 
     const lvCost = PlayerData.levelUpCost(petId);
     const canLv = PlayerData.canLevelUp(petId);
     const lvSub = lvCost === null ? '已满级' : `经验 ${PlayerData.exp}/${lvCost}`;
     const lvBtn = makeActionButton({
-      width: lvW, height: btnH,
+      width: btnW, height: btnH,
       title: lvCost === null ? '已满级' : '升级',
       subtitle: lvSub,
       variant: 'success',
       enabled: this._buildLive && canLv,
       onTap: () => this._onLevelUp(),
     });
-    lvBtn.position.set(marginX + starW + gap + lvW / 2, cy);
+    lvBtn.position.set(marginX + btnW + gap + btnW / 2, cy);
     this._uiRoot().addChild(lvBtn);
   }
 
