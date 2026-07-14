@@ -25,15 +25,18 @@ import { COLORS, FONT_SIZE, makeText, makeStarRow } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { ScrollListController } from '@/ui/ScrollList';
 
-/** 圆柱关卡点显示尺寸（对齐 home_hub_v4 圆台比例） */
-const NODE_W = 78;
-const NODE_H = 68;
-const NODE_HIT_R = 48;
+/** 圆柱关卡点显示尺寸（略小，给星星/Boss 让视觉重心） */
+const NODE_W = 56;
+const NODE_H = 48;
+const NODE_HIT_R = 40;
 /** Boss 守关灵宠立绘边长（放大，放在关卡点左侧） */
 const BOSS_PET_SIZE = 160;
 /** 相对 Boss 关节点：偏左、略上 */
-const BOSS_PET_OFFSET_X = -118;
-const BOSS_PET_OFFSET_Y = -NODE_H * 0.4;
+const BOSS_PET_OFFSET_X = -110;
+const BOSS_PET_OFFSET_Y = -NODE_H * 0.35;
+/** 通关星：主界面要明显大于石礅 */
+const NODE_STAR_SIZE = 22;
+const NODE_STAR_GAP = 3;
 /** 关卡路径整体下移（屏幕像素），与顶栏资源图标留出呼吸间距 */
 const TITLE_MAP_TOP_INSET = 32;
 
@@ -152,7 +155,7 @@ function buildStageNode(
   // 台面关卡序号（对齐 home_hub_v4 圆台上数字）
   if (opts.unlocked) {
     const num = makeText(String(stage.index), {
-      size: 22,
+      size: 18,
       fill: kind === 'active' ? 0xb5701f : 0x2f7a6b,
       bold: true,
       anchor: 0.5,
@@ -168,11 +171,11 @@ function buildStageNode(
       star: opts.stars,
       maxStar: 3,
       style: 'sprite',
-      starSize: 14,
-      gap: 2,
+      starSize: NODE_STAR_SIZE,
+      gap: NODE_STAR_GAP,
       anchor: 'center',
     });
-    starLine.position.set(0, -NODE_H * 0.95);
+    starLine.position.set(0, -NODE_H * 0.95 - NODE_STAR_SIZE * 0.15);
     wrap.addChild(starLine);
   }
 

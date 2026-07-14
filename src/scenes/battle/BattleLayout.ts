@@ -88,11 +88,12 @@ export function computeBattleLayout(): BattleLayout {
   const enemyCdY = enemyTagY - tagH / 2 - enemyCdToTagGap - cdH / 2;
   const enemyHpBarY = enemyCdY - cdH / 2 - enemyHpToCdGap - enemyHpBarHeight;
 
-  const enemyAreaTop = Game.safeTop + 4;
+  // 顶栏与全站统一：关卡匾/返回钮对齐胶囊收起区中心（safeHeaderCenterY）
+  const headerY = Game.safeHeaderCenterY;
+  const enemyAreaTop = headerY - stageBannerH / 2;
   const enemyAreaBottom = heroBarY - 4;
-  const headerY = enemyAreaTop + stageBannerH / 2 + 4;
   // 敌人名独立匾：紧贴关卡匾下方
-  const enemyNameY = headerY + stageBannerH / 2 + 8 + enemyNamePlaqueH / 2;
+  const enemyNameY = headerY + stageBannerH / 2 + 6 + enemyNamePlaqueH / 2;
 
   // 立绘：名匾下沿 ~ 血条上沿（加大间距，避免 Boss 头顶顶进名匾）
   const spriteZoneTop = enemyNameY + enemyNamePlaqueH / 2 + 20;
