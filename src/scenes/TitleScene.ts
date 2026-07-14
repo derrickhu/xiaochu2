@@ -221,10 +221,11 @@ export class TitleScene implements Scene {
     const coins = makeCurrencyLabel('coin', PlayerData.coins);
     const gap = 16;
     const totalW = lingyu.width + gap + coins.width;
-    // 右缘不得超过胶囊左缘，避免被「··· / 收起」挡住
-    const rightLimit = Game.contentRightX(16);
+    // 右缘避开「··· / 收起」胶囊；GM 开启时再让出 GM 按钮，避免灵宠币叠上去
+    const gmReserve = GMManager.isEnabled ? 56 + 14 : 0;
+    const rightLimit = Game.contentRightX(28 + gmReserve);
     const rowRight = Math.min(w - padX, rightLimit);
-    const rowX = rowRight - totalW;
+    const rowX = Math.max(padX + 200, rowRight - totalW);
     // IconLabel 原点在图标垂直中心，与头像/昵称共用 centerY
     lingyu.position.set(rowX, centerY);
     coins.position.set(rowX + lingyu.width + gap, centerY);

@@ -37,8 +37,8 @@ const BOSS_PET_OFFSET_Y = -NODE_H * 0.35;
 /** 通关星：主界面要明显大于石礅 */
 const NODE_STAR_SIZE = 22;
 const NODE_STAR_GAP = 3;
-/** 关卡路径整体下移（屏幕像素），与顶栏资源图标留出呼吸间距 */
-const TITLE_MAP_TOP_INSET = 32;
+/** 关卡路径节点略下移（屏幕像素），背景仍满屏；勿加在 world 上否则顶栏下露底色 */
+const TITLE_MAP_NODE_TOP_INSET = 32;
 
 type NodeKind = 'cleared' | 'active' | 'locked';
 
@@ -397,7 +397,8 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
 
   const world = new PIXI.Container();
   world.scale.set(fit.scale);
-  world.position.set(fit.offsetX, fit.offsetY + TITLE_MAP_TOP_INSET);
+  // 背景 cover 铺满逻辑屏；不要再叠 TOP_INSET，否则顶部露出 fallback 留白
+  world.position.set(fit.offsetX, fit.offsetY);
   root.addChild(world);
 
   const bgTex = TextureCache.get(BACKGROUND_IMAGES.titleScreen)
@@ -406,6 +407,11 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
   if (bgTex) {
     layoutDesignBackground(world, bgTex, designW, designH);
   }
+
+  // 节点/标记单独下移，与顶栏留呼吸间距；坐标系仍属设计稿
+  const designLayer = new PIXI.Container();
+  designLayer.position.set(0, TITLE_MAP_NODE_TOP_INSET / fit.scale);
+  world.addChild(designLayer);
 
   const nodes: PIXI.Container[] = [];
   opts.stages.forEach((stage, i) => {
@@ -418,7 +424,7 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
       editMode,
     });
     nodes.push(node);
-    world.addChild(node);
+    designLayer.addChild(node);
   });
 
   let marker: PIXI.Container | null = null;
@@ -426,10 +432,10 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
   if (activePos && showProgressMarker) {
     marker = buildPlayerMarker(PlayerData.team[0]);
     marker.position.set(activePos.x + 44, activePos.y - 22);
-    world.addChild(marker);
+    designLayer.addChild(marker);
   }
 
-  return { world: root, designLayer: world, nodes, marker, activeIndex: activeIdx };
+  return { world: root, designLayer, nodes, marker, activeIndex: activeIdx };
 }
 
 /** @deprecated 兼容旧调用，内部转 buildTitleScreenWorld */
