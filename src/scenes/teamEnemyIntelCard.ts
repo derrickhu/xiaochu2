@@ -259,7 +259,6 @@ function drawThinGoldFrame(w: number, h: number): PIXI.Graphics {
 }
 
 function estimateInfoHeight(def: EnemyDef, stage: StageDef, contentW: number): number {
-  void contentW;
   let y = INFO_PAD * 2 + 32 + 52;
   const skillIds = (def.skillIds ?? []).slice(0, 2);
   if (skillIds.length > 0) {
@@ -268,8 +267,23 @@ function estimateInfoHeight(def: EnemyDef, stage: StageDef, contentW: number): n
   y += 34 + TIP_GAP;
   const tip = stage.hintText
     ?? (stage.hintTags?.length ? `本关：${stage.hintTags.join(' · ')}` : null);
-  if (tip) y += 36;
+  if (tip) {
+    const tipStr = tip.startsWith('本关') ? tip : `本关：${tip}`;
+    y += estimateStageTipHeight(tipStr, contentW);
+  }
   return Math.max(y, 160);
+}
+
+/** 与 buildStageTip 同宽测算，避免长中文提示撑破卡片却高度仍按单行估 */
+function estimateStageTipHeight(text: string, width: number): number {
+  const tipText = makeText(text, {
+    size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: [0, 0],
+    wordWrapWidth: Math.max(40, width - 28),
+  });
+  try { tipText.updateText(true); } catch { /* noop */ }
+  const h = Math.max(28, Math.ceil(tipText.height) + 14);
+  tipText.destroy(true);
+  return h;
 }
 
 function skillBoxHeight(count: number): number {
@@ -439,8 +453,19 @@ function buildSkillBox(skillIds: readonly string[], width: number): SkillBox {
   return box;
 }
 
-function buildStageTip(text: string, width: number): PIXI.Container {
-  const c = new PIXI.Container();
+function buildStageTip(text: string, width: number): PIXI.Container & { tipH: number } {
+  const c = new PIXI.Container() as PIXI.Container & { tipH: number };
+  const wrapW = Math.max(40, width - 28);
+
+  const tipText = makeText(text, {
+    size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: [0, 0],
+    wordWrapWidth: wrapW,
+  });
+  try { tipText.updateText(true); } catch { /* noop */ }
+  const textH = Math.max(FONT_SIZE.xxs, Math.ceil(tipText.height));
+  const tipH = Math.max(28, textH + 14);
+  c.tipH = tipH;
+
   const line = new PIXI.Graphics();
   line.lineStyle(1.5, PLATE_BORDER, 0.75);
   line.moveTo(0, 0);
@@ -448,14 +473,10 @@ function buildStageTip(text: string, width: number): PIXI.Container {
   c.addChild(line);
 
   const pine = drawPineMark(9);
-  pine.position.set(10, 20);
+  pine.position.set(10, 8 + FONT_SIZE.xxs / 2);
   c.addChild(pine);
 
-  const tipText = makeText(text, {
-    size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-    wordWrapWidth: width - 28,
-  });
-  tipText.position.set(22, 20);
+  tipText.position.set(22, 8);
   c.addChild(tipText);
   return c;
 }

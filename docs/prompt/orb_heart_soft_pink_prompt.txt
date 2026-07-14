@@ -1,0 +1,11 @@
+Xiaochu2 match-3 orb bead — HEART / pink heal orb.
+
+Same family as other Q solid orbs (fire/wood/water): glossy round marble bead, soft cel shading, thin clean rim, bright specular highlight top-left, subtle embossed icon in center.
+
+COLOR (CRITICAL): soft rose / bubblegum pink, SLIGHTLY deeper than pastel baby pink — NOT pale washed pink, NOT dark magenta, NOT dusty mauve, NOT wine red. Target feel: cheerful medium-soft pink like #f48fb1 / #ff8fb8, readable on cream board.
+
+ICON: embossed heart symbol in center, same pink family with soft depth, no outline text.
+
+Composition: single centered circular bead filling most of square frame, transparent background.
+NO TEXT, no labels, no watermark, no UI frame, no second bead.
+Style match reference orbs: glossy Q mobile game gem bead.

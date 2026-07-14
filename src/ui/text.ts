@@ -16,6 +16,11 @@ export interface MakeTextOpts {
   anchor?: number | [number, number];
   /** 自动换行宽度 */
   wordWrapWidth?: number;
+  /**
+   * 中文等无空格文本换行（默认：开启 wordWrap 时为 true）。
+   * PIXI 默认只按空格断行，不设则中文会长串溢出。
+   */
+  breakWords?: boolean;
   align?: 'left' | 'center' | 'right';
   /** 描边色（用于亮底上的强调标题），不传则无描边 */
   strokeColor?: number;
@@ -41,6 +46,9 @@ export function makeText(content: string, opts: MakeTextOpts = {}): PIXI.Text {
   if (opts.wordWrapWidth) {
     style.wordWrap = true;
     style.wordWrapWidth = opts.wordWrapWidth;
+    style.breakWords = opts.breakWords ?? true;
+  } else if (opts.breakWords !== undefined) {
+    style.breakWords = opts.breakWords;
   }
   if (opts.strokeColor !== undefined) {
     style.stroke = opts.strokeColor;
