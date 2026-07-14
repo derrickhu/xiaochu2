@@ -59,7 +59,7 @@ export function renderOverview(container: HTMLElement): void {
   ).join('');
 
   container.innerHTML = `
-    <section class="panel">${panelTitle('总览', '52 关 · 8 收录 · Boss 挑战 archetype')}
+    <section class="panel">${panelTitle('总览', '64 关 · 8 收录 · Boss 挑战 archetype')}
       ${cards}
     </section>
     <section class="panel">

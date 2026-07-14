@@ -19,6 +19,8 @@ export interface RoleBadgeOpts {
   scale?: number;
   /** 胶囊最大宽度（默认按文字自适应） */
   maxWidth?: number;
+  /** 文字色；默认白字（对齐编队 UI 图） */
+  textFill?: number;
 }
 
 /** 定位胶囊（输出 / 治疗 / 坦克 / 辅助） */
@@ -28,18 +30,22 @@ export function makeRoleBadge(opts: RoleBadgeOpts): PIXI.Container {
   const pillH = 14 * S;
   const pillW = Math.min(
     opts.maxWidth ?? Infinity,
-    def.name.length * 9 * S + 10 * S,
+    def.name.length * 9 * S + 12 * S,
   );
 
   const cont = new PIXI.Container();
   cont.addChild(makePanel({
     width: pillW, height: pillH, radius: pillH / 2, centered: false,
-    bg: def.ui.badgeBg, bgAlpha: 0.88,
+    bg: def.ui.badgeBg, bgAlpha: 0.92,
     border: def.ui.badgeBorder, borderWidth: 1,
   }));
   const label = makeText(def.name, {
-    size: Math.round(8.5 * S), fill: def.ui.badgeText, bold: true, anchor: 0.5,
-    strokeColor: 0x2d180c, strokeWidth: Math.max(1, Math.round(1.5 * S)),
+    size: Math.round(8.5 * S),
+    fill: opts.textFill ?? 0xffffff,
+    bold: true,
+    anchor: 0.5,
+    strokeColor: 0x2d180c,
+    strokeWidth: Math.max(1, Math.round(1.5 * S)),
   });
   label.position.set(pillW / 2, pillH / 2);
   cont.addChild(label);

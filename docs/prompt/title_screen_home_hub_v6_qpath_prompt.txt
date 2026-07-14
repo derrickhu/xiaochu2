@@ -1,0 +1,22 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+Light airy painted scenery that is ALSO slightly Q/stylized.
+FORBIDDEN: photorealistic, dark fantasy, heavy oil paint, cyberpunk neon, purple-on-white AI defaults, 3D PBR.
+
+TASK: Mobile TITLE SCREEN / HOME HUB map BACKGROUND ONLY, portrait 9:16.
+Match attached home_hub_ui_prototype_v4 for STYLE + PATH SCENE (mint hills, waterfalls, lotuses, lanterns, cream stone path) — do NOT copy UI chrome, text, currency, bottom nav, chapter plaque, or numbered stage discs from the reference.
+
+COMPOSITION:
+- Full-bleed phone 9:16
+- Clear Q-version S-shaped cream cobblestone path from bottom-center rising toward top hill
+- Continuous path ONLY — NO circular stage pads, NO discs, NO cylinders, NO numbers on path
+- Soft misty mint mountains, waterfalls, pink lotuses, 1–2 distant pavilions, stone lanterns
+- Bottom ~18%: soft cream/lavender cloud bank for future nav
+- Bright cream-mint sky, no dark vignette
+- Optional tiny fox far from path
+
+MUST NOT: UI, buttons, text, numbers, stars, shields, BOSS label, turtle/boss creature, stage nodes of any kind.
+
+NO TEXT anywhere.

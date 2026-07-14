@@ -4,6 +4,8 @@ import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { getRarity } from '@/balance/rarity';
 import { PET_MAP, type PetDef } from '@/balance/pets';
+import { ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
+import type { Element } from '@/balance/combat';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import {
   petFrameImage,
@@ -24,7 +26,6 @@ import {
   makeShardBadge,
   makeText,
   attachPetFrameOrb,
-  makeElementOrb,
   makeStarRow,
 } from '@/ui';
 import type { ScrollListController } from '@/ui/ScrollList';
@@ -35,10 +36,9 @@ const FREE_CARD_W = 330;
 const FREE_CARD_H = 148;
 const FREE_AVATAR = 74;
 
-/** 战前可选区：更小双列横卡（对齐 UI 图；卡面略亮于外板，避免融进奶油底） */
+/** 战前可选区：双列横卡；左侧立绘高度与卡板同高 */
 const PREP_CARD_W = 300;
 const PREP_CARD_H = 108;
-const PREP_AVATAR = 72;
 const PREP_CARD_BG = 0xfffdf8;
 const PREP_CARD_BORDER = 0xd4b87a;
 
@@ -151,8 +151,8 @@ export function addTeamPetAvatar(
 }
 
 /**
- * 战前上阵竖卡：立绘铺满卡高（与托盘同高），属性珠左上，Lv+星叠在底部。
- * 对齐 team_prep 原型截图（不再用方形相框把立绘缩小）。
+ * 战前上阵竖卡：立绘高度与背景板一致（铺满卡高），左上属性类型标（白字），Lv+星叠底。
+ * 对齐 team_prep 原型。
  */
 export function addTeamPrepSlotPet(
   parent: PIXI.Container,
@@ -163,28 +163,28 @@ export function addTeamPrepSlotPet(
   star: number,
 ): void {
   const border = 0xe0c896;
+  const radius = 12;
+  // 底仅作缺图兜底；立绘铺满整卡，高度与背景板一致
   parent.addChild(makePanel({
-    width: slotW, height: slotH, radius: 12,
+    width: slotW, height: slotH, radius,
     bg: 0xfff8ec, bgAlpha: 1,
-    border, borderWidth: 2,
+    border, borderWidth: 0,
     centered: true,
   }));
 
-  const inset = 3;
-  const iw = slotW - inset * 2;
-  const ih = slotH - inset * 2;
   const art = new PIXI.Container();
   const tex = getPetAvatarTexture(pet.id, star);
   if (tex) {
     const spr = new PIXI.Sprite(tex);
     spr.anchor.set(0.5);
-    const cover = Math.max(iw / tex.width, ih / tex.height);
+    // cover：按卡高铺满，略放大避免露底
+    const cover = Math.max(slotW / tex.width, slotH / tex.height) * 1.12;
     spr.scale.set(cover);
     art.addChild(spr);
   }
   const mask = new PIXI.Graphics();
   mask.beginFill(0xffffff);
-  mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, 10);
+  mask.drawRoundedRect(-slotW / 2, -slotH / 2, slotW, slotH, radius);
   mask.endFill();
   art.addChild(mask);
   art.mask = mask;
@@ -192,30 +192,50 @@ export function addTeamPrepSlotPet(
 
   // 底渐变托住 Lv / 星
   const fade = new PIXI.Graphics();
-  fade.beginFill(0x2a1a0c, 0.45);
-  fade.drawRoundedRect(-iw / 2, ih / 2 - 36, iw, 36, 8);
+  fade.beginFill(0x2a1a0c, 0.48);
+  fade.drawRoundedRect(-slotW / 2, slotH / 2 - 40, slotW, 40, 8);
   fade.endFill();
   parent.addChild(fade);
 
-  const orb = makeElementOrb(pet.element, 26);
-  orb.position.set(-slotW / 2 + 16, -slotH / 2 + 16);
-  parent.addChild(orb);
+  const typeBadge = makeElementTypeBadge(pet.element, 36);
+  typeBadge.position.set(-slotW / 2 + 22, -slotH / 2 + 22);
+  parent.addChild(typeBadge);
 
   const lvText = makeText(`Lv.${level}`, {
-    size: 14, fill: COLORS.btnText, bold: true, anchor: [0, 1],
+    size: 15, fill: COLORS.btnText, bold: true, anchor: [0, 1],
     strokeColor: 0x2a1a0c, strokeWidth: 3,
   });
   lvText.position.set(-slotW / 2 + 8, slotH / 2 - 18);
   parent.addChild(lvText);
 
-  const stars = makeStarRow({ star, size: 11, anchor: 'center', style: 'sprite' });
+  const stars = makeStarRow({ star, size: 12, anchor: 'center', style: 'sprite' });
   stars.position.set(0, slotH / 2 - 10);
   parent.addChild(stars);
 
   const rim = new PIXI.Graphics();
-  rim.lineStyle(2, border, 1);
-  rim.drawRoundedRect(-slotW / 2, -slotH / 2, slotW, slotH, 12);
+  rim.lineStyle(2.5, border, 1);
+  rim.drawRoundedRect(-slotW / 2, -slotH / 2, slotW, slotH, radius);
   parent.addChild(rim);
+}
+
+/** 属性类型圆标：色底 + 白字（金/木/水/火/土） */
+function makeElementTypeBadge(element: Element, size: number): PIXI.Container {
+  const c = new PIXI.Container();
+  const g = new PIXI.Graphics();
+  g.beginFill(ORB_COLOR[element], 1);
+  g.lineStyle(2, 0xfff8ec, 0.95);
+  g.drawCircle(0, 0, size / 2);
+  g.endFill();
+  c.addChild(g);
+  c.addChild(makeText(ELEMENT_NAME[element], {
+    size: Math.round(size * 0.5),
+    fill: 0xffffff,
+    bold: true,
+    anchor: 0.5,
+    strokeColor: 0x2a1a0c,
+    strokeWidth: 3,
+  }));
+  return c;
 }
 
 function buildListItem(
@@ -231,7 +251,9 @@ function buildListItem(
   viewport?: { viewportTop: number; viewportBottom: number },
 ): PIXI.Container {
   const item = new PIXI.Container();
-  const avatarSize = compact ? PREP_AVATAR : FREE_AVATAR;
+  const avatarSize = FREE_AVATAR;
+  /** 紧凑卡：立绘宽=卡高，顶底与卡板齐平 */
+  const portraitW = compact ? cardH : avatarSize;
 
   if (compact) {
     item.addChild(makePanel({
@@ -240,6 +262,8 @@ function buildListItem(
       border: PREP_CARD_BORDER, borderWidth: 2,
       centered: true,
     }));
+    // 左侧立绘：高度与背景板一致（铺满卡高）
+    addPrepListPortrait(item, pet, -cardW / 2, cardH, PlayerData.petStar(pet.id));
   } else if (scrollTex) {
     const sx = cardW / CARD_TEX_W;
     const sy = cardH / CARD_TEX_H;
@@ -261,28 +285,30 @@ function buildListItem(
 
   const frameLeft = -cardW / 2;
   const frameTop = -cardH / 2;
-  const avatarX = -cardW / 2 + LIST_LEFT_PAD + avatarSize / 2;
-  addTeamPetAvatar(item, pet, avatarX, 0, avatarSize);
   if (!compact) {
+    const avatarX = -cardW / 2 + LIST_LEFT_PAD + avatarSize / 2;
+    addTeamPetAvatar(item, pet, avatarX, 0, avatarSize);
     attachRarityBadge(item, pet.rarity, frameLeft, frameTop, avatarSize, { variant: 'codex' });
     const shardBadge = makeShardBadge({ shards: PlayerData.petShards(pet.id) });
     shardBadge.position.set(avatarX, 4 + avatarSize / 2 + 14);
     item.addChild(shardBadge);
   }
 
-  const textX = -cardW / 2 + LIST_LEFT_PAD + avatarSize + LIST_TEXT_GAP;
+  const textX = compact
+    ? -cardW / 2 + portraitW + LIST_TEXT_GAP
+    : -cardW / 2 + LIST_LEFT_PAD + avatarSize + LIST_TEXT_GAP;
   const nameText = makeText(pet.name, {
-    size: compact ? FONT_SIZE.xxs : FONT_SIZE.xs,
+    size: compact ? FONT_SIZE.xs : FONT_SIZE.xs,
     fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
   });
   nameText.position.set(textX, compact ? -22 : -30);
   item.addChild(nameText);
 
   if (compact) {
-    const badge = makeRoleBadge({ role: pet.role, scale: 1.35 });
-    badge.position.set(cardW / 2 - 58, -22);
+    const badge = makeRoleBadge({ role: pet.role, scale: 1.85, textFill: 0xffffff });
+    badge.position.set(cardW / 2 - 72, -24);
     item.addChild(badge);
-    const line3 = makeLevelStarLine({ level: lv, star, size: FONT_SIZE.xxs, variant: 'panel', filledOnly: true });
+    const line3 = makeLevelStarLine({ level: lv, star, size: FONT_SIZE.xxs, variant: 'panel' });
     line3.position.set(textX, 14);
     item.addChild(line3);
   } else {
@@ -290,7 +316,7 @@ function buildListItem(
     line2.position.set(textX, -6);
     item.addChild(line2);
 
-    const line3 = makeLevelStarLine({ level: lv, star, size: FONT_SIZE.xxs, variant: 'panel', filledOnly: true });
+    const line3 = makeLevelStarLine({ level: lv, star, size: FONT_SIZE.xxs, variant: 'panel' });
     line3.position.set(textX, 18);
     item.addChild(line3);
 
@@ -320,6 +346,59 @@ function buildListItem(
   });
 
   return item;
+}
+
+/**
+ * 可选卡左侧立绘：高度 = 卡板高度，顶底贴齐，不再上下留白。
+ * @param leftX 卡左缘（centered 卡坐标系）
+ */
+function addPrepListPortrait(
+  parent: PIXI.Container,
+  pet: PetDef,
+  leftX: number,
+  cardH: number,
+  star: number,
+): void {
+  const radius = 12;
+  const border = PREP_CARD_BORDER;
+  const pw = cardH;
+  const ph = cardH;
+  const host = new PIXI.Container();
+  host.position.set(leftX + pw / 2, 0);
+  parent.addChild(host);
+
+  host.addChild(makePanel({
+    width: pw, height: ph, radius,
+    bg: 0xf5e8d0, bgAlpha: 1,
+    border: PREP_CARD_BORDER, borderWidth: 0,
+    centered: true,
+  }));
+
+  const art = new PIXI.Container();
+  const tex = getPetAvatarTexture(pet.id, star);
+  if (tex) {
+    const spr = new PIXI.Sprite(tex);
+    spr.anchor.set(0.5);
+    const cover = Math.max(pw / tex.width, ph / tex.height) * 1.06;
+    spr.scale.set(cover);
+    art.addChild(spr);
+  }
+  const mask = new PIXI.Graphics();
+  mask.beginFill(0xffffff);
+  mask.drawRoundedRect(-pw / 2, -ph / 2, pw, ph, radius);
+  mask.endFill();
+  art.addChild(mask);
+  art.mask = mask;
+  host.addChild(art);
+
+  const typeBadge = makeElementTypeBadge(pet.element, 28);
+  typeBadge.position.set(-pw / 2 + 16, -ph / 2 + 16);
+  host.addChild(typeBadge);
+
+  const rim = new PIXI.Graphics();
+  rim.lineStyle(2, border, 1);
+  rim.drawRoundedRect(-pw / 2, -ph / 2, pw, ph, radius);
+  host.addChild(rim);
 }
 
 function buildCheckMark(): PIXI.Container {

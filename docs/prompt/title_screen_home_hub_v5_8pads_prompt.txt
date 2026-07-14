@@ -1,0 +1,37 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+Light airy painted scenery that is ALSO slightly Q/stylized (NOT realistic ink-wash landscape).
+FORBIDDEN: photorealistic, dark fantasy, heavy oil paint, cyberpunk neon, purple-on-white AI defaults, 3D PBR.
+
+Mobile game HOME HUB / TITLE SCREEN full-bleed background ONLY (no UI chrome), STRICT portrait 9:16 for xiaochu2.
+
+Use attached references for STYLE + SCENE ONLY (do not copy UI chrome / text / numbers from them):
+- home_hub_ui_prototype_v4: mint mountains, cream sky, waterfalls, lotuses, soft pastel Q xianxia
+- current title_screen mood: S-path, pavilions, cloud bank at bottom
+
+CRITICAL COUNT (must obey):
+- Exactly EIGHT (8) empty circular stone pads on the path — COUNT THEM: 1 2 3 4 5 6 7 8
+- NOT 7, NOT 9, NOT 10 — only 8 pads total
+- Pad 1 near bottom trail head; pad 8 near top path end (boss pad slightly larger)
+- Even vertical spacing along a clear S-shaped mossy cobblestone path (bottom-left/center → top-right)
+
+COMPOSITION:
+- Full phone 9:16 scene filling the frame
+- Path centerline open/clean for icon overlay
+- Soft misty mint mountains + waterfalls + distant pavilion accents
+- Bottom ~18%: soft cream/lavender cloud bank blending under future nav bar
+- Top sky: bright cream-to-mint, NO dark vignette
+
+DECOR (moderate, keep pads clear):
+- Lotuses near water, 1–2 stone lanterns, bamboo at margins, tiny spirit wisps
+- Optional tiny peeking fox far from pads
+
+MUST NOT include:
+- NO UI, NO buttons, NO text, NO numbers, NO stars, NO shields, NO BOSS label
+- NO bottom navigation bar, NO currency pills, NO chapter title plaque
+- NO turtle/boss creature, NO large hero character
+- NO ninth stone pad anywhere
+
+NO TEXT anywhere in the image.

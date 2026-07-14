@@ -37,10 +37,10 @@ export const DEFAULT_HOME_RAIL: readonly HomeRailItem[] = [
   { id: 'event', label: '活动', glyph: '活', iconPath: UI_IMAGES.railEvent },
 ];
 
-const BTN = 64;
-const GAP = 14;
+const BTN = 84;
+const GAP = 16;
 const LABEL_GAP = 4;
-const ICON = 46;
+const ICON = 64;
 
 export function buildHomeLeftRail(
   parent: PIXI.Container,
@@ -91,15 +91,15 @@ function makeRailButton(item: HomeRailItem): PIXI.Container {
   }
 
   const label = makeText(item.label, {
-    size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: 0.5,
+    size: FONT_SIZE.xs, fill: COLORS.textMain, bold: true, anchor: 0.5,
   });
-  label.position.set(0, BTN / 2 + LABEL_GAP + 8);
+  label.position.set(0, BTN / 2 + LABEL_GAP + 10);
   root.addChild(label);
 
   if (item.badge) {
     const dot = new PIXI.Graphics();
     dot.beginFill(0xe85a4a, 1);
-    dot.drawCircle(0, 0, 7);
+    dot.drawCircle(0, 0, 8);
     dot.endFill();
     dot.position.set(BTN / 2 - 8, -BTN / 2 + 8);
     root.addChild(dot);
@@ -114,7 +114,7 @@ function makeRailButton(item: HomeRailItem): PIXI.Container {
 
   root.eventMode = 'static';
   root.cursor = 'pointer';
-  root.hitArea = new PIXI.Rectangle(-BTN / 2 - 4, -BTN / 2 - 4, BTN + 8, BTN + 28);
+  root.hitArea = new PIXI.Rectangle(-BTN / 2 - 6, -BTN / 2 - 6, BTN + 12, BTN + 36);
   root.interactiveChildren = false;
   bindPointerTap(root, onTap);
   pressFeedback(root);

@@ -129,7 +129,7 @@ export function buildOwnedCodexCard(
   item.addChild(nameText);
 
   const starY = nameY + 14 * S;
-  const stars = makeStarRow({ star, scale: S, variant: 'card', anchor: 'center' });
+  const stars = makeStarRow({ star, scale: S, variant: 'card', anchor: 'center', style: 'sprite' });
   stars.position.set(cardW / 2, starY);
   item.addChild(stars);
 

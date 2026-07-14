@@ -314,7 +314,7 @@ export const ELEMENT_IMPACT_IMAGES: Readonly<Record<Element, string>> = {
   earth: UI_FX_IMAGES.earthImpact,
 };
 
-/** 启动主包预加载（Title + 导航 + 棋盘珠） */
+/** 启动主包预加载（Title + 导航 + 棋盘珠 + 统一宠物星贴图） */
 export const MAIN_PRELOAD_IMAGES: readonly string[] = [
   BOARD_IMAGES.dark,
   BOARD_IMAGES.light,
@@ -324,4 +324,5 @@ export const MAIN_PRELOAD_IMAGES: readonly string[] = [
   ...Object.values(UI_IMAGES),
   ...Object.values(PET_FRAME_IMAGES),
   ...Object.values(ORB_IMAGES),
+  UI_BATTLE_IMAGES.petStar,
 ];

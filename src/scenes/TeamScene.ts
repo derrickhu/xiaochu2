@@ -143,8 +143,8 @@ export class TeamScene implements Scene {
     y += 30;
 
     // 竖卡高度 = 托盘内容区高度（对齐原型：头像与背景板同高）
-    const slotW = 118;
-    const slotH = 168;
+    const slotW = 124;
+    const slotH = 176;
     const trayPadX = 12;
     const trayPadTop = 10;
     const summaryH = 36;

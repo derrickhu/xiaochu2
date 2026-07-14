@@ -13,8 +13,8 @@ import {
 import { STAGES } from '../stages';
 
 describe('chapterMap', () => {
-  it('路径折线固定 12 点', () => {
-    expect(CHAPTER_MAP_PATH).toHaveLength(12);
+  it('路径折线与 8 关标定点数一致', () => {
+    expect(CHAPTER_MAP_PATH).toHaveLength(8);
   });
 
   it('节点数与关卡数一致', () => {

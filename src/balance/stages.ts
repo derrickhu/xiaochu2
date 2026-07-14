@@ -1,7 +1,8 @@
 /**
  * 关卡表（纯数据，零逻辑）
  *
- * 52 关 · 8 章 · 每章 Boss 直掉 1 只灵宠（SR/SSR，越后越高稀）+ 首教 1 种可玩挑战（bossChallenge.ts）。
+ * 64 关 · 8 章 × 每章固定 8 关 · 每章 Boss 直掉 1 只灵宠（SR/SSR）+ 首教 1 种可玩挑战。
+ * 统一关数便于运营与章节地图路径点复用。
  */
 import type { Element } from './combat';
 import type { StageType } from './stageTypes';
@@ -41,7 +42,7 @@ export interface StageDef {
 }
 
 export const CHAPTER_STAGE_COUNT: Readonly<Record<number, number>> = {
-  1: 5, 2: 6, 3: 6, 4: 6, 5: 7, 6: 7, 7: 7, 8: 8,
+  1: 8, 2: 8, 3: 8, 4: 8, 5: 8, 6: 8, 7: 8, 8: 8,
 };
 
 /** 各章 Boss 掉落宠期望稀有度（仅 SR/SSR；1~2 章 SR，3 章起 SSR；UR 仅抽卡） */
@@ -157,7 +158,7 @@ export function chapterBossStage(chapter: number): StageDef | undefined {
   return STAGES.find((s) => s.chapter === chapter && s.isBoss);
 }
 
-// ── 第一章（5 关）：铺垫无新挑战 · Boss 教多波 + 收录星辉灵鹿（SR 输出） ──
+// ── 第一章（8 关）：铺垫无新挑战 · Boss 教多波 + 收录星辉灵鹿（SR 输出） ──
 const CHAPTER_1: readonly StageDef[] = [
   {
     id: 'stage_1_1', chapter: 1, index: 1, name: '青苔林边', element: 'wood',
@@ -183,14 +184,32 @@ const CHAPTER_1: readonly StageDef[] = [
     encounters: [mob('enemy_slime_wood'), mob('enemy_slime_wood')], difficulty: 1.2, starTurnLimit: 9,
     hintTags: ['木属性'], hintText: '稳扎稳打，为章末试炼留技能',
   },
+  {
+    id: 'stage_1_5', chapter: 1, index: 5, name: '溪边练手', element: 'wood',
+    type: 'normal', dropTableId: 'dt_forest_wood',
+    encounters: [mob('enemy_slime_wood'), mob('enemy_bat_fire')], difficulty: 1.22, starTurnLimit: 10,
+    hintTags: ['巩固'], hintText: '多练习消除，熟悉心珠回血',
+  },
+  {
+    id: 'stage_1_6', chapter: 1, index: 6, name: '翠影谷', element: 'wood',
+    type: 'elite', dropTableId: 'dt_forest_wood',
+    encounters: [mob('enemy_slime_wood'), mob('enemy_slime_wood'), mob('enemy_bat_fire')], difficulty: 1.25, starTurnLimit: 11,
+    hintTags: ['三波'], hintText: '波次变多，注意保留技能',
+  },
+  {
+    id: 'stage_1_7', chapter: 1, index: 7, name: '林海尽头', element: 'fire',
+    type: 'elite', dropTableId: 'dt_forest_fire',
+    encounters: [mob('enemy_bat_fire'), mob('enemy_slime_wood')], difficulty: 1.28, starTurnLimit: 12,
+    hintTags: ['过渡'], hintText: '章末试炼将至，带齐克制属性',
+  },
   buildChapterBossDrop({
-    id: 'stage_1_5', chapter: 1, index: 5, name: '星辉试炼', element: 'wood',
+    id: 'stage_1_8', chapter: 1, index: 8, name: '星辉试炼', element: 'wood',
     dropTableId: 'dt_forest_boss', creatureId: 'pet_017',
-    difficulty: 1.1, starTurnLimit: 18, challenge: 'multiWave',
+    difficulty: 1.15, starTurnLimit: 18, challenge: 'multiWave',
   }),
 ];
 
-// ── 第二章（6 关）：铺垫复用多波 · Boss 教封印珠 + 收录灵鹿 ──
+// ── 第二章（8 关）：铺垫复用多波 · Boss 教封印珠 + 收录灵鹿 ──
 const CHAPTER_2: readonly StageDef[] = [
   fillerStage({
     id: 'stage_2_1', chapter: 2, index: 1, name: '晶洞入口', element: 'metal',
@@ -217,14 +236,24 @@ const CHAPTER_2: readonly StageDef[] = [
     type: 'elite', dropTableId: 'dt_cave_elite', difficulty: 1.2, starTurnLimit: 14,
     challenge: 'multiWave',
   }),
+  fillerStage({
+    id: 'stage_2_6', chapter: 2, index: 6, name: '晶髓浅滩', element: 'metal',
+    type: 'normal', dropTableId: 'dt_cave_normal', difficulty: 1.22, starTurnLimit: 14,
+    challenge: 'multiWave',
+  }),
+  fillerStage({
+    id: 'stage_2_7', chapter: 2, index: 7, name: '溶洞尽头', element: 'water',
+    type: 'elite', dropTableId: 'dt_cave_elite', difficulty: 1.25, starTurnLimit: 15,
+    challenge: 'multiWave',
+  }),
   buildChapterBossDrop({
-    id: 'stage_2_6', chapter: 2, index: 6, name: '灵鹿试炼', element: 'wood',
+    id: 'stage_2_8', chapter: 2, index: 8, name: '灵鹿试炼', element: 'wood',
     dropTableId: 'dt_cave_boss', creatureId: 'pet_004',
-    difficulty: 1.2, starTurnLimit: 20, challenge: 'boardSeal',
+    difficulty: 1.25, starTurnLimit: 20, challenge: 'boardSeal',
   }),
 ];
 
-// ── 第三章（6 关）：铺垫混多波+封印 · Boss 教高防减伤 + 收录归墟玄龟（SSR 坦克） ──
+// ── 第三章（8 关）：铺垫混多波+封印 · Boss 教高防减伤 + 收录归墟玄龟（SSR 坦克） ──
 const CHAPTER_3: readonly StageDef[] = [
   fillerStage({
     id: 'stage_3_1', chapter: 3, index: 1, name: '裂风崖', element: 'fire',
@@ -237,7 +266,7 @@ const CHAPTER_3: readonly StageDef[] = [
     challenge: 'boardSeal',
   }),
   fillerStage({
-    id: 'stage_3_3', chapter: 3, index: 3, name: '无心祭坛', element: 'water',
+    id: 'stage_3_3', chapter: 3, index: 3, name: '云心祭坛', element: 'water',
     type: 'normal', dropTableId: 'dt_peak_normal', difficulty: 1.15, starTurnLimit: 15,
     challenge: 'multiWave',
   }),
@@ -248,17 +277,27 @@ const CHAPTER_3: readonly StageDef[] = [
   }),
   fillerStage({
     id: 'stage_3_5', chapter: 3, index: 5, name: '焚天台', element: 'fire',
-    type: 'elite', dropTableId: 'dt_peak_elite', difficulty: 1.35, starTurnLimit: 17,
+    type: 'elite', dropTableId: 'dt_peak_elite', difficulty: 1.3, starTurnLimit: 17,
+    challenge: 'multiWave',
+  }),
+  fillerStage({
+    id: 'stage_3_6', chapter: 3, index: 6, name: '风雷栈道', element: 'metal',
+    type: 'normal', dropTableId: 'dt_peak_normal', difficulty: 1.32, starTurnLimit: 17,
+    challenge: 'boardSeal',
+  }),
+  fillerStage({
+    id: 'stage_3_7', chapter: 3, index: 7, name: '绝巅前厅', element: 'fire',
+    type: 'elite', dropTableId: 'dt_peak_elite', difficulty: 1.35, starTurnLimit: 18,
     challenge: 'multiWave',
   }),
   buildChapterBossDrop({
-    id: 'stage_3_6', chapter: 3, index: 6, name: '玄龟试炼', element: 'earth',
+    id: 'stage_3_8', chapter: 3, index: 8, name: '玄龟试炼', element: 'earth',
     dropTableId: 'dt_peak_boss', creatureId: 'pet_028',
-    difficulty: 1.2, starTurnLimit: 24, challenge: 'highDefense',
+    difficulty: 1.25, starTurnLimit: 24, challenge: 'highDefense',
   }),
 ];
 
-// ── 历练 4～8 章 ──
+// ── 历练 4～8 章（统一每章 8 关） ──
 interface TrialChapterDef {
   chapter: number;
   name: string;
@@ -277,28 +316,28 @@ interface TrialChapterDef {
  */
 const TRIAL_CHAPTERS: readonly TrialChapterDef[] = [
   {
-    chapter: 4, name: '炽土试炼', stageCount: 6, difficultyBase: 1.0,
+    chapter: 4, name: '炽土试炼', stageCount: 8, difficultyBase: 1.0,
     bossDropPetId: 'pet_025', bossChallenge: 'boardRock',
-    fillerChallenges: ['multiWave', 'boardSeal', 'highDefense', 'multiWave', 'boardSeal'],
-    fillerNames: ['炽土前哨', '熔岩小径', '岩傀儡阵', '焦土深谷', '封印残阵'],
+    fillerChallenges: ['multiWave', 'boardSeal', 'highDefense', 'multiWave', 'boardSeal', 'highDefense', 'multiWave'],
+    fillerNames: ['炽土前哨', '熔岩小径', '岩傀儡阵', '焦土深谷', '封印残阵', '炎纹廊道', '炽石祭坛'],
   },
   {
-    chapter: 5, name: '灵兽秘境', stageCount: 7, difficultyBase: 1.02,
+    chapter: 5, name: '灵兽秘境', stageCount: 8, difficultyBase: 1.02,
     bossDropPetId: 'pet_011', bossChallenge: 'selfHeal',
-    fillerChallenges: ['boardRock', 'highDefense', 'boardSeal', 'multiWave', 'boardRock', 'highDefense'],
-    fillerNames: ['秘境入口', '顽石迷阵', '巨像守卫', '灵泉浅滩', '熔岩岔路', '古阵核心'],
+    fillerChallenges: ['boardRock', 'highDefense', 'boardSeal', 'multiWave', 'boardRock', 'highDefense', 'boardSeal'],
+    fillerNames: ['秘境入口', '顽石迷阵', '巨像守卫', '灵泉浅滩', '熔岩岔路', '古阵核心', '秘境深廊'],
   },
   {
-    chapter: 6, name: '归墟深渊', stageCount: 7, difficultyBase: 1.04,
+    chapter: 6, name: '归墟深渊', stageCount: 8, difficultyBase: 1.04,
     bossDropPetId: 'pet_010', bossChallenge: 'chargeHit',
-    fillerChallenges: ['selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'selfHeal', 'multiWave'],
-    fillerNames: ['深渊上层', '寒潭回响', '晶甲巢穴', '自疗深池', '蓄力试场', '归墟裂隙'],
+    fillerChallenges: ['selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'selfHeal', 'multiWave', 'boardRock'],
+    fillerNames: ['深渊上层', '寒潭回响', '晶甲巢穴', '自疗深池', '蓄力试场', '归墟裂隙', '深渊前厅'],
   },
   {
-    chapter: 7, name: '星轨之野', stageCount: 7, difficultyBase: 1.06,
+    chapter: 7, name: '星轨之野', stageCount: 8, difficultyBase: 1.06,
     bossDropPetId: 'pet_029', bossChallenge: 'noHeart',
-    fillerChallenges: ['chargeHit', 'selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'chargeHit'],
-    fillerNames: ['星轨外环', '蓄力星门', '自愈绿洲', '顽石星带', '巨像轨道', '禁心前庭'],
+    fillerChallenges: ['chargeHit', 'selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'chargeHit', 'selfHeal'],
+    fillerNames: ['星轨外环', '蓄力星门', '自愈绿洲', '顽石星带', '巨像轨道', '禁心前庭', '星轨内环'],
   },
   {
     chapter: 8, name: '虚空之巅', stageCount: 8, difficultyBase: 1.08,
@@ -380,14 +419,15 @@ export const CHAPTER_NAME: Readonly<Record<number, string>> = {
   ...Object.fromEntries(TRIAL_CHAPTERS.map((t) => [t.chapter, `第${t.chapter}章 · ${t.name}`])),
 };
 
-/** 旧关卡 id → 新 id（存档星数迁移） */
+/** 旧关卡 id → 新 id（存档星数迁移；Boss 关统一迁到第 8 关） */
 export const STAGE_STAR_MIGRATION: Readonly<Record<string, string>> = {
-  stage_1_8: 'stage_1_5',
-  stage_4_5: 'stage_4_6',
-  stage_5_5: 'stage_5_7',
-  stage_6_5: 'stage_6_7',
-  stage_7_5: 'stage_7_7',
-  stage_8_2: 'stage_8_8',
+  stage_1_5: 'stage_1_8',
+  stage_2_6: 'stage_2_8',
+  stage_3_6: 'stage_3_8',
+  stage_4_6: 'stage_4_8',
+  stage_5_7: 'stage_5_8',
+  stage_6_7: 'stage_6_8',
+  stage_7_7: 'stage_7_8',
 };
 
 export { STARTER_CREATURE_IDS };

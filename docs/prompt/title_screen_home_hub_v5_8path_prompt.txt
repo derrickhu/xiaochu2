@@ -1,0 +1,25 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+FORBIDDEN: photorealistic, dark fantasy, heavy oil paint, cyberpunk neon, purple-on-white AI defaults, 3D PBR.
+
+Mobile game HOME HUB / TITLE SCREEN full-bleed background ONLY, STRICT portrait 9:16.
+
+CHAPTER RULE (xiaochu2): every chapter has exactly 8 stages.
+Background must NOT bake stage pads (AI keeps miscounting 7/9).
+Use a continuous S-shaped mossy cobblestone PATH only; game overlays exactly 8 stage icons.
+
+COMPOSITION:
+- Full phone 9:16 scene
+- Clear continuous S-path bottom-left/center → top-right, centerline open
+- NO circular stone pads / discs / round platforms / level markers
+- Soft misty mint mountains + waterfalls + distant pavilion accents
+- Bottom ~18%: soft cream/lavender cloud bank under future nav
+- Top sky: bright cream-to-mint
+
+DECOR: lotuses, lanterns, bamboo margins, tiny wisps, optional tiny fox far from path.
+
+MUST NOT: UI, text, numbers, stars, shields, BOSS label, turtle, large character, ANY circular pads.
+
+NO TEXT anywhere in the image.

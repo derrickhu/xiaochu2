@@ -17,7 +17,7 @@ import {
 } from '@/config/CloudConfig';
 
 export { SAVE_KEY, LEGACY_SAVE_KEY } from '@/config/CloudConfig';
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 /** 单只灵宠的养成进度 */
 export interface OwnedPet {
@@ -88,11 +88,12 @@ export function initialData(): SaveData {
   };
 }
 
-/** 解析存档，缺字段回退默认；v3 起迁移灵宠 ID，v4 移除收录字段 */
+/** 解析存档，缺字段回退默认；v3 起迁移灵宠 ID，v5 起 Boss 关统一到第 8 关 */
 export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown }): SaveData {
   const migrated = migratePetIdsInPartialSave(parsed);
   const owned = sanitizeOwned(migrated.ownedPets);
   const ownedCount = Object.keys(owned).length;
+  const fromVersion = typeof migrated.version === 'number' ? migrated.version : 0;
   return {
     version: SAVE_VERSION,
     coins: typeof migrated.coins === 'number' ? migrated.coins : 0,
@@ -100,7 +101,10 @@ export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown
     tickets: typeof migrated.tickets === 'number' ? migrated.tickets : 0,
     gachaSinceHigh: typeof migrated.gachaSinceHigh === 'number' ? migrated.gachaSinceHigh : 0,
     exp: typeof migrated.exp === 'number' ? migrated.exp : 0,
-    stars: migrateStageStars(migrated.stars && typeof migrated.stars === 'object' ? migrated.stars : {}),
+    stars: migrateStageStars(
+      migrated.stars && typeof migrated.stars === 'object' ? migrated.stars : {},
+      fromVersion,
+    ),
     ownedPets: owned,
     pendingShards: sanitizeShardLedger(migrated.pendingShards, owned),
     team: sanitizeTeam(migrated.team, owned),
@@ -131,7 +135,7 @@ export function migrateLegacySave(legacy: { coins?: number; stars?: unknown; tea
   return parseSaveData({
     coins: legacy.coins,
     stars: legacy.stars && typeof legacy.stars === 'object'
-      ? migrateStageStars(legacy.stars as Record<string, number>)
+      ? migrateStageStars(legacy.stars as Record<string, number>, 0)
       : {},
     ownedPets: owned,
     team: Array.isArray(legacy.team)
@@ -233,13 +237,14 @@ function migratePetIdsInPartialSave(parsed: Partial<SaveData> & { discovered?: u
   return { ...parsed, ownedPets, pendingShards, team };
 }
 
-function migrateStageStars(stars: Record<string, number>): Record<string, number> {
+function migrateStageStars(stars: Record<string, number>, fromVersion: number): Record<string, number> {
   const validIds = new Set(STAGES.map((s) => s.id));
   const out: Record<string, number> = {};
   for (const [id, n] of Object.entries(stars)) {
-    const mapped = STAGE_STAR_MIGRATION[id] ?? id;
+    // v5：旧 Boss 关 id（如 stage_1_5）迁到统一第 8 关；仅升级时跑一次，避免与新铺垫关撞 id
+    const mapped = fromVersion < 5 ? (STAGE_STAR_MIGRATION[id] ?? id) : id;
     if (validIds.has(mapped)) {
-      out[mapped] = Math.max(out[mapped] ?? 0, n);
+      out[mapped] = Math.max(out[mapped] ?? 0, typeof n === 'number' ? n : 0);
     }
   }
   return out;

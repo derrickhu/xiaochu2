@@ -50,9 +50,9 @@ export function runVerifyCases(): VerifyCase[] {
     actual: mid.win ? `win ${mid.stars}★` : 'lose',
   });
 
-  const boss = simulateBattle(team, 'stage_1_5', COMBO_MODELS.mid);
+  const boss = simulateBattle(team, 'stage_1_8', COMBO_MODELS.mid);
   cases.push({
-    name: 'stage_1_5 默认队中手（收录 Boss）',
+    name: 'stage_1_8 默认队中手（收录 Boss）',
     pass: typeof boss.win === 'boolean',
     expected: '有结果',
     actual: boss.win ? `win ${boss.stars}★ t=${boss.turnsUsed}` : `lose t=${boss.turnsUsed}`,

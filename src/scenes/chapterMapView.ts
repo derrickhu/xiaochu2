@@ -1,5 +1,5 @@
 /**
- * 章节路径地图 — 全屏修仙背景 + 归一化节点（彩珠式贴图）
+ * 章节路径地图 — 全屏 Q 版路径背景 + 圆柱关卡点（nodes_sheet 三态）
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -21,15 +21,19 @@ import { PET_MAP } from '@/balance/pets';
 import { PlayerData } from '@/game/PlayerData';
 import { BACKGROUND_IMAGES, MAP_UI_IMAGES } from '@/config/Assets';
 import { getPetAvatarTexture, loadPetAvatarTexture } from '@/config/petAvatarTexture';
-import { COLORS, FONT_SIZE, makeText } from '@/ui';
+import { COLORS, FONT_SIZE, makeText, makeStarRow } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { ScrollListController } from '@/ui/ScrollList';
 
-const SHIELD_H = 88;
-const SHIELD_W = 64;
-const NODE_HIT_R = 52;
-/** Boss 节点上的守关灵宠立绘边长 */
-const BOSS_PET_SIZE = 92;
+/** 圆柱关卡点显示尺寸（对齐 home_hub_v4 圆台比例） */
+const NODE_W = 78;
+const NODE_H = 68;
+const NODE_HIT_R = 48;
+/** Boss 守关灵宠立绘边长（放大，放在关卡点左侧） */
+const BOSS_PET_SIZE = 160;
+/** 相对 Boss 关节点：偏左、略上 */
+const BOSS_PET_OFFSET_X = -118;
+const BOSS_PET_OFFSET_Y = -NODE_H * 0.4;
 /** 关卡路径整体下移（屏幕像素），与顶栏资源图标留出呼吸间距 */
 const TITLE_MAP_TOP_INSET = 32;
 
@@ -128,28 +132,47 @@ function buildStageNode(
   wrap.hitArea = new PIXI.Circle(0, -4, NODE_HIT_R);
 
   const kind = resolveNodeKind(opts.unlocked, opts.stars, opts.active);
-  const shieldTex = nodeShieldTexture(kind);
-  if (shieldTex) {
-    const shield = new PIXI.Sprite(shieldTex);
-    shield.anchor.set(0.5, 0.72);
-    shield.width = SHIELD_W;
-    shield.height = SHIELD_H;
-    wrap.addChild(shield);
+  const nodeTex = nodeShieldTexture(kind);
+  if (nodeTex) {
+    const node = new PIXI.Sprite(nodeTex);
+    // 锚点偏下：圆柱底贴路径
+    node.anchor.set(0.5, 0.88);
+    node.width = NODE_W;
+    node.height = NODE_H;
+    wrap.addChild(node);
   } else {
     const fallback = new PIXI.Graphics();
-    const fill = kind === 'locked' ? 0x9aa0a8 : kind === 'active' ? 0x9b6bff : 0x5db9ff;
+    const fill = kind === 'locked' ? 0x9aa0a8 : kind === 'active' ? 0xe8a33d : 0xf5e6c8;
     fallback.beginFill(fill, 1);
-    fallback.drawCircle(0, -4, 26);
+    fallback.drawEllipse(0, -8, 28, 18);
     fallback.endFill();
     wrap.addChild(fallback);
   }
 
-  if (opts.stars > 0) {
-    const starLine = makeText('★'.repeat(opts.stars), {
-      size: FONT_SIZE.xs, fill: 0xffe566, bold: true, anchor: 0.5,
-      strokeColor: 0x6b4a00, strokeWidth: 2,
+  // 台面关卡序号（对齐 home_hub_v4 圆台上数字）
+  if (opts.unlocked) {
+    const num = makeText(String(stage.index), {
+      size: 22,
+      fill: kind === 'active' ? 0xb5701f : 0x2f7a6b,
+      bold: true,
+      anchor: 0.5,
+      strokeColor: 0xfff8ec,
+      strokeWidth: 3,
     });
-    starLine.position.set(0, -SHIELD_H * 0.82);
+    num.position.set(0, -NODE_H * 0.42);
+    wrap.addChild(num);
+  }
+
+  if (opts.stars > 0) {
+    const starLine = makeStarRow({
+      star: opts.stars,
+      maxStar: 3,
+      style: 'sprite',
+      starSize: 14,
+      gap: 2,
+      anchor: 'center',
+    });
+    starLine.position.set(0, -NODE_H * 0.95);
     wrap.addChild(starLine);
   }
 
@@ -162,7 +185,7 @@ function buildStageNode(
     bold: true,
     anchor: 0.5,
   });
-  nameText.position.set(0, 26);
+  nameText.position.set(0, 14);
   wrap.addChild(nameText);
 
   if (stage.isBoss) {
@@ -172,20 +195,20 @@ function buildStageNode(
       size: FONT_SIZE.xxs, fill: getStageType(stage.type).color, bold: true, anchor: 0.5,
       strokeColor: 0x2a3444, strokeWidth: 2,
     });
-    badge.position.set(-SHIELD_W * 0.28, -SHIELD_H * 0.62);
+    badge.position.set(-NODE_W * 0.28, -NODE_H * 0.72);
     wrap.addChild(badge);
   }
 
   if (opts.active && opts.unlocked && opts.stars === 0) {
     const bg = new PIXI.Graphics();
     bg.beginFill(0xe8554d, 1);
-    bg.drawRoundedRect(SHIELD_W * 0.06, -SHIELD_H * 0.78, 32, 16, 6);
+    bg.drawRoundedRect(NODE_W * 0.12, -NODE_H * 0.88, 32, 16, 6);
     bg.endFill();
     wrap.addChild(bg);
     const nw = makeText('New', {
       size: FONT_SIZE.xxs, fill: 0xffffff, bold: true, anchor: 0.5,
     });
-    nw.position.set(SHIELD_W * 0.06 + 16, -SHIELD_H * 0.78 + 8);
+    nw.position.set(NODE_W * 0.12 + 16, -NODE_H * 0.88 + 8);
     wrap.addChild(nw);
   }
 
@@ -204,7 +227,7 @@ function buildStageNode(
 }
 
 /**
- * Boss 关节点：叠放本章守关灵宠立绘 + BOSS 标（对齐 home_hub_v4）。
+ * Boss 关节点：放大守关灵宠立绘，放在关卡圆柱左侧（对齐 home_hub_v4）。
  * 立绘取 CHAPTER_REWARD_PET，与编队敌情「守关」同源。
  */
 function attachBossGuardianPet(
@@ -213,12 +236,13 @@ function attachBossGuardianPet(
   unlocked: boolean,
 ): void {
   const petId = CHAPTER_REWARD_PET[chapter];
-  const petY = -SHIELD_H * 0.95;
 
   const host = new PIXI.Container();
-  host.position.set(0, petY);
-  if (!unlocked) host.alpha = 0.55;
-  wrap.addChild(host);
+  host.position.set(BOSS_PET_OFFSET_X, BOSS_PET_OFFSET_Y);
+  // 未解锁也保持清晰可见，仅略压暗（勿半透明发虚）
+  if (!unlocked) host.alpha = 0.92;
+  // 先加立绘，再叠关卡圆柱/文字之上更抢眼
+  wrap.addChildAt(host, 0);
 
   const applyTex = (tex: PIXI.Texture | null): void => {
     host.removeChildren().forEach((c) => c.destroy({ children: true }));
@@ -236,10 +260,11 @@ function attachBossGuardianPet(
       host.addChild(ph);
     }
     const tag = makeText('BOSS', {
-      size: FONT_SIZE.xxs, fill: 0xfff4c8, bold: true, anchor: 0.5,
-      strokeColor: 0x8a5a18, strokeWidth: 3,
+      size: FONT_SIZE.xs, fill: 0xfff4c8, bold: true, anchor: 0.5,
+      strokeColor: 0x8a5a18, strokeWidth: 4,
     });
-    tag.position.set(BOSS_PET_SIZE * 0.42, -BOSS_PET_SIZE * 0.72);
+    // 标在立绘右上，避免挡住宠脸
+    tag.position.set(BOSS_PET_SIZE * 0.38, -BOSS_PET_SIZE * 0.88);
     host.addChild(tag);
   };
 

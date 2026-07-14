@@ -47,6 +47,7 @@ export const PET_POOL_SHELL_IMAGES: readonly string[] = [
 export const CODEX_SHELL_IMAGES: readonly string[] = [
   ...PET_POOL_SHELL_IMAGES,
   ...Object.values(RARITY_PET_CARD_IMAGES),
+  UI_BATTLE_IMAGES.petStar,
 ];
 
 export const TEAM_SHELL_IMAGES: readonly string[] = [

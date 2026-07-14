@@ -191,7 +191,7 @@ export class GachaScene implements Scene {
     row.position.set(w / 2 - x / 2, y);
     this._page.addChild(row);
 
-    const barW = 520;
+    const barW = 560;
     const barH = 40;
     const bar = makeProgressBar({
       width: barW, height: barH, ratio: cur / pity, frame: true,
@@ -199,21 +199,30 @@ export class GachaScene implements Scene {
     bar.position.set(w / 2 - barW / 2, y + 26);
     this._page.addChild(bar);
 
-    const floorNote = makeText('十连必出 SR 或以上 · UR 概率更高', {
+    // 底注文案必须落在进度框主体宽度内，避免「溢出花边」
+    const noteStr = '十连必出 SR 或以上 · UR 概率更高';
+    const floorNote = makeText(noteStr, {
       size: FONT_SIZE.xs, fill: COLORS.textSub, bold: false, anchor: 0.5,
     });
+    try { floorNote.updateText(true); } catch { /* noop */ }
+    // 进度框左右约 14.5% 花边，可读区约 71%
+    const noteMaxW = Math.floor(barW * 0.68);
+    if (floorNote.width > noteMaxW) {
+      floorNote.scale.set(noteMaxW / floorNote.width);
+    }
     floorNote.position.set(w / 2, y + 80);
     this._page.addChild(floorNote);
   }
 
   /** @returns 匾高度，供下方灵玉/保底区排布 */
   private _buildTitlePlaque(w: number, centerY: number, label: string): number {
-    // title 九宫左右切片各 140：匾宽过窄时中段奶油被挤没，字会「溢出」到花边外
-    // 原型短匾需 ≥ ~520，给中段留足可读区
-    const plaqueW = Math.min(560, Math.max(520, w - 100));
+    // title 九宫左右各 140：匾必须明显宽于字+花边，否则字贴边像「溢出」
+    // 逻辑宽 750 时取 ~680，并抬高匾身，不再被 NamePlaque defaultMaxW 夹回 560
+    const plaqueW = Math.min(680, Math.max(620, w - 70));
     const plaque = makeNamePlaque({
       text: label,
       width: plaqueW,
+      height: 92,
       size: 'lg',
       plate: 'title',
       fill: COLORS.btnBackText,
@@ -222,7 +231,7 @@ export class GachaScene implements Scene {
     plaque.position.set(w / 2, centerY);
     this._page.addChild(plaque);
     const view = plaque as { plaqueH?: number };
-    return view.plaqueH ?? 72;
+    return view.plaqueH ?? 92;
   }
 
   private _buildPullButtons(w: number, h: number): void {

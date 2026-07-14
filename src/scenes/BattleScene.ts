@@ -103,6 +103,8 @@ export class BattleScene implements Scene {
   private _overlay!: BattleResultOverlay;
 
   private _busy = false;
+  /** 失败结算浮层打开中：锁输入，暂不 finish，支持看广告复活 */
+  private _resultOpen = false;
   /** 场景是否仍处于可更新/可演出状态（onExit 后置 false） */
   private _alive = false;
   /** 拖珠结算代次：场景退出或强制收敛时递增，陈旧 async 演出立即短路 */
@@ -125,6 +127,7 @@ export class BattleScene implements Scene {
       this._board.sealRandom(this._ctrl.sealOrbCount);
     }
     this._busy = false;
+    this._resultOpen = false;
 
     this._layout = computeBattleLayout();
     this._fx = new BattleFx();
@@ -340,6 +343,10 @@ export class BattleScene implements Scene {
       } else {
         this._settleBattleVisuals(visualScope);
       }
+      if (this._resultOpen) {
+        this._busy = true;
+        return;
+      }
       this._busy = false;
       if (!this._ctrl.isFinished && this._ctrl.state !== 'playerTurn') {
         this._ctrl.beginPlayerTurn();
@@ -529,6 +536,7 @@ export class BattleScene implements Scene {
     while (this._ctrl.hasNextWave()) this._ctrl.nextWave();
     this._ctrl.enemy.hp = 0;
     this._settleBattleVisuals();
+    this._resultOpen = true;
     this._overlay.show(this._ctrl, true, this._battleStartedAt);
     return `已通关：${this._ctrl.stage.name}`;
   }
@@ -592,6 +600,7 @@ export class BattleScene implements Scene {
       return false;
     }
     SfxManager.playVictory();
+    this._resultOpen = true;
     this._overlay.show(this._ctrl, true, this._battleStartedAt);
     await delay(0.3);
     return true;
@@ -606,6 +615,28 @@ export class BattleScene implements Scene {
     Game.app?.renderer?.render(Game.stage);
   }
 
+  /** 失败结算：暂不 finish，支持看广告复活后继续本场 */
+  private _showDefeatOverlay(): void {
+    this._resultOpen = true;
+    this._busy = true;
+    this._overlay.show(this._ctrl, false, this._battleStartedAt, {
+      onRevive: () => this._reviveFromAd(),
+    });
+  }
+
+  private _reviveFromAd(): void {
+    const max = Math.max(1, this._ctrl.heroMaxHp);
+    this._ctrl.heroHp = Math.max(1, Math.floor(max * 0.5));
+    if (this._ctrl.state !== 'playerTurn') {
+      this._ctrl.beginPlayerTurn();
+    }
+    this._resultOpen = false;
+    this._busy = false;
+    this._hud.snapHpBarsToModel();
+    this._refreshSkillUi();
+    Platform.showToast('已复活，继续战斗！', 'success');
+  }
+
   private async _enemyPhase(isStale: () => boolean): Promise<void> {
     if (isStale()) return;
     const result = this._ctrl.enemyAct();
@@ -618,7 +649,7 @@ export class BattleScene implements Scene {
         if (isStale()) return;
         if (result.heroDead) {
           SfxManager.playGameOver();
-          this._overlay.show(this._ctrl, false, this._battleStartedAt);
+          this._showDefeatOverlay();
           await delay(0.3);
           return;
         }
@@ -684,7 +715,7 @@ export class BattleScene implements Scene {
     if (isStale()) return;
     if (result.heroDead) {
       SfxManager.playGameOver();
-      this._overlay.show(this._ctrl, false, this._battleStartedAt);
+      this._showDefeatOverlay();
       await delay(0.3);
       return;
     }

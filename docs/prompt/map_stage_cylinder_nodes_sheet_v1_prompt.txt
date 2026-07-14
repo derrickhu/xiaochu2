@@ -1,0 +1,23 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI icon sheet.
+Soft cel-shaded, thin clean outlines, chubby rounded proportions.
+Palette: cream parchment (#fdf3df) + soft gold (#e8a33d) + mint accents.
+FORBIDDEN: photorealistic, dark fantasy, neon purple, heavy 3D PBR.
+
+TASK: Stage NODE icon sheet for home map (cylindrical pedestals).
+Use attached home_hub_ui_prototype_v4 stage discs for STYLE reference (cream round pads with gold rim) but render as SHORT CUTE CYLINDERS (圆台/短圆柱) with visible side height + flat top face.
+
+LAYOUT: single row, exactly 3 equal cells, transparent or pure black background between icons, generous padding, each icon centered in its cell.
+Cell order LEFT → RIGHT:
+1) CLEARED / normal: warm cream cylinder, soft gold rim on top disc, mint-teal soft glow optional, empty flat top (NO number, NO star)
+2) ACTIVE / current: brighter cream + stronger gold rim + soft golden glow ring, empty flat top
+3) LOCKED: desaturated grey cream cylinder, muted silver rim, small subtle lock hint optional on front face OR empty top (prefer empty top), duller
+
+REQUIREMENTS:
+- Same size/perspective for all 3
+- Top face clear for game to overlay stage numbers later
+- Soft drop shadow under each cylinder
+- NO Chinese/English text, NO digits, NO stars on the asset
+- Transparent background preferred (or solid black for rembg)
+
+NO TEXT anywhere.

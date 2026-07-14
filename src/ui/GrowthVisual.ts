@@ -1,9 +1,11 @@
 /**
- * 等级 / 星级 UI 组件 — 灵宠页 / 编队页 / 详情等统一引用 getGrowthUi() 配色。
+ * 等级 / 星级 UI 组件 — 灵宠页 / 编队页 / 详情 / 战斗统一引用。
  *
- * 单一真源：balance/growth.ts 的 GROWTH_UI；
- * 战斗 Q 版星贴图走 style:'sprite'（与 BattlePetBar 同一 battle_pet_star）。
- * 场景禁止再写 0x... / 手写 ★ 循环区分等级与星级。
+ * 宠物星级单一真源：
+ * - 贴图 `UI_BATTLE_IMAGES.petStar`（battle_pet_star.png）
+ * - 组件 `makeStarRow`（默认 style:'sprite'）
+ * 禁止场景手写 ★ 循环、自绘星星、或另起一套星级样式。
+ * 关卡通关星（1~3）若展示，也复用同一组件（maxStar:3），勿另造。
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
@@ -41,13 +43,13 @@ export interface StarRowOpts {
   /** xiao_chu 设计缩放 S = logicWidth / 375 */
   scale?: number;
   variant?: GrowthUiVariant;
-  /** dim = 灰色 ★；hollow = ☆ */
+  /** dim = 灰色 ★；hollow = ☆（仅 glyph 模式） */
   emptyStyle?: 'dim' | 'hollow';
   /** center = 以 (0,0) 为中心；left = 左对齐 */
   anchor?: 'center' | 'left';
   /**
-   * glyph = ★ 文字（默认）；
-   * sprite = 战斗 Q 版星贴图 battle_pet_star（详情/战斗统一）
+   * sprite = 战斗同款 Q 版星贴图（默认，全项目宠物星级必须用此）
+   * glyph = ★ 文字（仅调试/无贴图兜底；业务场景勿用）
    */
   style?: 'glyph' | 'sprite';
   /** sprite 单星边长；不传则用 size / UI.battle.petStarSize */
@@ -56,12 +58,12 @@ export interface StarRowOpts {
   gap?: number;
 }
 
-/** 星级行（默认 5 槽） */
+/** 星级行（默认 5 槽；默认战斗同款 sprite） */
 export function makeStarRow(opts: StarRowOpts): PIXI.Container {
-  if (opts.style === 'sprite') {
-    return makeSpriteStarRow(opts);
+  if (opts.style === 'glyph') {
+    return makeGlyphStarRow(opts);
   }
-  return makeGlyphStarRow(opts);
+  return makeSpriteStarRow(opts);
 }
 
 function makeGlyphStarRow(opts: StarRowOpts): PIXI.Container {
@@ -165,12 +167,14 @@ export interface LevelStarLineOpts {
   size?: number;
   scale?: number;
   variant?: GrowthUiVariant;
-  /** 仅显示已点亮星（编队列表紧凑模式） */
+  /**
+   * @deprecated 已忽略：宠物星级一律用 makeStarRow(sprite) 满槽展示（点亮+暗星），与战斗一致。
+   */
   filledOnly?: boolean;
   emptyStyle?: 'dim' | 'hollow';
 }
 
-/** 一行：「Lv.5 ★★★☆☆」或「Lv.5/50 ★★★☆☆」 */
+/** 一行：「Lv.5」+ 统一 Q 版星贴图行 */
 export function makeLevelStarLine(opts: LevelStarLineOpts): PIXI.Container {
   const ui = getGrowthUi(opts.variant ?? 'panel');
   const size = resolveSize(opts, FONT_SIZE.xxs);
@@ -180,31 +184,24 @@ export function makeLevelStarLine(opts: LevelStarLineOpts): PIXI.Container {
   const levelStr = opts.maxLevel !== undefined
     ? `Lv.${opts.level}/${opts.maxLevel}`
     : `Lv.${opts.level}`;
-  const gap = opts.filledOnly ? ' ' : '  ';
-  const levelText = makeText(`${levelStr}${gap}`, {
+  const levelText = makeText(`${levelStr} `, {
     ...levelTextOpts(ui, size),
     anchor: [0, 0.5],
   });
   cont.addChild(levelText);
 
-  if (opts.filledOnly && opts.star > 0) {
-    const stars = makeText('★'.repeat(opts.star), {
-      size, fill: ui.starFilled, bold: true, anchor: [0, 0.5],
-    });
-    stars.position.set(levelText.width, 0);
-    cont.addChild(stars);
-  } else if (!opts.filledOnly) {
-    const stars = makeStarRow({
-      star: opts.star,
-      maxStar,
-      size,
-      variant: opts.variant,
-      emptyStyle: opts.emptyStyle ?? 'hollow',
-      anchor: 'left',
-    });
-    stars.position.set(levelText.width, 0);
-    cont.addChild(stars);
-  }
+  const starSize = Math.max(12, Math.round(size * 1.15));
+  const stars = makeStarRow({
+    star: opts.star,
+    maxStar,
+    style: 'sprite',
+    starSize,
+    gap: Math.max(2, Math.round(starSize * 0.12)),
+    variant: opts.variant,
+    anchor: 'left',
+  });
+  stars.position.set(levelText.width, 0);
+  cont.addChild(stars);
 
   return cont;
 }

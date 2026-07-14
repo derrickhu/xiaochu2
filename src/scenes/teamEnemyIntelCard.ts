@@ -1,11 +1,12 @@
 /**
- * 战前编队 · 敌情 Intel（对齐 team_prep UI 原型）
+ * 战前编队 · 敌情 Intel
  *
- * 奶油外板；左侧生图金框立绘全图铺满；右侧名/三维/技能圆标/克制/本关提示分层，互不重叠。
+ * 左：极薄金框立绘（独立）；右：说明奶油板（独立，不覆盖左栏）；
+ * 两栏等高。波次 tab 仅在立绘下方。
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
-import { ENEMY_PORTRAIT_FRAME, enemyImage } from '@/config/Assets';
+import { enemyImage } from '@/config/Assets';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
 import { resolveEncounter, type EnemyDef } from '@/balance/enemies';
 import { formatEnemyBattleName } from '@/balance/enemyDisplay';
@@ -28,17 +29,18 @@ export interface TeamEnemyIntelHandle {
 
 const PLATE_BG = 0xfff8ec;
 const PLATE_BORDER = 0xd4b87a;
-/** 立绘框：略竖，贴近 UI 左栏 */
-const PORTRAIT_W = 248;
-const PORTRAIT_H = 268;
-/** 金框内窗 inset（立绘 cover 区域） */
-const FRAME_INSET = 18;
-const OUTER_PAD = 14;
-const GAP = 16;
+const FRAME_GOLD = 0xc9a063;
+/** 立绘框宽；高度与右侧说明板同步 */
+const PORTRAIT_W = 220;
+/** 金线贴边，立绘几乎贴满框内（对齐 UI：怪物框高=边框高） */
+const FRAME_INSET = 2;
+const FRAME_LINE = 2.2;
+const OUTER_PAD = 12;
+const COL_GAP = 14;
 const TAB_H = 28;
 const TAB_GAP = 6;
-/** 克制行与本关提示之间的最小间距（避免重叠） */
-const TIP_GAP = 14;
+const TIP_GAP = 12;
+const INFO_PAD = 12;
 
 export function buildTeamEnemyIntelCard(opts: {
   stage: StageDef;
@@ -50,115 +52,116 @@ export function buildTeamEnemyIntelCard(opts: {
 
   const root = new PIXI.Container();
   const tabsH = waveCount > 1 ? TAB_H + 8 : 0;
-  const leftInnerH = PORTRAIT_H + tabsH;
   const leftColW = PORTRAIT_W;
-  const rightX = OUTER_PAD + leftColW + GAP;
+  const rightX = OUTER_PAD + leftColW + COL_GAP;
   const infoInnerW = width - rightX - OUTER_PAD;
 
-  // 先按各波内容估高，避免右侧顶穿后把「本关」夹进克制行
-  let cardH = Math.max(
-    leftInnerH + OUTER_PAD * 2,
-    ...encounters.map((enc) => estimateInfoHeight(enc.def, stage) + OUTER_PAD * 2),
-    300,
+  const maxInfoH = Math.max(
+    ...encounters.map((enc) => estimateInfoHeight(enc.def, stage, infoInnerW)),
+    160,
   );
+  /** 立绘框与说明板共用高度 */
+  const bodyH = Math.max(PORTRAIT_W + 20, maxInfoH);
+  const cardH = OUTER_PAD * 2 + bodyH + tabsH;
 
-  const plate = makePanel({
-    width, height: cardH, radius: 18,
-    bg: PLATE_BG, bgAlpha: 0.97,
-    border: PLATE_BORDER, borderWidth: 2.5,
+  // 外层仅作整卡容器底；左右内容各自独立，说明板不会画到怪物上
+  root.addChild(makePanel({
+    width, height: cardH, radius: 16,
+    bg: PLATE_BG, bgAlpha: 0.92,
+    border: PLATE_BORDER, borderWidth: 1.5,
     centered: false,
-  });
-  root.addChild(plate);
+  }));
 
   const portraitHost = new PIXI.Container();
-  portraitHost.position.set(OUTER_PAD + PORTRAIT_W / 2, OUTER_PAD + PORTRAIT_H / 2);
+  portraitHost.position.set(OUTER_PAD + PORTRAIT_W / 2, OUTER_PAD + bodyH / 2);
   root.addChild(portraitHost);
 
   const tabRow = new PIXI.Container();
-  tabRow.position.set(OUTER_PAD, OUTER_PAD + PORTRAIT_H + 6);
+  tabRow.position.set(OUTER_PAD, OUTER_PAD + bodyH + 6);
   root.addChild(tabRow);
 
+  // 右侧说明区：独立奶油板，起点 = rightX，绝不向左覆盖立绘
+  const infoPlate = makePanel({
+    width: infoInnerW, height: bodyH, radius: 14,
+    bg: 0xfffdf8, bgAlpha: 0.98,
+    border: PLATE_BORDER, borderWidth: 1.5,
+    centered: false,
+  });
+  infoPlate.position.set(rightX, OUTER_PAD);
+  root.addChild(infoPlate);
+
   const infoHost = new PIXI.Container();
-  infoHost.position.set(rightX, OUTER_PAD);
+  infoHost.position.set(rightX + INFO_PAD, OUTER_PAD + INFO_PAD);
   root.addChild(infoHost);
+  const infoContentW = infoInnerW - INFO_PAD * 2;
 
   let selected = 0;
 
   const paintPortrait = (def: EnemyDef): void => {
     portraitHost.removeChildren().forEach((c) => c.destroy({ children: true }));
 
-    // 内底（金框贴图未就绪时的兜底）
+    // 框内铺满：底与立绘同尺寸，不再缩一圈奶油边
+    const iw = PORTRAIT_W - FRAME_INSET * 2;
+    const ih = bodyH - FRAME_INSET * 2;
     portraitHost.addChild(makePanel({
-      width: PORTRAIT_W - 8, height: PORTRAIT_H - 8, radius: 12,
-      bg: 0xf0e2c4, bgAlpha: 1,
-      border: 0xc9a063, borderWidth: 2,
+      width: iw, height: ih, radius: 11,
+      bg: 0xf5e8d0, bgAlpha: 1,
+      border: FRAME_GOLD, borderWidth: 0,
       centered: true,
     }));
 
     const path = def.image ?? enemyImage(def.id);
     const tex = TextureCache.get(path);
-    const iw = PORTRAIT_W - FRAME_INSET * 2;
-    const ih = PORTRAIT_H - FRAME_INSET * 2;
-    if (tex) {
+    if (tex && tex.width > 0 && tex.height > 0) {
       const art = new PIXI.Container();
       const spr = new PIXI.Sprite(tex);
-      spr.anchor.set(0.5);
-      const cover = Math.max(iw / tex.width, ih / tex.height);
+      // cover 贴满框内，略放大避免露底；偏上减少头顶空
+      spr.anchor.set(0.5, 0.40);
+      const cover = Math.max(iw / tex.width, ih / tex.height) * 1.12;
       spr.scale.set(cover);
+      spr.position.set(0, ih * 0.04);
       art.addChild(spr);
 
       const mask = new PIXI.Graphics();
       mask.beginFill(0xffffff);
-      mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, 10);
+      mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, 11);
       mask.endFill();
       art.addChild(mask);
       art.mask = mask;
       portraitHost.addChild(art);
     }
 
-    // 生图奶油金框叠在立绘之上
-    const frameTex = TextureCache.get(ENEMY_PORTRAIT_FRAME);
-    if (frameTex) {
-      const frame = new PIXI.Sprite(frameTex);
-      frame.anchor.set(0.5);
-      frame.width = PORTRAIT_W;
-      frame.height = PORTRAIT_H;
-      portraitHost.addChild(frame);
-    } else {
-      const rim = new PIXI.Graphics();
-      rim.lineStyle(3, 0xc9a063, 1);
-      rim.drawRoundedRect(-PORTRAIT_W / 2, -PORTRAIT_H / 2, PORTRAIT_W, PORTRAIT_H, 14);
-      portraitHost.addChild(rim);
-    }
+    // 金框外轮廓 = 立绘区外尺寸，与右侧说明板同高
+    portraitHost.addChild(drawThinGoldFrame(PORTRAIT_W, bodyH));
   };
 
   const paintInfo = (def: EnemyDef): void => {
     infoHost.removeChildren().forEach((c) => c.destroy({ children: true }));
-    let y = 2;
+    let y = 0;
 
     const nameRow = new PIXI.Container();
     const name = makeText(formatEnemyBattleName(def), {
       size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-      wordWrapWidth: infoInnerW - 40,
+      wordWrapWidth: infoContentW - 40,
     });
     name.position.set(0, 0);
     nameRow.addChild(name);
     const orb = makeElementOrb(def.element, 28);
-    orb.position.set(Math.min(name.width + 14, infoInnerW - 14), 0);
+    orb.position.set(Math.min(name.width + 14, infoContentW - 14), 0);
     nameRow.addChild(orb);
     nameRow.position.set(0, y + 10);
     infoHost.addChild(nameRow);
     y += 32;
 
     const stats = enemyStats(def, stage.chapter, stage.difficulty);
-    const chipRow = buildStatChips(stats.hp, stats.atk, def.attackInterval, infoInnerW);
+    const chipRow = buildStatChips(stats.hp, stats.atk, def.attackInterval, infoContentW);
     chipRow.position.set(0, y);
     infoHost.addChild(chipRow);
     y += 52;
 
     const skillIds = (def.skillIds ?? []).slice(0, 2);
     if (skillIds.length > 0) {
-      const skillBox = buildSkillBox(skillIds, infoInnerW);
+      const skillBox = buildSkillBox(skillIds, infoContentW);
       skillBox.position.set(0, y);
       infoHost.addChild(skillBox);
       y += skillBox.boxH + 10;
@@ -166,7 +169,7 @@ export function buildTeamEnemyIntelCard(opts: {
 
     const weak = counterElementOf(def.element);
     const resist = resistedElementOf(def.element);
-    const counterRow = buildCounterRow(weak, resist, infoInnerW);
+    const counterRow = buildCounterRow(weak, resist, infoContentW);
     counterRow.position.set(0, y);
     infoHost.addChild(counterRow);
     y += counterRow.rowH + TIP_GAP;
@@ -174,7 +177,7 @@ export function buildTeamEnemyIntelCard(opts: {
     const tip = stage.hintText
       ?? (stage.hintTags?.length ? `本关：${stage.hintTags.join(' · ')}` : null);
     if (tip) {
-      const tipBlock = buildStageTip(tip.startsWith('本关') ? tip : `本关：${tip}`, infoInnerW);
+      const tipBlock = buildStageTip(tip.startsWith('本关') ? tip : `本关：${tip}`, infoContentW);
       tipBlock.position.set(0, y);
       infoHost.addChild(tipBlock);
     }
@@ -233,9 +236,34 @@ export function buildTeamEnemyIntelCard(opts: {
   return handle;
 }
 
-/** 右侧内容高度估算（与 paintInfo 节奏一致） */
-function estimateInfoHeight(def: EnemyDef, stage: StageDef): number {
-  let y = 2 + 32 + 52;
+/** 极薄金框：单层描边 + 轻角饰；不画内缩二框，避免「怪物框比边框窄」 */
+function drawThinGoldFrame(w: number, h: number): PIXI.Graphics {
+  const g = new PIXI.Graphics();
+  const hw = w / 2;
+  const hh = h / 2;
+  const r = 12;
+  g.lineStyle(FRAME_LINE, FRAME_GOLD, 1);
+  g.drawRoundedRect(-hw, -hh, w, h, r);
+  // 轻角勾（薄，非厚雕花）
+  const tick = 10;
+  g.lineStyle(1.6, FRAME_GOLD, 0.9);
+  const corners: [number, number, number, number][] = [
+    [-hw + 5, -hh + 5, 1, 1],
+    [hw - 5, -hh + 5, -1, 1],
+    [-hw + 5, hh - 5, 1, -1],
+    [hw - 5, hh - 5, -1, -1],
+  ];
+  for (const [x, y, sx, sy] of corners) {
+    g.moveTo(x, y + sy * tick);
+    g.lineTo(x, y);
+    g.lineTo(x + sx * tick, y);
+  }
+  return g;
+}
+
+function estimateInfoHeight(def: EnemyDef, stage: StageDef, contentW: number): number {
+  void contentW;
+  let y = INFO_PAD * 2 + 32 + 52;
   const skillIds = (def.skillIds ?? []).slice(0, 2);
   if (skillIds.length > 0) {
     y += skillBoxHeight(skillIds.length) + 10;
@@ -244,7 +272,7 @@ function estimateInfoHeight(def: EnemyDef, stage: StageDef): number {
   const tip = stage.hintText
     ?? (stage.hintTags?.length ? `本关：${stage.hintTags.join(' · ')}` : null);
   if (tip) y += 36;
-  return Math.max(y, 120);
+  return Math.max(y, 160);
 }
 
 function skillBoxHeight(count: number): number {
@@ -316,34 +344,36 @@ function buildCounterRow(
 ): CounterRow {
   const row = new PIXI.Container() as CounterRow;
   const boxH = 34;
+  const gap = 8;
+  const chipW = Math.floor((width - gap) / 2);
   row.rowH = boxH;
 
-  // 原型：一整条浅奶油横条，克制/抵抗并排
-  row.addChild(makePanel({
-    width, height: boxH, radius: 10,
-    bg: 0xf3e6c8, bgAlpha: 0.95,
-    border: PLATE_BORDER, borderWidth: 1,
-    centered: false,
-  }));
-
-  const half = width / 2;
   const place = (label: string, el: Element, x0: number): void => {
+    const chip = new PIXI.Container();
+    chip.position.set(x0, 0);
+    chip.addChild(makePanel({
+      width: chipW, height: boxH, radius: 10,
+      bg: 0xf3e6c8, bgAlpha: 0.95,
+      border: PLATE_BORDER, borderWidth: 1,
+      centered: false,
+    }));
     const t = makeText(label, {
       size: FONT_SIZE.xxs, fill: COLORS.textSub, bold: true, anchor: [0, 0.5],
     });
-    t.position.set(x0 + 10, boxH / 2);
-    row.addChild(t);
+    t.position.set(10, boxH / 2);
+    chip.addChild(t);
     const o = makeElementOrb(el, 22);
-    o.position.set(x0 + 10 + t.width + 16, boxH / 2);
-    row.addChild(o);
+    o.position.set(10 + t.width + 14, boxH / 2);
+    chip.addChild(o);
     const name = makeText(ELEMENT_NAME[el], {
       size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
     });
     name.position.set(o.x + 16, boxH / 2);
-    row.addChild(name);
+    chip.addChild(name);
+    row.addChild(chip);
   };
   place('克制', weak, 0);
-  place('抵抗', resist, half);
+  place('抵抗', resist, chipW + gap);
   return row;
 }
 
@@ -358,10 +388,9 @@ function buildSkillBox(skillIds: readonly string[], width: number): SkillBox {
   const boxH = skillBoxHeight(skillIds.length);
   const box = new PIXI.Container() as SkillBox;
   box.boxH = boxH;
-  // 浅凹槽技能区（对齐原型奶油内板）
   box.addChild(makePanel({
     width, height: boxH, radius: 12,
-    bg: 0xfffdf8, bgAlpha: 0.96,
+    bg: 0xfff8ec, bgAlpha: 0.96,
     border: PLATE_BORDER, borderWidth: 1,
     centered: false,
   }));
@@ -370,7 +399,6 @@ function buildSkillBox(skillIds: readonly string[], width: number): SkillBox {
     const skill = skillForEnemy(id);
     const y = pad + i * (rowH + 6) + rowH / 2;
 
-    // 棕色圆底托，技能正圆图标叠上（扣底后无方块）
     const disc = new PIXI.Graphics();
     disc.beginFill(0x8b6914, 0.22);
     disc.drawCircle(0, 0, iconSize / 2 + 2);
@@ -414,7 +442,6 @@ function buildSkillBox(skillIds: readonly string[], width: number): SkillBox {
   return box;
 }
 
-/** 本关提示：分割线 + 小松标 + 文案（独立于克制行） */
 function buildStageTip(text: string, width: number): PIXI.Container {
   const c = new PIXI.Container();
   const line = new PIXI.Graphics();
@@ -439,7 +466,6 @@ function buildStageTip(text: string, width: number): PIXI.Container {
 function skillDisplayLines(skill: SkillDef): { title: string; sub: string } {
   const effect = compactEnemySkillEffect(skill);
   const title = `${skill.name}：${effect}`;
-  // 副行：完整 desc，若与短效重复则给温和补语
   let sub = skill.desc;
   if (sub.includes(effect) || sub.length <= effect.length + 2) {
     const tag = skill.tags?.[0];
@@ -503,7 +529,6 @@ function drawHourglass(r: number): PIXI.Graphics {
   return g;
 }
 
-/** 本关提示左侧小松标 */
 function drawPineMark(r: number): PIXI.Graphics {
   const g = new PIXI.Graphics();
   g.beginFill(0x3d7a4a, 1);

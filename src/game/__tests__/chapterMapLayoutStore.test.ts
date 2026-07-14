@@ -38,7 +38,9 @@ describe('ChapterMapLayoutStore', () => {
       { x: 0.4, y: 0.5 },
     ]);
     expect(ChapterMapLayoutStore.getNormalized(6)?.length).toBe(6);
-    expect(ChapterMapLayoutStore.getNormalized(5)?.length).toBe(5);
+    // 未保存且无 bundled 的关数 → null；运营默认仅打包 8 关布局
+    expect(ChapterMapLayoutStore.getNormalized(5)).toBeNull();
+    expect(ChapterMapLayoutStore.getNormalized(8)?.length).toBe(8);
   });
 
   it('clearByCount 后无记录', () => {

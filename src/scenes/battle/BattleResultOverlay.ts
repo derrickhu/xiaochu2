@@ -1,5 +1,6 @@
 /**
- * 战斗结算浮层：胜/负面板、星级、奖励滚动入账、Boss 掉落提示、卡关引导，以及失败/重试/下一关导航。
+ * 战斗结算浮层 — 对齐 battle_victory / battle_defeat UI prototype v2
+ * 轻量奶油金边卡片：胜局星级+奖励；败局提示+战力引导+看广告复活。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -9,472 +10,692 @@ import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { STAGES } from '@/balance/stages';
 import { PET_MAP } from '@/balance/pets';
-import { UI_PANEL_IMAGES, UI_IMAGES, petAvatarPath } from '@/config/Assets';
+import { UI_IMAGES, petAvatarPath } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
+import { Platform } from '@/core/PlatformService';
 import type { BattleController } from '@/game/battle/BattleController';
-import { makeButton } from './battleWidgets';
 import { formatStarTurnHint } from '@/formulas/stars';
-import { makeIconLabel, type IconLabelHandle } from '@/ui/IconLabel';
-import { COLORS } from '@/ui/theme';
+import {
+  COLORS, FONT_SIZE,
+  makeActionButton, makePanel, makeText, makeStarRow, makeIconLabel,
+} from '@/ui';
 import type { BattleEnterData } from '../BattleScene';
 import type { TeamEnterData } from '../TeamScene';
 import { battleProgressHint } from './battleProgressHints';
 import { analytics } from '@/analytics';
+import { bindPointerTap } from '@/utils/bindPointerTap';
 
-const PANEL_W = 560;
-const PANEL_H_DEFAULT = 820;
-const BTN_W = 300;
-const BTN_H = 68;
-const BTN_GAP = 14;
-
-/** 金框内胆：顶部/底部留给 ornate 边框，内容不得超出 */
-const FRAME_INSET_TOP = 0.12;
-const FRAME_INSET_BOTTOM = 0.14;
-
-/** 文案区固定间距（避免面板偏高时被均匀拉稀） */
-const WIN_GAP_TITLE_STARS = 50;
-const WIN_GAP_STARS_DETAIL = 42;
-const WIN_GAP_DETAIL_REWARDS = 40;
-const WIN_REWARD_ROW_GAP = 40;
-const WIN_GAP_REWARDS_DROP = 20;
-const REWARD_ICON_SIZE = 36;
-const SHARD_ICON_SIZE = 40;
-
-interface WinLayout {
-  title: number;
-  stars: number;
-  detail: number;
-  rewardYs: number[];
-  drop: number;
-  progressHint: number;
-  buttonYs: number[];
+const PANEL_W = 600;
+const CREAM = 0xfff9ec;
+const CREAM_INSET = 0xf5ead2;
+const GOLD = 0xd4b87a;
+const GOLD_SOFT = 0xe0c896;
+const TITLE_BROWN = 0x5c3d24;
+const REWARD_GREEN = 0x3d9a5c;
+export interface BattleResultHooks {
+  /** 看广告复活成功后继续本场战斗 */
+  onRevive?: () => void;
 }
 
 export class BattleResultOverlay {
   private static readonly _failCounts = new Map<string, number>();
   private _overlayLayer!: PIXI.Container;
+  private _open = false;
+
+  get isOpen(): boolean {
+    return this._open;
+  }
 
   build(parent: PIXI.Container): void {
     this._overlayLayer = new PIXI.Container();
     parent.addChild(this._overlayLayer);
   }
 
-  show(ctrl: BattleController, win: boolean, battleStartedAt = 0): void {
-    const result = ctrl.finish(win);
-    let milestoneLingyu = 0;
-    let defeatRefund = 0;
-    const newlyUnlocked: string[] = [];
-    if (win) {
-      milestoneLingyu = PlayerData.recordClear(ctrl.stage.id, result.stars, result.coins);
-      PlayerData.addExp(result.exp);
-      for (const s of result.shards) PlayerData.addShards(s.petId, s.count);
-      for (const pid of result.bossDropPets) {
-        if (PlayerData.unlockPet(pid)) newlyUnlocked.push(pid);
-      }
-      BattleResultOverlay._failCounts.delete(ctrl.stage.id);
-    } else {
-      defeatRefund = ctrl.defeatExpRefund();
-      if (defeatRefund > 0) PlayerData.addExp(defeatRefund);
-      BattleResultOverlay._failCounts.set(
-        ctrl.stage.id,
-        (BattleResultOverlay._failCounts.get(ctrl.stage.id) ?? 0) + 1,
-      );
-    }
+  clear(): void {
+    this._open = false;
+    this._overlayLayer.removeChildren().forEach((c) => c.destroy({ children: true }));
+  }
+
+  show(
+    ctrl: BattleController,
+    win: boolean,
+    battleStartedAt = 0,
+    hooks: BattleResultHooks = {},
+  ): void {
+    this.clear();
+    this._open = true;
 
     const durationMs = battleStartedAt > 0 ? Date.now() - battleStartedAt : 0;
+
     if (win) {
-      analytics.trackLevelClear(ctrl.stage.id, {
-        durationMs,
-        turnsUsed: result.turnsUsed,
-        stars: result.stars,
-        stageName: ctrl.stage.name,
-      });
+      this._showVictory(ctrl, durationMs);
     } else {
-      analytics.trackLevelFail(ctrl.stage.id, {
-        durationMs,
-        turnsUsed: result.turnsUsed,
-        reason: 'defeat',
-        stageName: ctrl.stage.name,
-      });
+      this._showDefeat(ctrl, durationMs, hooks);
     }
+  }
 
-    const w = Game.logicWidth;
-    const h = Game.logicHeight;
-    const mask = new PIXI.Graphics();
-    mask.beginFill(0x000000, 0.65);
-    mask.drawRect(0, 0, w, h);
-    mask.endFill();
-    mask.eventMode = 'static';
-    this._overlayLayer.addChild(mask);
+  private _showVictory(ctrl: BattleController, durationMs: number): void {
+    const result = ctrl.finish(true);
+    let milestoneLingyu = 0;
+    const newlyUnlocked: string[] = [];
+    milestoneLingyu = PlayerData.recordClear(ctrl.stage.id, result.stars, result.coins);
+    PlayerData.addExp(result.exp);
+    for (const s of result.shards) PlayerData.addShards(s.petId, s.count);
+    for (const pid of result.bossDropPets) {
+      if (PlayerData.unlockPet(pid)) newlyUnlocked.push(pid);
+    }
+    BattleResultOverlay._failCounts.delete(ctrl.stage.id);
 
-    const { panelH, fitScale } = this._panelMetrics(win);
+    analytics.trackLevelClear(ctrl.stage.id, {
+      durationMs,
+      turnsUsed: result.turnsUsed,
+      stars: result.stars,
+      stageName: ctrl.stage.name,
+    });
+
+    const progressHintText = battleProgressHint(ctrl.stage.id, milestoneLingyu > 0);
     const nextStage = STAGES.find(
       (s) => s.chapter === ctrl.stage.chapter && s.index === ctrl.stage.index + 1,
     );
-    const btnCount = (win && nextStage ? 1 : 0) + 2;
-    const rewardRowCount = win
-      ? 2 + result.shards.length + (milestoneLingyu > 0 ? 1 : 0)
-      : 0;
-    const progressHintText = win
-      ? battleProgressHint(ctrl.stage.id, milestoneLingyu > 0)
-      : null;
-    const winLayout = win
-      ? this._computeWinLayout(panelH, {
-        btnCount,
-        rewardRowCount,
-        hasDrop: newlyUnlocked.length > 0,
-        hasProgressHint: !!progressHintText,
-      })
-      : null;
 
-    const panel = new PIXI.Container();
-    panel.addChild(this._makePanelBg(win, panelH));
+    const root = this._mountScrim();
+    const card = new PIXI.Container();
+    root.addChild(card);
 
-    if (win && winLayout) {
-      this._buildWinContent(
-        panel, ctrl, result, milestoneLingyu, newlyUnlocked, progressHintText, winLayout,
-      );
-      this._buildNavButtons(panel, ctrl, win, winLayout.buttonYs);
-    } else {
-      this._buildLoseContent(panel, ctrl, defeatRefund, panelH);
-      this._buildNavButtons(panel, ctrl, win, this._loseButtonYs(panelH, btnCount));
+    // 先按内容估算高度，再画底板
+    const content = new PIXI.Container();
+    card.addChild(content);
+
+    let y = 0;
+    // 顶部探头灵宠
+    const peek = this._makePeekMascot(ctrl);
+    if (peek) {
+      peek.position.set(0, y);
+      content.addChild(peek);
+      y += 36;
     }
 
-    panel.position.set(w / 2, h / 2 - 16);
-    const enterScale = 0.6 * fitScale;
-    panel.scale.set(enterScale);
-    panel.alpha = 0;
-    this._overlayLayer.addChild(panel);
-    TweenManager.to({
-      target: panel.scale, props: { x: fitScale, y: fitScale },
-      duration: 0.25, ease: Ease.easeOutBack,
+    const title = makeText('战斗胜利！', {
+      size: 46, fill: TITLE_BROWN, bold: true, anchor: 0.5,
     });
-    TweenManager.to({ target: panel, props: { alpha: 1 }, duration: 0.2 });
-  }
-
-  private _panelMetrics(win: boolean): { panelH: number; fitScale: number } {
-    const tex = win ? TextureCache.get(UI_PANEL_IMAGES.battleVictory) : null;
-    const panelH = tex ? PANEL_W * (tex.height / tex.width) : PANEL_H_DEFAULT;
-    const fitScale = Math.min(1, (Game.logicHeight * 0.78) / panelH);
-    return { panelH, fitScale };
-  }
-
-  /** 奖励区自上而下排布，按钮贴金框底部 */
-  private _computeWinLayout(
-    panelH: number,
-    opts: { btnCount: number; rewardRowCount: number; hasDrop: boolean; hasProgressHint: boolean },
-  ): WinLayout {
-    const half = panelH / 2;
-    const innerTop = -half + panelH * FRAME_INSET_TOP;
-    const innerBottom = half - panelH * FRAME_INSET_BOTTOM;
-
-    let y = innerTop + 38;
-    const title = y;
-    y += WIN_GAP_TITLE_STARS;
-    const stars = y;
-    y += WIN_GAP_STARS_DETAIL;
-    const detail = y;
-
-    const btnBlock = opts.btnCount * BTN_H + (opts.btnCount - 1) * BTN_GAP;
-    const buttonYs = Array.from(
-      { length: opts.btnCount },
-      (_, i) => innerBottom - 14 - btnBlock + BTN_H / 2 + i * (BTN_H + BTN_GAP),
-    );
-
-    const rewardYs = Array.from(
-      { length: opts.rewardRowCount },
-      (_, i) => detail + WIN_GAP_DETAIL_REWARDS + i * WIN_REWARD_ROW_GAP,
-    );
-
-    const lastRewardY = rewardYs.length > 0
-      ? rewardYs[rewardYs.length - 1]
-      : detail;
-    const drop = opts.hasDrop
-      ? lastRewardY + WIN_GAP_REWARDS_DROP + 24
-      : lastRewardY;
-    const tailY = opts.hasDrop ? drop + 52 : lastRewardY;
-    const progressHint = opts.hasProgressHint
-      ? tailY + (opts.hasDrop ? 16 : WIN_GAP_REWARDS_DROP + 28)
-      : tailY;
-
-    return { title, stars, detail, rewardYs, drop, progressHint, buttonYs };
-  }
-
-  private _placeIconRow(panel: PIXI.Container, row: IconLabelHandle, y: number): void {
-    row.position.set(-row.width / 2, y);
-    panel.addChild(row);
-  }
-
-  private _loseButtonYs(panelH: number, btnCount: number): number[] {
-    const half = panelH / 2;
-    const innerBottom = half - panelH * FRAME_INSET_BOTTOM;
-    const btnBlock = btnCount * BTN_H + (btnCount - 1) * BTN_GAP;
-    const firstBtnY = innerBottom - 8 - btnBlock + BTN_H / 2;
-    return Array.from({ length: btnCount }, (_, i) => firstBtnY + i * (BTN_H + BTN_GAP));
-  }
-
-  private _makePanelBg(win: boolean, panelH: number): PIXI.Container {
-    const bg = new PIXI.Container();
-    if (win) {
-      const tex = TextureCache.get(UI_PANEL_IMAGES.battleVictory);
-      if (tex) {
-        const sprite = new PIXI.Sprite(tex);
-        sprite.anchor.set(0.5);
-        sprite.width = PANEL_W;
-        sprite.height = panelH;
-        bg.addChild(sprite);
-        return bg;
-      }
-    }
-    const g = new PIXI.Graphics();
-    g.beginFill(win ? 0xfdf3df : 0x2e2148);
-    g.lineStyle(3, win ? 0xc9822a : 0x5a4a82);
-    g.drawRoundedRect(-PANEL_W / 2, -panelH / 2, PANEL_W, panelH, 28);
-    g.endFill();
-    bg.addChild(g);
-    return bg;
-  }
-
-  private _buildWinContent(
-    panel: PIXI.Container,
-    ctrl: BattleController,
-    result: ReturnType<BattleController['finish']>,
-    milestoneLingyu: number,
-    newlyUnlocked: string[],
-    progressHintText: string | null,
-    layout: WinLayout,
-  ): void {
-    const title = new PIXI.Text('战斗胜利！', {
-      fontSize: 48, fill: COLORS.textTitle, fontWeight: 'bold',
-      stroke: 0xfdf3df, strokeThickness: 4,
-    });
-    title.anchor.set(0.5);
-    title.position.set(0, layout.title);
-    panel.addChild(title);
-    title.scale.set(0.2);
+    title.position.set(0, y + 28);
+    content.addChild(title);
+    title.scale.set(0.35);
     TweenManager.to({
       target: title.scale, props: { x: 1, y: 1 },
-      duration: 0.4, delay: 0.25, ease: Ease.easeOutBack,
+      duration: 0.4, delay: 0.15, ease: Ease.easeOutBack,
     });
+    y += 72;
 
-    const starText = new PIXI.Text(
-      '★'.repeat(result.stars) + '☆'.repeat(3 - result.stars),
-      { fontSize: 50, fill: COLORS.accent },
-    );
-    starText.anchor.set(0.5);
-    starText.position.set(0, layout.stars);
-    panel.addChild(starText);
-
-    const detail = new PIXI.Text(
-      `回合数 ${result.turnsUsed}（${formatStarTurnHint(ctrl.stage.starTurnLimit)}）`,
-      { fontSize: 22, fill: COLORS.textSub },
-    );
-    detail.anchor.set(0.5);
-    detail.position.set(0, layout.detail);
-    panel.addChild(detail);
-
-    let rowIdx = 0;
-    const nextRewardY = (): number => layout.rewardYs[rowIdx++];
-
-    const coinRow = makeIconLabel({
-      iconPath: UI_IMAGES.iconCoin,
-      iconSize: REWARD_ICON_SIZE,
-      caption: '灵宠币',
-      captionFill: COLORS.textSub,
-      text: `+0（持有 ${PlayerData.coins}）`,
-      size: 24,
-      fill: COLORS.textTitle,
+    const stars = makeStarRow({
+      star: result.stars, maxStar: 3, style: 'sprite',
+      starSize: 54, gap: 16, anchor: 'center',
     });
-    this._placeIconRow(panel, coinRow, nextRewardY());
-    const coinCounter = { v: 0 };
-    TweenManager.to({
-      target: coinCounter, props: { v: result.coins },
-      duration: 0.5, delay: 0.3, ease: Ease.easeOutCubic,
-      onUpdate: () => {
-        coinRow.setText(`+${Math.round(coinCounter.v)}（持有 ${PlayerData.coins}）`);
-        coinRow.position.x = -coinRow.width / 2;
-      },
-    });
+    stars.position.set(0, y + 28);
+    content.addChild(stars);
+    y += 72;
 
-    const expRow = makeIconLabel({
-      iconPath: UI_IMAGES.iconExp,
-      iconSize: REWARD_ICON_SIZE,
-      caption: '经验',
-      captionFill: COLORS.textSub,
-      text: '+0',
-      size: 24,
-      fill: 0x4a8a62,
-    });
-    this._placeIconRow(panel, expRow, nextRewardY());
-    const expCounter = { v: 0 };
-    TweenManager.to({
-      target: expCounter, props: { v: result.exp },
-      duration: 0.5, delay: 0.3, ease: Ease.easeOutCubic,
-      onUpdate: () => {
-        expRow.setText(`+${Math.round(expCounter.v)}`);
-        expRow.position.x = -expRow.width / 2;
-      },
-    });
+    y = this._addTurnBlock(content, y, result.turnsUsed, ctrl.stage.starTurnLimit);
+    y += 18;
 
-    for (const shard of result.shards) {
-      const pet = PET_MAP.get(shard.petId);
-      const shardRow = makeIconLabel({
-        iconPath: petAvatarPath(shard.petId, 1),
-        iconSize: SHARD_ICON_SIZE,
-        caption: `${pet?.name ?? shard.petId}碎片`,
-        captionFill: COLORS.textSub,
-        text: `×${shard.count}`,
-        size: 24,
-        fill: 0x4a8a62,
-      });
-      this._placeIconRow(panel, shardRow, nextRewardY());
-    }
-
-    if (milestoneLingyu > 0) {
-      const lingyuRow = makeIconLabel({
-        iconPath: UI_IMAGES.iconLingyu,
-        iconSize: REWARD_ICON_SIZE,
-        caption: '灵玉',
-        captionFill: COLORS.textSub,
-        text: `+${milestoneLingyu}`,
-        size: 24,
-        fill: COLORS.textTitle,
-      });
-      this._placeIconRow(panel, lingyuRow, nextRewardY());
-    }
+    const rewardBox = this._buildRewardBox(result, milestoneLingyu);
+    rewardBox.position.set(0, y + rewardBox.boxH / 2);
+    content.addChild(rewardBox);
+    y += rewardBox.boxH + 16;
 
     if (newlyUnlocked.length > 0) {
-      const iconSize = 48;
-      const gap = 10;
-      const rowW = newlyUnlocked.length * iconSize + (newlyUnlocked.length - 1) * gap;
-      let ix = -rowW / 2 + iconSize / 2;
-      const rowY = layout.drop;
-      for (const pid of newlyUnlocked) {
-        const tex = getPetAvatarTexture(pid, 1);
-        if (tex) {
-          const sp = new PIXI.Sprite(tex);
-          sp.anchor.set(0.5, 1);
-          const dw = iconSize - 4;
-          sp.width = dw;
-          sp.height = dw * (tex.height / tex.width);
-          sp.position.set(ix, rowY + iconSize / 2 - 2);
-          sp.alpha = 0;
-          panel.addChild(sp);
-          TweenManager.to({
-            target: sp, props: { alpha: 1 },
-            duration: 0.35, delay: 0.55, ease: Ease.easeOutCubic,
-          });
-        }
-        ix += iconSize + gap;
-      }
-
-      const names = newlyUnlocked.map((pid) => PET_MAP.get(pid)?.name ?? pid).join('、');
-      const dropLine = new PIXI.Text(`${names} · 获得灵宠`, {
-        fontSize: 20, fill: COLORS.accentDeep, align: 'center', fontWeight: 'bold',
-      });
-      dropLine.anchor.set(0.5);
-      dropLine.position.set(0, rowY + iconSize / 2 + 18);
-      dropLine.alpha = 0;
-      panel.addChild(dropLine);
-
-      TweenManager.to({
-        target: dropLine, props: { alpha: 1 },
-        duration: 0.35, delay: 0.65, ease: Ease.easeOutCubic,
-      });
+      const drop = this._buildDropLine(newlyUnlocked);
+      drop.position.set(0, y + 18);
+      content.addChild(drop);
+      y += 44;
     }
 
     if (progressHintText) {
-      const hint = new PIXI.Text(progressHintText, {
-        fontSize: 19, fill: COLORS.textTitle, align: 'center', fontWeight: 'bold', lineHeight: 26,
-      });
-      hint.anchor.set(0.5);
-      hint.position.set(0, layout.progressHint);
-      hint.alpha = 0;
-      panel.addChild(hint);
-      TweenManager.to({
-        target: hint, props: { alpha: 1 },
-        duration: 0.4, delay: 0.7, ease: Ease.easeOutCubic,
-      });
+      const chip = this._makeInfoChip(progressHintText, 0xe8f6e4, 0x4e8a36);
+      chip.position.set(0, y + 18);
+      content.addChild(chip);
+      y += 44;
     }
-  }
 
-  private _buildLoseContent(
-    panel: PIXI.Container,
-    ctrl: BattleController,
-    defeatRefund: number,
-    panelH: number,
-  ): void {
-    const half = panelH / 2;
-    const innerTop = -half + panelH * FRAME_INSET_TOP;
-
-    const title = new PIXI.Text('战斗失败…', {
-      fontSize: 48, fill: 0xb0a5cc, fontWeight: 'bold',
-      stroke: 0x2a2342, strokeThickness: 5,
-    });
-    title.anchor.set(0.5);
-    title.position.set(0, innerTop + 48);
-    panel.addChild(title);
-
-    const refundLine = defeatRefund > 0 ? `\n保底经验 +${defeatRefund}` : '';
-    const tip = new PIXI.Text(
-      `提示：消除克制敌人属性的珠子伤害 ×1.6${refundLine}`,
-      { fontSize: 22, fill: 0x9b8cc4, align: 'center', lineHeight: 30 },
-    );
-    tip.anchor.set(0.5);
-    tip.position.set(0, innerTop + 130);
-    panel.addChild(tip);
-
-    const fails = BattleResultOverlay._failCounts.get(ctrl.stage.id) ?? 0;
-    if (fails >= 2) {
-      const guide = new PIXI.Text('卡关了？试试提升战力：', {
-        fontSize: 20, fill: 0xffd75e, align: 'center',
-      });
-      guide.anchor.set(0.5);
-      guide.position.set(0, innerTop + 200);
-      panel.addChild(guide);
-
-      const entries: { label: string; scene: string }[] = [
-        { label: '召唤', scene: 'gacha' },
-        { label: '商店', scene: 'shop' },
-        { label: '编队', scene: 'team' },
-      ];
-      const gw = 140;
-      const gap = 12;
-      const totalW = entries.length * gw + (entries.length - 1) * gap;
-      entries.forEach((en, i) => {
-        const gx = -totalW / 2 + gw / 2 + i * (gw + gap);
-        const gb = makeButton(en.label, gw, 56, 0x8c5ad6, () => {
-          SceneManager.switchTo(en.scene);
-        });
-        gb.position.set(gx, innerTop + 260);
-        panel.addChild(gb);
-      });
-    }
-  }
-
-  private _buildNavButtons(
-    panel: PIXI.Container, ctrl: BattleController, win: boolean, buttonYs: number[],
-  ): void {
-    const nextStage = STAGES.find(
-      (s) => s.chapter === ctrl.stage.chapter && s.index === ctrl.stage.index + 1,
-    );
-
-    const buttons: PIXI.Container[] = [];
-    if (win && nextStage) {
-      buttons.push(makeButton('下一关', BTN_W, BTN_H, 0xe8554d, () => {
-        SceneManager.switchTo('team', { stageId: nextStage.id } satisfies TeamEnterData);
+    y += 8;
+    const btnW = 420;
+    const btnH = 78;
+    const btnGap = 14;
+    const btns: PIXI.Container[] = [];
+    if (nextStage) {
+      btns.push(makeActionButton({
+        title: '下一关', width: btnW, height: btnH, variant: 'gold',
+        onTap: () => {
+          this.clear();
+          SceneManager.switchTo('team', { stageId: nextStage.id } satisfies TeamEnterData);
+        },
       }));
     }
-    buttons.push(makeButton(win ? '再打一次' : '重试', BTN_W, BTN_H, win ? 0x4a3a72 : 0xe8554d, () => {
-      SceneManager.switchTo('battle', { stageId: ctrl.stage.id } satisfies BattleEnterData);
+    btns.push(makeActionButton({
+      title: '再打一次', width: btnW, height: btnH, variant: 'cream',
+      onTap: () => {
+        this.clear();
+        SceneManager.switchTo('battle', { stageId: ctrl.stage.id } satisfies BattleEnterData);
+      },
     }));
-    buttons.push(makeButton('返回主页', BTN_W, BTN_H, 0x4a3a72, () => {
-      SceneManager.switchTo('title');
+    btns.push(makeActionButton({
+      title: '返回主页', width: btnW, height: btnH, variant: 'cream',
+      onTap: () => {
+        this.clear();
+        SceneManager.switchTo('title');
+      },
+    }));
+    for (const b of btns) {
+      b.position.set(0, y + btnH / 2);
+      content.addChild(b);
+      y += btnH + btnGap;
+    }
+    y -= btnGap;
+
+    const padY = 28;
+    const panelH = y + padY * 2;
+    const bg = makePanel({
+      width: PANEL_W, height: panelH, radius: 28,
+      bg: CREAM, bgAlpha: 0.98,
+      border: GOLD, borderWidth: 2.5,
+      centered: true,
+    });
+    card.addChildAt(bg, 0);
+    // 轻云纹角饰
+    card.addChildAt(this._cornerClouds(PANEL_W, panelH), 1);
+    content.position.set(0, -panelH / 2 + padY);
+
+    this._playCardEnter(card, panelH);
+  }
+
+  private _showDefeat(
+    ctrl: BattleController,
+    durationMs: number,
+    hooks: BattleResultHooks,
+  ): void {
+    const defeatRefund = ctrl.defeatExpRefund();
+    const fails = (BattleResultOverlay._failCounts.get(ctrl.stage.id) ?? 0) + 1;
+
+    const commitDefeat = (navigate: () => void): void => {
+      BattleResultOverlay._failCounts.set(ctrl.stage.id, fails);
+      if (defeatRefund > 0) PlayerData.addExp(defeatRefund);
+      ctrl.finish(false);
+      analytics.trackLevelFail(ctrl.stage.id, {
+        durationMs,
+        turnsUsed: ctrl.turnsUsed,
+        reason: 'defeat',
+        stageName: ctrl.stage.name,
+      });
+      this.clear();
+      navigate();
+    };
+
+    const root = this._mountScrim();
+    const card = new PIXI.Container();
+    root.addChild(card);
+    const content = new PIXI.Container();
+    card.addChild(content);
+
+    let y = 0;
+    const title = makeText('战斗失败', {
+      size: 46, fill: TITLE_BROWN, bold: true, anchor: 0.5,
+    });
+    title.position.set(0, y + 28);
+    content.addChild(title);
+    // 两侧星芒
+    content.addChild(this._spark(-150, y + 28));
+    content.addChild(this._spark(150, y + 28));
+    y += 64;
+
+    const sad = this._makeSadMascot();
+    sad.position.set(0, y + 70);
+    content.addChild(sad);
+    y += 150;
+
+    const tipRow = new PIXI.Container();
+    const bang = new PIXI.Graphics();
+    bang.beginFill(0xe8a33d, 1);
+    bang.drawCircle(0, 0, 14);
+    bang.endFill();
+    tipRow.addChild(bang);
+    tipRow.addChild(makeText('!', {
+      size: 18, fill: 0xffffff, bold: true, anchor: 0.5,
+    }));
+    const tip = makeText('提示：消除克制属性珠子伤害更高', {
+      size: FONT_SIZE.xs, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+    });
+    tip.position.set(22, 0);
+    tipRow.addChild(tip);
+    tipRow.position.set(-(tip.width + 22) / 2, y + 12);
+    content.addChild(tipRow);
+    y += 40;
+
+    if (defeatRefund > 0) {
+      const chip = this._makeInfoChip(`保底经验 +${defeatRefund}`, 0xeef8e4, REWARD_GREEN);
+      chip.position.set(0, y + 16);
+      content.addChild(chip);
+      y += 40;
+    }
+
+    // 卡关引导（失败 ≥1 次即展示，对齐原型常驻）
+    const guide = this._buildGrowthGuide((scene) => {
+      commitDefeat(() => SceneManager.switchTo(scene));
+    });
+    guide.position.set(0, y + guide.boxH / 2);
+    content.addChild(guide);
+    y += guide.boxH + 18;
+
+    const reviveW = 460;
+    const reviveH = 88;
+    const reviveBtn = this._makeReviveButton(reviveW, reviveH, async () => {
+      const ok = await Platform.showRewardedVideo();
+      if (!ok) {
+        Platform.showToast('广告未完成，请重试');
+        return;
+      }
+      this.clear();
+      hooks.onRevive?.();
+    });
+    reviveBtn.position.set(0, y + reviveH / 2);
+    content.addChild(reviveBtn);
+    y += reviveH + 16;
+
+    const halfW = 210;
+    const halfH = 72;
+    const gap = 16;
+    const retry = makeActionButton({
+      title: '重试', width: halfW, height: halfH, variant: 'cream',
+      onTap: () => commitDefeat(() => {
+        SceneManager.switchTo('battle', { stageId: ctrl.stage.id } satisfies BattleEnterData);
+      }),
+    });
+    retry.position.set(-(halfW + gap) / 2, y + halfH / 2);
+    content.addChild(retry);
+
+    const home = makeActionButton({
+      title: '返回主页', width: halfW, height: halfH, variant: 'cream',
+      onTap: () => commitDefeat(() => SceneManager.switchTo('title')),
+    });
+    home.position.set((halfW + gap) / 2, y + halfH / 2);
+    content.addChild(home);
+    y += halfH;
+
+    const padY = 28;
+    const panelH = y + padY * 2;
+    const bg = makePanel({
+      width: PANEL_W, height: panelH, radius: 28,
+      bg: CREAM, bgAlpha: 0.98,
+      border: GOLD, borderWidth: 2.5,
+      centered: true,
+    });
+    card.addChildAt(bg, 0);
+    card.addChildAt(this._cornerClouds(PANEL_W, panelH), 1);
+    content.position.set(0, -panelH / 2 + padY);
+
+    this._playCardEnter(card, panelH);
+  }
+
+  private _mountScrim(): PIXI.Container {
+    const w = Game.logicWidth;
+    const h = Game.logicHeight;
+    const root = new PIXI.Container();
+    const mask = new PIXI.Graphics();
+    mask.beginFill(COLORS.scrim, 0.55);
+    mask.drawRect(0, 0, w, h);
+    mask.endFill();
+    mask.eventMode = 'static';
+    root.addChild(mask);
+    this._overlayLayer.addChild(root);
+    return root;
+  }
+
+  private _playCardEnter(card: PIXI.Container, panelH: number): void {
+    const w = Game.logicWidth;
+    const h = Game.logicHeight;
+    const fitScale = Math.min(1, (h * 0.86) / panelH, (w - 48) / PANEL_W);
+    card.position.set(w / 2, h / 2);
+    card.scale.set(0.72 * fitScale);
+    card.alpha = 0;
+    TweenManager.to({
+      target: card.scale, props: { x: fitScale, y: fitScale },
+      duration: 0.28, ease: Ease.easeOutBack,
+    });
+    TweenManager.to({ target: card, props: { alpha: 1 }, duration: 0.2 });
+  }
+
+  private _addTurnBlock(
+    parent: PIXI.Container,
+    y: number,
+    turns: number,
+    starTurnLimit: number,
+  ): number {
+    const line = new PIXI.Graphics();
+    line.lineStyle(1.5, GOLD_SOFT, 0.9);
+    line.moveTo(-180, 0);
+    line.lineTo(-40, 0);
+    line.moveTo(40, 0);
+    line.lineTo(180, 0);
+    // 小菱形
+    const diamond = (x: number) => {
+      line.beginFill(GOLD, 1);
+      line.moveTo(x, -5);
+      line.lineTo(x + 5, 0);
+      line.lineTo(x, 5);
+      line.lineTo(x - 5, 0);
+      line.closePath();
+      line.endFill();
+    };
+    diamond(-40);
+    diamond(40);
+    line.position.set(0, y + 14);
+    parent.addChild(line);
+
+    const turn = makeText(`回合数 ${turns}`, {
+      size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: 0.5,
+    });
+    turn.position.set(0, y + 14);
+    parent.addChild(turn);
+
+    const hint = makeText(`（${formatStarTurnHint(starTurnLimit)}）`, {
+      size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: 0.5,
+    });
+    hint.position.set(0, y + 40);
+    parent.addChild(hint);
+    return y + 56;
+  }
+
+  private _buildRewardBox(
+    result: ReturnType<BattleController['finish']>,
+    milestoneLingyu: number,
+  ): PIXI.Container & { boxH: number } {
+    const box = new PIXI.Container() as PIXI.Container & { boxH: number };
+    const innerW = PANEL_W - 72;
+    const rows: PIXI.Container[] = [];
+
+    const coinRow = this._rewardRow(
+      UI_IMAGES.iconCoin,
+      `+${result.coins}`,
+      REWARD_GREEN,
+      `持有 ${PlayerData.coins}`,
+    );
+    rows.push(coinRow);
+
+    const expRow = this._rewardRow(UI_IMAGES.iconExp, `+${result.exp}`, REWARD_GREEN);
+    rows.push(expRow);
+
+    for (const shard of result.shards) {
+      const pet = PET_MAP.get(shard.petId);
+      rows.push(this._rewardRow(
+        petAvatarPath(shard.petId, 1),
+        `×${shard.count}`,
+        0x6b5cff,
+        pet ? `${pet.name}碎片` : '碎片',
+      ));
+    }
+    if (milestoneLingyu > 0) {
+      rows.push(this._rewardRow(UI_IMAGES.iconLingyu, `+${milestoneLingyu}`, COLORS.textTitle));
+    }
+
+    const rowH = 52;
+    const pad = 16;
+    const headH = 36;
+    const boxH = pad + headH + rows.length * rowH + pad;
+    box.boxH = boxH;
+
+    box.addChild(makePanel({
+      width: innerW, height: boxH, radius: 16,
+      bg: CREAM_INSET, bgAlpha: 0.95,
+      border: GOLD_SOFT, borderWidth: 1.5,
+      centered: true,
     }));
 
-    buttonYs.forEach((y, i) => {
-      buttons[i].position.set(0, y);
-      panel.addChild(buttons[i]);
+    const head = makeText('◆  获得奖励  ◆', {
+      size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5,
     });
+    head.position.set(0, -boxH / 2 + pad + headH / 2);
+    box.addChild(head);
+
+    rows.forEach((row, i) => {
+      row.position.set(0, -boxH / 2 + pad + headH + i * rowH + rowH / 2);
+      box.addChild(row);
+    });
+    return box;
+  }
+
+  private _rewardRow(
+    iconPath: string,
+    value: string,
+    valueFill: number,
+    holdHint?: string,
+  ): PIXI.Container {
+    const row = new PIXI.Container();
+    const innerW = PANEL_W - 100;
+    row.addChild(makePanel({
+      width: innerW, height: 46, radius: 10,
+      bg: 0xfffdf8, bgAlpha: 0.9,
+      border: 0xe8d4a8, borderWidth: 1,
+      centered: true,
+    }));
+
+    const label = makeIconLabel({
+      iconPath,
+      iconSize: 34,
+      text: value,
+      size: FONT_SIZE.sm,
+      fill: valueFill,
+      bold: true,
+      gap: 10,
+    });
+    label.position.set(-innerW / 2 + 18, 0);
+    // IconLabel 原点在左缘中心
+    row.addChild(label);
+
+    if (holdHint) {
+      const pill = new PIXI.Container();
+      const t = makeText(holdHint, {
+        size: 13, fill: COLORS.textSub, bold: true, anchor: 0.5,
+      });
+      try { t.updateText(true); } catch { /* noop */ }
+      const pw = Math.ceil(t.width) + 20;
+      const ph = 26;
+      pill.addChild(makePanel({
+        width: pw, height: ph, radius: ph / 2,
+        bg: 0xefe4ce, bgAlpha: 0.95,
+        border: 0xe0c896, borderWidth: 1,
+        centered: true,
+      }));
+      pill.addChild(t);
+      pill.position.set(innerW / 2 - pw / 2 - 12, 0);
+      row.addChild(pill);
+    }
+    return row;
+  }
+
+  private _buildDropLine(ids: string[]): PIXI.Container {
+    const c = new PIXI.Container();
+    const names = ids.map((pid) => PET_MAP.get(pid)?.name ?? pid).join('、');
+    c.addChild(makeText(`${names} · 获得灵宠`, {
+      size: FONT_SIZE.xs, fill: COLORS.accentDeep, bold: true, anchor: 0.5,
+    }));
+    return c;
+  }
+
+  private _buildGrowthGuide(
+    onPick: (scene: string) => void,
+  ): PIXI.Container & { boxH: number } {
+    const box = new PIXI.Container() as PIXI.Container & { boxH: number };
+    const innerW = PANEL_W - 72;
+    const boxH = 150;
+    box.boxH = boxH;
+    box.addChild(makePanel({
+      width: innerW, height: boxH, radius: 16,
+      bg: CREAM_INSET, bgAlpha: 0.96,
+      border: GOLD_SOFT, borderWidth: 1.5,
+      centered: true,
+    }));
+
+    const head = makeText('卡关了？试试提升战力', {
+      size: FONT_SIZE.xs, fill: COLORS.textMain, bold: true, anchor: 0.5,
+    });
+    head.position.set(0, -boxH / 2 + 22);
+    box.addChild(head);
+
+    const entries: { label: string; icon: string; scene: string }[] = [
+      { label: '召唤', icon: UI_IMAGES.iconRecruit, scene: 'gacha' },
+      { label: '商店', icon: UI_IMAGES.navShop, scene: 'shop' },
+      { label: '编队', icon: UI_IMAGES.navTeam, scene: 'team' },
+    ];
+    const gap = 100;
+    const startX = -((entries.length - 1) * gap) / 2;
+    entries.forEach((en, i) => {
+      const item = new PIXI.Container();
+      item.position.set(startX + i * gap, 18);
+      const disc = new PIXI.Graphics();
+      disc.beginFill(0xfffdf8, 1);
+      disc.lineStyle(2, GOLD, 1);
+      disc.drawCircle(0, 0, 28);
+      disc.endFill();
+      item.addChild(disc);
+      const tex = TextureCache.get(en.icon);
+      if (tex) {
+        const sp = new PIXI.Sprite(tex);
+        sp.anchor.set(0.5);
+        sp.width = 36;
+        sp.height = 36;
+        item.addChild(sp);
+      }
+      const lab = makeText(en.label, {
+        size: FONT_SIZE.xxs, fill: COLORS.textMain, bold: true, anchor: 0.5,
+      });
+      lab.position.set(0, 44);
+      item.addChild(lab);
+      item.eventMode = 'static';
+      item.cursor = 'pointer';
+      item.hitArea = new PIXI.Rectangle(-36, -36, 72, 90);
+      bindPointerTap(item, () => onPick(en.scene));
+      box.addChild(item);
+    });
+    return box;
+  }
+
+  private _makeReviveButton(w: number, h: number, onTap: () => void): PIXI.Container {
+    const btn = makeActionButton({
+      title: '看广告复活',
+      width: w,
+      height: h,
+      variant: 'success',
+      onTap,
+    });
+    // 「广告」角标
+    const tag = new PIXI.Container();
+    tag.addChild(makePanel({
+      width: 52, height: 24, radius: 8,
+      bg: 0xff8c22, bgAlpha: 1,
+      border: 0xffffff, borderWidth: 1.5,
+      centered: true,
+    }));
+    tag.addChild(makeText('广告', {
+      size: 13, fill: 0xffffff, bold: true, anchor: 0.5,
+    }));
+    tag.position.set(-w / 2 + 48, -h / 2 + 18);
+    btn.addChild(tag);
+    return btn;
+  }
+
+  private _makeInfoChip(text: string, bg: number, fill: number): PIXI.Container {
+    const c = new PIXI.Container();
+    const t = makeText(text, {
+      size: FONT_SIZE.xs, fill, bold: true, anchor: 0.5,
+    });
+    try { t.updateText(true); } catch { /* noop */ }
+    const pw = Math.ceil(t.width) + 36;
+    const ph = 34;
+    c.addChild(makePanel({
+      width: pw, height: ph, radius: ph / 2,
+      bg, bgAlpha: 0.96,
+      border: GOLD_SOFT, borderWidth: 1.5,
+      centered: true,
+    }));
+    c.addChild(t);
+    return c;
+  }
+
+  private _makePeekMascot(ctrl: BattleController): PIXI.Container | null {
+    const pet = ctrl.team[0]?.def;
+    if (!pet) return null;
+    const c = new PIXI.Container();
+    const tex = getPetAvatarTexture(pet.id, 1);
+    if (!tex) return null;
+    const sp = new PIXI.Sprite(tex);
+    sp.anchor.set(0.5, 1);
+    const size = 88;
+    const cover = size / Math.max(tex.width, tex.height);
+    sp.scale.set(cover);
+    c.addChild(sp);
+    return c;
+  }
+
+  /** 失败页：简笔委屈灵宠 + 蔫花（无独立立绘时的轻量占位） */
+  private _makeSadMascot(): PIXI.Container {
+    const c = new PIXI.Container();
+    const g = new PIXI.Graphics();
+    // 身体
+    g.beginFill(0x5cb8b0, 1);
+    g.drawEllipse(0, 10, 48, 42);
+    g.endFill();
+    // 角
+    g.beginFill(0xf0d48a, 1);
+    g.moveTo(-18, -28); g.lineTo(-10, -48); g.lineTo(-4, -26); g.closePath();
+    g.moveTo(18, -28); g.lineTo(10, -48); g.lineTo(4, -26); g.closePath();
+    g.endFill();
+    // 眼（委屈）
+    g.lineStyle(3, 0x2a3a3a, 1);
+    g.moveTo(-18, -2); g.lineTo(-8, 2);
+    g.moveTo(18, -2); g.lineTo(8, 2);
+    // 泪
+    g.lineStyle(0);
+    g.beginFill(0x7ec8ff, 0.9);
+    g.drawEllipse(-14, 12, 4, 8);
+    g.drawEllipse(14, 12, 4, 8);
+    g.endFill();
+    // 蔫花
+    g.beginFill(0x7a9a4a, 1);
+    g.drawEllipse(62, 8, 16, 10);
+    g.endFill();
+    g.lineStyle(3, 0x5a7a3a, 1);
+    g.moveTo(62, 18); g.quadraticCurveTo(70, 40, 58, 52);
+    c.addChild(g);
+    return c;
+  }
+
+  private _spark(x: number, y: number): PIXI.Graphics {
+    const g = new PIXI.Graphics();
+    g.beginFill(0xe8a33d, 0.95);
+    const r = 7;
+    g.moveTo(0, -r);
+    g.lineTo(r * 0.3, -r * 0.3);
+    g.lineTo(r, 0);
+    g.lineTo(r * 0.3, r * 0.3);
+    g.lineTo(0, r);
+    g.lineTo(-r * 0.3, r * 0.3);
+    g.lineTo(-r, 0);
+    g.lineTo(-r * 0.3, -r * 0.3);
+    g.closePath();
+    g.endFill();
+    g.position.set(x, y);
+    return g;
+  }
+
+  private _cornerClouds(w: number, h: number): PIXI.Graphics {
+    const g = new PIXI.Graphics();
+    g.lineStyle(1.5, GOLD_SOFT, 0.45);
+    const draw = (cx: number, cy: number, sx: number) => {
+      g.moveTo(cx, cy);
+      g.quadraticCurveTo(cx + 18 * sx, cy - 10, cx + 36 * sx, cy);
+      g.quadraticCurveTo(cx + 50 * sx, cy + 8, cx + 28 * sx, cy + 14);
+    };
+    draw(-w / 2 + 28, -h / 2 + 36, 1);
+    draw(w / 2 - 28, -h / 2 + 36, -1);
+    return g;
   }
 }

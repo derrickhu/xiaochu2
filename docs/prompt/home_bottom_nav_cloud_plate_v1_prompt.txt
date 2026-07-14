@@ -1,0 +1,29 @@
+UI asset ONLY: bottom navigation CLOUD PANEL / cream board for mobile game home hub.
+
+EDIT STYLE from attached screenshot reference (home hub bottom nav crop): soft Q-version xianxia cream parchment, hand-painted look.
+
+GENERATE ONLY the empty decorative background board — NO icons, NO characters, NO eggs, NO pets, NO buttons, NO text labels.
+
+SHAPE (critical):
+- Wide horizontal panel spanning full width (phone bottom bar proportions ~750×280)
+- TOP EDGE must be SCALLOPED / CLOUD-LIKE: soft rounded wave bumps (like auspicious cloud rim), NOT a straight rectangle
+- Bottom edge can be mostly flat/slightly rounded for device safe area
+- Left and right bottom corners with gentle cloud-swirl flourishes (xiangyun curls)
+- Thin soft-gold outline along the entire cloud silhouette
+
+FILL:
+- Warm cream / parchment (#FDF6E8 ~ #F9F0DC)
+- Subtle painted auspicious-cloud swirl textures inside (low contrast beige swirls)
+- Soft inner highlight near top scallops, gentle shadow under bottom edge so it floats over the map
+- Feels HAND-DRAWN / painted game UI plate, NOT flat vector box, NOT metallic heavy frame
+
+TRANSPARENCY:
+- Outside the cloud silhouette MUST be fully transparent (PNG cutout)
+- Empty interior for icons to be overlaid in code
+
+FORBIDDEN:
+- NO text, NO numbers, NO icons, NO characters, NO navigation items
+- NO straight box rectangle as the main silhouette
+- NO purple neon, NO dark mode
+
+NO TEXT anywhere.

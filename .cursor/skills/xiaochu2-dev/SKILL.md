@@ -47,4 +47,5 @@ cd xiaochu2 && npm run build
 | 战斗编排 | `src/scenes/BattleScene.ts` |
 | GM | `src/core/GMManager.ts`, `src/ui/GMPanel.ts` |
 | 数值/UI 时长 | `src/balance/ui.ts` |
+| 宠物星级 UI | `makeStarRow` + `battle_pet_star.png`（全项目统一，见 `.cursor/rules/pet-star-ui.mdc`） |
 | 平台检测 | `src/core/PlatformService.ts` |

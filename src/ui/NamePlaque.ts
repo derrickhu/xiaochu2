@@ -23,13 +23,16 @@ export interface NamePlaqueOpts {
   text: string;
   /**
    * 固定显示宽度（逻辑像素）。
-   * 不传则按文字宽度 + 左右留白自适应，并夹在 minWidth~maxWidth。
+   * 显式传入时不再被 defaultMaxW 悄悄夹窄（这是召唤页匾过窄的根因）。
+   * 仍会按文字 + 花边留白自动抬到可读下限。
    */
   width?: number;
   /** 自适应时下限，默认 200 */
   minWidth?: number;
-  /** 自适应时上限，默认 520；banner 默认 560 */
+  /** 自适应时上限；显式 width 时仅在传入本字段时才封顶 */
   maxWidth?: number;
+  /** 显示高度；不传则用底板默认高度 */
+  height?: number;
   /** 字号档；默认 md */
   size?: NamePlaqueSize;
   /** 底板样式：title 短匾 / banner 战斗同源横匾 */
@@ -52,6 +55,7 @@ const SIZE_FONT: Record<NamePlaqueSize, number> = {
 interface PlateStyle {
   path: string;
   height: number;
+  /** 可读中段约占匾宽（花边内侧） */
   innerRatio: number;
   sliceLr: number;
   sliceTb: number;
@@ -64,14 +68,14 @@ const PLATE_STYLE: Record<NamePlaquePlate, PlateStyle> = {
   title: {
     path: UI_IMAGES.titlePlaque,
     // 显示高度须大于上下九宫帽之和，否则中段被挤没 → 看起来像「只有字没有匾」
-    height: 72,
-    // 可读中段约占匾宽；过低会导致标题被过度缩小或视觉溢出花边
-    innerRatio: 0.55,
+    height: 84,
+    // 花边内可读区；过低会把标题挤进花边
+    innerRatio: 0.62,
     sliceLr: 140,
-    sliceTb: 18,
+    sliceTb: 20,
     defaultFill: COLORS.textTitle,
     defaultStroke: true,
-    defaultMaxW: 560,
+    defaultMaxW: 680,
   },
   banner: {
     path: UI_IMAGES.textBanner,
@@ -131,14 +135,28 @@ export function makeNamePlaque(opts: NamePlaqueOpts): PIXI.Container {
   });
   try { title.updateText(true); } catch { /* noop */ }
 
-  const padX = Math.max(48, Math.round(fontSize * 2.2));
+  const padX = Math.max(56, Math.round(fontSize * 2.4));
   const minW = opts.minWidth ?? 200;
-  const maxW = opts.maxWidth ?? style.defaultMaxW;
-  let plaqueW = opts.width
-    ?? Math.ceil(title.width + padX * 2);
-  plaqueW = Math.max(minW, Math.min(maxW, plaqueW));
+  // 左右花边各吃掉 sliceLr；再加字边距，保证字不贴花边
+  const fitForText = Math.ceil(title.width + style.sliceLr * 2 + padX);
+  const fitByInner = Math.ceil(title.width / style.innerRatio);
 
-  const plaqueH = style.height;
+  let plaqueW: number;
+  if (opts.width != null) {
+    // 显式宽度：不再被 defaultMaxW 夹窄；只抬到文字可读下限
+    plaqueW = Math.max(minW, opts.width, fitForText, fitByInner);
+    if (opts.maxWidth != null) plaqueW = Math.min(plaqueW, opts.maxWidth);
+  } else {
+    const maxW = opts.maxWidth ?? style.defaultMaxW;
+    const autoW = Math.ceil(title.width + padX * 2);
+    plaqueW = Math.max(minW, Math.min(maxW, Math.max(autoW, fitForText, fitByInner)));
+  }
+
+  // 九宫左右切片之和不可超过匾宽，否则中段奶油被挤没
+  const minPlaneW = style.sliceLr * 2 + 48;
+  plaqueW = Math.max(plaqueW, minPlaneW);
+
+  const plaqueH = opts.height ?? style.height;
   const innerMax = plaqueW * style.innerRatio;
   if (title.width > innerMax) {
     title.scale.set(innerMax / title.width);

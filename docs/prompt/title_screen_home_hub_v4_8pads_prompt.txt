@@ -1,0 +1,27 @@
+Mobile game HOME HUB / TITLE SCREEN full-bleed background ONLY (no UI chrome), STRICT portrait 9:16 for xiaochu2.
+
+Use the attached home_hub_ui_prototype_v4 as STYLE + SCENE REFERENCE:
+- Soft Q-version cute xianxia pastel: mint-teal mountains, cream sky, soft waterfalls, lotuses, stone lanterns
+- Light airy painted look matching v4 (NOT heavy oil paint, NOT dark fantasy, NOT purple neon)
+- Same mountain-path atmosphere as the prototype center map area
+
+COMPOSITION (background plate only — UI will be overlaid in code):
+- Full phone 9:16 scene filling the frame
+- CLEAR S-shaped mossy cobblestone path from BOTTOM-CENTER/LEFT rising to TOP-RIGHT
+- Exactly 8 EMPTY circular stone pads baked on the path (subtle soft-gold rim), evenly spaced for level nodes:
+  pad1 near bottom trail head, pad8 near top path end (boss platform slightly larger)
+- Path centerline must stay open/clean for icon overlay
+- Soft misty mint mountains + waterfalls + distant pavilion accents (like v4)
+- Bottom ~18%: soft cream/lavender cloud bank that blends under a future nav bar
+- Top sky: bright cream-to-mint, NO dark vignette
+
+DECOR (moderate, do not clutter path pads):
+- Lotuses near water, 1–2 stone lanterns, bamboo at margins, tiny spirit wisps
+- Optional cute peeking fox far from pads
+
+MUST NOT include:
+- NO UI, NO buttons, NO text, NO numbers, NO stars, NO shields, NO BOSS label, NO characters as main focus
+- NO bottom navigation bar, NO currency pills, NO chapter title plaque
+- NO turtle/boss creature (boss pet is overlaid in game)
+
+NO TEXT anywhere in the image.

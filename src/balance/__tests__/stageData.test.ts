@@ -14,8 +14,14 @@ import { stageMatchesChallenge } from '../bossChallenge';
 import { stageDrops } from '@/formulas/economyOutput';
 
 describe('关卡数据完整性（单一真源约束）', () => {
-  it('共 52 关', () => {
-    expect(STAGES.length).toBe(52);
+  it('共 64 关（8 章 × 每章 8 关）', () => {
+    expect(STAGES.length).toBe(64);
+  });
+
+  it('每章恰好 8 关', () => {
+    for (const ch of CHAPTERS) {
+      expect(stagesOfChapter(ch).length, `章节 ${ch}`).toBe(8);
+    }
   });
 
   it('每关引用的掉落表 / 遭遇 / 类型 / 机制均存在', () => {
