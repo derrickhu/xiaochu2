@@ -1,0 +1,31 @@
+---
+description: 五行/属性图标必须用棋盘珠 ORB_IMAGES，禁止自绘色底文字圆标
+alwaysApply: true
+---
+
+# 属性图标（棋盘珠强制统一）
+
+凡展示**金 / 木 / 水 / 火 / 土**（及心珠）属性图标，必须与棋盘珠同一套贴图，禁止自创色底+汉字圆标、Graphics 画珠、另起一套图标。
+
+## 单一真源
+
+| 项 | 路径 |
+|---|---|
+| 贴图 | `ORB_IMAGES`（`src/config/Assets.ts`）→ 棋盘珠 PNG |
+| 组件 | `makeElementOrb` / `attachPetFrameOrb`（`src/ui/ElementOrb.ts`） |
+
+## 必做
+
+1. 编队上阵槽、可选列表、图鉴、商店、战斗栏、五行覆盖、敌情克制等：**一律** `makeElementOrb` 或 `attachPetFrameOrb`。
+2. 需要预加载的页面把 `ORB_IMAGES` 列入对应 `*_SHELL_IMAGES` / 主包预加载（主包已含珠图）。
+3. 尺寸只调 `size` 参数，不换素材。
+
+## 禁止
+
+- `Graphics` 色圆 + `金/木/水/火/土` 文字充当属性图标
+- 新建第二套属性角标 / emoji / 纯色块代替珠图
+- 场景内手写 `new PIXI.Sprite(ORB_IMAGES[…])` 绕过 `makeElementOrb`（定位叠珠请用 `attachPetFrameOrb`）
+
+## 文案例外
+
+界面**文字**里写「木属性」「克制金」等可以用 `ELEMENT_NAME`；仅**图标**必须走珠图。

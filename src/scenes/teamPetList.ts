@@ -4,8 +4,6 @@ import { TextureCache } from '@/core/TextureCache';
 import { getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { getRarity } from '@/balance/rarity';
 import { PET_MAP, type PetDef } from '@/balance/pets';
-import { ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
-import type { Element } from '@/balance/combat';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import {
   petFrameImage,
@@ -26,6 +24,7 @@ import {
   makeShardBadge,
   makeText,
   attachPetFrameOrb,
+  makeElementOrb,
   makeStarRow,
 } from '@/ui';
 import type { ScrollListController } from '@/ui/ScrollList';
@@ -151,7 +150,7 @@ export function addTeamPetAvatar(
 }
 
 /**
- * 战前上阵竖卡：立绘高度与背景板一致（铺满卡高），左上属性类型标（白字），Lv+星叠底。
+ * 战前上阵竖卡：立绘高度与背景板一致（铺满卡高），左上棋盘珠属性标，Lv+星叠底。
  * 对齐 team_prep 原型。
  */
 export function addTeamPrepSlotPet(
@@ -197,9 +196,12 @@ export function addTeamPrepSlotPet(
   fade.endFill();
   parent.addChild(fade);
 
-  const typeBadge = makeElementTypeBadge(pet.element, 36);
-  typeBadge.position.set(-slotW / 2 + 22, -slotH / 2 + 22);
-  parent.addChild(typeBadge);
+  // 棋盘珠贴卡框左上角（锚点中心 → 圆心落在角内侧半珠处）
+  const orbSize = 32;
+  const orbPad = 2;
+  const orb = makeElementOrb(pet.element, orbSize);
+  orb.position.set(-slotW / 2 + orbSize / 2 + orbPad, -slotH / 2 + orbSize / 2 + orbPad);
+  parent.addChild(orb);
 
   const lvText = makeText(`Lv.${level}`, {
     size: 15, fill: COLORS.btnText, bold: true, anchor: [0, 1],
@@ -216,26 +218,6 @@ export function addTeamPrepSlotPet(
   rim.lineStyle(2.5, border, 1);
   rim.drawRoundedRect(-slotW / 2, -slotH / 2, slotW, slotH, radius);
   parent.addChild(rim);
-}
-
-/** 属性类型圆标：色底 + 白字（金/木/水/火/土） */
-function makeElementTypeBadge(element: Element, size: number): PIXI.Container {
-  const c = new PIXI.Container();
-  const g = new PIXI.Graphics();
-  g.beginFill(ORB_COLOR[element], 1);
-  g.lineStyle(2, 0xfff8ec, 0.95);
-  g.drawCircle(0, 0, size / 2);
-  g.endFill();
-  c.addChild(g);
-  c.addChild(makeText(ELEMENT_NAME[element], {
-    size: Math.round(size * 0.5),
-    fill: 0xffffff,
-    bold: true,
-    anchor: 0.5,
-    strokeColor: 0x2a1a0c,
-    strokeWidth: 3,
-  }));
-  return c;
 }
 
 function buildListItem(
@@ -391,9 +373,11 @@ function addPrepListPortrait(
   art.mask = mask;
   host.addChild(art);
 
-  const typeBadge = makeElementTypeBadge(pet.element, 28);
-  typeBadge.position.set(-pw / 2 + 16, -ph / 2 + 16);
-  host.addChild(typeBadge);
+  const orbSize = 26;
+  const orbPad = 2;
+  const orb = makeElementOrb(pet.element, orbSize);
+  orb.position.set(-pw / 2 + orbSize / 2 + orbPad, -ph / 2 + orbSize / 2 + orbPad);
+  host.addChild(orb);
 
   const rim = new PIXI.Graphics();
   rim.lineStyle(2, border, 1);

@@ -1,6 +1,6 @@
 /**
- * 属性 / 心珠图标 — 一律棋盘同源 ORB_IMAGES。
- * 场景禁止再手写 Sprite(ORB_IMAGES[…]) 或依赖相框内嵌旧角标。
+ * 属性 / 心珠图标 — 一律棋盘同源 ORB_IMAGES（全项目强制，见 `.cursor/rules/element-orb-ui.mdc`）。
+ * 禁止色底+汉字圆标、自绘珠、另起一套属性图标。
  */
 import * as PIXI from 'pixi.js';
 import type { Element } from '@/balance/combat';

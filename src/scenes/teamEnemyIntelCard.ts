@@ -1,8 +1,8 @@
 /**
  * 战前编队 · 敌情 Intel
  *
- * 左：极薄金框立绘（独立）；右：说明奶油板（独立，不覆盖左栏）；
- * 两栏等高。波次 tab 仅在立绘下方。
+ * 左：金框立绘（顶底贴齐外卡，contain 整只入框）；右：说明奶油板同高；
+ * 波次 tab 在立绘下方。
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
@@ -30,13 +30,14 @@ export interface TeamEnemyIntelHandle {
 const PLATE_BG = 0xfff8ec;
 const PLATE_BORDER = 0xd4b87a;
 const FRAME_GOLD = 0xc9a063;
-/** 立绘框宽；高度与右侧说明板同步 */
+/** 立绘框宽；高度与右侧说明板 / 外卡同高 */
 const PORTRAIT_W = 220;
-/** 金线贴边，立绘几乎贴满框内（对齐 UI：怪物框高=边框高） */
+/** 金线贴边 */
 const FRAME_INSET = 2;
 const FRAME_LINE = 2.2;
-const OUTER_PAD = 12;
-const COL_GAP = 14;
+/** 外卡左右内边：左栏贴边，右侧说明略留缝 */
+const OUTER_PAD_RIGHT = 10;
+const COL_GAP = 12;
 const TAB_H = 28;
 const TAB_GAP = 6;
 const TIP_GAP = 12;
@@ -53,18 +54,18 @@ export function buildTeamEnemyIntelCard(opts: {
   const root = new PIXI.Container();
   const tabsH = waveCount > 1 ? TAB_H + 8 : 0;
   const leftColW = PORTRAIT_W;
-  const rightX = OUTER_PAD + leftColW + COL_GAP;
-  const infoInnerW = width - rightX - OUTER_PAD;
+  const rightX = leftColW + COL_GAP;
+  const infoInnerW = width - rightX - OUTER_PAD_RIGHT;
 
   const maxInfoH = Math.max(
     ...encounters.map((enc) => estimateInfoHeight(enc.def, stage, infoInnerW)),
     160,
   );
-  /** 立绘框与说明板共用高度 */
+  /** 立绘框 = 外卡内容区高度（顶底贴齐，无上下包边） */
   const bodyH = Math.max(PORTRAIT_W + 20, maxInfoH);
-  const cardH = OUTER_PAD * 2 + bodyH + tabsH;
+  const cardH = bodyH + tabsH;
 
-  // 外层仅作整卡容器底；左右内容各自独立，说明板不会画到怪物上
+  // 外层底：仅右侧/整体奶油底；左栏立绘顶底贴齐，避免「框中框」
   root.addChild(makePanel({
     width, height: cardH, radius: 16,
     bg: PLATE_BG, bgAlpha: 0.92,
@@ -73,25 +74,25 @@ export function buildTeamEnemyIntelCard(opts: {
   }));
 
   const portraitHost = new PIXI.Container();
-  portraitHost.position.set(OUTER_PAD + PORTRAIT_W / 2, OUTER_PAD + bodyH / 2);
+  portraitHost.position.set(PORTRAIT_W / 2, bodyH / 2);
   root.addChild(portraitHost);
 
   const tabRow = new PIXI.Container();
-  tabRow.position.set(OUTER_PAD, OUTER_PAD + bodyH + 6);
+  tabRow.position.set(8, bodyH + 4);
   root.addChild(tabRow);
 
-  // 右侧说明区：独立奶油板，起点 = rightX，绝不向左覆盖立绘
+  // 右侧说明区：与立绘同高，顶底贴外卡
   const infoPlate = makePanel({
-    width: infoInnerW, height: bodyH, radius: 14,
+    width: infoInnerW, height: bodyH - 4, radius: 14,
     bg: 0xfffdf8, bgAlpha: 0.98,
     border: PLATE_BORDER, borderWidth: 1.5,
     centered: false,
   });
-  infoPlate.position.set(rightX, OUTER_PAD);
+  infoPlate.position.set(rightX, 2);
   root.addChild(infoPlate);
 
   const infoHost = new PIXI.Container();
-  infoHost.position.set(rightX + INFO_PAD, OUTER_PAD + INFO_PAD);
+  infoHost.position.set(rightX + INFO_PAD, 2 + INFO_PAD);
   root.addChild(infoHost);
   const infoContentW = infoInnerW - INFO_PAD * 2;
 
@@ -100,11 +101,11 @@ export function buildTeamEnemyIntelCard(opts: {
   const paintPortrait = (def: EnemyDef): void => {
     portraitHost.removeChildren().forEach((c) => c.destroy({ children: true }));
 
-    // 框内铺满：底与立绘同尺寸，不再缩一圈奶油边
+    // 立绘区高度 = bodyH（与外卡同高），仅左右留金线
     const iw = PORTRAIT_W - FRAME_INSET * 2;
     const ih = bodyH - FRAME_INSET * 2;
     portraitHost.addChild(makePanel({
-      width: iw, height: ih, radius: 11,
+      width: iw, height: ih, radius: 14,
       bg: 0xf5e8d0, bgAlpha: 1,
       border: FRAME_GOLD, borderWidth: 0,
       centered: true,
@@ -115,23 +116,23 @@ export function buildTeamEnemyIntelCard(opts: {
     if (tex && tex.width > 0 && tex.height > 0) {
       const art = new PIXI.Container();
       const spr = new PIXI.Sprite(tex);
-      // cover 贴满框内，略放大避免露底；偏上减少头顶空
-      spr.anchor.set(0.5, 0.40);
-      const cover = Math.max(iw / tex.width, ih / tex.height) * 1.12;
-      spr.scale.set(cover);
-      spr.position.set(0, ih * 0.04);
+      // contain：整只怪物按框放入，不裁手脚/底边
+      spr.anchor.set(0.5, 0.5);
+      const fit = Math.min(iw / tex.width, ih / tex.height) * 0.94;
+      spr.scale.set(fit);
+      spr.position.set(0, 0);
       art.addChild(spr);
 
       const mask = new PIXI.Graphics();
       mask.beginFill(0xffffff);
-      mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, 11);
+      mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, 14);
       mask.endFill();
       art.addChild(mask);
       art.mask = mask;
       portraitHost.addChild(art);
     }
 
-    // 金框外轮廓 = 立绘区外尺寸，与右侧说明板同高
+    // 金框与外卡同高
     portraitHost.addChild(drawThinGoldFrame(PORTRAIT_W, bodyH));
   };
 
@@ -236,15 +237,14 @@ export function buildTeamEnemyIntelCard(opts: {
   return handle;
 }
 
-/** 极薄金框：单层描边 + 轻角饰；不画内缩二框，避免「怪物框比边框窄」 */
+/** 极薄金框：单层描边 + 轻角饰；高度与外卡同齐 */
 function drawThinGoldFrame(w: number, h: number): PIXI.Graphics {
   const g = new PIXI.Graphics();
   const hw = w / 2;
   const hh = h / 2;
-  const r = 12;
+  const r = 14;
   g.lineStyle(FRAME_LINE, FRAME_GOLD, 1);
   g.drawRoundedRect(-hw, -hh, w, h, r);
-  // 轻角勾（薄，非厚雕花）
   const tick = 10;
   g.lineStyle(1.6, FRAME_GOLD, 0.9);
   const corners: [number, number, number, number][] = [
