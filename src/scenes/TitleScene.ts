@@ -10,8 +10,8 @@ import { UI } from '@/balance/ui';
 import { CHAPTERS, CHAPTER_NAME, stagesOfChapter } from '@/balance/stages';
 import { PlayerData } from '@/game/PlayerData';
 import {
-  makeCurrencyLabel, makeChapterNavArrow,
-  makeNamePlaque, namePlaqueWidth,
+  makeCurrencyLabel, makeChapterNavArrow, NAV_ARROW_SIZE,
+  makeChapterTitlePlaque, namePlaqueOuterHalf,
   buildBottomNav, BOTTOM_NAV_RESERVE,
   buildHomeLeftRail,
   COLORS, FONT_SIZE, makePanel, makeText,
@@ -237,12 +237,11 @@ export class TitleScene implements Scene {
     const name = CHAPTER_NAME[this._chapter] ?? `第${this._chapter}章`;
     const idx = CHAPTERS.indexOf(this._chapter);
 
-    const plaque = makeNamePlaque({
+    // 对齐 home_hub_v4：战斗同源横匾 + 箭头紧贴尖角外侧
+    const plaque = makeChapterTitlePlaque({
       text: name,
-      size: 'md',
+      screenWidth: w,
       disabled: !chapterUnlocked,
-      minWidth: 240,
-      maxWidth: Math.min(420, w - 160),
     });
     plaque.position.set(w / 2, y);
     if (GMManager.isRuntimeAllowed) {
@@ -252,11 +251,12 @@ export class TitleScene implements Scene {
     }
     this.container.addChild(plaque);
 
-    const arrowGap = 10;
-    const arrowHalf = 28;
-    const halfW = namePlaqueWidth(plaque) / 2;
-    const leftX = w / 2 - halfW - arrowGap - arrowHalf;
-    const rightX = w / 2 + halfW + arrowGap + arrowHalf;
+    const arrowGap = 4;
+    const arrowHalf = NAV_ARROW_SIZE / 2;
+    const tipHalf = namePlaqueOuterHalf(plaque);
+    // 紧贴匾尖角；下限避开左侧玩法栏（x≈48, 宽 84 → 右缘 ~90）
+    const leftX = Math.max(100, w / 2 - tipHalf - arrowGap - arrowHalf);
+    const rightX = Math.min(w - 52, w / 2 + tipHalf + arrowGap + arrowHalf);
 
     const mkArrow = (direction: 'left' | 'right', x: number, targetChapter: number | null): void => {
       const enabled = targetChapter !== null

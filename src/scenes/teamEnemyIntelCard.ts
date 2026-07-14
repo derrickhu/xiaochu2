@@ -1,8 +1,9 @@
 /**
  * 战前编队 · 敌情 Intel
  *
- * 左：金框立绘（顶底贴齐外卡，contain 整只入框）；右：说明奶油板同高；
- * 波次 tab 在立绘下方。
+ * 左：金框立绘（固定宽高、顶底贴齐外卡；contain 整只入框）；
+ * 右：说明奶油板同高；波次 tab 在立绘下方。
+ * 立绘区尺寸不随贴图变化——怪物图须统一 Q 版规格（见 docs/prompt/enemy_portrait_q_spec）。
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
@@ -30,7 +31,7 @@ export interface TeamEnemyIntelHandle {
 const PLATE_BG = 0xfff8ec;
 const PLATE_BORDER = 0xd4b87a;
 const FRAME_GOLD = 0xc9a063;
-/** 立绘框宽；高度与右侧说明板 / 外卡同高 */
+/** 立绘框固定宽（与说明区同高，不随贴图改尺寸） */
 const PORTRAIT_W = 220;
 /** 金线贴边 */
 const FRAME_INSET = 2;
@@ -61,11 +62,10 @@ export function buildTeamEnemyIntelCard(opts: {
     ...encounters.map((enc) => estimateInfoHeight(enc.def, stage, infoInnerW)),
     160,
   );
-  /** 立绘框 = 外卡内容区高度（顶底贴齐，无上下包边） */
+  /** 立绘框高度固定 = 外卡内容区高度（顶底贴齐说明区） */
   const bodyH = Math.max(PORTRAIT_W + 20, maxInfoH);
   const cardH = bodyH + tabsH;
 
-  // 外层底：仅右侧/整体奶油底；左栏立绘顶底贴齐，避免「框中框」
   root.addChild(makePanel({
     width, height: cardH, radius: 16,
     bg: PLATE_BG, bgAlpha: 0.92,
@@ -81,7 +81,6 @@ export function buildTeamEnemyIntelCard(opts: {
   tabRow.position.set(8, bodyH + 4);
   root.addChild(tabRow);
 
-  // 右侧说明区：与立绘同高，顶底贴外卡
   const infoPlate = makePanel({
     width: infoInnerW, height: bodyH - 4, radius: 14,
     bg: 0xfffdf8, bgAlpha: 0.98,
@@ -101,7 +100,6 @@ export function buildTeamEnemyIntelCard(opts: {
   const paintPortrait = (def: EnemyDef): void => {
     portraitHost.removeChildren().forEach((c) => c.destroy({ children: true }));
 
-    // 立绘区高度 = bodyH（与外卡同高），仅左右留金线
     const iw = PORTRAIT_W - FRAME_INSET * 2;
     const ih = bodyH - FRAME_INSET * 2;
     portraitHost.addChild(makePanel({
@@ -116,9 +114,9 @@ export function buildTeamEnemyIntelCard(opts: {
     if (tex && tex.width > 0 && tex.height > 0) {
       const art = new PIXI.Container();
       const spr = new PIXI.Sprite(tex);
-      // contain：整只怪物按框放入，不裁手脚/底边
-      spr.anchor.set(0.5, 0.5);
-      const fit = Math.min(iw / tex.width, ih / tex.height) * 0.94;
+      // contain：整只入框；统一规格贴图时应铺满框面
+      const fit = Math.min(iw / tex.width, ih / tex.height);
+      spr.anchor.set(0.5);
       spr.scale.set(fit);
       spr.position.set(0, 0);
       art.addChild(spr);
@@ -132,7 +130,6 @@ export function buildTeamEnemyIntelCard(opts: {
       portraitHost.addChild(art);
     }
 
-    // 金框与外卡同高
     portraitHost.addChild(drawThinGoldFrame(PORTRAIT_W, bodyH));
   };
 

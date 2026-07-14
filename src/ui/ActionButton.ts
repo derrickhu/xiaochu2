@@ -37,7 +37,8 @@ interface TextStyle {
 
 const TEXT_STYLE: Record<ActionButtonVariant, TextStyle> = {
   cream: { title: 0x5c3d24, subtitle: 0x8a6a4a },
-  success: { title: COLORS.btnText, subtitle: 0xeef8e4 },
+  // Q 版金边绿钮：纯白字 + 深绿描边（对齐编队 UI 图）
+  success: { title: 0xffffff, subtitle: 0xeef8e4 },
   gold: { title: COLORS.btnText, subtitle: 0xfff3d0 },
 };
 
@@ -52,21 +53,21 @@ function makeFallbackPlate(w: number, h: number, variant: ActionButtonVariant, d
   const fill = disabled
     ? COLORS.btnDisabledBg
     : (variant === 'success'
-      ? 0x6db85a
+      ? 0x5cbf4a
       : (variant === 'gold' ? 0xe8a23a : 0xf5ead2));
   const border = disabled
     ? COLORS.btnDisabledBorder
-    : 0xc9a45a;
+    : (variant === 'success' ? 0xe0b44a : 0xc9a45a);
   g.beginFill(0x000000, 0.1);
   g.drawRoundedRect(-w / 2 + 2, -h / 2 + 3, w, h, r);
   g.endFill();
   g.beginFill(fill, 1);
-  g.lineStyle(4, border, 1);
+  g.lineStyle(variant === 'success' ? 5 : 4, border, 1);
   g.drawRoundedRect(-w / 2, -h / 2, w, h, r);
   g.endFill();
   if (!disabled) {
-    g.beginFill(0xffffff, variant === 'cream' ? 0.22 : 0.16);
-    g.drawRoundedRect(-w / 2 + 6, -h / 2 + 4, w - 12, Math.max(8, h * 0.18), r * 0.45);
+    g.beginFill(0xffffff, variant === 'cream' ? 0.22 : 0.18);
+    g.drawRoundedRect(-w / 2 + 6, -h / 2 + 4, w - 12, Math.max(8, h * 0.22), r * 0.45);
     g.endFill();
   }
   return g;
@@ -85,6 +86,9 @@ export function makeActionButton(opts: ActionButtonOpts): ActionButtonHandle {
     size: FONT_SIZE.lg,
     bold: true,
     anchor: 0.5,
+    ...(variant === 'success'
+      ? { strokeColor: 0x2f6a28, strokeWidth: 4 }
+      : {}),
   });
   const subtitle = makeText(opts.subtitle ?? '', {
     size: FONT_SIZE.sm,
@@ -113,6 +117,13 @@ export function makeActionButton(opts: ActionButtonOpts): ActionButtonHandle {
 
     const style = enabled ? TEXT_STYLE[variant] : DISABLED_TEXT;
     title.style.fill = style.title;
+    if (variant === 'success' && enabled) {
+      title.style.stroke = 0x2f6a28;
+      title.style.strokeThickness = 4;
+    } else if (variant === 'success' && !enabled) {
+      title.style.stroke = 0x000000;
+      title.style.strokeThickness = 0;
+    }
     subtitle.style.fill = style.subtitle;
     const hasSub = !!subtitle.text;
     title.position.set(0, hasSub ? -16 : 0);

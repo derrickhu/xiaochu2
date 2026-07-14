@@ -19,7 +19,7 @@ import {
 import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS, FONT_SIZE,
-  makeBackButton, makeCoverBackground, makeIconLabel, makeText, makeNamePlaque,
+  makeBackButton, makeCoverBackground, makeIconLabel, makeText, makePageTitlePlaque,
   staggerIn,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -174,11 +174,7 @@ export class CodexScene implements Scene {
   }
 
   private _buildTitlePlaque(w: number, centerY: number): void {
-    const plaque = makeNamePlaque({
-      text: '灵宠',
-      width: Math.min(480, w - 80),
-      size: 'lg',
-    });
+    const plaque = makePageTitlePlaque({ text: '灵宠', screenWidth: w });
     plaque.position.set(w / 2, centerY);
     this.container.addChild(plaque);
   }

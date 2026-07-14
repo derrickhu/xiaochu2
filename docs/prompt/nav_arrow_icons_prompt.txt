@@ -1,0 +1,5 @@
+Mobile game UI icon sheet, 2 panels side by side on transparent background.
+Left: circular warm golden-tan nav button with dark brown left chevron.
+Right: same button with right chevron.
+Q-version oriental fantasy cream UI, soft shadow, NO TEXT.
+Reference: home_hub_ui_prototype_v4 chapter nav arrows.

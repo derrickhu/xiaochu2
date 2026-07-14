@@ -21,7 +21,7 @@ import type { BattleEnterData } from './BattleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
   makeActionButton, makeBackButton, makeCoverBackground, makePanel, makeText,
-  makeNamePlaque,
+  makePageTitlePlaque,
   staggerIn, popIn, fadeIn, attachRarityBadge,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -170,8 +170,8 @@ export class TeamScene implements Scene {
     this.container.addChild(this._summaryHost);
     y += trayH + 12;
 
-    const bottomBtnH = 104;
-    const bottomPad = 16;
+    const bottomBtnH = 96;
+    const bottomPad = 18;
     const listBtnGap = 10;
     const listBottom = h - bottomPad - bottomBtnH - listBtnGap;
 
@@ -286,11 +286,7 @@ export class TeamScene implements Scene {
   }
 
   private _buildTitlePlaque(w: number, centerY: number): void {
-    const plaque = makeNamePlaque({
-      text: '编队',
-      width: Math.min(420, w - 160),
-      size: 'lg',
-    });
+    const plaque = makePageTitlePlaque({ text: '编队', screenWidth: w });
     plaque.position.set(w / 2, centerY);
     this.container.addChild(plaque);
   }

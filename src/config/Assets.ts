@@ -161,9 +161,12 @@ export const UI_IMAGES = {
   iconStatHp: `${IMG}/ui/icon/stat_hp.png`,
   iconStatAtk: `${IMG}/ui/icon/stat_atk.png`,
   iconStatRcv: `${IMG}/ui/icon/stat_rcv.png`,
+  /** 通用左右导航箭头（主线章节切换等，可复用） */
+  iconNavArrowLeft: `${IMG}/ui/icon/nav_arrow_left.png`,
+  iconNavArrowRight: `${IMG}/ui/icon/nav_arrow_right.png`,
   titlePlaque: `${IMG}/ui/plaque/title.png`,
   /**
-   * 文字背景匾（与战斗关卡匾同源）—— 召唤标题等页面级标题统一用此板。
+   * 文字背景匾（与战斗关卡匾同源）—— 主线章节名 / 战斗关卡标题等。
    */
   textBanner: `${IMG}/ui/plaque/text_banner.png`,
   /** 详情底栏行动按钮底板（奶油次按钮） */

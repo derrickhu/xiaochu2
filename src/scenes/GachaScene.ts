@@ -25,7 +25,7 @@ import {
 } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE, RADIUS,
-  makeBackButton, makeButton, makeCoverBackground, makePanel, makeText, makeNamePlaque,
+  makeBackButton, makeButton, makeCoverBackground, makePanel, makeText, makePageTitlePlaque,
   attachRarityBadge, makeCurrencyLabel, makeProgressBar, makeActionButton,
   SceneFx, type ActionButtonHandle,
 } from '@/ui';
@@ -216,22 +216,10 @@ export class GachaScene implements Scene {
 
   /** @returns 匾高度，供下方灵玉/保底区排布 */
   private _buildTitlePlaque(w: number, centerY: number, label: string): number {
-    // title 九宫左右各 140：匾必须明显宽于字+花边，否则字贴边像「溢出」
-    // 逻辑宽 750 时取 ~680，并抬高匾身，不再被 NamePlaque defaultMaxW 夹回 560
-    const plaqueW = Math.min(680, Math.max(620, w - 70));
-    const plaque = makeNamePlaque({
-      text: label,
-      width: plaqueW,
-      height: 92,
-      size: 'lg',
-      plate: 'title',
-      fill: COLORS.btnBackText,
-      stroke: false,
-    });
+    const plaque = makePageTitlePlaque({ text: label, screenWidth: w });
     plaque.position.set(w / 2, centerY);
     this._page.addChild(plaque);
-    const view = plaque as { plaqueH?: number };
-    return view.plaqueH ?? 92;
+    return plaque.plaqueH ?? 104;
   }
 
   private _buildPullButtons(w: number, h: number): void {

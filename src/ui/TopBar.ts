@@ -32,10 +32,13 @@ export function makeTopBar(opts: TopBarOpts): PIXI.Container {
   back.position.set(80, opts.centerY);
   bar.addChild(back);
 
-  // 标题匾：与章节名 / 页面标题同一套全局样式
-  const maxW = Math.min(opts.plaqueWidth ?? 480, opts.width - 200);
+  // 标题匾：与灵宠 / 召唤 / 主线同一套页面主标题规格
+  const maxW = Math.min(opts.plaqueWidth ?? 560, opts.width - 90);
   const plaque = makeNamePlaque({
     text: opts.title,
+    plate: 'title',
+    height: 104,
+    minWidth: Math.min(560, maxW),
     ...(opts.plaqueWidth !== undefined ? { width: opts.plaqueWidth } : {}),
     maxWidth: maxW,
     size: 'lg',
