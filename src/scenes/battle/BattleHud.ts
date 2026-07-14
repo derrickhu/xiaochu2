@@ -901,6 +901,29 @@ export class BattleHud {
     return this._playEnemyAttackTween(fx, heavy, onHeroHit);
   }
 
+  /**
+   * 敌人出手预警：头顶大字 + 警示粒子，再进入弹道打血。
+   * 让玩家先意识到「要挨打了」，而不是数字突然跳出来。
+   */
+  async playEnemyAttackTelegraph(fx: BattleFx, heavy: boolean): Promise<void> {
+    const { enemyCenterX, enemyCenterY } = this._layout;
+    const label = heavy ? '蓄力攻击！' : '敌人攻击！';
+    const color = heavy ? 0xff3b30 : 0xff6b3d;
+    fx.spawnFloat(label, enemyCenterX, enemyCenterY - 72, color, heavy ? 1.55 : 1.4);
+    fx.burst({
+      x: enemyCenterX,
+      y: enemyCenterY,
+      color,
+      count: heavy ? 16 : 12,
+      speed: heavy ? 260 : 220,
+      gravity: -220,
+      size: heavy ? 15 : 13,
+      life: UI.anim.enemyAttackTelegraph * 0.85,
+    });
+    Platform.vibrateShort(heavy ? 'medium' : 'light');
+    await delay(UI.anim.enemyAttackTelegraph);
+  }
+
   private async _playEnemyAttackTween(
     fx: BattleFx, heavy: boolean, onHeroHit: () => void,
   ): Promise<void> {

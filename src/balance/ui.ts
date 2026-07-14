@@ -151,6 +151,20 @@ export const UI = {
     /** 敌人弹道飞行（略慢，便于看清来向） */
     enemyProjectile: 0.32,
     enemyProjectileHeavy: 0.42,
+    /**
+     * 玩家消珠/伤害表现结束后 → 敌人出手前的空拍（秒）。
+     * 避免「打完立刻挨打」，给玩家读完数字的时间。
+     */
+    enemyTurnLeadIn: 0.48,
+    /**
+     * 「敌人攻击！」预警停留（秒）：先提示再飞弹道打血。
+     */
+    enemyAttackTelegraph: 0.72,
+    /**
+     * 英雄致死受击后 → 失败结算前的可读停顿（秒）。
+     * 对齐 heroHitFloat 主可读段，避免失败蒙层瞬间盖住伤害。
+     */
+    defeatHitHold: 1.2,
     /** 英雄受击：队伍栏后撤复位 */
     heroHitRecoil: 0.22,
     /** 受击闪白 */

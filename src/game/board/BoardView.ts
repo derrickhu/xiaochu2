@@ -20,7 +20,7 @@ import { ORB_IMAGES } from '@/config/Assets';
 import { BoardModel, type MatchGroup, type FallMove, type Cell } from './BoardModel';
 import { playBoardClear, playBoardConvert, playBoardFall } from './boardAnimations';
 import { buildBoardBackground } from './boardBackground';
-import { drawInactiveMark, drawSealMark } from './boardOrbMarks';
+import { drawSealMark } from './boardOrbMarks';
 
 export interface BoardViewCallbacks {
   /** 是否允许开始拖珠（战斗状态机控制） */
@@ -34,9 +34,9 @@ export interface BoardViewCallbacks {
   dragTimeLimit?: () => number;
 }
 
-/** 无效珠：降饱和 + 半透明（仍可拖消，仅无伤害） */
-const INACTIVE_TINT = 0x8a8a8a;
-const INACTIVE_ALPHA = 0.58;
+/** 无效珠：降饱和变淡（仍可拖消，仅无伤害；不再叠「无」字/斜杠） */
+const INACTIVE_TINT = 0xffffff;
+const INACTIVE_ALPHA = 0.42;
 /** 封印珠：冷色覆层，与无效珠明显区分 */
 const SEAL_TINT = 0xc8d4ff;
 const SEAL_ALPHA = 0.72;
@@ -65,7 +65,7 @@ export class BoardView {
   private readonly _cell = UI.board.cellSize;
 
   private _orbsLayer = new PIXI.Container();
-  /** 珠子状态标记层：封印「封」/ 无效「无」，与珠面分离便于辨认 */
+  /** 珠子状态标记层：封印「封」叠层（无效珠仅变淡，不叠字） */
   private _overlayLayer = new PIXI.Container();
   private _floatLayer = new PIXI.Container();
   private _pool: ObjectPool<PIXI.Sprite>;
@@ -191,9 +191,9 @@ export class BoardView {
           sp.alpha = SEAL_ALPHA;
           drawSealMark(this._overlayLayer, this._cellCenterX(c), this._cellCenterY(r), size);
         } else if (!active && orb !== 'heart') {
+          // 无效珠：只变淡，保留原色辨识；不叠「无」字
           sp.tint = INACTIVE_TINT;
           sp.alpha = INACTIVE_ALPHA;
-          drawInactiveMark(this._overlayLayer, this._cellCenterX(c), this._cellCenterY(r), size);
         } else {
           sp.tint = 0xffffff;
           sp.alpha = 1;

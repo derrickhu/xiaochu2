@@ -627,6 +627,15 @@ export class BattleScene implements Scene {
     });
   }
 
+  /** 致死受击可读停顿后再弹失败，避免「还没看清伤害就结算」 */
+  private async _presentDefeatAfterHit(): Promise<void> {
+    SfxManager.playGameOver();
+    await delay(UI.anim.defeatHitHold);
+    if (this._resultOpen) return;
+    this._showDefeatOverlay();
+    await delay(0.3);
+  }
+
   private _reviveFromAd(): void {
     const max = Math.max(1, this._ctrl.heroMaxHp);
     this._ctrl.heroHp = Math.max(1, Math.floor(max * 0.5));
@@ -642,18 +651,22 @@ export class BattleScene implements Scene {
 
   private async _enemyPhase(isStale: () => boolean): Promise<void> {
     if (isStale()) return;
+    // 玩家伤害/消珠刚结束：先空一拍，再让敌人出手
+    await delay(UI.anim.enemyTurnLeadIn);
+    if (isStale()) return;
+
     const result = this._ctrl.enemyAct();
     this._hud.refreshEnemyCd();
     switch (result.action) {
       case 'attack':
       case 'chargedAttack': {
         const heavy = result.action === 'chargedAttack';
+        await this._hud.playEnemyAttackTelegraph(this._fx, heavy);
+        if (isStale()) return;
         await this._presentEnemyHeroDamage(result, heavy);
         if (isStale()) return;
         if (result.heroDead) {
-          SfxManager.playGameOver();
-          this._showDefeatOverlay();
-          await delay(0.3);
+          await this._presentDefeatAfterHit();
           return;
         }
         break;
@@ -664,12 +677,16 @@ export class BattleScene implements Scene {
       case 'heal':
         await this._hud.playEnemyHeal(this._fx, result.healed);
         if (result.damage > 0 || result.absorbed > 0) {
+          await this._hud.playEnemyAttackTelegraph(this._fx, false);
+          if (isStale()) return;
           await this._presentEnemyHeroDamage(result, false);
         }
         break;
       case 'shield':
         await this._hud.playEnemyShield(this._fx);
         if (result.damage > 0 || result.absorbed > 0) {
+          await this._hud.playEnemyAttackTelegraph(this._fx, false);
+          if (isStale()) return;
           await this._presentEnemyHeroDamage(result, false);
         }
         break;
@@ -717,9 +734,7 @@ export class BattleScene implements Scene {
     }
     if (isStale()) return;
     if (result.heroDead) {
-      SfxManager.playGameOver();
-      this._showDefeatOverlay();
-      await delay(0.3);
+      await this._presentDefeatAfterHit();
       return;
     }
     if (this._ctrl.enemy.hp <= 0 && await this._handleEnemyDefeat(isStale)) return;

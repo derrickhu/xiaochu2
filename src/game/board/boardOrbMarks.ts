@@ -37,34 +37,3 @@ export function drawSealMark(layer: PIXI.Container, cx: number, cy: number, size
   mark.position.set(cx, cy);
   layer.addChild(mark);
 }
-
-/** 无效珠：灰化 + 红色斜杠 + 「无」字（可消无伤害） */
-export function drawInactiveMark(layer: PIXI.Container, cx: number, cy: number, size: number): void {
-  const mark = new PIXI.Container();
-  const half = size / 2;
-
-  const slash = new PIXI.Graphics();
-  slash.lineStyle(4, 0xff5252, 0.95);
-  slash.moveTo(-half * 0.62, half * 0.62);
-  slash.lineTo(half * 0.62, -half * 0.62);
-  mark.addChild(slash);
-
-  const badge = new PIXI.Graphics();
-  badge.beginFill(0x2a1a1a, 0.88);
-  badge.lineStyle(2, 0xff9142, 1);
-  badge.drawRoundedRect(-half * 0.55, -half * 0.72, half * 1.1, half * 0.42, 6);
-  badge.endFill();
-  mark.addChild(badge);
-
-  const label = new PIXI.Text('无', {
-    fontSize: Math.floor(size * 0.28),
-    fill: 0xff9142,
-    fontWeight: 'bold',
-  });
-  label.anchor.set(0.5);
-  label.position.set(0, -half * 0.51);
-  mark.addChild(label);
-
-  mark.position.set(cx, cy);
-  layer.addChild(mark);
-}
