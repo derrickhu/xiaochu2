@@ -7,7 +7,7 @@
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
 import { UI_IMAGES } from '@/config/Assets';
-import { COLORS, FONT_SIZE, RADIUS } from './theme';
+import { COLORS, FONT_FAMILY_DISPLAY, FONT_SIZE, RADIUS } from './theme';
 import { makeText } from './text';
 import { pressFeedback } from './motion';
 import { bindPointerTap } from '@/utils/bindPointerTap';
@@ -21,6 +21,8 @@ export interface ActionButtonOpts {
   height: number;
   variant?: ActionButtonVariant;
   enabled?: boolean;
+  /** 覆盖标题字号；默认 FONT_SIZE.lg */
+  fontSize?: number;
   onTap: () => void;
 }
 
@@ -39,7 +41,8 @@ const TEXT_STYLE: Record<ActionButtonVariant, TextStyle> = {
   cream: { title: 0x5c3d24, subtitle: 0x8a6a4a },
   // Q 版金边绿钮：纯白字 + 深绿描边（对齐编队 UI 图）
   success: { title: 0xffffff, subtitle: 0xeef8e4 },
-  gold: { title: COLORS.btnText, subtitle: 0xfff3d0 },
+  // 胜利「下一关」橙金钮：白字 + 深橙描边
+  gold: { title: 0xffffff, subtitle: 0xfff3d0 },
 };
 
 const DISABLED_TEXT: TextStyle = {
@@ -82,18 +85,26 @@ export function makeActionButton(opts: ActionButtonOpts): ActionButtonHandle {
   const { width, height, variant = 'success', onTap } = opts;
   const btn = new PIXI.Container() as ActionButtonHandle;
   const plateHost = new PIXI.Container();
+  // cream / gold / success 结算钮：衬线体对齐 victory/defeat UI
+  const displayFont = variant === 'cream' || variant === 'gold' || variant === 'success'
+    ? FONT_FAMILY_DISPLAY
+    : undefined;
   const title = makeText(opts.title, {
-    size: FONT_SIZE.lg,
+    size: opts.fontSize ?? FONT_SIZE.lg,
     bold: true,
     anchor: 0.5,
+    fontFamily: displayFont,
     ...(variant === 'success'
       ? { strokeColor: 0x2f6a28, strokeWidth: 4 }
-      : {}),
+      : variant === 'gold'
+        ? { strokeColor: 0xa85a18, strokeWidth: 4 }
+        : {}),
   });
   const subtitle = makeText(opts.subtitle ?? '', {
     size: FONT_SIZE.sm,
     bold: true,
     anchor: 0.5,
+    fontFamily: displayFont,
   });
   btn.addChild(plateHost, title, subtitle);
 
@@ -117,11 +128,10 @@ export function makeActionButton(opts: ActionButtonOpts): ActionButtonHandle {
 
     const style = enabled ? TEXT_STYLE[variant] : DISABLED_TEXT;
     title.style.fill = style.title;
-    if (variant === 'success' && enabled) {
-      title.style.stroke = 0x2f6a28;
+    if (enabled && (variant === 'success' || variant === 'gold')) {
+      title.style.stroke = variant === 'success' ? 0x2f6a28 : 0xa85a18;
       title.style.strokeThickness = 4;
-    } else if (variant === 'success' && !enabled) {
-      title.style.stroke = 0x000000;
+    } else {
       title.style.strokeThickness = 0;
     }
     subtitle.style.fill = style.subtitle;

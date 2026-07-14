@@ -10,6 +10,8 @@ export interface MakeTextOpts {
   /** 颜色（用 COLORS token），默认主文字色 */
   fill?: number;
   bold?: boolean;
+  /** 覆盖默认字体族（如 FONT_FAMILY_DISPLAY） */
+  fontFamily?: string;
   /** 锚点，默认 [0,0] */
   anchor?: number | [number, number];
   /** 自动换行宽度 */
@@ -30,7 +32,7 @@ export interface MakeTextOpts {
 
 export function makeText(content: string, opts: MakeTextOpts = {}): PIXI.Text {
   const style: Partial<PIXI.ITextStyle> = {
-    fontFamily: FONT_FAMILY,
+    fontFamily: opts.fontFamily ?? FONT_FAMILY,
     fontSize: opts.size ?? FONT_SIZE.sm,
     fill: opts.fill ?? COLORS.textMain,
     fontWeight: opts.bold ? 'bold' : 'normal',

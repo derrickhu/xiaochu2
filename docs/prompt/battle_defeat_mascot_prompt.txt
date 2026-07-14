@@ -1,0 +1,16 @@
+Xiaochu2 Q-version cute-chibi xianxia mascot for BATTLE DEFEAT UI.
+Soft cel-shaded, thin clean outlines, chubby rounded proportions.
+Same character family as victory peek pet: fluffy white body + mint-teal mane/ears/horns accents.
+
+SUBJECT (single centered character, full body-ish sitting):
+- Soft white fluffy mythical fox-dragon cub, sad and crying
+- Big watery blue eyes with large teardrops falling; soft frown, pink blush
+- Small mint-green horns (not gold), mint ear fluff, mint back fur accents
+- Tiny wilted drooping pink lotus flower on the LEFT side of the pet (soft, simple)
+- Soft sitting pose, paws together, head slightly down — cute pity, NOT scary/gothic
+- Optional tiny soft petals near feet
+
+MUST: fully transparent background, NO UI frame, NO panel, NO TEXT, NO labels, NO watermark.
+Square-ish composition with pet filling most of frame, room for lotus on left.
+Style match: soft bright cream-friendly game UI art, same softness as battle_victory_peek.
+Reference: docs/ui/battle_defeat_ui_prototype_v2.png mascot only (style + pose + colors).

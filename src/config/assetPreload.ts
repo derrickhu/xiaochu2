@@ -152,6 +152,8 @@ export function battlePreloadImages(stageId: string, teamPetIds: readonly string
     ...Object.values(PET_FRAME_IMAGES),
     ...Object.values(UI_BATTLE_IMAGES),
     UI_PANEL_IMAGES.battleVictory,
+    UI_PANEL_IMAGES.battleVictoryPeek,
+    UI_PANEL_IMAGES.battleDefeatMascot,
     battleBgImage(stage.element),
   ];
   for (const ref of stage.encounters) {

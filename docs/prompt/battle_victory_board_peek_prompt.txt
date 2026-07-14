@@ -1,0 +1,4 @@
+Battle victory UI assets — empty cream parchment panel + peek mascot.
+Panel: vertical cream board, soft thin gold border, scalloped/cloud flourishes at top corners only, NO jade gems, NO tassels, NO landscape inside, NO TEXT.
+Mascot: white fluffy Q dragon peaking over top edge, mint-green mane/ears, tiny gold horns, happy closed eyes, pink cheeks, paws on border, sparkles. Transparent BG. NO TEXT.
+Reference: docs/ui/battle_victory_ui_prototype_v2.png style only.

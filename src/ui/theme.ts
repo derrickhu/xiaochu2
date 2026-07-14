@@ -13,6 +13,13 @@
 export const FONT_FAMILY = '"PingFang SC", "Heiti SC", "Microsoft YaHei", sans-serif';
 
 /**
+ * 结算/匾额展示用衬线体（对齐 victory UI：深棕略书法感）
+ * 微信小游戏/iOS 优先 Songti SC；Android 回退 Noto Serif / 系统衬线。
+ */
+export const FONT_FAMILY_DISPLAY =
+  '"Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif';
+
+/**
  * 语义化颜色 token。命名按「用途」而非颜色本身。
  */
 export const COLORS = {

@@ -222,6 +222,10 @@ export const RARITY_BADGE_IMAGES: Readonly<Record<Rarity, string>> = {
 /** 战斗/UI 面板（pkg-scene，战斗结算按需加载） */
 export const UI_PANEL_IMAGES = {
   battleVictory: `${PKG.scene}/images/ui/panel/battle_victory.png`,
+  /** 胜利页顶部趴宠（白+薄荷绿，对齐 battle_victory_ui_prototype_v2） */
+  battleVictoryPeek: `${PKG.scene}/images/ui/panel/battle_victory_peek.png`,
+  /** 失败页委屈宠（白+薄荷绿+泪+枯莲，对齐 battle_defeat_ui_prototype_v2） */
+  battleDefeatMascot: `${PKG.scene}/images/ui/panel/battle_defeat_mascot.png`,
 } as const;
 
 /** 场景卡片 UI（pkg-scene） */
