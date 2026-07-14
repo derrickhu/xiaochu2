@@ -200,7 +200,13 @@ class GameClass {
    * @param pad 与胶囊左缘的间距
    */
   contentRightX(pad = 12): number {
-    return Math.max(this.designWidth * 0.55, this.safeCapsuleLeft - pad);
+    const capLeft = this.safeCapsuleLeft;
+    // 未取到胶囊 left（仍为设计宽）时，保守按屏宽 68% 作为右缘，切勿贴到 750
+    if (capLeft >= this.designWidth - 4) {
+      return Math.round(this.designWidth * 0.68) - pad;
+    }
+    // 右缘 = 胶囊左缘左侧；上限勿超过屏宽
+    return Math.min(this.designWidth - pad, capLeft - pad);
   }
 
   /**

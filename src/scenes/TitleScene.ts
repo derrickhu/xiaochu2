@@ -182,7 +182,7 @@ export class TitleScene implements Scene {
     this.container.addChild(btn);
   }
 
-  /** 顶栏：左头像+昵称；右货币（避开胶囊，垂直对齐收起按钮） */
+  /** 顶栏：左头像+昵称；货币紧随昵称右侧排布，彻底躲开右上角胶囊/收起 */
   private _buildTopBar(w: number, centerY: number): void {
     const padX = 28;
     const profile = new PIXI.Container();
@@ -213,20 +213,23 @@ export class TitleScene implements Scene {
     const name = makeText(HOME_DISPLAY_NAME, {
       size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
     });
+    try { name.updateText(true); } catch { /* noop */ }
     name.position.set(avSize / 2 + 12, 0);
     profile.addChild(name);
     this.container.addChild(profile);
 
     const lingyu = makeCurrencyLabel('lingyu', PlayerData.lingyu);
     const coins = makeCurrencyLabel('coin', PlayerData.coins);
-    const gap = 16;
+    const gap = 14;
+    // 真正左对齐：跟在头像昵称右侧，不再右贴胶囊（真机右贴必叠「收起」）
+    const afterNameX = padX + avSize / 2 + 12 + name.width + 20;
+    const rightLimit = Game.contentRightX(GMManager.isEnabled ? 72 : 28);
     const totalW = lingyu.width + gap + coins.width;
-    // 右缘避开「··· / 收起」胶囊；GM 开启时再让出 GM 按钮，避免灵宠币叠上去
-    const gmReserve = GMManager.isEnabled ? 56 + 14 : 0;
-    const rightLimit = Game.contentRightX(28 + gmReserve);
-    const rowRight = Math.min(w - padX, rightLimit);
-    const rowX = Math.max(padX + 200, rowRight - totalW);
-    // IconLabel 原点在图标垂直中心，与头像/昵称共用 centerY
+    // 若昵称过长挤到右限，整体再左收，优先保证不进胶囊
+    let rowX = afterNameX;
+    if (rowX + totalW > rightLimit) {
+      rowX = Math.max(padX + avSize + 8, rightLimit - totalW);
+    }
     lingyu.position.set(rowX, centerY);
     coins.position.set(rowX + lingyu.width + gap, centerY);
     this.container.addChild(lingyu, coins);
