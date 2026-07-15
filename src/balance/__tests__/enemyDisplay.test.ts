@@ -55,15 +55,15 @@ describe('敌人表现分级', () => {
 
   it('立绘可按区高 cap，避免顶穿名匾', () => {
     const uncapped = enemySpriteScale(528, 579, 'miniBoss');
-    const capped = enemySpriteScale(528, 579, 'miniBoss', 280);
+    const capped = enemySpriteScale(528, 579, 'miniBoss', 360);
     expect(579 * uncapped).toBeCloseTo(enemyDisplaySize('miniBoss'), 0);
-    expect(579 * capped).toBeLessThanOrEqual(280 + 0.01);
+    expect(579 * capped).toBeLessThanOrEqual(360 + 0.01);
   });
 
-  it('立绘中心贴区底，头顶不越过区顶', () => {
-    const cy = enemySpriteCenterY(200, 500, 300);
-    expect(cy).toBe(500 - 150);
-    expect(cy - 150).toBeGreaterThanOrEqual(200 - 0.01);
+  it('立绘中心贴区顶，减少上方留白', () => {
+    const cy = enemySpriteCenterY(200, 500, 300, 6);
+    expect(cy).toBe(200 + 6 + 150);
+    expect(cy - 150).toBe(206);
   });
 
   it('所有关卡遭遇均有 displayTier', () => {

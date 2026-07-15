@@ -38,7 +38,7 @@ export const UI = {
   /** ── 战斗布局（设计坐标） ── */
   battle: {
     /** 敌人立绘尺寸（布局占位；实际显示尺寸见 enemyDisplaySize） */
-    enemySize: 280,
+    enemySize: 420,
     /**
      * 血条尺寸（对齐 mockup）：偏厚；玩家条略长于敌条
      * 贴宠物板顶，勿铺满屏宽
@@ -83,12 +83,22 @@ export const UI = {
     petCdBadgeRatio: 0.28,
     /** 英雄血条右侧护盾徽章（大于血条高度，底边与血条底对齐） */
     shieldBadgeSize: 76,
-    /** 顶栏关卡匾宽度 / 高度（仅关卡名） */
-    stageBannerW: 520,
-    stageBannerH: 88,
-    /** 敌人名独立匾（关卡匾下方） */
+    /** 顶栏关卡匾最大宽度 / 高度（宽随文字自适应；高度宜扁，少占竖向空间） */
+    stageBannerW: 560,
+    stageBannerH: 64,
+    /** 关卡匾相对「标题+回合」内容的左右内边距（需避开两端卷尖花边） */
+    stageBannerPadX: 44,
+    /** 关卡匾最小宽度 */
+    stageBannerMinW: 180,
+    /** 关卡匾内回合胶囊左右内边距 */
+    stageTurnPillPadX: 12,
+    /** 关卡匾内回合胶囊与标题间距 */
+    stageTurnPillGap: 8,
+    /** 敌人名独立匾（叠在立绘区、血条正上方） */
     enemyNamePlaqueW: 320,
     enemyNamePlaqueH: 44,
+    /** 敌人名匾底边 → 血条顶边 */
+    enemyNameToHpGap: 8,
     /** 血条 → 倒计时 → 克制标签 的垂直间距 */
     enemyHpToCdGap: 10,
     enemyCdToTagGap: 14,

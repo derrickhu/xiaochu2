@@ -36,20 +36,20 @@ export const ENEMY_TIER_COLOR: Readonly<Record<EnemyDisplayTier, number>> = {
  */
 export function enemyDisplaySize(tier: EnemyDisplayTier): number {
   switch (tier) {
-    case 'mob': return 280;
-    case 'elite': return 300;
-    case 'miniBoss': return 320;
-    case 'boss': return 340;
+    case 'mob': return 420;
+    case 'elite': return 440;
+    case 'miniBoss': return 460;
+    case 'boss': return 480;
   }
 }
 
-/** 立绘最大宽度：横图可略宽于竖图，但不顶满屏 */
+/** 立绘最大宽度：横图可略宽于竖图；叠层放大后允许接近屏宽 */
 export function enemyDisplayMaxWidth(tier: EnemyDisplayTier): number {
   switch (tier) {
-    case 'mob': return 480;
-    case 'elite': return 500;
-    case 'miniBoss': return 520;
-    case 'boss': return 540;
+    case 'mob': return 720;
+    case 'elite': return 730;
+    case 'miniBoss': return 740;
+    case 'boss': return 740;
   }
 }
 
@@ -78,15 +78,18 @@ export function enemySpriteScale(
   return s;
 }
 
-/** 立绘中心 Y：底边贴立绘区下沿，保证头顶不越过区顶 */
+/**
+ * 立绘中心 Y：贴立绘区上沿（头顶靠近关卡匾，减少上方留白）。
+ * 脚可自然伸入名/血条叠层区；spriteZoneBottom 仅作缩放上限参考，不强制贴底。
+ */
 export function enemySpriteCenterY(
   spriteZoneTop: number,
-  spriteZoneBottom: number,
+  _spriteZoneBottom: number,
   displayHeight: number,
+  topPad = 6,
 ): number {
-  const zoneH = Math.max(1, spriteZoneBottom - spriteZoneTop);
-  const h = Math.min(Math.max(1, displayHeight), zoneH);
-  return spriteZoneBottom - h / 2;
+  const h = Math.max(1, displayHeight);
+  return spriteZoneTop + Math.max(0, topPad) + h / 2;
 }
 
 /** Q 版亮色战斗：杂兵不再压灰，保持原色 */

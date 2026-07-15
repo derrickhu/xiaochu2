@@ -319,6 +319,7 @@ export class BattleScene implements Scene {
 
     this._busy = true;
     this._ctrl.beginResolve();
+    this._hud.refreshStageHeader();
     const visualScope = this._fx.beginTransientScope();
     const seq = ++this._resolveSeq;
     const isStale = (): boolean => seq !== this._resolveSeq;
@@ -353,6 +354,7 @@ export class BattleScene implements Scene {
       this._busy = false;
       if (!this._ctrl.isFinished && this._ctrl.state !== 'playerTurn') {
         this._ctrl.beginPlayerTurn();
+        this._hud.refreshStageHeader();
       }
     }
   }
@@ -521,6 +523,7 @@ export class BattleScene implements Scene {
 
     if (waveAdvanced) {
       this._ctrl.beginPlayerTurn();
+      this._hud.refreshStageHeader();
     } else {
       this._ctrl.beginEnemyTurn();
     }
@@ -641,6 +644,7 @@ export class BattleScene implements Scene {
     this._ctrl.heroHp = Math.max(1, Math.floor(max * 0.5));
     if (this._ctrl.state !== 'playerTurn') {
       this._ctrl.beginPlayerTurn();
+      this._hud.refreshStageHeader();
     }
     this._resultOpen = false;
     this._busy = false;
@@ -740,6 +744,7 @@ export class BattleScene implements Scene {
     if (this._ctrl.enemy.hp <= 0 && await this._handleEnemyDefeat(isStale)) return;
 
     this._ctrl.beginPlayerTurn();
+    this._hud.refreshStageHeader();
     this._refreshSkillUi();
   }
 

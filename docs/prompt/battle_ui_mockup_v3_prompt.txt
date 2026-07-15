@@ -1,0 +1,34 @@
+ART STYLE: Match attached battle_ui_mockup_v2 — Q cute-chibi xianxia, cream #fdf3df + gold #e8a33d, soft cel-shaded, polished mobile mockup. NOT schematic. NO phone bezel.
+
+EDIT the attached battle_ui_mockup_v3. Keep same slime, pets, board, colors. ONLY redesign the TOP TEXT AREA.
+
+══════════════════════════════════════
+HEADER OPTIMIZATION (the whole point)
+══════════════════════════════════════
+Problem: three separate text rows waste vertical space:
+  ① 1-1 青苔林边
+  ② 第 3 回合
+  ③ 杂兵 · 木域软泥
+
+NEW layout — collapse to ONE header band + enemy name near HP:
+
+ROW 1 (single cream-gold banner, same height as v2 stage banner):
+[返回] |  1-1 青苔林边          [第3回合]  | [⚙]
+- Stage title LEFT-CENTER inside the banner
+- Turn is a SMALL gold pill INSIDE the same banner on the RIGHT (before the gear), NOT a second floating row
+- Text on pill: 第3回合 (can omit space: 第3回合)
+- Gear stays top-right outside/beside banner
+
+ENEMY NAME — move DOWN, do NOT put under header:
+- Small cream plaque floating just ABOVE the enemy HP bar (near slime feet), OR as a tiny caption centered above the red HP bar
+- Text: 杂兵 · 木域软泥
+- This frees the upper stage so the HUGE green leaf-slime can sit higher / larger
+
+Result: only ONE text band at the very top. No three stacked plaques under the notch.
+
+KEEP:
+- Large green leaf-slime (fill upper stage)
+- HP 620/620, 1 回合后攻击, tags 拖金珠克制 + 抵抗土珠
+- Hero 1809/1809 +217, 5 pets with CD numbers, drag timer
+- 6×5 large orbs (fix if previous had wrong rows)
+- Chinese only except Lv. Portrait 9:16 full-bleed.

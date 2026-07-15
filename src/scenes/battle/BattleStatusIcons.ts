@@ -1,9 +1,8 @@
 /**
- * 持续状态可视化：敌人血条下方 + 英雄血条上方各一行小图标。
+ * 持续状态可视化：敌人名匾右侧 + 英雄血条上方各一行小图标。
  *
- * 每个图标 = Graphics 圆角底 + 单字 glyph + 剩余回合数字，数据源为
- * BattleController.statuses（BattleStatusStore），由编排者在回合节点调用 refresh()。
- * 新状态弹入（easeOutBack），到期状态淡出移除；无 turnsLeft 的状态（如狂暴）不显示数字。
+ * 敌方 Debuff 锚在怪物名右边（layout.enemyStatusIconX/Y，由 HUD 按名匾实宽刷新），
+ * 避免压住「N 回合后攻击」/克制标签。数据源为 BattleController.statuses。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -65,18 +64,14 @@ export class BattleStatusIcons {
 
   build(parent: PIXI.Container): void {
     this._enemyRow = new PIXI.Container();
-    // 克制标签行下方，避免与倒计时/克制重叠
-    this._enemyRow.position.set(
-      Game.logicWidth / 2,
-      this._layout.enemyTagY + 28 + ICON_SIZE / 2,
-    );
+    this._syncEnemyRowPos();
     parent.addChild(this._enemyRow);
 
     this._teamRow = new PIXI.Container();
-    // 英雄血条上方靠左（右侧留给 buff 状态文字行）
+    // 英雄血条正上方靠左（右侧留给 buff 状态文字行）
     this._teamRow.position.set(
       UI.board.marginX + ICON_SIZE / 2,
-      this._layout.heroBarY - 22,
+      this._layout.teamStatusIconY,
     );
     parent.addChild(this._teamRow);
   }
@@ -99,7 +94,9 @@ export class BattleStatusIcons {
       this._fadeOut(entry.container);
     }
 
-    this._layoutRow(enemyList, this._enemyRow, 'enemy', true);
+    this._syncEnemyRowPos();
+    // 敌方：从名匾右侧向右排布（不居中，避免压倒计时）
+    this._layoutRow(enemyList, this._enemyRow, 'enemy', false);
     this._layoutRow(teamList, this._teamRow, 'team', false);
   }
 
@@ -110,6 +107,14 @@ export class BattleStatusIcons {
       }
     }
     this._icons.clear();
+  }
+
+  private _syncEnemyRowPos(): void {
+    if (!this._enemyRow) return;
+    this._enemyRow.position.set(
+      this._layout.enemyStatusIconX,
+      this._layout.enemyStatusIconY,
+    );
   }
 
   private _layoutRow(

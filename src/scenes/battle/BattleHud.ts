@@ -39,6 +39,9 @@ import { makeText } from '@/ui/text';
 
 export class BattleHud {
   private _stageTitleText!: PIXI.Text;
+  private _stageTurnText!: PIXI.Text;
+  /** 关卡匾内回合胶囊底板 */
+  private _stageTurnPillBg!: PIXI.Graphics;
   private _stageSubText!: PIXI.Text;
   /** 关卡匾贴图（宽随标题自适应） */
   private _stageBannerSprite: PIXI.Sprite | null = null;
@@ -93,7 +96,7 @@ export class BattleHud {
   }
 
   /**
-   * 顶栏：关卡匾（仅关卡名）+ 其下独立敌人名匾（对齐 mockup）。
+   * 顶栏：关卡匾单层（关卡名 + 回合胶囊）+ 敌人名匾叠在血条上方（对齐 mockup v3）。
    */
   buildStageHeader(parent: PIXI.Container): void {
     const w = Game.logicWidth;
@@ -114,23 +117,28 @@ export class BattleHud {
       this._stageBannerFallback = fallback;
     }
 
-    // 关卡匾只放关卡名（居中；mockup 深棕墨字，非金色）
+    // 关卡名（匾内左侧）+ 回合胶囊（匾内右侧）同一层；长标题用较小字号以免顶进卷尖
     this._stageTitleText = makeText(this._stageTitleLabel(), {
-      size: FONT_SIZE.sm, fill: COLORS.battlePlaqueText, bold: true, anchor: 0.5,
+      size: FONT_SIZE.xs, fill: COLORS.battlePlaqueText, bold: true, anchor: 0.5,
     });
-    this._stageTitleText.position.set(w / 2, cy);
     parent.addChild(this._stageTitleText);
+
+    this._stageTurnPillBg = new PIXI.Graphics();
+    parent.addChild(this._stageTurnPillBg);
+    this._stageTurnText = makeText(this._turnLabel(), {
+      size: FONT_SIZE.xs, fill: COLORS.battlePlaqueText, bold: true, anchor: 0.5,
+    });
+    parent.addChild(this._stageTurnText);
     this._fitStageBannerAndTitle();
 
-    // 敌人名：关卡匾下方独立匾，宽随文字动态适应（截图浅金底 + 深棕字）
-    const nameY = this._layout.enemyNameY;
+    // 敌人名：血条正上方独立匾（浅金底 + 深棕字）
     this._enemyNameBg = new PIXI.Graphics();
     parent.addChild(this._enemyNameBg);
 
     this._stageSubText = makeText(this._stageSubLabel(), {
       size: FONT_SIZE.xs, fill: COLORS.battleEnemyNameText, bold: true, anchor: 0.5,
     });
-    this._stageSubText.position.set(w / 2, nameY);
+    this._stageSubText.position.set(w / 2, this._layout.enemyNameY);
     parent.addChild(this._stageSubText);
     this._layoutEnemyNamePlaque();
   }
@@ -154,12 +162,23 @@ export class BattleHud {
     g.drawRoundedRect(cx - bw / 2, cy - bh / 2, bw, bh, bh / 2);
     g.endFill();
     this._stageSubText.position.set(cx, cy);
+    // Debuff 图标锚在名匾右侧，避免压住「N 回合后攻击」
+    const iconSize = 34;
+    const gap = 8;
+    const maxX = Game.logicWidth - UI.board.marginX - iconSize / 2;
+    this._layout.enemyStatusIconX = Math.min(maxX, cx + bw / 2 + gap + iconSize / 2);
+    this._layout.enemyStatusIconY = cy;
   }
 
-  /** 刷新顶栏关卡号 / 多波进度 / 敌人名匾 */
+  /** 刷新顶栏关卡号 / 回合 / 多波进度 / 敌人名匾 */
   refreshStageHeader(): void {
     if (displayAlive(this._stageTitleText)) {
       this._stageTitleText.text = this._stageTitleLabel();
+    }
+    if (displayAlive(this._stageTurnText)) {
+      this._stageTurnText.text = this._turnLabel();
+    }
+    if (displayAlive(this._stageTitleText)) {
       this._fitStageBannerAndTitle();
     }
     if (displayAlive(this._stageSubText)) {
@@ -169,31 +188,58 @@ export class BattleHud {
   }
 
   /**
-   * 关卡匾 + 标题自适应：
-   * 默认用较小字号；匾宽不超过默认值，避免压到返回/GM；文字落在花边内侧。
+   * 关卡匾 + 标题 + 回合胶囊自适应（同一层）：
+   * 匾宽紧贴「标题 + 回合」内容，只留少量花边内边距，避免大块留白。
    */
   private _fitStageBannerAndTitle(): void {
-    if (!displayAlive(this._stageTitleText)) return;
-    const { stageBannerW, stageBannerH } = UI.battle;
+    if (!displayAlive(this._stageTitleText) || !displayAlive(this._stageTurnText)) return;
+    const {
+      stageBannerW, stageBannerH, stageBannerPadX, stageBannerMinW,
+      stageTurnPillPadX, stageTurnPillGap,
+    } = UI.battle;
+    const cy = this._layout.headerY;
     const t = this._stageTitleText;
+    const turn = this._stageTurnText;
     t.scale.set(1);
-    t.style.fontSize = FONT_SIZE.sm;
+    turn.scale.set(1);
+    t.style.fontSize = FONT_SIZE.xs; // 19：长标题（含 BOSS/波次）需避开两端花边
+    turn.style.fontSize = FONT_SIZE.xxs + 2;
     try { t.updateText(true); } catch { /* 部分运行时无 updateText */ }
+    try { turn.updateText(true); } catch { /* 部分运行时无 updateText */ }
 
-    // 左右花边约占匾宽，文字只用中间约 66%
-    const innerRatio = 0.66;
-    // 返回钮右缘约 125、GM 左缘约 W-114，匾面勿再加宽
-    const maxBannerW = Math.min(stageBannerW, Game.logicWidth - 300);
-    const minBannerW = Math.min(stageBannerW, maxBannerW);
-
-    const textW0 = Math.max(1, t.width);
-    const bannerW = Math.min(maxBannerW, Math.max(minBannerW, textW0 / innerRatio));
-    const innerMax = bannerW * innerRatio;
-    if (t.width > innerMax) {
-      t.scale.set(innerMax / t.width);
+    const pillH = 28;
+    const pillW = Math.ceil(turn.width) + stageTurnPillPadX * 2;
+    // 返回钮 / 右上角控件之间的可用宽
+    const maxBannerW = Math.min(stageBannerW, Game.logicWidth - 280);
+    const contentW0 = Math.max(1, t.width) + stageTurnPillGap + pillW;
+    let bannerW = Math.min(maxBannerW, Math.max(stageBannerMinW, contentW0 + stageBannerPadX * 2));
+    const innerMax = bannerW - stageBannerPadX * 2;
+    if (contentW0 > innerMax) {
+      const scale = innerMax / contentW0;
+      t.scale.set(scale);
+      turn.scale.set(scale);
+      bannerW = Math.min(maxBannerW, Math.max(stageBannerMinW, contentW0 * scale + stageBannerPadX * 2));
     }
+    const titleW = t.width;
+    const scaledPillW = Math.ceil(turn.width) + stageTurnPillPadX * 2;
+    const blockW = titleW + stageTurnPillGap + scaledPillW;
+    const cx = Game.logicWidth / 2;
+    const blockLeft = cx - blockW / 2;
+    t.position.set(blockLeft + titleW / 2, cy);
+    const pillCx = blockLeft + titleW + stageTurnPillGap + scaledPillW / 2;
+    turn.position.set(pillCx, cy);
+    this._drawTurnPill(pillCx, cy, scaledPillW, pillH);
     this._applyStageBannerSize(bannerW, stageBannerH);
-    t.position.set(Game.logicWidth / 2, this._layout.headerY);
+  }
+
+  private _drawTurnPill(cx: number, cy: number, bw: number, bh: number): void {
+    if (!displayAlive(this._stageTurnPillBg)) return;
+    const g = this._stageTurnPillBg;
+    g.clear();
+    g.beginFill(COLORS.battleEnemyNameBg, 0.98);
+    g.lineStyle(2, COLORS.accent, 1);
+    g.drawRoundedRect(cx - bw / 2, cy - bh / 2, bw, bh, bh / 2);
+    g.endFill();
   }
 
   private _applyStageBannerSize(bannerW: number, bannerH: number): void {
@@ -224,11 +270,21 @@ export class BattleHud {
     return label;
   }
 
+  /** 当前回合序号：玩家回合显示「即将进行」的回合，其余阶段显示已完成回合 */
+  private _currentTurnNumber(): number {
+    if (this._ctrl.state === 'playerTurn') return this._ctrl.turnsUsed + 1;
+    return Math.max(1, this._ctrl.turnsUsed);
+  }
+
+  private _turnLabel(): string {
+    return `第${this._currentTurnNumber()}回合`;
+  }
+
   private _stageSubLabel(): string {
     return formatEnemyBattleName(this._ctrl.enemy.def);
   }
 
-  /** 敌人区：立绘 + 金框血条 + 倒计时 + 克制标签（敌人名在独立匾，见 buildStageHeader） */
+  /** 敌人区：立绘 + 金框血条 + 倒计时 + 克制标签（敌人名叠在血条上，见 buildStageHeader） */
   buildEnemyArea(parent: PIXI.Container): void {
     const w = Game.logicWidth;
     const { enemyCenterX, enemyCenterY, headerY, enemyTagY, enemyHpBarY, enemyCdY } = this._layout;
@@ -575,8 +631,8 @@ export class BattleHud {
     const def = enemy.def;
     const tier = enemyDisplayTierOf(def);
     const { spriteZoneTop, spriteZoneBottom, enemyCenterX } = this._layout;
-    // 预留头顶空隙，避免 Boss 晶体顶到名匾
-    const zoneH = Math.max(40, spriteZoneBottom - spriteZoneTop - 20);
+    // 真叠层：立绘可用满「匾后 → 标签下」整段高度，名/血条叠在怪身上
+    const zoneH = Math.max(40, spriteZoneBottom - spriteZoneTop);
     const tex = TextureCache.get(def.image ?? enemyImage(def.id));
     let displaySize = enemyDisplaySize(tier);
     if (tex && displayAlive(this._enemySprite)) {
@@ -591,8 +647,8 @@ export class BattleHud {
     } else {
       displaySize = Math.min(displaySize, zoneH);
     }
-    // 按实际显示高度贴立绘区下沿，头顶不顶进名匾
-    this._layout.enemyCenterY = enemySpriteCenterY(spriteZoneTop, spriteZoneBottom, displaySize);
+    // 贴顶上移：头顶靠近关卡匾，脚伸入名/血条叠层
+    this._layout.enemyCenterY = enemySpriteCenterY(spriteZoneTop, spriteZoneBottom, displaySize, 4);
     if (displayAlive(this._enemyContainer)) {
       this._enemyContainer.position.set(enemyCenterX, this._layout.enemyCenterY);
     }
