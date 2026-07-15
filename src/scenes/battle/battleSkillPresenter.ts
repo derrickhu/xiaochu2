@@ -1,6 +1,8 @@
 /**
  * 宠物主动技演出：把 BattleController.castSkill 的结果按 VFX 类型映射为画面表现
- * （弹道 / 齐射 / 多段 / DOT / 眩晕 / 破防 / 治疗 / 护盾 / 增伤 / 转珠）。
+ * （属性刃弹道 / 齐射 / 多段 / DOT / 眩晕 / 破防 / 治疗 / 护盾 / 增伤 / 转珠）。
+ *
+ * 直伤类与消珠普攻一致，走 fireElementBladeVolley（属性刃 + 命中爆炸），不再飞原始珠子弹道。
  *
  * 纯演出编排：依赖通过 deps 注入，自身不持有状态。返回 true 表示战斗已在演出中结束
  * （最后一波敌人被击败），编排者据此保留 busy 状态、跳过收尾刷新。
@@ -56,7 +58,20 @@ function spawnSkillDamage(
   });
 }
 
-/** 技能直伤反馈：飘字 + 命中音效 + 轻闪白（去掉额外粒子/光晕特效） */
+/** 从宠槽打出属性刃弹道（与消珠普攻同款效果 UI） */
+function fireSkillBlade(
+  fx: BattleFx,
+  petBar: BattlePetBar,
+  petIndex: number,
+  toX: number,
+  toY: number,
+  element: Element,
+): Promise<void> {
+  const slot = petBar.slotAt(petIndex);
+  return fx.fireElementBladeVolley(slot.x, slot.y - 60, toX, toY, element);
+}
+
+/** 技能直伤反馈：飘字 + 命中音效 + 受击演出（对齐消珠命中） */
 function presentSkillEnemyDamage(
   deps: Pick<SkillCastDeps, 'fx' | 'hud' | 'layout'>,
   element: Element,
@@ -64,7 +79,7 @@ function presentSkillEnemyDamage(
   opts?: { isCrit?: boolean; orderIdx?: number; minor?: boolean; hitCount?: number },
 ): void {
   if (damage <= 0) return;
-  deps.hud.playEnemyHitLight();
+  deps.hud.playEnemyHit(deps.fx, element, damage, opts?.isCrit ?? false);
   SfxManager.playAttack();
   SfxManager.playPetDmgHit(opts?.isCrit ?? false);
   spawnSkillDamage(deps.fx, deps.layout, element, damage, opts);
@@ -89,10 +104,9 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
 
   switch (vfx?.kind) {
     case 'projectile': {
-      const slot = petBar.slotAt(petIndex);
       const damage = result.damage ?? 0;
       const el = result.element ?? pet.def.element;
-      await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
+      await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
       presentSkillEnemyDamage(deps, el, damage);
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
@@ -100,11 +114,9 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
     }
     case 'teamVolley': {
       const damage = result.damage ?? 0;
-      // 全队齐射：所有槽位同时发弹道，命中弹一次总伤害
+      // 全队齐射：各宠属性刃同时飞出，命中弹一次总伤害
       await Promise.all(ctrl.team.map((member, i) =>
-        fx.fireProjectileBetween(
-          petBar.slotAt(i).x, petBar.slotAt(i).y - 60, enemyCenterX, enemyCenterY, member.def.element,
-        ),
+        fireSkillBlade(fx, petBar, i, enemyCenterX, enemyCenterY, member.def.element),
       ));
       presentSkillEnemyDamage(deps, pet.def.element, damage);
       hud.refreshEnemyHp();
@@ -112,13 +124,12 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       break;
     }
     case 'multiHit': {
-      // 多段直伤：连续发弹道，逐段弹伤害数字
+      // 多段直伤：连续属性刃，逐段弹伤害数字
       const total = result.damage ?? 0;
       const hits = result.damageEvents.filter((e) => e.target === 'enemy').length || 1;
-      const slot = petBar.slotAt(petIndex);
       const el = result.element ?? pet.def.element;
       for (let i = 0; i < hits; i++) {
-        await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
+        await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
         presentSkillEnemyDamage(deps, el, Math.round(total / hits), {
           orderIdx: i,
           minor: i > 0,
@@ -130,10 +141,9 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       break;
     }
     case 'dotApply': {
-      const slot = petBar.slotAt(petIndex);
       const el = result.element ?? pet.def.element;
       const initial = result.damage ?? 0;
-      await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
+      await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
       if (initial > 0) {
         presentSkillEnemyDamage(deps, el, initial);
       }
@@ -152,9 +162,8 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
     case 'stun': {
       const damage = result.damage ?? 0;
       if (damage > 0) {
-        const slot = petBar.slotAt(petIndex);
         const el = result.element ?? pet.def.element;
-        await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
+        await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
         presentSkillEnemyDamage(deps, el, damage);
       }
       fx.spawnFloat(`眩晕 ${result.turns ?? 0} 回合`, enemyCenterX, enemyCenterY - 76, 0xfff176, 1.2);
@@ -204,12 +213,11 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
           ? `${vfx?.floatText ?? ''} ×${result.mult ?? 1}（${result.turns ?? 0} 回合）`
           : `${vfx?.floatText ?? ''}${result.turns ? `（${result.turns} 回合）` : ''}`;
       if (result.type === 'delayAttack') {
-        // 威吓可附带直伤：先弹道命中再飘字
+        // 威吓可附带直伤：先属性刃命中再飘字
         const damage = result.damage ?? 0;
         if (damage > 0) {
-          const slot = petBar.slotAt(petIndex);
           const el = result.element ?? pet.def.element;
-          await fx.fireProjectileBetween(slot.x, slot.y - 60, enemyCenterX, enemyCenterY, el);
+          await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
           presentSkillEnemyDamage(deps, el, damage);
           hud.refreshEnemyHp();
           if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
