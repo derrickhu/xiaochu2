@@ -1,0 +1,31 @@
+ART STYLE (MANDATORY — xiaochu2 Spirit v2 locked):
+Unified Q-version cute-chibi xianxia guofeng mobile game character art.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions, big glossy eyes, moe spirit-pet look.
+Airy cute, NOT dark fantasy / NOT photoreal.
+FORBIDDEN: photorealistic, dark horror, heavy oil paint, cyberpunk neon, purple-on-white AI defaults, 3D PBR, tiny ant-sized characters, huge empty margins.
+NO TEXT, no labels, no captions, no watermarks, no UI frames, no speech bubbles, no panel borders.
+
+LAYOUT (MANDATORY):
+Exactly ONE image, 2 columns × 2 rows equal panels (seamless 2x2 sprite sheet).
+Plain solid soft cream background in every cell (easy cutout).
+Base vs awakened MUST be instantly readable as different power stages — EXPLOSIVE contrast — while body footprint stays similar for UI frames.
+
+SIZE / FRAMING HARD RULES:
+- Top-left & bottom-left (bust): subject fills 70%–78% of cell height, centered.
+- Top-right & bottom-right (full body): standing figure fills 88%–92% of cell height, feet near bottom with 4%–6% margin.
+- Awakened body FOOTPRINT / height stays in the same band as base (NOT a giant).
+
+AWAKENED UPGRADE (MANDATORY — dramatic):
+Base = cute everyday spirit-pet, softer colors, simpler gear.
+Awakened = CLEAR ascended look with HIGH CONTRAST:
+- Palette jump: brighter / more saturated accents vs muted base
+- Silhouette evolve: ornate armor/crest/wings/ribbons still inside same cell mass
+- Strong VFX: bold aura rings, particle storm, rune circles, elemental burst behind character
+- Face still cute moe; eyes glow; markings appear
+- Must feel "wow power-up" at a glance — NOT thin gold trim only
+
+CELL MAP:
+1) TOP-LEFT — Base pet bust avatar, slight 3/4, chest-up. Calm cute.
+2) BOTTOM-LEFT — Awakened bust (_s3): SAME footprint, EXPLOSIVE upgrade.
+3) TOP-RIGHT — Enemy tier1 full body standing chibi. Calm combat pose.
+4) BOTTOM-RIGHT — Enemy tier2 awakened full body: SAME height band, EXPLOSIVE burst / evolved armor.

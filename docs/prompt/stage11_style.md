@@ -40,6 +40,12 @@ Use reference images for STYLE / palette / button & plaque chrome ONLY — do no
 - 卡框/图标需透明：出图后走 rembg（见 `ui-asset-matting` 规则）。
 - **完整度**：竖屏 9:16 一屏结构齐全（顶栏、主内容、底栏/主按钮按需求），禁止裁切半截、缺模块。
 
+## Spirit 灵宠四形态（角色原画）
+
+灵宠 / 怪立绘定调见 **[`spirit_q_art_direction.md`](spirit_q_art_direction.md)**（2026-07 锁定 v2：Q 萌 + 觉醒炸裂对比 + 框内体量一致）。
+生图骨架：`spirit_q_4form_style_common.txt`；物种 brief：`spirit_q_creatures_brief.json`。
+风格锚点：`docs/ui/spirit_q_sample_pet_001_4form_v2.png`。
+
 ## 交付
 
 - Prompt → `docs/prompt/{task}_prompt.txt`

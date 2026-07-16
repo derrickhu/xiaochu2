@@ -1,0 +1,29 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game character art.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions, big glossy eyes, moe spirit-pet look.
+FORBIDDEN: photorealistic, dark horror, heavy oil, neon cyberpunk, 3D PBR, tiny ant-sized characters.
+NO TEXT, no labels, no watermarks, no UI frames.
+
+LAYOUT: ONE seamless 2 columns × 2 rows equal-panel sprite sheet. Soft cream solid background every cell.
+Size consistency CRITICAL for frames; awakened must look EXPLOSIVELY different while keeping similar body footprint.
+
+SIZE: Bust cells fill 70–78% height; full-body cells 88–92% height, feet 4–6% from bottom.
+Awakened = same footprint band, NOT a giant — but HIGH CONTRAST power-up.
+
+SUBJECT pet_001 「裂甲铁犀」Metal baby armored rhinoceros spirit-pet:
+Chubby baby rhino, dark grey skin, cream chest fluff, large brown eyes, short snout horn, gold nose ring. Q-chibi.
+
+BASE (TL bust + TR full body): softer hammered grey armor, simple spaulders, calm friendly look, muted metal.
+
+AWAKENED (BL bust + BR full body) — DRAMATIC upgrade (must be obvious at a glance):
+- Armor evolves into ornate cracked-gold / white-gold divine plates with glowing rune seams
+- Horns gain bright gold tips + small floating metal spirit shards around head
+- Eyes glow warm gold; chest fluff edged with light
+- Strong golden spirit aura burst / concentric metal rune rings behind character
+- Still cute moe baby rhino — NOT scary adult — but feels “ascended war-spirit”
+- Same body height/mass as base cells
+
+CELL MAP:
+1) TOP-LEFT base bust 2) BOTTOM-LEFT awakened bust explosive 3) TOP-RIGHT base full body 4) BOTTOM-RIGHT awakened full body explosive
+
+Use references for species identity only; redraw with stronger base↔awakened contrast.
