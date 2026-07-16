@@ -27,7 +27,7 @@ import { bindPointerTap } from '@/utils/bindPointerTap';
 import { Platform } from '@/core/PlatformService';
 import type { PetDetailEnterData } from './PetDetailScene';
 import { buildLockedCodexCard, buildOwnedCodexCard } from './codexCards';
-import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
+import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 
 /** xiao_chu 设计缩放：S = logicWidth / 375 */
 function designScale(w: number): number {
@@ -78,45 +78,47 @@ export class CodexScene implements Scene {
     if (codexLingyu > 0) {
       Platform.showToast(`图鉴里程碑达成 · 灵玉 +${codexLingyu}`);
     }
-    void this._enter(this._enterSeq.next());
+    const token = this._enterSeq.next();
+    // 点击立刻出壳 + 列表（头像异步补），禁止 await 壳图/全量头像
+    this._buildShell();
+    this._buildPetList(Game.safeTop + 118, { animate: true });
+    void Game.warmScenePresent();
+    void this._hydrateShell(token);
   }
 
-  private async _enter(token: number): Promise<void> {
-    await ensureAssets(CODEX_SHELL_IMAGES);
-    if (!this._enterSeq.stillValid(token)) return;
-    deferSceneBuild(token, this._enterSeq, 'codex', () => {
-      this._buildShell();
-      void this._loadPetCards(token);
+  private async _hydrateShell(token: number): Promise<void> {
+    await ensureAssets(CODEX_SHELL_IMAGES).catch((e) => {
+      console.warn('[Codex] 壳层资源加载失败', e);
     });
-  }
-
-  /** 壳层先渲染，避免等全量灵宠头像时黑屏 */
-  private async _loadPetCards(token: number): Promise<void> {
-    await ensurePetAvatars(codexPetAvatarEntries());
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'codex') return;
-    this._buildPetList(Game.safeTop + 118);
-    await Game.warmScenePresent();
+    this._buildShell();
+    this._buildPetList(Game.safeTop + 118, { animate: false });
+    void ensurePetAvatars(codexPetAvatarEntries()).catch((e) => {
+      console.warn('[Codex] 头像预热失败', e);
+    });
   }
 
   onExit(): void {
     this._enterSeq.cancel();
     this._scroll.detach();
     this._content = null;
-    if (this._listMask) {
-      this.container.removeChild(this._listMask);
-      this._listMask.destroy();
-      this._listMask = null;
-    }
-    this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this._listMask = null;
+    this.container.removeChildren().forEach((c) => {
+      if (!c.destroyed) c.destroy({ children: true });
+    });
   }
 
   private _buildShell(): void {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     this._scroll.detach();
-    this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
+    // 先清引用再 destroy，避免 hydrate 二次重建时对已销毁 mask/content 再 destroy
+    this._listMask = null;
     this._content = null;
+    this.container.removeChildren().forEach((c) => {
+      if (!c.destroyed) c.destroy({ children: true });
+    });
 
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
 
@@ -179,18 +181,17 @@ export class CodexScene implements Scene {
     this.container.addChild(plaque);
   }
 
-  private _buildPetList(startY: number): void {
+  private _buildPetList(startY: number, opts?: { animate?: boolean }): void {
+    const animate = opts?.animate !== false;
     this._scroll.detach();
-    if (this._listMask) {
-      this.container.removeChild(this._listMask);
+    if (this._listMask && !this._listMask.destroyed) {
       this._listMask.destroy();
-      this._listMask = null;
     }
-    if (this._content) {
+    this._listMask = null;
+    if (this._content && !this._content.destroyed) {
       this._content.destroy({ children: true });
-      this.container.removeChild(this._content);
-      this._content = null;
     }
+    this._content = null;
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     const { S, cols, cardGap, cardW, cardH, marginX } = petPoolGrid(w);
@@ -238,8 +239,9 @@ export class CodexScene implements Scene {
       items.push(item);
     });
 
-    // 卡片逐项入场（仅首屏可见项明显，超出视口的延迟也无碍）
-    staggerIn(items, { stepDelay: 0.022, offsetY: 14, duration: 0.28 });
+    if (animate) {
+      staggerIn(items, { stepDelay: 0.022, offsetY: 14, duration: 0.28 });
+    }
 
     // 视口与滚动范围
     const viewportH = h - startY - 16;

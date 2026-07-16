@@ -7,7 +7,7 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
-import { getPetAvatarTexture } from '@/config/petAvatarTexture';
+import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import { ensurePetAvatars, petDetailPreloadImages, petDetailAvatarEntry } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { Platform } from '@/core/PlatformService';
@@ -31,7 +31,7 @@ import {
   type ProgressBarHandle,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
-import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
+import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { clientEventToDesign } from '@/utils/clientEventToDesign';
 import { getTouchCanvas } from '@/utils/touchCanvas';
@@ -113,30 +113,14 @@ export class PetDetailScene implements Scene {
     this._preview = enter?.preview ?? false;
     this._fx?.destroy();
     this._fx = null;
-    this._mountEnterShell();
     const token = this._enterSeq.next();
-    deferSceneBuild(token, this._enterSeq, 'petDetail', () => this._buildSafe());
-    void this._enter(token);
-  }
-
-  private _mountEnterShell(): void {
-    const w = Game.logicWidth;
-    const h = Game.logicHeight;
+    // 点击立刻出详情壳，禁止等资源完再画（避免黑屏/加载中）
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
-    const base = new PIXI.Graphics();
-    base.beginFill(0x1a1126);
-    base.drawRect(0, 0, w, h);
-    base.endFill();
-    this.container.addChild(base);
-    this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.home, w, h));
     if (this._content.destroyed) this._content = new PIXI.Container();
     this.container.addChild(this._content);
-    const hint = makeText('加载中…', {
-      size: FONT_SIZE.sm, fill: COLORS.textInverse, anchor: 0.5,
-    });
-    hint.name = 'petDetailLoading';
-    hint.position.set(w / 2, h / 2);
-    this.container.addChild(hint);
+    this._buildSafe();
+    void Game.warmScenePresent();
+    void this._hydrateShell(token);
   }
 
   private _prepareContentLayer(): void {
@@ -186,7 +170,7 @@ export class PetDetailScene implements Scene {
     this._fx.build(this.container, w, h);
   }
 
-  private async _enter(token: number): Promise<void> {
+  private async _hydrateShell(token: number): Promise<void> {
     try {
       await ensureAssets(petDetailPreloadImages(this._petId));
     } catch (e) {
@@ -203,7 +187,8 @@ export class PetDetailScene implements Scene {
       }
     }
     if (!this._enterSeq.stillValid(token)) return;
-    deferSceneBuild(token, this._enterSeq, 'petDetail', () => this._buildSafe());
+    if (SceneManager.current?.name !== 'petDetail') return;
+    this._buildSafe();
   }
 
   onExit(): void {
@@ -838,13 +823,12 @@ export class PetDetailScene implements Scene {
       holder.addChild(fallback);
     }
 
-    const tex = getPetAvatarTexture(pet.id, star);
-    if (tex) {
-      const avatar = new PIXI.Sprite(tex);
-      avatar.anchor.set(0.5);
-      avatar.scale.set((size * 0.78) / Math.max(avatar.width, avatar.height));
-      holder.addChild(avatar);
-    }
+    const avatar = new PIXI.Sprite(PIXI.Texture.EMPTY);
+    avatar.anchor.set(0.5);
+    holder.addChild(avatar);
+    bindPetAvatarSprite(avatar, pet.id, star, (tex) => {
+      avatar.scale.set((size * 0.78) / Math.max(tex.width, tex.height));
+    });
     // 棋盘同源属性珠（略缩小，避免大头像上角标显贴图感）
     attachPetFrameOrb(holder, pet.element, size, { scale: 0.72 });
 

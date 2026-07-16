@@ -35,7 +35,7 @@ import {
   buildTeamPrepSummary,
   makeSectionTitle,
 } from './teamPrepChrome';
-import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
+import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
 /** 战前编队：传入 stageId 时展示本关敌人，确认后进入战斗；缺省为自由编队 */
@@ -71,14 +71,23 @@ export class TeamScene implements Scene {
     PlayerData.load();
     const enter = data as TeamEnterData | undefined;
     this._prepStage = enter?.stageId ? STAGE_MAP.get(enter.stageId) : undefined;
-    void this._enter(this._enterSeq.next());
+    const token = this._enterSeq.next();
+    this._build({ animate: true });
+    void Game.warmScenePresent();
+    void this._hydrateShell(token);
   }
 
-  private async _enter(token: number): Promise<void> {
-    await ensureAssets(teamPreloadImages(this._prepStage?.id));
-    await ensurePetAvatars(teamPetAvatarEntries());
+  /** 壳图/头像后台补齐后静默重建一次 */
+  private async _hydrateShell(token: number): Promise<void> {
+    await ensureAssets(teamPreloadImages(this._prepStage?.id)).catch((e) => {
+      console.warn('[Team] 壳层资源加载失败', e);
+    });
     if (!this._enterSeq.stillValid(token)) return;
-    deferSceneBuild(token, this._enterSeq, 'team', () => this._build());
+    if (SceneManager.current?.name !== 'team') return;
+    this._build({ animate: false });
+    void ensurePetAvatars(teamPetAvatarEntries()).catch((e) => {
+      console.warn('[Team] 头像预热失败', e);
+    });
   }
 
   onExit(): void {
@@ -92,15 +101,27 @@ export class TeamScene implements Scene {
     this._summaryHost = null;
     this._listScroll.detach();
     this._listContent = null;
-    this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this.container.removeChildren().forEach((c) => {
+      if (!c.destroyed) c.destroy({ children: true });
+    });
     this._slotArea = new PIXI.Container();
     this._overview = new PIXI.Container();
   }
 
-  private _build(): void {
+  private _build(opts?: { animate?: boolean }): void {
+    const animate = opts?.animate !== false;
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     const prep = !!this._prepStage;
+
+    this._listScroll.detach();
+    this._listChecks.clear();
+    this._listItems.clear();
+    this._summaryHost = null;
+    this._listContent = null;
+    this.container.removeChildren().forEach((c) => {
+      if (!c.destroyed) c.destroy({ children: true });
+    });
 
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
 
@@ -118,7 +139,9 @@ export class TeamScene implements Scene {
       this._buildFreeLayout(w);
     }
 
-    staggerIn([...this._listItems.values()], { stepDelay: 0.03, offsetY: 16, duration: 0.3 });
+    if (animate) {
+      staggerIn([...this._listItems.values()], { stepDelay: 0.03, offsetY: 16, duration: 0.3 });
+    }
     this._refreshTeamUi();
   }
 

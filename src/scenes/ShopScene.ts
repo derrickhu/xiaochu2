@@ -8,7 +8,7 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
 import { TextureCache } from '@/core/TextureCache';
-import { getPetAvatarTexture } from '@/config/petAvatarTexture';
+import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import { shopPreloadImages, shopPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ELEMENT_NAME } from '@/balance/ui';
@@ -31,7 +31,7 @@ import {
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { pressFeedback } from '@/ui/motion';
 import { ScrollListController } from '@/ui/ScrollList';
-import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
+import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 
 /** 对齐 shop_ui_mockup.png（750 设计宽） */
 const SHOP_UI = {
@@ -249,10 +249,10 @@ function makeShopBuyButton(
   return btn;
 }
 
-/** 透明底宠物立绘，完全收纳在商品行金框内 */
+/** 透明底宠物立绘；有缓存立刻画，否则占位并 CDN 到货后补上（不挡首屏） */
 function addShopPetPortrait(
   parent: PIXI.Container,
-  tex: PIXI.Texture | null,
+  petId: string,
   x: number,
   y: number,
   size: number,
@@ -260,14 +260,13 @@ function addShopPetPortrait(
   const top = y - size / 2;
   const left = x;
   const right = x + size;
-  if (tex) {
-    const sp = new PIXI.Sprite(tex);
-    const scale = size / Math.max(tex.width, tex.height);
-    sp.scale.set(scale);
-    sp.anchor.set(0.5);
-    sp.position.set(x + size / 2, y);
-    parent.addChild(sp);
-  }
+  const spr = new PIXI.Sprite(PIXI.Texture.EMPTY);
+  spr.anchor.set(0.5);
+  spr.position.set(x + size / 2, y);
+  parent.addChild(spr);
+  bindPetAvatarSprite(spr, petId, 1, (tex) => {
+    spr.scale.set(size / Math.max(tex.width, tex.height));
+  });
   return { left, right, top };
 }
 
@@ -337,16 +336,28 @@ export class ShopScene implements Scene {
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
-    void this._enter(this._enterSeq.next());
+    // 同步出壳，与 Title 一致；资源后台 hydrate，避免首点黑屏
+    const token = this._enterSeq.next();
+    this._fx = new SceneFx();
+    this._build({ animate: true });
+    void Game.warmScenePresent();
+    void this._hydrateShell(token);
   }
 
-  private async _enter(token: number): Promise<void> {
-    await ensureAssets(shopPreloadImages());
-    await ensurePetAvatars(shopPetAvatarEntries());
+  /** 壳层贴图与头像后台补齐；壳图到位后静默重建一次换真贴图 */
+  private async _hydrateShell(token: number): Promise<void> {
+    await ensureAssets(shopPreloadImages()).catch((e) => {
+      console.warn('[Shop] 壳层资源加载失败', e);
+    });
     if (!this._enterSeq.stillValid(token)) return;
-    deferSceneBuild(token, this._enterSeq, 'shop', () => {
-      this._fx = new SceneFx();
-      this._build();
+    if (SceneManager.current?.name !== 'shop') return;
+
+    this._fx?.destroy();
+    this._fx = new SceneFx();
+    this._build({ animate: false });
+
+    void ensurePetAvatars(shopPetAvatarEntries()).catch((e) => {
+      console.warn('[Shop] 头像预热失败', e);
     });
   }
 
@@ -358,7 +369,9 @@ export class ShopScene implements Scene {
     this._rows.clear();
     this._fx?.destroy();
     this._fx = null;
-    this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this.container.removeChildren().forEach((c) => {
+      if (!c.destroyed) c.destroy({ children: true });
+    });
   }
 
   update(dt: number): void {
@@ -397,12 +410,17 @@ export class ShopScene implements Scene {
     );
   }
 
-  private _build(): void {
+  private _build(opts?: { animate?: boolean }): void {
+    const animate = opts?.animate !== false;
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     this._scroll.detach();
     this._rows.clear();
-    this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this._listMask = null;
+    this._content = null;
+    this.container.removeChildren().forEach((c) => {
+      if (!c.destroyed) c.destroy({ children: true });
+    });
 
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.shop, w, h));
 
@@ -476,7 +494,9 @@ export class ShopScene implements Scene {
       moveThreshold: 6,
     });
 
-    staggerIn(animTargets, { stepDelay: 0.04, offsetY: 16, duration: 0.3 });
+    if (animate) {
+      staggerIn(animTargets, { stepDelay: 0.04, offsetY: 16, duration: 0.3 });
+    }
     buildBottomNav(this.container, w, h, 'shop');
     if (this._fx) this._fx.build(this.container, w, h);
   }
@@ -586,9 +606,7 @@ export class ShopScene implements Scene {
 
     const avatarSize = rowH - innerPad * 2;
     const avatarX = -rowW / 2 + innerPad;
-    const avatarBounds = addShopPetPortrait(
-      row, getPetAvatarTexture(pet.id, 1), avatarX, 0, avatarSize,
-    );
+    const avatarBounds = addShopPetPortrait(row, pet.id, avatarX, 0, avatarSize);
     attachRarityBadge(row, pet.rarity, avatarBounds.left, avatarBounds.top, avatarSize);
 
     const buyCenterX = rowW / 2 - buyPad - buyW / 2 + SHOP_UI.buyOffsetX;

@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { TextureCache } from '@/core/TextureCache';
-import { bindPetAvatarSprite, getPetAvatarTexture } from '@/config/petAvatarTexture';
+import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import { getRarity } from '@/balance/rarity';
 import { PET_MAP, type PetDef } from '@/balance/pets';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
@@ -132,13 +132,12 @@ export function addTeamPetAvatar(
   holder.position.set(x, y);
   parent.addChild(holder);
 
-  const tex = getPetAvatarTexture(pet.id, PlayerData.petStar(pet.id));
-  if (tex) {
-    const avatar = new PIXI.Sprite(tex);
-    avatar.anchor.set(0.5);
+  const avatar = new PIXI.Sprite(PIXI.Texture.EMPTY);
+  avatar.anchor.set(0.5);
+  holder.addChild(avatar);
+  bindPetAvatarSprite(avatar, pet.id, PlayerData.petStar(pet.id), (tex) => {
     avatar.scale.set((size - 8) / Math.max(tex.width, tex.height));
-    holder.addChild(avatar);
-  }
+  });
   const frameTex = TextureCache.get(petFrameImage(pet.element));
   if (frameTex) {
     const frame = new PIXI.Sprite(frameTex);
@@ -348,14 +347,12 @@ function addPrepListPortrait(
   }));
 
   const art = new PIXI.Container();
-  const tex = getPetAvatarTexture(pet.id, star);
-  if (tex) {
-    const spr = new PIXI.Sprite(tex);
-    spr.anchor.set(0.5);
-    const cover = Math.max(pw / tex.width, ph / tex.height) * 1.06;
-    spr.scale.set(cover);
-    art.addChild(spr);
-  }
+  const spr = new PIXI.Sprite(PIXI.Texture.EMPTY);
+  spr.anchor.set(0.5);
+  art.addChild(spr);
+  bindPetAvatarSprite(spr, pet.id, star, (tex) => {
+    spr.scale.set(Math.max(pw / tex.width, ph / tex.height) * 1.06);
+  });
   const mask = new PIXI.Graphics();
   mask.beginFill(0xffffff);
   mask.drawRoundedRect(-pw / 2, -ph / 2, pw, ph, radius);

@@ -9,7 +9,7 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
 import { TextureCache } from '@/core/TextureCache';
-import { getPetAvatarTexture } from '@/config/petAvatarTexture';
+import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import { gachaPreloadImages, gachaPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ELEMENT_NAME } from '@/balance/ui';
@@ -31,7 +31,7 @@ import {
 } from '@/ui';
 import { GachaRevealSequence } from './gacha/gachaRevealSequence';
 import { buildGachaCompareCard, pickBestNewOutcome } from './gacha/gachaCompareCard';
-import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
+import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
 export class GachaScene implements Scene {
@@ -56,16 +56,23 @@ export class GachaScene implements Scene {
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
-    void this._enter(this._enterSeq.next());
+    const token = this._enterSeq.next();
+    this._ensurePage();
+    this._build();
+    void Game.warmScenePresent();
+    void this._hydrateShell(token);
   }
 
-  private async _enter(token: number): Promise<void> {
-    await ensureAssets(gachaPreloadImages());
-    await ensurePetAvatars(gachaPetAvatarEntries());
+  private async _hydrateShell(token: number): Promise<void> {
+    await ensureAssets(gachaPreloadImages()).catch((e) => {
+      console.warn('[Gacha] 壳层资源加载失败', e);
+    });
     if (!this._enterSeq.stillValid(token)) return;
-    deferSceneBuild(token, this._enterSeq, 'gacha', () => {
-      this._ensurePage();
-      this._build();
+    if (SceneManager.current?.name !== 'gacha') return;
+    this._ensurePage();
+    this._build();
+    void ensurePetAvatars(gachaPetAvatarEntries()).catch((e) => {
+      console.warn('[Gacha] 头像预热失败', e);
     });
   }
 
@@ -469,14 +476,16 @@ export class GachaScene implements Scene {
     const avatarLeft = (cardW - avatarSize) / 2;
     const avatarTop = cardH * 0.16;
 
-    const avatarTex = getPetAvatarTexture(o.petId, 1);
-    if (avatarTex) {
-      const avatar = new PIXI.Sprite(avatarTex);
+    const avatar = new PIXI.Sprite(PIXI.Texture.EMPTY);
+    avatar.width = avatarSize;
+    avatar.height = avatarSize;
+    avatar.position.set(avatarLeft, avatarTop);
+    card.addChild(avatar);
+    bindPetAvatarSprite(avatar, o.petId, 1, (tex) => {
+      avatar.texture = tex;
       avatar.width = avatarSize;
       avatar.height = avatarSize;
-      avatar.position.set(avatarLeft, avatarTop);
-      card.addChild(avatar);
-    }
+    });
     attachRarityBadge(card, o.rarity, avatarLeft, avatarTop, avatarSize, { variant: 'list' });
 
     const name = pet?.name ?? o.petId;

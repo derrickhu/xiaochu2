@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js';
-import { getPetAvatarTexture } from '@/config/petAvatarTexture';
+import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import type { PetDef } from '@/balance/pets';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { PlayerData } from '@/game/PlayerData';
@@ -14,6 +14,30 @@ import {
   makeText,
   makeElementOrb,
 } from '@/ui';
+
+function addCodexAvatar(
+  item: PIXI.Container,
+  petId: string,
+  star: number,
+  avatarLeft: number,
+  avatarTop: number,
+  avatarSize: number,
+  opts?: { tint?: number; alpha?: number },
+): void {
+  const avatar = new PIXI.Sprite(PIXI.Texture.EMPTY);
+  avatar.width = avatarSize;
+  avatar.height = avatarSize;
+  avatar.position.set(avatarLeft, avatarTop);
+  if (opts?.tint != null) avatar.tint = opts.tint;
+  if (opts?.alpha != null) avatar.alpha = opts.alpha;
+  item.addChild(avatar);
+  bindPetAvatarSprite(avatar, petId, star, (tex) => {
+    // 固定槽位：用宽高铺满，避免异步到货后 scale 与 width 双写冲突
+    avatar.texture = tex;
+    avatar.width = avatarSize;
+    avatar.height = avatarSize;
+  });
+}
 
 /** 未拥有卡：稀有度底板 + 剪影 + 获取提示。 */
 export function buildLockedCodexCard(
@@ -49,16 +73,10 @@ export function buildLockedCodexCard(
   const avatarLeft = (cardW - avatarSize) / 2;
   const avatarTop = 8 * S;
 
-  const avatarTex = getPetAvatarTexture(pet.id, 1);
-  if (avatarTex) {
-    const avatar = new PIXI.Sprite(avatarTex);
-    avatar.width = avatarSize;
-    avatar.height = avatarSize;
-    avatar.position.set(avatarLeft, avatarTop);
-    avatar.tint = 0x111317;
-    avatar.alpha = 0.85;
-    item.addChild(avatar);
-  }
+  addCodexAvatar(item, pet.id, 1, avatarLeft, avatarTop, avatarSize, {
+    tint: 0x111317,
+    alpha: 0.85,
+  });
   attachRarityBadge(item, pet.rarity, 0, 0, avatarSize, { variant: 'codex' });
 
   const lock = makeText('未获得', {
@@ -109,14 +127,7 @@ export function buildOwnedCodexCard(
   const avatarLeft = (cardW - avatarSize) / 2;
   const avatarTop = 8 * S;
 
-  const avatarTex = getPetAvatarTexture(pet.id, star);
-  if (avatarTex) {
-    const avatar = new PIXI.Sprite(avatarTex);
-    avatar.width = avatarSize;
-    avatar.height = avatarSize;
-    avatar.position.set(avatarLeft, avatarTop);
-    item.addChild(avatar);
-  }
+  addCodexAvatar(item, pet.id, star, avatarLeft, avatarTop, avatarSize);
   attachRarityBadge(item, pet.rarity, 0, 0, avatarSize, { variant: 'codex' });
 
   const displayName = pet.name.length > 4 ? `${pet.name.slice(0, 4)}…` : pet.name;
