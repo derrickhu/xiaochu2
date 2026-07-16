@@ -1,0 +1,43 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+FORBIDDEN: photorealistic, dark fantasy, heavy oil paint, cyberpunk neon, purple-on-white AI defaults, 3D PBR.
+Use reference images for STYLE / candy orb look / cream-gold chrome ONLY — do not copy their exact layout.
+
+TASK: Mobile game UI PROTOTYPE sheet for SEALED ORBS (封珠) — replace the ugly programmatic purple square + padlock.
+
+OUTPUT: Square 1:1 asset concept sheet, clean light gray (#d8d8d8) background.
+Title strip at top in Chinese (readable): 封珠 UI 原型 v1
+Subtitle: 圆形叠层 · 可盖在任意属性珠上 · 非方块绘制
+
+══════════════════════════════════════
+DESIGN GOAL
+══════════════════════════════════════
+Sealed state is an OVERLAY on top of existing glossy candy orbs (Puzzle & Dragons style).
+Must feel premium Q-xianxia, NOT a flat purple rounded-rect with a drawn lock.
+
+Mechanics reminder (for design clarity only):
+- Sealed = cannot drag / cannot match; clear adjacent orbs to unseal.
+- Overlay must still let the player SEE which element orb is underneath (color peeks through).
+
+══════════════════════════════════════
+LAYOUT — 2 rows × 3 columns (6 panels)
+══════════════════════════════════════
+Each panel: one glossy candy orb + a seal overlay candidate. Label each panel A–F with tiny Chinese caption under the orb.
+
+Row 1:
+A) 冰晶罩：semi-transparent cool ice-blue circular frost dome over a WATER orb (blue drop). Thin gold rim. Tiny cream talisman stamp with「封」at bottom-center of the orb. Soft frost cracks. Circular only — no square box.
+B) 金锁环：WOOD orb (green leaf) wrapped by a cute round gold chain ring / shackle ring sitting on the orb equator. Small padlock charm at bottom, Q-cute (rounded, not scary). Frost glaze ~35% alpha. No square overlay.
+C) 符印罩：FIRE orb (red flame) with circular parchment-cream seal disk (半透明) covering center ~55% of orb, gold border, single「封」glyph in deep ink. Outer orb color still visible as a ring. Soft glow.
+
+Row 2:
+D) 冰棱锁：EARTH orb (brown rock) with circular ice shard rim + thin gold chain X across (cute, not heavy metal). Center small「封」. Still round silhouette.
+E) 推荐稿：METAL orb (gold star) — BEST hybrid: circular frosted glass overlay (cool lavender-blue, 40% alpha) + gold ornate ring + small cream seal plaque with「封」. Polished production-ready look. Mark with a small gold star badge 「推荐」.
+F) 对比反例：same WATER orb but with the OLD bad UI — flat purple rounded square + white padlock +「封」— caption 「现状·勿用」so we reject it.
+
+QUALITY:
+- Orbs must look like glossy candy glass marbles matching the reference orb style.
+- Overlays are CIRCULAR and centered on the orb.
+- Soft shadows under orbs. Clean UI prototype fidelity.
+- Chinese captions readable. No watermark. No phone frame.

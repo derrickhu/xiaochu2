@@ -189,13 +189,6 @@ export function addTeamPrepSlotPet(
   art.mask = mask;
   parent.addChild(art);
 
-  // 底渐变托住 Lv / 星
-  const fade = new PIXI.Graphics();
-  fade.beginFill(0x2a1a0c, 0.48);
-  fade.drawRoundedRect(-slotW / 2, slotH / 2 - 40, slotW, 40, 8);
-  fade.endFill();
-  parent.addChild(fade);
-
   // 棋盘珠贴卡框左上角（锚点中心 → 圆心落在角内侧半珠处）
   const orbSize = 32;
   const orbPad = 2;

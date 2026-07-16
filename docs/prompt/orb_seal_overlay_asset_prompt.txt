@@ -1,0 +1,14 @@
+ART STYLE: Q-version cute-chibi xianxia guofeng game UI icon. Soft cel-shaded, cream-gold chrome (#e8a33d), NOT realistic, NOT dark fantasy.
+
+TASK: Single PRODUCTION game asset — SEALED ORB OVERLAY (封珠叠层).
+Use the attached reference for the RECOMMENDED design (gold ornate circular frame + frost glass + bottom「封」plaque). Produce a CLEAN game-ready icon ONLY.
+
+CRITICAL — this is an OVERLAY that sits ON TOP of existing candy orbs:
+- Outside the circular frame: PURE solid flat chroma green #00FF00 background (for cutout). NO shadow on the green.
+- Inside the circle: SEMI-TRANSPARENT cool lavender-blue frosted glass (about 35–45% opacity feel) so the orb underneath can still show color. NOT a solid opaque metal/gold orb fill.
+- Ornate GOLD circular rim with cute ruyi/cloud ornaments at top / left / right (match reference).
+- Soft gold four-point star emblem faintly in the center (semi-transparent, not blocking).
+- Bottom center: small cream-gold cloud/scalloped plaque with Chinese character「封」in dark brown — KEEP this character, it is part of the icon.
+- NO「推荐」badge, NO「E) 推荐稿」label, NO captions, NO extra text outside the seal.
+- Centered, large, fills most of the square canvas with small margin.
+- Aspect ratio 1:1. Polished mobile game HUD icon fidelity.

@@ -37,9 +37,9 @@ export interface BoardViewCallbacks {
 /** 无效珠：降饱和变淡（仍可拖消，仅无伤害；不再叠「无」字/斜杠） */
 const INACTIVE_TINT = 0xffffff;
 const INACTIVE_ALPHA = 0.42;
-/** 封印珠：冷色覆层，与无效珠明显区分 */
-const SEAL_TINT = 0xc8d4ff;
-const SEAL_ALPHA = 0.72;
+/** 封印珠：珠体略压冷色，叠层金框负责「封」识别 */
+const SEAL_TINT = 0xd8e4ff;
+const SEAL_ALPHA = 0.88;
 
 /** 拖动期双珠交换 tween（对齐 xiao_chu g.swapAnim，连拖路径上逐格换位） */
 interface DragSwapAnim {
