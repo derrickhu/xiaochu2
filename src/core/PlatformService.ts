@@ -240,6 +240,34 @@ class PlatformServiceClass {
     return null;
   }
 
+  /** 下载远程文件到临时路径（CDN 资源用） */
+  downloadFile(url: string): Promise<{ tempFilePath?: string; statusCode?: number }> {
+    return new Promise((resolve, reject) => {
+      if (!this._api?.downloadFile) {
+        reject(new Error('downloadFile unavailable'));
+        return;
+      }
+      this._api.downloadFile({
+        url,
+        success: (res: { tempFilePath?: string; statusCode?: number }) => {
+          const statusCode = Number(res?.statusCode || 0);
+          if (statusCode > 0 && (statusCode < 200 || statusCode >= 300)) {
+            reject(new Error(`downloadFile status=${statusCode} url=${url}`));
+            return;
+          }
+          if (!res?.tempFilePath) {
+            reject(new Error(`downloadFile missing tempFilePath url=${url}`));
+            return;
+          }
+          resolve(res);
+        },
+        fail: (err: any) => {
+          reject(new Error(err?.errMsg || err?.message || String(err)));
+        },
+      });
+    });
+  }
+
   /** 创建 InnerAudioContext（BGM / 音效） */
   createInnerAudioContext(): WechatMinigame.InnerAudioContext | null {
     try {

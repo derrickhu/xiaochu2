@@ -14,11 +14,10 @@ describe('灵宠头像路径', () => {
     expect(petAvatarPath('pet_001', 5)).toBe(petImageAwakened('pet_001'));
   });
 
-  it('预加载候选含旧 ID fallback', () => {
-    expect(petAvatarLoadPaths('pet_007', 1)).toEqual([
-      petImage('pet_007'),
-      'subpackages/pkg-pet/images/pet/pet_fire_003.png',
-    ]);
+  it('预加载仅 canonical 文件名；旧存档 ID 映射到新路径', () => {
+    expect(petAvatarLoadPaths('pet_007', 1)).toEqual([petImage('pet_007')]);
+    expect(petAvatarLoadPaths('pet_fire_003', 1)).toEqual([petImage('pet_007')]);
+    expect(petAvatarLoadPaths('cr_star_deer', 1)).toEqual([petImage('pet_017')]);
   });
 
   it('pet_011+ 怪物立绘进 pkg-enemy-cr', () => {

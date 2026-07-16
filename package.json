@@ -6,6 +6,8 @@
   "scripts": {
     "build": "vite build && rimraf minigame/index.html && node scripts/rename-creature-assets.mjs && node scripts/organize-subpackages.mjs",
     "assets:rename-creatures": "node scripts/rename-creature-assets.mjs",
+    "cdn:upload": "node scripts/upload_cdn.js",
+    "cdn:upload:dry": "node scripts/upload_cdn.js --dry-run",
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

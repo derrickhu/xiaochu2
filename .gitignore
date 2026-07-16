@@ -21,6 +21,9 @@ dist/
 # Environment
 .env
 .env.local
+scripts/.cdn_secret
+scripts/.cdn_manifest.json
+scripts/_tmp_cdn_manifest.json
 
 # 平台私有配置
 project.private.config.json

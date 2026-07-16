@@ -17,6 +17,7 @@ import { PlayerData } from '@/game/PlayerData';
 import { MAIN_PRELOAD_IMAGES } from '@/config/Assets';
 import { ensureAudioSubpackage, loadSubpackagesForPaths } from '@/config/Subpackages';
 import { warmupCommonSubpackages } from '@/config/SubpackageWarmup';
+import { warmupCdnAssets } from '@/config/CdnWarmup';
 import { TitleScene } from '@/scenes/TitleScene';
 import { BattleScene } from '@/scenes/BattleScene';
 import { TeamScene } from '@/scenes/TeamScene';
@@ -119,6 +120,8 @@ async function main(): Promise<void> {
   await Game.warmScenePresent();
 
   warmupCommonSubpackages();
+  // CDN：不 await，manifest + 拥有灵宠/BGM 后台预热，不挡首屏与 BGM 起播
+  warmupCdnAssets();
 
   await ensureAudioSubpackage();
   BgmManager.playMain();

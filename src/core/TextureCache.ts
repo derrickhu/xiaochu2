@@ -3,29 +3,47 @@
  *
  * - Map 缓存 + inflight 去重（同一路径并发请求只加载一次）
  * - 失败自动重试一次
- * - 预留分包 / CDN 懒加载扩展点（首版只走主包本地路径）
+ * - CDN：先 resolve / 后台 download，逻辑路径作 cache key；加载完成发 texture:loaded
  */
 import * as PIXI from 'pixi.js';
+import { CdnAssetService } from '@/core/CdnAssetService';
+import { EventBus } from '@/core/EventBus';
 import { Platform } from './PlatformService';
 
 const PRELOAD_BATCH_SIZE = 6;
+export const TEXTURE_LOADED_EVENT = 'texture:loaded';
 
 class TextureCacheClass {
   private _cache: Map<string, PIXI.Texture> = new Map();
   private _inflight: Map<string, Promise<PIXI.Texture>> = new Map();
 
-  /** 同步取缓存（未加载返回 null） */
+  /** 同步取缓存（未加载返回 null；CDN miss 时静默 kickoff 加载） */
   get(path: string): PIXI.Texture | null {
-    return this._cache.get(path) ?? null;
+    const cached = this._cache.get(path) ?? null;
+    if (cached) return cached;
+    if (CdnAssetService.isCdnPath(path) && !this._inflight.has(path)) {
+      void this.load(path).catch(() => null);
+    }
+    return null;
   }
 
   /** 按候选路径顺序查缓存 */
   getFirst(paths: readonly string[]): PIXI.Texture | null {
     for (const path of paths) {
-      const tex = this._cache.get(path);
+      const tex = this.get(path);
       if (tex) return tex;
     }
     return null;
+  }
+
+  has(path: string): boolean {
+    return this._cache.has(path);
+  }
+
+  /** 订阅纹理加载完成（用于 UI 打开后 CDN 到货自动刷新） */
+  onTextureLoaded(handler: (path: string) => void): () => void {
+    EventBus.on(TEXTURE_LOADED_EVENT, handler);
+    return () => EventBus.off(TEXTURE_LOADED_EVENT, handler);
   }
 
   /** 加载纹理（带缓存与并发去重） */
@@ -36,11 +54,12 @@ class TextureCacheClass {
     const inflight = this._inflight.get(path);
     if (inflight) return inflight;
 
-    const promise = this._loadImage(path)
-      .catch(() => this._loadImage(path)) // 失败重试一次
+    const promise = this._loadResolved(path)
+      .catch(() => this._loadResolved(path))
       .then((tex) => {
         this._cache.set(path, tex);
         this._inflight.delete(path);
+        EventBus.emit(TEXTURE_LOADED_EVENT, path);
         return tex;
       })
       .catch((e) => {
@@ -67,7 +86,7 @@ class TextureCacheClass {
     return null;
   }
 
-  /** 批量预加载（限并发，避免小游戏同时拉过多分包图） */
+  /** 批量预加载（限并发，避免小游戏同时拉过多图） */
   async preload(paths: readonly string[]): Promise<void> {
     for (let i = 0; i < paths.length; i += PRELOAD_BATCH_SIZE) {
       const batch = paths.slice(i, i + PRELOAD_BATCH_SIZE);
@@ -94,7 +113,12 @@ class TextureCacheClass {
     return this._cache.size;
   }
 
-  private _loadImage(path: string): Promise<PIXI.Texture> {
+  private async _loadResolved(logicalPath: string): Promise<PIXI.Texture> {
+    const src = await CdnAssetService.resolveOrDownload(logicalPath);
+    return this._loadImage(src);
+  }
+
+  private _loadImage(src: string): Promise<PIXI.Texture> {
     return new Promise((resolve, reject) => {
       const img = Platform.createImage();
       if (!img) {
@@ -110,7 +134,7 @@ class TextureCacheClass {
         }
       };
       img.onerror = (e: any) => reject(e);
-      img.src = path;
+      img.src = src;
     });
   }
 }

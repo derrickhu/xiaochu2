@@ -110,25 +110,26 @@ export function buildTeamEnemyIntelCard(opts: {
     }));
 
     const path = def.image ?? enemyImage(def.id);
-    const tex = TextureCache.get(path);
-    if (tex && tex.width > 0 && tex.height > 0) {
-      const art = new PIXI.Container();
-      const spr = new PIXI.Sprite(tex);
-      // contain：整只入框；统一规格贴图时应铺满框面
-      const fit = Math.min(iw / tex.width, ih / tex.height);
-      spr.anchor.set(0.5);
-      spr.scale.set(fit);
-      spr.position.set(0, 0);
-      art.addChild(spr);
+    const art = new PIXI.Container();
+    const spr = new PIXI.Sprite(PIXI.Texture.EMPTY);
+    spr.anchor.set(0.5);
+    art.addChild(spr);
+    const mask = new PIXI.Graphics();
+    mask.beginFill(0xffffff);
+    mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, 14);
+    mask.endFill();
+    art.addChild(mask);
+    art.mask = mask;
+    portraitHost.addChild(art);
 
-      const mask = new PIXI.Graphics();
-      mask.beginFill(0xffffff);
-      mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, 14);
-      mask.endFill();
-      art.addChild(mask);
-      art.mask = mask;
-      portraitHost.addChild(art);
-    }
+    const applyTex = (tex: PIXI.Texture) => {
+      if (portraitHost.destroyed || !tex.width || !tex.height) return;
+      spr.texture = tex;
+      spr.scale.set(Math.min(iw / tex.width, ih / tex.height));
+    };
+    const cached = TextureCache.get(path);
+    if (cached) applyTex(cached);
+    else void TextureCache.load(path).then(applyTex).catch(() => {});
 
     portraitHost.addChild(drawThinGoldFrame(PORTRAIT_W, bodyH));
   };

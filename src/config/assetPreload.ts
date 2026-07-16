@@ -243,7 +243,7 @@ export function titleLeadPetAvatarEntry(): PetAvatarPreloadEntry | null {
   return { petId: lead, star: PlayerData.petStar(lead) };
 }
 
-/** 预加载灵宠头像（含 ID 迁移 fallback + 限并发） */
+/** 预加载灵宠头像（旧 ID 已映射到 canonical 路径 + 限并发） */
 export async function ensurePetAvatars(entries: readonly PetAvatarPreloadEntry[]): Promise<void> {
   if (entries.length === 0) return;
   const paths = entries.flatMap(({ petId, star = 1 }) => [...petAvatarLoadPaths(petId, star)]);

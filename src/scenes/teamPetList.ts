@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { TextureCache } from '@/core/TextureCache';
-import { getPetAvatarTexture } from '@/config/petAvatarTexture';
+import { bindPetAvatarSprite, getPetAvatarTexture } from '@/config/petAvatarTexture';
 import { getRarity } from '@/balance/rarity';
 import { PET_MAP, type PetDef } from '@/balance/pets';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
@@ -172,15 +172,13 @@ export function addTeamPrepSlotPet(
   }));
 
   const art = new PIXI.Container();
-  const tex = getPetAvatarTexture(pet.id, star);
-  if (tex) {
-    const spr = new PIXI.Sprite(tex);
-    spr.anchor.set(0.5);
-    // cover：按卡高铺满，略放大避免露底
+  const spr = new PIXI.Sprite(PIXI.Texture.EMPTY);
+  spr.anchor.set(0.5);
+  art.addChild(spr);
+  bindPetAvatarSprite(spr, pet.id, star, (tex) => {
     const cover = Math.max(slotW / tex.width, slotH / tex.height) * 1.12;
     spr.scale.set(cover);
-    art.addChild(spr);
-  }
+  });
   const mask = new PIXI.Graphics();
   mask.beginFill(0xffffff);
   mask.drawRoundedRect(-slotW / 2, -slotH / 2, slotW, slotH, radius);

@@ -3,6 +3,7 @@
  *
  * 资源路径前缀与 scripts/organize-subpackages.mjs 目录结构一致。
  */
+import { CdnAssetService } from '@/core/CdnAssetService';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
 
@@ -102,9 +103,17 @@ export async function loadSubpackagesForPaths(paths: readonly string[]): Promise
   await Promise.all([...names].map(loadSubpackage));
 }
 
-/** 先加载分包，再预加载纹理（场景入口统一调用） */
+/**
+ * 场景入口统一拉资源：CDN 预下载（带超时）+ 本地分包 + 纹理解码。
+ * CDN miss 不卡死；超时后 TextureCache 仍会后台补齐并发 texture:loaded。
+ */
 export async function ensureAssets(paths: readonly string[]): Promise<void> {
-  await loadSubpackagesForPaths(paths);
+  await Promise.all([
+    CdnAssetService.preloadPaths(paths).catch((e) => {
+      console.warn('[ensureAssets] CDN 预热失败', e);
+    }),
+    loadSubpackagesForPaths(paths),
+  ]);
   await TextureCache.preload(paths);
 }
 

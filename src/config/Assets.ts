@@ -8,7 +8,6 @@ import type { Element, OrbType } from '@/balance/combat';
 import type { Rarity } from '@/balance/rarity';
 import {
   creatureUsesCrSubpackage,
-  legacyCreatureId,
   migrateCreatureId,
 } from '@/balance/creatureIdMigration';
 import { SUBPACKAGE_ROOT } from '@/config/Subpackages';
@@ -77,16 +76,11 @@ export function petImageAwakened(petId: string): string {
 }
 
 /**
- * 预加载候选路径：新 ID 文件名 + 旧 ID 文件名（迁移过渡期，见 scripts/rename-creature-assets.mjs）
+ * 预加载候选路径（仅 canonical 文件名）。
+ * 存档旧 ID 经 migrateCreatureId 映射；磁盘/CDN 已统一为 pet_XXX，不再请求 pet_metal_* / cr_* 旧文件名。
  */
 export function petAvatarLoadPaths(petId: string, star = 1): readonly string[] {
-  const id = canonicalCreatureId(petId);
-  const primary = star >= PET_AWAKEN_STAR ? petImageAwakened(id) : petImage(id);
-  const legacy = legacyCreatureId(id);
-  if (!legacy) return [primary];
-  const suffix = star >= PET_AWAKEN_STAR ? '_s3' : '';
-  const fallback = `${PKG.pet}/images/pet/${legacy}${suffix}.png`;
-  return fallback === primary ? [primary] : [primary, fallback];
+  return [petAvatarPath(petId, star)];
 }
 
 export function petAvatarPath(petId: string, star = 1): string {

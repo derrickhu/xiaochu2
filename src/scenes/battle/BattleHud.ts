@@ -633,19 +633,30 @@ export class BattleHud {
     const { spriteZoneTop, spriteZoneBottom, enemyCenterX } = this._layout;
     // 真叠层：立绘可用满「匾后 → 标签下」整段高度，名/血条叠在怪身上
     const zoneH = Math.max(40, spriteZoneBottom - spriteZoneTop);
-    const tex = TextureCache.get(def.image ?? enemyImage(def.id));
+    const enemyPath = def.image ?? enemyImage(def.id);
+    const tex = TextureCache.get(enemyPath);
     let displaySize = enemyDisplaySize(tier);
-    if (tex && displayAlive(this._enemySprite)) {
-      this._enemySprite.texture = tex;
+    const applyEnemyTex = (t: PIXI.Texture) => {
+      if (!displayAlive(this._enemySprite)) return;
+      this._enemySprite.texture = t;
       const s = readScale(this._enemySprite);
       if (s) {
-        const scale = enemySpriteScale(tex.width, tex.height, tier, zoneH);
+        const scale = enemySpriteScale(t.width, t.height, tier, zoneH);
         s.set(scale);
-        displaySize = tex.height * scale;
+        displaySize = t.height * scale;
+        this._layout.enemyCenterY = enemySpriteCenterY(spriteZoneTop, spriteZoneBottom, displaySize, 4);
+        if (displayAlive(this._enemyContainer)) {
+          this._enemyContainer.position.set(enemyCenterX, this._layout.enemyCenterY);
+        }
       }
       this._enemySprite.tint = enemySpriteTint(tier);
+    };
+    if (tex) {
+      applyEnemyTex(tex);
     } else {
       displaySize = Math.min(displaySize, zoneH);
+      // CDN / 分包未就绪：不卡主流程，到货后异步贴上
+      void TextureCache.load(enemyPath).then(applyEnemyTex).catch(() => {});
     }
     // 贴顶上移：头顶靠近关卡匾，脚伸入名/血条叠层
     this._layout.enemyCenterY = enemySpriteCenterY(spriteZoneTop, spriteZoneBottom, displaySize, 4);
