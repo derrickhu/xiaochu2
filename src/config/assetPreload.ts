@@ -26,6 +26,7 @@ import {
   enemyImage,
   petAvatarLoadPaths,
   petFrameImage,
+  petShowcaseImage,
   skillIconImage,
   passiveIconImage,
 } from '@/config/Assets';
@@ -96,6 +97,8 @@ export const PET_DETAIL_SHELL_IMAGES: readonly string[] = [
   UI_IMAGES.iconStatAtk,
   UI_IMAGES.iconStatRcv,
   UI_BATTLE_IMAGES.petStar,
+  ENEMY_PORTRAIT_FRAME,
+  ...Object.values(ORB_IMAGES),
   UI_FX_IMAGES.starburst,
   UI_FX_IMAGES.auraRing,
   UI_FX_IMAGES.particleSpark,
@@ -202,13 +205,13 @@ export function shopPetAvatarEntries(): PetAvatarPreloadEntry[] {
   }));
 }
 
-/** 灵宠详情：壳 + 当前灵宠头像与相框 + 主动/被动技能图标 */
-export function petDetailPreloadImages(petId: string): readonly string[] {
+/** 灵宠详情：壳 + 全身立绘框 + 当前宠秀场立绘 + 技能图标 */
+export function petDetailPreloadImages(petId: string, starOverride?: number): readonly string[] {
   const pet = PET_MAP.get(petId);
   const paths = [...PET_DETAIL_SHELL_IMAGES];
   if (pet) {
-    paths.push(petFrameImage(pet.element), skillIconImage(pet.skillId));
-    const star = PlayerData.petStar(petId);
+    const star = starOverride ?? PlayerData.petStar(petId);
+    paths.push(petShowcaseImage(petId, star), skillIconImage(pet.skillId));
     const lines = resolvePetPassiveBundle(pet.role, pet.rarity, star, { includeStarInDisplay: true }).displayLines;
     for (const line of lines) {
       if (line.iconKey) paths.push(passiveIconImage(line.iconKey));
@@ -217,6 +220,7 @@ export function petDetailPreloadImages(petId: string): readonly string[] {
   return unique(paths);
 }
 
+/** @deprecated 详情页已改秀场立绘，保留给旧调用方 */
 export function petDetailAvatarEntry(petId: string): PetAvatarPreloadEntry | null {
   if (!PET_MAP.has(petId)) return null;
   return { petId, star: PlayerData.petStar(petId) };

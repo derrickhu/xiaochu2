@@ -1,14 +1,13 @@
 /**
- * 灵宠详情场景：对齐 pet_detail_ui_prototype_v3_swipe
- * 顶栏名匾 → 左立绘 + 右说明白底 → 左右滑切宠 → 中部可滚属性/技能 → 底栏「升星 | 升级」
+ * 灵宠详情场景：对齐 pet_detail_lihui_showcase_v1
+ * 顶栏名匾 → 左竖框全身立绘 + 右矮说明板 → 左右滑切宠 → 中部可滚属性/技能 → 底栏「升星 | 升级」
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
-import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
-import { ensurePetAvatars, petDetailPreloadImages, petDetailAvatarEntry } from '@/config/assetPreload';
+import { petDetailPreloadImages } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { Platform } from '@/core/PlatformService';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
@@ -20,14 +19,14 @@ import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { resolvePetAbilities, diffAbilityUnlocks, type PetProgress } from '@/game/petAbilities';
 import { EventBus } from '@/core/EventBus';
 import {
-  petFrameImage, BACKGROUND_IMAGES, UI_FX_IMAGES,
+  ENEMY_PORTRAIT_FRAME, BACKGROUND_IMAGES, UI_FX_IMAGES, petShowcaseImage,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS, FONT_SIZE, RADIUS,
   makeButton, makeCoverBackground, makePanel, makeText, makeProgressBar, makeTopBar,
   makeStarRow, SceneFx, fadeIn, countUp, pulse, makeSkillIcon, makeStatIcon,
-  makeActionButton, attachPetFrameOrb,
+  makeActionButton, makeElementOrb,
   type ProgressBarHandle,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -171,20 +170,11 @@ export class PetDetailScene implements Scene {
   }
 
   private async _hydrateShell(token: number): Promise<void> {
+    const star = this._preview ? INITIAL_PET_STAR : PlayerData.petStar(this._petId);
     try {
-      await ensureAssets(petDetailPreloadImages(this._petId));
+      await ensureAssets(petDetailPreloadImages(this._petId, star));
     } catch (e) {
       console.warn('[PetDetailScene] 资源预加载部分失败:', e);
-    }
-    const avatarEntry = this._preview
-      ? { petId: this._petId, star: 1 as const }
-      : petDetailAvatarEntry(this._petId);
-    if (avatarEntry) {
-      try {
-        await ensurePetAvatars([avatarEntry]);
-      } catch (e) {
-        console.warn('[PetDetailScene] 头像加载失败:', e);
-      }
     }
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'petDetail') return;
@@ -283,10 +273,18 @@ export class PetDetailScene implements Scene {
 
     const marginX = 28;
     const heroTop = Game.safeTop + 16;
-    const heroGap = 16;
+    const heroGap = 14;
+    // 竖框立绘加高；说明区单独较矮，不跟拉高
     const halfAvail = Math.floor((w - marginX * 2 - heroGap) / 2);
-    const portraitSize = Math.min(268, Math.floor(halfAvail * 0.78));
-    const heroBottom = this._buildHeroRow(petId, pet, lv, star, marginX, heroTop, portraitSize, heroGap, w);
+    const portraitW = Math.min(250, Math.floor(halfAvail * 0.96));
+    let portraitH = Math.floor(portraitW * (4 / 3));
+    const maxPortraitH = Math.floor(h * 0.52);
+    if (portraitH > maxPortraitH) {
+      portraitH = maxPortraitH;
+    }
+    const heroBottom = this._buildHeroRow(
+      petId, pet, lv, star, marginX, heroTop, portraitW, portraitH, heroGap, w,
+    );
 
     const dockH = this._preview ? 0 : 168;
     const dockGap = 12;
@@ -336,8 +334,6 @@ export class PetDetailScene implements Scene {
     for (const d of [-1, 1] as const) {
       const id = this._neighborId(d);
       if (!id) continue;
-      const entry = petDetailAvatarEntry(id);
-      if (entry) void ensurePetAvatars([entry]).catch(() => {});
       void ensureAssets(petDetailPreloadImages(id)).catch(() => {});
     }
   }
@@ -397,10 +393,6 @@ export class PetDetailScene implements Scene {
     this._incomingDelta = delta;
     this._incomingPetId = petId;
 
-    const entry = petDetailAvatarEntry(petId);
-    if (entry) {
-      try { await ensurePetAvatars([entry]); } catch { /* */ }
-    }
     try { await ensureAssets(petDetailPreloadImages(petId)); } catch { /* */ }
     if (gen !== this._incomingGen || !this._track || this._track.destroyed) return false;
 
@@ -456,7 +448,7 @@ export class PetDetailScene implements Scene {
     this._commitIncoming(delta);
   }
 
-  /** 左立绘 + 右说明白底（等宽居中）；下阵贴说明区右下；支持左右滑切宠 */
+  /** 左竖框全身立绘 + 右矮说明板；下阵贴说明区右下；支持左右滑切宠 */
   private _buildHeroRow(
     petId: string,
     pet: PetDef,
@@ -464,48 +456,47 @@ export class PetDetailScene implements Scene {
     star: number,
     marginX: number,
     top: number,
-    portraitSize: number,
+    portraitW: number,
+    portraitH: number,
     heroGap: number,
     w: number,
   ): number {
-    // 左右等宽，整体居中
-    const side = portraitSize;
-    const bandW = side * 2 + heroGap;
+    const rightW = portraitW;
+    const bandW = portraitW + heroGap + rightW;
     const left = Math.max(marginX, Math.floor((w - bandW) / 2));
-    const rightX = left + side + heroGap;
-    const rightW = side;
+    const rightX = left + portraitW + heroGap;
     const platePad = 12;
-    const teamBtnH = this._preview ? 0 : 48;
-    const teamBtnW = Math.min(120, Math.max(96, rightW - platePad * 2));
+    const teamBtnH = this._preview ? 0 : 44;
+    const teamBtnW = Math.min(112, Math.max(92, rightW - platePad * 2));
 
-    // 说明区高度对齐立绘
-    const plateH = side;
+    // 说明区比立绘略矮，上下各缩一点（相对立绘垂直居中）
+    const plateInset = 10;
+    const plateH = Math.max(160, portraitH - plateInset * 2);
+    const plateTop = top + plateInset;
     const band = new PIXI.Container();
     if (this._buildLive) this._heroBand = band;
     this._uiRoot().addChild(band);
 
-    // —— 左：立绘 ——
-    const portraitCX = left + side / 2;
-    const portraitCY = top + side / 2;
-    this._buildAvatar(pet, star, portraitCX, portraitCY, side, band);
+    const portraitCX = left + portraitW / 2;
+    const portraitCY = top + portraitH / 2;
+    this._buildShowcase(pet, star, portraitCX, portraitCY, portraitW, portraitH, band);
 
-    // —— 右：说明白底 ——
     const plate = makePanel({
       width: rightW,
       height: plateH,
-      radius: 20,
+      radius: 18,
       centered: false,
       bg: 0xffffff,
-      bgAlpha: 0.78,
+      bgAlpha: 0.82,
       border: COLORS.panelBorderSoft,
       borderWidth: 2,
     });
-    plate.position.set(rightX, top);
+    plate.position.set(rightX, plateTop);
     band.addChild(plate);
 
     const contentX = rightX + platePad;
     const contentW = rightW - platePad * 2;
-    let y = top + platePad + 6;
+    let y = plateTop + platePad + 4;
 
     const rarity = getRarity(pet.rarity);
     const role = getPetRole(pet.role);
@@ -526,7 +517,7 @@ export class PetDetailScene implements Scene {
     }
     meta.position.set(contentX, y);
     band.addChild(meta);
-    y += meta.height + 14;
+    y += meta.height + 10;
 
     const maxLv = getStarProfile(star).maxLevel;
     const lvText = makeText(`Lv.${lv} / ${maxLv}`, {
@@ -534,32 +525,31 @@ export class PetDetailScene implements Scene {
     });
     lvText.position.set(contentX, y);
     band.addChild(lvText);
-    y += lvText.height + 10;
+    y += lvText.height + 8;
 
     const lvCost = this._preview ? null : PlayerData.levelUpCost(petId);
     const expRatio = lvCost && lvCost > 0
       ? Math.min(1, PlayerData.exp / lvCost)
       : (lv >= maxLv ? 1 : 0);
     const expBar = makeProgressBar({
-      width: Math.max(90, contentW), height: 18, ratio: expRatio, fill: COLORS.btnSuccessBg,
+      width: Math.max(90, contentW), height: 16, ratio: expRatio, fill: COLORS.btnSuccessBg,
     });
     expBar.position.set(contentX, y);
     band.addChild(expBar);
-    y += 18 + 12;
+    y += 16 + 10;
 
-    const starSize = Math.min(34, Math.max(28, Math.floor(contentW / 6.5)));
+    const starSize = Math.min(30, Math.max(26, Math.floor(contentW / 6.5)));
     const starRow = makeStarRow({
       star,
       style: 'sprite',
       starSize,
-      gap: 5,
+      gap: 4,
       anchor: 'left',
     });
     starRow.position.set(contentX, y + starSize / 2);
     band.addChild(starRow);
     if (this._buildLive) this._starRow = starRow;
 
-    // 上阵 / 下阵：说明区右下角（绿描边空心，对齐原型）
     if (!this._preview) {
       const inTeam = PlayerData.isInTeam(petId);
       const teamBtn = this._makeOutlineTeamButton({
@@ -570,18 +560,17 @@ export class PetDetailScene implements Scene {
       });
       teamBtn.position.set(
         rightX + rightW - platePad - teamBtnW / 2,
-        top + plateH - platePad - teamBtnH / 2,
+        plateTop + plateH - platePad - teamBtnH / 2,
       );
       if (!this._buildLive) teamBtn.eventMode = 'none';
       band.addChild(teamBtn);
     }
 
-    const plateBottom = top + plateH;
+    const portraitBottom = top + portraitH;
 
-    // 左右切宠箭头（仍保留，滑动为主）
     const ids = this._browseIds();
     if (ids.length > 1) {
-      const midY = top + plateH / 2;
+      const midY = top + portraitH / 2;
       const prev = this._makeHeroArrow('prev', () => this._switchPet(-1));
       prev.position.set(marginX + 4, midY);
       if (!this._buildLive) prev.eventMode = 'none';
@@ -592,7 +581,7 @@ export class PetDetailScene implements Scene {
       this._uiRoot().addChild(next);
 
       const idx = Math.max(0, ids.indexOf(petId));
-      const dotsY = plateBottom + 18;
+      const dotsY = portraitBottom + 16;
       const dots = new PIXI.Container();
       const gap = 14;
       const n = Math.min(ids.length, 8);
@@ -616,12 +605,11 @@ export class PetDetailScene implements Scene {
       hint.position.set(w / 2 + 20, dotsY);
       this._uiRoot().addChild(hint);
 
-      // 整页左右滑切宠（属性区纵向滚动通过轴判定互让）
       if (this._buildLive) this._attachPageSwipe();
-      return dotsY + 22;
+      return dotsY + 20;
     }
 
-    return plateBottom + 8;
+    return portraitBottom + 8;
   }
 
   /** 整页左右滑切换灵宠；邻宠页跟手从侧边滑入 */
@@ -796,41 +784,77 @@ export class PetDetailScene implements Scene {
     return btn;
   }
 
-  private _buildAvatar(
+  /** 竖框全身立绘秀场（enemy_portrait 金框 + 初级/觉醒怪面） */
+  private _buildShowcase(
     pet: PetDef,
     star: number,
     cx: number,
     cy: number,
-    size: number,
+    frameW: number,
+    frameH: number,
     parent: PIXI.Container = this._content,
   ): void {
     if (this._buildLive) this._avatarCenter.set(cx, cy);
     const holder = new PIXI.Container();
     holder.position.set(cx, cy);
 
-    // 仅用五行相框 + 立绘，不再叠稀有度卡底板（会在框内露出奶油底显得突兀）
-    const frameTex = TextureCache.get(petFrameImage(pet.element));
+    // 立绘裁切窗对齐金框透明洞；背板略大于洞、伸入边框下，铺满不露缝
+    const insetX = Math.floor(frameW * 0.105);
+    const insetY = Math.floor(frameH * 0.08);
+    const iw = frameW - insetX * 2;
+    const ih = frameH - insetY * 2;
+    const plateW = frameW - 2;
+    const plateH = frameH - 2;
+
+    holder.addChild(makePanel({
+      width: plateW, height: plateH, radius: 18, centered: true,
+      bg: 0xf5e8d0, bgAlpha: 1, borderWidth: 0,
+    }));
+
+    const art = new PIXI.Container();
+    const spr = new PIXI.Sprite(PIXI.Texture.EMPTY);
+    spr.anchor.set(0.5);
+    art.addChild(spr);
+    const mask = new PIXI.Graphics();
+    mask.beginFill(0xffffff);
+    mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, 14);
+    mask.endFill();
+    art.addChild(mask);
+    art.mask = mask;
+    holder.addChild(art);
+
+    const path = petShowcaseImage(pet.id, star);
+    const applyTex = (tex: PIXI.Texture) => {
+      if (holder.destroyed || !tex.width || !tex.height) return;
+      spr.texture = tex;
+      // Q 版透明底偏「矮胖」：纯 contain 会上下空一大块像小方块。
+      // 用 cover 铺满窗高，左右略裁由 mask 吃掉（源图本身也常左右贴边）。
+      const s = Math.max(iw / tex.width, ih / tex.height) * 0.98;
+      spr.scale.set(s);
+      spr.y = 0;
+    };
+    const cached = TextureCache.get(path);
+    if (cached) applyTex(cached);
+    else void TextureCache.load(path).then(applyTex).catch(() => {});
+
+    const frameTex = TextureCache.get(ENEMY_PORTRAIT_FRAME);
     if (frameTex) {
       const frame = new PIXI.Sprite(frameTex);
       frame.anchor.set(0.5);
-      frame.scale.set(size / Math.max(frame.width, frame.height));
+      frame.width = frameW;
+      frame.height = frameH;
       holder.addChild(frame);
     } else {
-      const fallback = makePanel({
-        width: size + 16, height: size + 16, radius: 22, centered: true,
-        bg: COLORS.panelBg, border: COLORS.panelBorder, borderWidth: 4,
-      });
-      holder.addChild(fallback);
+      const g = new PIXI.Graphics();
+      g.lineStyle(3, 0xc9a063, 1);
+      g.drawRoundedRect(-frameW / 2, -frameH / 2, frameW, frameH, 18);
+      holder.addChild(g);
     }
 
-    const avatar = new PIXI.Sprite(PIXI.Texture.EMPTY);
-    avatar.anchor.set(0.5);
-    holder.addChild(avatar);
-    bindPetAvatarSprite(avatar, pet.id, star, (tex) => {
-      avatar.scale.set((size * 0.78) / Math.max(tex.width, tex.height));
-    });
-    // 棋盘同源属性珠（略缩小，避免大头像上角标显贴图感）
-    attachPetFrameOrb(holder, pet.element, size, { scale: 0.72 });
+    const orbSize = Math.floor(frameW * 0.22);
+    const orb = makeElementOrb(pet.element, orbSize);
+    orb.position.set(-frameW / 2 + orbSize * 0.62, -frameH / 2 + orbSize * 0.62);
+    holder.addChild(orb);
 
     parent.addChild(holder);
     if (this._buildLive) {

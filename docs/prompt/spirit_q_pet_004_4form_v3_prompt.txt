@@ -1,0 +1,40 @@
+ART STYLE (MANDATORY — xiaochu2 Spirit v2 locked):
+Unified Q-version cute-chibi xianxia guofeng mobile game character art.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions, big glossy eyes, moe spirit-pet look.
+Airy cute, NOT dark fantasy / NOT photoreal.
+FORBIDDEN: photorealistic, dark horror, heavy oil paint, cyberpunk neon, purple-on-white AI defaults, 3D PBR, tiny ant-sized characters, huge empty margins.
+NO TEXT, no labels, no captions, no watermarks, no UI frames, no speech bubbles, no panel borders.
+
+LAYOUT (MANDATORY):
+Exactly ONE image, 2 columns × 2 rows equal panels (seamless 2x2 sprite sheet).
+Plain solid soft cream background in every cell (easy cutout).
+Base vs awakened MUST be instantly readable as different power stages — EXPLOSIVE contrast — while body footprint stays similar for UI frames.
+
+SIZE / FRAMING HARD RULES (CRITICAL — previous pet_004 had TOP CLIPPING):
+- Top-left & bottom-left (bust): subject fills 70%–78% of cell height, centered.
+- Top-right & bottom-right (full body): standing figure fills 85%–90% of cell height (NOT over 92%).
+- MUST keep clear headroom: antler tips, leafy crown, aura rings, particle bursts MUST stay fully inside each cell with at least 6%–8% empty cream margin ABOVE the highest point. NEVER crop the top of head / antlers / halo.
+- Feet near bottom with 4%–6% margin. Do NOT push subject upward into the top edge.
+- Awakened body FOOTPRINT / height stays in the same band as base (NOT a giant).
+
+AWAKENED UPGRADE (MANDATORY — dramatic):
+Base = cute everyday spirit-pet, softer colors, simpler gear.
+Awakened = CLEAR ascended look with HIGH CONTRAST:
+- Palette jump: brighter / more saturated accents vs muted base
+- Silhouette evolve: ornate armor/crest/wings/ribbons still inside same cell mass
+- Strong VFX: bold aura rings, particle storm, rune circles, elemental burst behind character — ALL fully inside cell, not clipped
+- Face still cute moe; eyes glow; markings appear
+- Must feel "wow power-up" at a glance — NOT thin gold trim only
+
+CELL MAP:
+1) TOP-LEFT — Base pet bust avatar, slight 3/4, chest-up. Calm cute. Full antlers + leafy crown visible with headroom.
+2) BOTTOM-LEFT — Awakened bust (_s3): SAME footprint, EXPLOSIVE upgrade. Glow halo fully inside, not cropped.
+3) TOP-RIGHT — Enemy tier1 full body standing chibi. Calm combat pose. Full body head-to-hoof with headroom.
+4) BOTTOM-RIGHT — Enemy tier2 awakened full body: SAME height band, EXPLOSIVE burst / evolved armor. Aura circle COMPLETELY inside cell.
+
+SUBJECT — pet_004 灵鹿医者 (Wood · Healer · SR):
+Cute anthropomorphic fawn / young deer spirit doctor, large emerald-green glossy eyes, soft tan fur with white spots, small brown antlers adorned with green leaves and tiny white flower buds.
+BASE: simple dark-green healer hooded robe with gold trim, cream under-tunic, leather belt pouch, wooden staff topped with a soft glowing green orb, satchel of medicinal herbs and flowers. Calm gentle healer vibe.
+AWAKENED: ornate living-wood / jade-leaf armor with gold filigree, brighter emerald cape, larger leafy crest crown, staff evolves with brighter crystal and leaf ornaments, bold green nature rune ring + soft leaf-particle storm BEHIND the body (must fit fully in cell with headroom). Still cute moe face, glowing green eyes.
+Keep wood/nature green-gold palette. Same character identity across all four cells.
+Use reference images for style grid layout and species color only — do NOT copy any prior clipped framing.

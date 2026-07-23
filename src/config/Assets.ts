@@ -92,10 +92,16 @@ export function creaturePetAvatar(creatureId: string, star = 1): string {
 }
 
 export function creatureMonsterImage(creatureId: string, tier: 'tier1' | 'tier2'): string {
-  const root = enemyImageRoot(creatureId);
+  const id = canonicalCreatureId(creatureId);
+  const root = enemyImageRoot(id);
   return tier === 'tier2'
-    ? `${root}/${creatureId}_awakened.png`
-    : `${root}/${creatureId}.png`;
+    ? `${root}/${id}_awakened.png`
+    : `${root}/${id}.png`;
+}
+
+/** 详情秀场全身立绘：★3+ 用高级怪面，否则初级怪面 */
+export function petShowcaseImage(petId: string, star = 1): string {
+  return creatureMonsterImage(petId, star >= PET_AWAKEN_STAR ? 'tier2' : 'tier1');
 }
 
 /** 章节路径地图 UI（主包） */

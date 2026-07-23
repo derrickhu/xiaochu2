@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { petImage, petImageAwakened, petAvatarPath, petAvatarLoadPaths, creatureMonsterImage, PET_AWAKEN_STAR } from '../Assets';
+import {
+  petImage, petImageAwakened, petAvatarPath, petAvatarLoadPaths,
+  creatureMonsterImage, petShowcaseImage, PET_AWAKEN_STAR,
+} from '../Assets';
 
 describe('灵宠头像路径', () => {
   it('初始头像与觉醒头像路径', () => {
@@ -23,5 +26,10 @@ describe('灵宠头像路径', () => {
   it('pet_011+ 怪物立绘进 pkg-enemy-cr', () => {
     expect(creatureMonsterImage('pet_001', 'tier1')).toContain('pkg-enemy/images/enemy/pet_001.png');
     expect(creatureMonsterImage('pet_011', 'tier2')).toContain('pkg-enemy-cr/images/enemy/pet_011_awakened.png');
+  });
+
+  it('详情秀场立绘随星级切初级/觉醒全身', () => {
+    expect(petShowcaseImage('pet_001', 2)).toBe(creatureMonsterImage('pet_001', 'tier1'));
+    expect(petShowcaseImage('pet_001', 3)).toBe(creatureMonsterImage('pet_001', 'tier2'));
   });
 });
