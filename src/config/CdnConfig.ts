@@ -38,7 +38,10 @@ export const CDN_CONFIG: CdnConfig = {
   cacheRootName: 'cdn_cache_v1',
   downloadRetry: 2,
   downloadTimeoutMs: 30000,
-  /** 大体积立绘 / 场景底图 / 音频走 CDN（上传后可由 packOptions.ignore 瘦包） */
+  /**
+   * 大体积立绘 / 场景底图 / 音频走 CDN。
+   * 微信上传前务必 `npm run cdn:strip` 物理剔除（勿只靠 packOptions.ignore）。
+   */
   cdnDirs: [
     'subpackages/pkg-pet/images',
     'subpackages/pkg-enemy/images',

@@ -39,7 +39,12 @@
       { "type": "folder", "value": "subpackages/pkg-enemy/images" },
       { "type": "folder", "value": "subpackages/pkg-enemy-cr/images" },
       { "type": "folder", "value": "subpackages/pkg-scene/images/bg" },
-      { "type": "folder", "value": "subpackages/pkg-audio/audio" }
+      { "type": "folder", "value": "subpackages/pkg-audio/audio" },
+      { "type": "glob", "value": "subpackages/pkg-pet/images/**/*" },
+      { "type": "glob", "value": "subpackages/pkg-enemy/images/**/*" },
+      { "type": "glob", "value": "subpackages/pkg-enemy-cr/images/**/*" },
+      { "type": "glob", "value": "subpackages/pkg-scene/images/bg/**/*" },
+      { "type": "glob", "value": "subpackages/pkg-audio/audio/**/*" }
     ],
     "include": []
   },
