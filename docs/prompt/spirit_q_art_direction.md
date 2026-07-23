@@ -30,14 +30,29 @@
 ## 生图工具
 
 - 默认：**Cursor 内置 GenerateImage**
-- 参考图优先：`spirit_q_sample_pet_001_4form_v2.png` + 该宠旧头像（借物种色相）
+- 参考图优先：`docs/ui/spirit_q_sample_pet_001_4form_v2.png` + 该宠旧头像（借物种色相）
 - Prompt 骨架：粘贴 `spirit_q_4form_style_common.txt`，再写物种 SUBJECT
+
+## 资源落盘（仓库外）
+
+大批量原图 / 切图输出不进 git，统一放外部资源库：
+
+| 内容 | 路径 |
+|------|------|
+| 30 宠 2×2 原图 | `/Users/huyi/dk_proj/game_assets/xiaochu2/assets/raw/spirit_batch/` |
+| 单宠切图成品 | `/Users/huyi/dk_proj/game_assets/xiaochu2/assets/final/spirit_pet_XXX/` |
+| 本地临时 demo / processed | 仓库内 `tmp/`（已 gitignore） |
+
+仓库 `docs/ui/` 仅保留**定稿锚点**（`spirit_q_sample_*_v2.png` 等）与 UI 原型参考图。
 
 ## 入库流水线
 
 ```bash
-python3 scripts/process_spirit_4form_grid.py GRID.png --pet-id pet_XXX \
-  --out-dir /Users/huyi/rosa_games/game_assets/xiaochu2/assets/final/spirit_pet_XXX \
+# 原图在外部 raw/spirit_batch；切图输出到 final，并 --install 写入 minigame
+python3 scripts/process_spirit_4form_grid.py \
+  /Users/huyi/dk_proj/game_assets/xiaochu2/assets/raw/spirit_batch/pet_XXX_4form.png \
+  --pet-id pet_XXX \
+  --out-dir /Users/huyi/dk_proj/game_assets/xiaochu2/assets/final/spirit_pet_XXX \
   --install
 npm run build && ./scripts/upload.sh
 ```

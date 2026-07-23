@@ -147,6 +147,11 @@ export const UI_IMAGES = {
   railTower: `${IMG}/ui/icon/rail_tower.png`,
   railDaily: `${IMG}/ui/icon/rail_daily.png`,
   railEvent: `${IMG}/ui/icon/rail_event.png`,
+  /** 首页右下：桌面快捷方式 / 侧边栏复访入口 */
+  homeDesktop: `${IMG}/ui/icon/home_desktop.png`,
+  homeSidebar: `${IMG}/ui/icon/home_sidebar.png`,
+  /** 首页顶栏默认玩家头像（仙灵小萌新） */
+  playerAvatarDefault: `${IMG}/ui/avatar/player_default.png`,
   iconCoin: `${IMG}/ui/icon/currency_coin.png`,
   iconExp: `${IMG}/ui/icon/currency_exp.png`,
   iconLingyu: `${IMG}/ui/icon/currency_lingyu.png`,

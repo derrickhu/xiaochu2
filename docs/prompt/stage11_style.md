@@ -49,5 +49,7 @@ Use reference images for STYLE / palette / button & plaque chrome ONLY — do no
 ## 交付
 
 - Prompt → `docs/prompt/{task}_prompt.txt`
-- UI 原型 → `docs/ui/`
+- UI 定稿原型 / 风格锚点 → `docs/ui/`（进仓库）
+- 大批量原图 / 切图成品 → `/Users/huyi/dk_proj/game_assets/xiaochu2/assets/`（`game_assets` 仓）
+- 临时 demo / processed → 仓库 `tmp/`（gitignore）
 - 运行时资源 → `minigame/images/...` 后 `npm run build`

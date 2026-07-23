@@ -9,9 +9,13 @@
 
 用法：
   python3 scripts/process_spirit_4form_grid.py \\
-    docs/ui/spirit_q_sample_pet_001_4form.png \\
+    /Users/huyi/dk_proj/game_assets/xiaochu2/assets/raw/spirit_batch/pet_001_4form.png \\
     --pet-id pet_001 \\
-    --out-dir /Users/huyi/rosa_games/game_assets/xiaochu2/assets/final/spirit_sample_pet_001
+    --out-dir /Users/huyi/dk_proj/game_assets/xiaochu2/assets/final/spirit_pet_001 \\
+    --install
+
+  # 定稿锚点仍可从仓库 docs/ui 读取：
+  #   docs/ui/spirit_q_sample_pet_001_4form_v2.png
 """
 from __future__ import annotations
 

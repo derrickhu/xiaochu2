@@ -1,7 +1,8 @@
 /**
- * 标题场景：主线章节地图首页 + 可扩展左侧玩法栏 + 五格底栏
+ * 标题场景：主线章节地图首页 + 左侧分组栏 + 五格底栏
  *
- * IA：底栏「主线」= 本页；左侧签到/通天塔/日常/活动 = 副玩法（可继续扩展）。
+ * IA：底栏「主线」= 本页；
+ * 左栏上组 = 副玩法；分隔线下 = 侧边栏/桌面（抖音必接，对齐 home_layout_demo_b）。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -13,8 +14,8 @@ import {
   makeCurrencyLabel, makeChapterNavArrow, NAV_ARROW_SIZE,
   makeChapterTitlePlaque, namePlaqueOuterHalf,
   buildBottomNav, BOTTOM_NAV_RESERVE,
-  buildHomeLeftRail,
-  COLORS, FONT_SIZE, makePanel, makeText,
+  buildHomeLeftRail, homeLeftRailHeight, DEFAULT_HOME_RAIL,
+  COLORS, FONT_SIZE, makeText,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
 import { GMManager } from '@/core/GMManager';
@@ -24,10 +25,8 @@ import { bindPointerTap } from '@/utils/bindPointerTap';
 import { buildTitleScreenWorld } from './chapterMapView';
 import { attachChapterMapEditor } from './chapterMapEditor';
 import { ensurePetAvatars, titleHomePetAvatarEntries } from '@/config/assetPreload';
-import { getPetAvatarTexture } from '@/config/petAvatarTexture';
-import { SidebarEntryButton } from '@/ui/SidebarEntryButton';
-import { DesktopShortcutEntryButton } from '@/ui/DesktopShortcutEntryButton';
-import { DesktopShortcutService } from '@/core/DesktopShortcutService';
+import { UI_IMAGES } from '@/config/Assets';
+import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
 
 declare const GameGlobal: any;
@@ -150,8 +149,6 @@ export class TitleScene implements Scene {
     this._buildTopBar(w, Game.safeHeaderCenterY);
     this._buildChapterNav(w, TitleScene.chapterNavY());
     this._buildLeftRail(h);
-    this._buildSidebarEntry(w, h);
-    this._buildDesktopShortcutEntry(w, h);
     this._buildBottomNav(w, h);
   }
 
@@ -160,54 +157,61 @@ export class TitleScene implements Scene {
   }
 
   private _buildLeftRail(h: number): void {
-    const top = TitleScene.chapterNavY() + 56;
+    const showWelfare = Platform.isDouyin || Platform.isDevtools;
+    const top = TitleScene.chapterNavY() + 64;
     const bottomLimit = h - TitleScene.BOTTOM_RESERVE - 24;
+    const railH = homeLeftRailHeight(
+      DEFAULT_HOME_RAIL.length,
+      showWelfare ? 2 : 0,
+    );
     buildHomeLeftRail(this.container, {
       x: 48,
-      y: Math.min(top, bottomLimit - 280),
+      y: Math.min(top, bottomLimit - railH),
+      showWelfare,
     });
   }
 
-  private _buildDesktopShortcutEntry(w: number, h: number): void {
-    if (!DesktopShortcutService.isAvailable) return;
-    const reserve = TitleScene.BOTTOM_RESERVE;
-    const btn = new DesktopShortcutEntryButton(w - 130, h - reserve - 72);
-    this.container.addChild(btn);
-  }
-
-  private _buildSidebarEntry(w: number, h: number): void {
-    if (!Platform.isDouyin) return;
-    const reserve = TitleScene.BOTTOM_RESERVE;
-    const btn = new SidebarEntryButton(w - 56, h - reserve - 72);
-    this.container.addChild(btn);
-  }
-
-  /** 顶栏：左头像+昵称；货币紧随昵称右侧排布，彻底躲开右上角胶囊/收起 */
+  /** 顶栏：默认玩家头像+昵称；货币紧随昵称右侧排布，躲开右上角胶囊/收起 */
   private _buildTopBar(w: number, centerY: number): void {
     const padX = 28;
     const profile = new PIXI.Container();
     profile.position.set(padX, centerY);
 
-    const avSize = 52;
-    profile.addChild(makePanel({
-      width: avSize, height: avSize, radius: avSize / 2,
-      bg: COLORS.panelBg, bgAlpha: 0.95,
-      border: COLORS.panelBorder, borderWidth: 2,
-      centered: true,
-    }));
+    const avSize = 56;
+    // 外环金边 + 内圈奶油底，突出「仙灵小萌新」默认头像
+    const ring = new PIXI.Graphics();
+    ring.beginFill(COLORS.accent, 1);
+    ring.drawCircle(0, 0, avSize / 2 + 3);
+    ring.endFill();
+    ring.beginFill(COLORS.panelBorder, 1);
+    ring.drawCircle(0, 0, avSize / 2 + 1);
+    ring.endFill();
+    ring.beginFill(COLORS.panelBg, 1);
+    ring.drawCircle(0, 0, avSize / 2 - 1);
+    ring.endFill();
+    profile.addChild(ring);
 
-    const lead = PlayerData.team[0];
-    const tex = lead ? getPetAvatarTexture(lead, PlayerData.petStar(lead)) : null;
-    if (tex) {
+    const avatarSlot = new PIXI.Container();
+    profile.addChild(avatarSlot);
+    const mountAvatar = (tex: PIXI.Texture) => {
+      avatarSlot.removeChildren().forEach((c) => c.destroy());
       const sp = new PIXI.Sprite(tex);
       sp.anchor.set(0.5);
-      sp.scale.set((avSize - 8) / Math.max(tex.width, tex.height));
+      sp.scale.set((avSize - 6) / Math.max(tex.width, tex.height));
       const mask = new PIXI.Graphics();
       mask.beginFill(0xffffff);
       mask.drawCircle(0, 0, (avSize - 6) / 2);
       mask.endFill();
       sp.mask = mask;
-      profile.addChild(sp, mask);
+      avatarSlot.addChild(sp, mask);
+    };
+    const cached = TextureCache.get(UI_IMAGES.playerAvatarDefault);
+    if (cached) {
+      mountAvatar(cached);
+    } else {
+      void TextureCache.load(UI_IMAGES.playerAvatarDefault).then((tex) => {
+        if (!avatarSlot.destroyed) mountAvatar(tex);
+      }).catch(() => null);
     }
 
     const name = makeText(HOME_DISPLAY_NAME, {

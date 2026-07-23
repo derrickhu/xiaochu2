@@ -27,7 +27,8 @@ export class DesktopShortcutPanel extends PIXI.Container {
   }
 
   open(): void {
-    if (!DesktopShortcutService.isAvailable || this._isOpen) return;
+    // 开发者工具可预览 UI；真机仍要求宿主支持 addShortcut
+    if ((!DesktopShortcutService.isAvailable && !Platform.isDevtools) || this._isOpen) return;
     this._isOpen = true;
     this.visible = true;
     this._refresh();
@@ -67,6 +68,7 @@ export class DesktopShortcutPanel extends PIXI.Container {
 
     const panelW = Math.min(w * 0.78, 560);
     const panelH = 300;
+    const bodyPadX = 40;
     this._content.addChild(makePanel({
       width: panelW,
       height: panelH,
@@ -75,25 +77,25 @@ export class DesktopShortcutPanel extends PIXI.Container {
       centered: true,
     }));
 
+    // 浅底弹窗：深墨标题，去掉金字+紫描边
     const title = makeText('添加到桌面', {
       size: FONT_SIZE.lg,
-      fill: COLORS.textTitle,
+      fill: COLORS.textMain,
       bold: true,
       anchor: 0.5,
-      strokeColor: 0x1a1028,
-      strokeWidth: 3,
     });
-    title.position.set(0, -panelH / 2 + 36);
+    title.position.set(0, -panelH / 2 + 40);
     this._content.addChild(title);
 
     this._body = makeText('', {
       size: FONT_SIZE.sm,
       fill: COLORS.textMain,
-      anchor: 0.5,
-      wordWrapWidth: panelW - 48,
-      align: 'center',
+      anchor: [0, 0],
+      wordWrapWidth: panelW - bodyPadX * 2,
+      align: 'left',
     });
-    this._body.position.set(0, -panelH / 2 + 92);
+    this._body.style.lineHeight = Math.round(FONT_SIZE.sm * 1.55);
+    this._body.position.set(-panelW / 2 + bodyPadX, -panelH / 2 + 84);
     this._content.addChild(this._body);
 
     this._actionSlot = new PIXI.Container();
@@ -124,18 +126,24 @@ export class DesktopShortcutPanel extends PIXI.Container {
 
     const st = DesktopShortcutService.status;
     if (st?.exist && !st.needUpdate) {
-      this._body.text = '桌面快捷方式已添加\n\n下次可直接从手机桌面图标进入游戏';
+      this._body.text = '桌面快捷方式已添加。\n\n下次可直接从手机桌面图标进入游戏。';
       return;
     }
 
-    this._body.text = '将「灵宠消消塔」添加到手机桌面，\n下次可从桌面图标快速进入游戏。';
+    this._body.text = DesktopShortcutService.isAvailable
+      ? '将「灵宠消消塔」添加到手机桌面，\n下次可从桌面图标快速进入游戏。'
+      : '将「灵宠消消塔」添加到手机桌面，\n下次可从桌面图标快速进入游戏。\n\n（当前为预览环境，真机抖音可添加）';
     const btn = makeButton({
-      label: '立即添加',
+      label: DesktopShortcutService.isAvailable ? '立即添加' : '预览·知道了',
       width: 260,
       height: 52,
       variant: 'primary',
       syncGesture: true,
       onTap: () => {
+        if (!DesktopShortcutService.isAvailable) {
+          this.close();
+          return;
+        }
         DesktopShortcutService.addToDesktop({
           onSuccess: () => {
             Platform.showToast('已添加到桌面', 'success');

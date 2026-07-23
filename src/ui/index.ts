@@ -25,8 +25,6 @@ export * from './RoleVisual';
 export * from './GrowthVisual';
 export * from './StatVisual';
 export * from './SidebarPanel';
-export * from './SidebarEntryButton';
 export * from './DesktopShortcutPanel';
-export * from './DesktopShortcutEntryButton';
 export * from './BottomNav';
 export * from './HomeLeftRail';

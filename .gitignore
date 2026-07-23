@@ -33,3 +33,6 @@ project.private.config.json
 *.tmp
 run/
 logs/
+
+# 本地临时产物（布局示意稿、切图中间层、调试导出等，勿进仓库）
+tmp/

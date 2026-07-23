@@ -31,7 +31,8 @@ export class SidebarPanel extends PIXI.Container {
   }
 
   open(): void {
-    if (!Platform.isDouyin || this._isOpen) return;
+    // 开发者工具可预览 UI；真机仅抖音侧边栏场景
+    if ((!Platform.isDouyin && !Platform.isDevtools) || this._isOpen) return;
     this._isOpen = true;
     this.visible = true;
     this._refresh();
@@ -70,7 +71,8 @@ export class SidebarPanel extends PIXI.Container {
     this.addChild(this._content);
 
     const panelW = Math.min(w * 0.78, 560);
-    const panelH = 320;
+    const panelH = 340;
+    const bodyPadX = 40;
     this._content.addChild(makePanel({
       width: panelW,
       height: panelH,
@@ -79,25 +81,25 @@ export class SidebarPanel extends PIXI.Container {
       centered: true,
     }));
 
+    // 浅底弹窗：深墨标题，去掉金字+紫描边
     const title = makeText('侧边栏复访奖励', {
       size: FONT_SIZE.lg,
-      fill: COLORS.textTitle,
+      fill: COLORS.textMain,
       bold: true,
       anchor: 0.5,
-      strokeColor: 0x1a1028,
-      strokeWidth: 3,
     });
-    title.position.set(0, -panelH / 2 + 36);
+    title.position.set(0, -panelH / 2 + 40);
     this._content.addChild(title);
 
     this._body = makeText('', {
       size: FONT_SIZE.sm,
       fill: COLORS.textMain,
-      anchor: 0.5,
-      wordWrapWidth: panelW - 48,
-      align: 'center',
+      anchor: [0, 0],
+      wordWrapWidth: panelW - bodyPadX * 2,
+      align: 'left',
     });
-    this._body.position.set(0, -panelH / 2 + 92);
+    this._body.style.lineHeight = Math.round(FONT_SIZE.sm * 1.55);
+    this._body.position.set(-panelW / 2 + bodyPadX, -panelH / 2 + 84);
     this._content.addChild(this._body);
 
     this._actionSlot = new PIXI.Container();
@@ -132,7 +134,7 @@ export class SidebarPanel extends PIXI.Container {
     const reward = ECONOMY.sidebar.lingyuReward;
 
     if (canClaim) {
-      this._body.text = `你从侧边栏进入了游戏！\n\n🎁 奖励：灵玉 +${reward}`;
+      this._body.text = `你从侧边栏进入了游戏！\n\n奖励：灵玉 +${reward}`;
       const btn = makeButton({
         label: '领取奖励',
         width: 240,
@@ -150,11 +152,15 @@ export class SidebarPanel extends PIXI.Container {
     }
 
     if (claimed) {
-      this._body.text = '今日奖励已领取，明天再来吧~\n\n每天从抖音首页侧边栏进入游戏\n即可领取灵玉奖励';
+      this._body.text = '今日奖励已领取，明天再来吧~\n\n每天从抖音首页侧边栏进入游戏，\n即可领取灵玉奖励。';
       return;
     }
 
-    this._body.text = '① 点击下方按钮前往侧边栏\n② 在侧边栏找到本游戏并点击进入\n③ 返回后即可领取灵玉奖励';
+    this._body.text = [
+      '1. 点击下方按钮前往侧边栏',
+      '2. 在侧边栏找到本游戏并进入',
+      '3. 返回后即可领取灵玉奖励',
+    ].join('\n');
     const goBtn = makeButton({
       label: '去首页侧边栏',
       width: 260,
