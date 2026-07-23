@@ -58,8 +58,8 @@ export function enemyImage(enemyId: string): string {
   return `${enemyImageRoot(enemyId)}/${enemyId}.png`;
 }
 
-/** ★4 及以上使用觉醒灵相头像（*_s3.png） */
-export const PET_AWAKEN_STAR = 4;
+/** ★3 及以上使用觉醒灵相头像（*_s3.png；文件名 s3 = star 3 形态） */
+export const PET_AWAKEN_STAR = 3;
 
 function canonicalCreatureId(id: string): string {
   return migrateCreatureId(id) ?? id;

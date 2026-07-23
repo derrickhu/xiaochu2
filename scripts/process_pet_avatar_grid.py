@@ -2,7 +2,7 @@
 """
 从 xiao_chu 风格 2×2 四宫格提取灵宠头像对：
   左上 = 初始（normal avatar）
-  左下 = 觉醒（awakened avatar，★4 灵相）
+  左下 = 觉醒（awakened avatar，★3 灵相）
 
 流程：切分 → rembg → 裁透明边 → 居中缩放到 128×128 PNG。
 """

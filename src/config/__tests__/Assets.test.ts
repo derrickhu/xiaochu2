@@ -7,10 +7,10 @@ describe('灵宠头像路径', () => {
     expect(petImageAwakened('pet_007')).toBe('subpackages/pkg-pet/images/pet/pet_007_s3.png');
   });
 
-  it('★4 及以上切换觉醒灵相', () => {
-    expect(PET_AWAKEN_STAR).toBe(4);
-    expect(petAvatarPath('pet_001', 3)).toBe(petImage('pet_001'));
-    expect(petAvatarPath('pet_001', 4)).toBe(petImageAwakened('pet_001'));
+  it('★3 及以上切换觉醒灵相', () => {
+    expect(PET_AWAKEN_STAR).toBe(3);
+    expect(petAvatarPath('pet_001', 2)).toBe(petImage('pet_001'));
+    expect(petAvatarPath('pet_001', 3)).toBe(petImageAwakened('pet_001'));
     expect(petAvatarPath('pet_001', 5)).toBe(petImageAwakened('pet_001'));
   });
 

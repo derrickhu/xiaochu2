@@ -7,6 +7,10 @@
 import { EventBus } from '@/core/EventBus';
 import { Platform } from '@/core/PlatformService';
 import { ChapterMapLayoutStore } from '@/game/chapterMapLayoutStore';
+import { PlayerData } from '@/game/PlayerData';
+import { MAX_PET_STAR } from '@/balance/growth';
+import { PET_AWAKEN_STAR } from '@/config/Assets';
+import { PET_MAP } from '@/balance/pets';
 
 const GM_STORAGE_KEY = 'xiaochu2_gm';
 
@@ -150,6 +154,117 @@ class GMManagerClass {
         return this._instantClearHandler();
       },
     });
+
+    // ── 养成调试：经验 / 碎片 / 快速升星（测觉醒头像等）──
+    this._commands.push({
+      id: 'exp_plus_10k',
+      group: '养成',
+      name: '经验 +1万',
+      desc: '全局宠物经验池 +10000，详情页可连续升级',
+      execute: () => {
+        PlayerData.load();
+        PlayerData.addExp(10_000);
+        return `经验 = ${PlayerData.exp}`;
+      },
+    });
+    this._commands.push({
+      id: 'exp_plus_100k',
+      group: '养成',
+      name: '经验 +10万',
+      desc: '全局宠物经验池 +100000',
+      execute: () => {
+        PlayerData.load();
+        PlayerData.addExp(100_000);
+        return `经验 = ${PlayerData.exp}`;
+      },
+    });
+    this._commands.push({
+      id: 'shards_owned_plus_50',
+      group: '养成',
+      name: '已拥有碎片 +50',
+      desc: '每只已拥有灵宠 +50 碎片（够测小幅升星）',
+      execute: () => this._addShardsToOwned(50),
+    });
+    this._commands.push({
+      id: 'shards_owned_plus_200',
+      group: '养成',
+      name: '已拥有碎片 +200',
+      desc: '每只已拥有灵宠 +200 碎片（覆盖 2★→3★ 等成本）',
+      execute: () => this._addShardsToOwned(200),
+    });
+    this._commands.push({
+      id: 'shards_team_next_star',
+      group: '养成',
+      name: '编队补齐下一星碎片',
+      desc: '当前编队每只宠刚好补足升一星所需碎片（不自动升）',
+      execute: () => this._fillTeamNextStarShards(),
+    });
+    this._commands.push({
+      id: 'team_star_awaken',
+      group: '养成',
+      name: `编队升到 ${PET_AWAKEN_STAR}★（觉醒脸）`,
+      desc: `编队自动补碎片并升到 ${PET_AWAKEN_STAR}★，用于测觉醒头像`,
+      execute: () => this._starUpTeamTo(PET_AWAKEN_STAR),
+    });
+    this._commands.push({
+      id: 'team_star_max',
+      group: '养成',
+      name: `编队升到 ${MAX_PET_STAR}★`,
+      desc: '编队补碎片并升到满星',
+      execute: () => this._starUpTeamTo(MAX_PET_STAR),
+    });
+  }
+
+  private _addShardsToOwned(amount: number): string {
+    PlayerData.load();
+    const ids = PlayerData.ownedPets;
+    if (ids.length === 0) return '暂无已拥有灵宠';
+    for (const id of ids) PlayerData.addShards(id, amount);
+    const sample = ids.slice(0, 3).map((id) => {
+      const name = PET_MAP.get(id)?.name ?? id;
+      return `${name}${PlayerData.petShards(id)}`;
+    });
+    return `已给 ${ids.length} 只 +${amount} 碎片；例：${sample.join(' / ')}`;
+  }
+
+  private _fillTeamNextStarShards(): string {
+    PlayerData.load();
+    const parts: string[] = [];
+    for (const id of PlayerData.team) {
+      if (!PlayerData.isOwned(id)) continue;
+      const cost = PlayerData.starUpCost(id);
+      const name = PET_MAP.get(id)?.name ?? id;
+      if (cost === null) {
+        parts.push(`${name}=满星`);
+        continue;
+      }
+      const have = PlayerData.petShards(id);
+      const need = Math.max(0, cost - have);
+      if (need > 0) PlayerData.addShards(id, need);
+      parts.push(`${name}+${need}→${PlayerData.petShards(id)}/${cost}`);
+    }
+    return parts.length ? parts.join('；') : '编队为空';
+  }
+
+  /** 编队补碎片并连续升星到 target（含） */
+  private _starUpTeamTo(target: number): string {
+    PlayerData.load();
+    const goal = Math.max(1, Math.min(MAX_PET_STAR, target));
+    const parts: string[] = [];
+    for (const id of PlayerData.team) {
+      if (!PlayerData.isOwned(id)) continue;
+      const name = PET_MAP.get(id)?.name ?? id;
+      let guard = MAX_PET_STAR + 2;
+      while (PlayerData.petStar(id) < goal && guard-- > 0) {
+        const cost = PlayerData.starUpCost(id);
+        if (cost === null) break;
+        const need = Math.max(0, cost - PlayerData.petShards(id));
+        if (need > 0) PlayerData.addShards(id, need);
+        if (!PlayerData.starUp(id)) break;
+      }
+      parts.push(`${name}${PlayerData.petStar(id)}★`);
+    }
+    return parts.length ? `编队 → ${parts.join(' / ')}` : '编队为空';
   }
 
   private _saveState(): void {

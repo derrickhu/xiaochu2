@@ -19,7 +19,7 @@ export interface AbilityCardOpts {
   width: number;
   /** 是否已拥有（决定锁定提示文案） */
   owned: boolean;
-  /** 养成星级（★4+ 展示觉醒灵相） */
+  /** 养成星级（★3+ 展示觉醒灵相） */
   star?: number;
 }
 
