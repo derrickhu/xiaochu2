@@ -143,6 +143,10 @@ function migrateOverflowFromMain() {
     [path.join(ROOT, 'images/ui/fx'), path.join(ROOT, 'subpackages/pkg-fx/images/ui/fx')],
     // 战斗 HUD 贴图约 3MB，必须出主包（微信主包 ≤4MB）
     [path.join(ROOT, 'images/ui/battle'), path.join(ROOT, 'subpackages/pkg-battle/images/ui/battle')],
+    // 签到 / 秘境 / 通天塔大图 → pkg-scene（再经 CDN strip，避免主包与单分包超限）
+    [path.join(ROOT, 'images/ui/checkin'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/checkin')],
+    [path.join(ROOT, 'images/ui/realm'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/realm')],
+    [path.join(ROOT, 'images/ui/tower'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/tower')],
   ];
   for (const [srcDir, destDir] of moves) {
     if (!fs.existsSync(srcDir)) continue;
@@ -151,6 +155,34 @@ function migrateOverflowFromMain() {
       moveFile(path.join(srcDir, f), path.join(destDir, f));
     }
     rmEmpty(srcDir);
+  }
+
+  // 日常宝箱单文件（约 0.8MB）
+  moveFile(
+    path.join(ROOT, 'images/ui/icon/quest_chest.png'),
+    path.join(ROOT, 'subpackages/pkg-scene/images/ui/icon/quest_chest.png'),
+  );
+
+  // 非首屏匾额（主包刚好贴 4MB 线，这两张约 330KB）
+  moveFile(
+    path.join(ROOT, 'images/ui/plaque/modal_title.png'),
+    path.join(ROOT, 'subpackages/pkg-scene/images/ui/plaque/modal_title.png'),
+  );
+  moveFile(
+    path.join(ROOT, 'images/ui/plaque/scene_title.png'),
+    path.join(ROOT, 'subpackages/pkg-scene/images/ui/plaque/scene_title.png'),
+  );
+
+  // 非首屏背景：主包仅留 scene_home / title_screen
+  const bgDir = path.join(ROOT, 'images/bg');
+  const pkgSceneBg = path.join(ROOT, 'subpackages/pkg-scene/images/bg');
+  const keepMainBg = new Set(['scene_home.jpg', 'title_screen.jpg']);
+  if (fs.existsSync(bgDir)) {
+    ensureDir(pkgSceneBg);
+    for (const f of fs.readdirSync(bgDir)) {
+      if (keepMainBg.has(f) || f === '.DS_Store') continue;
+      moveFile(path.join(bgDir, f), path.join(pkgSceneBg, f));
+    }
   }
 }
 

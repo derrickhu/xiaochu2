@@ -46,7 +46,8 @@ export const CDN_CONFIG: CdnConfig = {
     'subpackages/pkg-pet/images',
     'subpackages/pkg-enemy/images',
     'subpackages/pkg-enemy-cr/images',
-    'subpackages/pkg-scene/images/bg',
+    /** 含战斗/秘境/通天塔/签到等场景图；整包走 CDN，避免单分包与总包超限 */
+    'subpackages/pkg-scene/images',
     'subpackages/pkg-audio/audio',
   ],
   /** 主包 UI / 棋盘珠 / 战斗 HUD / 特效等首屏与操作强依赖资源留包内 */

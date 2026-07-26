@@ -87,10 +87,25 @@ class TextureCacheClass {
   }
 
   /** 批量预加载（限并发，避免小游戏同时拉过多图） */
-  async preload(paths: readonly string[]): Promise<void> {
+  async preload(
+    paths: readonly string[],
+    onProgress?: (loaded: number, total: number) => void,
+  ): Promise<void> {
+    const total = paths.length;
+    if (total === 0) {
+      onProgress?.(0, 0);
+      return;
+    }
+    let loaded = 0;
     for (let i = 0; i < paths.length; i += PRELOAD_BATCH_SIZE) {
       const batch = paths.slice(i, i + PRELOAD_BATCH_SIZE);
-      await Promise.all(batch.map((p) => this.load(p).catch(() => null)));
+      await Promise.all(
+        batch.map(async (p) => {
+          await this.load(p).catch(() => null);
+          loaded += 1;
+          onProgress?.(loaded, total);
+        }),
+      );
     }
   }
 

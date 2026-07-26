@@ -35,6 +35,10 @@ import { SidebarPanel } from '@/ui/SidebarPanel';
 import { DesktopShortcutPanel } from '@/ui/DesktopShortcutPanel';
 import { CheckinPanel } from '@/ui/CheckinPanel';
 import { DailyQuestPanel } from '@/ui/DailyQuestPanel';
+import {
+  LOADING_SPLASH_IMAGES,
+  LoadingScreenOverlay,
+} from '@/ui/LoadingScreenOverlay';
 
 declare const GameGlobal: any;
 
@@ -66,6 +70,16 @@ async function main(): Promise<void> {
     return;
   }
 
+  Game.stage.sortableChildren = true;
+  const loadingOverlay = new LoadingScreenOverlay();
+  Game.stage.addChild(loadingOverlay);
+
+  // 先出 Loading 底图/标题，避免云同步等待时黑屏
+  await TextureCache.preload([...LOADING_SPLASH_IMAGES]);
+  loadingOverlay.applySplashTexture();
+  loadingOverlay.applyTitleTexture();
+  loadingOverlay.setProgress(0.08);
+
   let initialSaveLoaded = false;
   PersistService.subscribeCloudImport((info) => {
     if (!info.changedKeys.includes(SAVE_KEY)) return;
@@ -78,6 +92,7 @@ async function main(): Promise<void> {
   console.log(
     `[main] 云同步启动结果: ${startupSync.status}, reason=${startupSync.reason}, platform=${Platform.name}`,
   );
+  loadingOverlay.setProgress(0.16);
 
   let resolvedUserId = CloudSyncManager.userId;
   if (!resolvedUserId && BackendService.available) {
@@ -98,9 +113,16 @@ async function main(): Promise<void> {
 
   PlayerData.load();
   initialSaveLoaded = true;
+  loadingOverlay.setProgress(0.2);
 
   await loadSubpackagesForPaths(MAIN_PRELOAD_IMAGES);
-  await TextureCache.preload([...MAIN_PRELOAD_IMAGES]);
+  loadingOverlay.setProgress(0.28);
+
+  await TextureCache.preload([...MAIN_PRELOAD_IMAGES], (loaded, total) => {
+    const ratio = total > 0 ? loaded / total : 1;
+    loadingOverlay.setProgress(0.28 + ratio * 0.67);
+  });
+  loadingOverlay.setProgress(0.97);
 
   SceneManager.register(new TitleScene());
   SceneManager.register(new BattleScene());
@@ -127,6 +149,11 @@ async function main(): Promise<void> {
   }
 
   await Game.warmScenePresent();
+  loadingOverlay.setProgress(1);
+
+  // 进主场景首帧后再撤 Loading，避免中间空窗浅底闪一下
+  Game.stage.removeChild(loadingOverlay);
+  loadingOverlay.destroy({ children: true });
 
   warmupCommonSubpackages();
   // CDN：不 await，manifest + 拥有灵宠/BGM 后台预热，不挡首屏与 BGM 起播

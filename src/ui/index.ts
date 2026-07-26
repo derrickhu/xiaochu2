@@ -30,5 +30,6 @@ export * from './SidebarPanel';
 export * from './DesktopShortcutPanel';
 export * from './CheckinPanel';
 export * from './DailyQuestPanel';
+export * from './LoadingScreenOverlay';
 export * from './BottomNav';
 export * from './HomeLeftRail';
