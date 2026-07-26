@@ -12,7 +12,8 @@ import {
   type PlatformName,
 } from '@gp/analytics-sdk';
 
-import { ANALYTICS_ENDPOINT, GAME_KEY } from '@/config/CloudConfig';
+import { ANALYTICS_ENDPOINT } from '@/config/CloudConfig';
+import { BASE_GAME_KEY } from '@/config/gameKeyScope';
 import { Platform } from '@/core/PlatformService';
 import { stageLevelId } from './stageLevel';
 
@@ -31,9 +32,11 @@ function track(eventName: string, params: AnalyticsParams = {}): void {
 export function initAnalytics(opts?: { endpoint?: string; userId?: string; debug?: boolean }): void {
   if (inited) return;
 
+  // 经分 gameKey 必须用基础名 petTower（白名单只有这一档）。
+  // 存档/本地 key 的抖音命名空间 petTower_tt_* 走 platform 字段区分，不要把 scoped key 写进 gameKey。
   Analytics.init({
     endpoint: opts?.endpoint || ANALYTICS_ENDPOINT,
-    gameKey: GAME_KEY,
+    gameKey: BASE_GAME_KEY,
     appVersion: typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.1.0',
     platform: mapPlatform(),
     deviceInfo: buildDeviceInfo(),
@@ -49,7 +52,7 @@ export function initAnalytics(opts?: { endpoint?: string; userId?: string; debug
   });
 
   inited = true;
-  console.log(`[analytics] init gameKey=${GAME_KEY} platform=${mapPlatform()}`);
+  console.log(`[analytics] init gameKey=${BASE_GAME_KEY} platform=${mapPlatform()}`);
 }
 
 /** 登录拿到 openid 后调用；SDK 内部自动 track login + flush */
