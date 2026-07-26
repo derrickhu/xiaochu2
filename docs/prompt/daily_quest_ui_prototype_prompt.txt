@@ -1,0 +1,63 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + soft gold trim (#e8a33d).
+FORBIDDEN: photorealistic, dark fantasy, purple-on-white AI defaults, heavy filigree clutter, neon cyberpunk, emoji.
+Use reference images for STYLE / palette / chrome / button look ONLY — do not copy their exact layouts.
+
+Create ONE COMPLETE mobile DAILY QUEST (每日任务) MODAL UI prototype
+(phone 9:16 portrait, centered cream modal on soft dimmed scenic Q background, production-ready polish).
+
+INFORMATION ARCHITECTURE:
+- MODAL overlay (same family as 每日签到 panel), NOT a full-screen scene
+- 4 daily quests + 1 all-clear bonus strip
+- Demo mixed states so status is obvious at a glance
+- Answer instantly: What to do? What reward? How close? What button?
+
+COMPOSITION:
+
+1) MODAL SHELL
+- Large rounded cream parchment panel, soft gold border, subtle corner cloud flourishes
+- Top center: cream-gold title plaque「每日任务」
+- Top right: simple ✕ close
+- Sub line under plaque:「每日 0 点刷新」
+
+2) PROGRESS HEADER (one thin cream pill bar)
+- Left:「今日进度 3/4」with 4 small dots (3 filled mint-gold, 1 empty)
+- Right: teal-green gold-rim capsule「一键领取」(claimable highlight)
+- NO stats dashboard clutter
+
+3) QUEST LIST — exactly 4 horizontal cream ROW CARDS (not a dense table)
+Each row left→right:
+- Cute Q type icon in soft circle (stage / combo / gacha / realm themed)
+- Middle stack: quest name (bold) + thin mint progress bar +「2/3」style numbers
+- Reward preview: 1–2 small currency icons + amount (灵玉 / 灵宠币 / 经验)
+- Right CTA pill (ONE per row):
+  Row1「通关 3 个关卡」progress 3/3 → green「领取」
+  Row2「单场达成 8 连击」progress 0/1 → cream「前往」
+  Row3「召唤 1 次」progress 1/1 → green stamp overlay「已领取」dimmed row
+  Row4「完成 1 次五行秘境」progress 0/1 → cream「前往」
+- Generous padding; icons never clip borders; rows evenly spaced
+
+4) ALL-CLEAR BANNER (bottom of list, special but lighter than check-in day7)
+- Wide warm gold-cream horizontal strip with soft sparkle
+- Left treasure chest / gift motif
+- Center text「全部完成 · 额外奖励」+「灵玉 x50  碎片 x5」
+- Right state: soft「未解锁」or locked chest look (since demo progress 3/4)
+- Must feel like a goal, not just another gray row
+
+5) FOOTER TIP (tiny)
+-「完成任务后记得领奖哦」
+
+HERO BUDGET / CLEANLINESS:
+- One modal composition; no bottom nav; no floating badges except status stamps
+- Clear CTA hierarchy: 一键领取 > 领取 > 前往 > 已领取
+- Lightweight Q-UI, breathing room, soft shadows only
+
+Required readable Chinese text:
+每日任务 / 每日 0 点刷新 / 今日进度 3/4 / 一键领取 /
+通关 3 个关卡 / 单场达成 8 连击 / 召唤 1 次 / 完成 1 次五行秘境 /
+领取 / 前往 / 已领取 / 全部完成 · 额外奖励 / 灵玉 x50  碎片 x5 /
+完成任务后记得领奖哦
+
+Reference: check-in panel chrome and green gold CTA style.

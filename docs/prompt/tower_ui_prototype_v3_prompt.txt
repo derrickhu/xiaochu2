@@ -1,0 +1,29 @@
+CRITICAL STYLE FIX — Q版修仙 ONLY.
+
+Reference the attached image for overall screen structure, BUT:
+- REPLACE the tower art with a SUPER CUTE chibi/Q pagoda (think cute game prop / toy pavilion, rounded soft shapes, oversized cute eaves, simplified windows as glowing dots, soft cel-shading, NO photoreal bricks/tiles/perspective realism).
+- Move and SHRINK all status text UI so the tower body is almost fully visible.
+
+Use cream-mint-gold light Q UI language (like soft pastel cultivation mobile game).
+
+9:16 full mobile UI mock 「通天塔」.
+
+LAYOUT:
+1) Top: jade tassel back | cream plaque 「通天塔」 | tiny 「重置 2/2」
+2) CENTER HERO (70% of vertical focus): ultra-Q cute sky tower, centered, mostly UNCOVERED. Soft mint clouds, floating candy-like islands. Cute sparkles. Grand but toy-cute.
+3) STATUS (VERY SMALL, far-right margin ONLY, width ≤18% screen):
+   Two tiny slim pills stacked, not a big card:
+   · 「最高36」
+   · 「37层 HP72%」
+   One micro caption under them: 「跨层·回10%」
+   Must NOT cover tower trunk/center. Prefer overlapping only outer mist.
+4) Milestone strip lower third, semi-transparent, thin: 30已领 40待领 50 60
+5) Bottom cream-gold CTA 「挑战第37层」 — clean simple plaque
+6) NO bottom tab bar
+
+ABSOLUTELY AVOID:
+- realistic architecture / photo-like tower
+- large opaque info panels covering the tower
+- dark UI, neon purple, dense dashboard clutter
+
+Chinese labels required. No phone frame. No watermark.

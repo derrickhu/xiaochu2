@@ -1,0 +1,21 @@
+High-fidelity mobile game UI prototype mockup, portrait 9:16 phone frame, for "灵宠消消塔2" daily check-in modal.
+
+Use the reference screenshot ONLY for phone frame, blurred mountain-path home background, and modal placement. Completely redesign the modal chrome and day cells — do NOT copy the plain text spreadsheet look.
+
+Aesthetic: bright Eastern fantasy casual mobile RPG, cream parchment + soft gold, matching existing game UI (宣纸米白 panels, 金棕 borders, soft teal accents). Cute, rewarding, polished. Soft lighting, rounded corners. NO purple gradient, NO dark mode, NO neon glow spam, NO newspaper broadsheet.
+
+Layout (one composition, modal centered over dimmed home):
+1) Top of modal: ornate cream title plaque with gold trim, Chinese title 「每日签到」 in deep brown display calligraphy-like sans, small X close top-right.
+2) Under title: a short streak chip pill — calendar leaf icon + 「连续 1 天」; tiny muted tip 「断签从第1天重新开始」.
+3) Main grid: 3 columns × 2 rows for Day 1–6 reward cards. Each card:
+   - day badge top 「第N天」
+   - LARGE centered reward ICON (not text-only): Day1 blue lingyu gem, Day2 gold coin stack, Day3 green exp orb, Day4 bigger lingyu, Day5 coins, Day6 exp
+   - amount under icon 「×30」「×300」 etc.
+   - Day 1 CLAIMED state: soft taupe card + translucent green check stamp 「已领取」
+   - Day 2 TODAY state (claimable): brighter cream card, thicker gold border, soft gold halo, tiny 「今日」 ribbon
+   - Days 3–6 locked/upcoming: clean cream cards, readable but quieter
+4) Day 7 full-width grand reward banner below grid: wider gold ornate frame, ticket icon + shard pouch icons, label 「第7天 · 大奖」, text 「十连券×1  碎片×20」, sparkle accents — clearly the weekly anchor.
+5) Bottom CTA: large rounded green pill button 「签到 · 第 2 天」 with soft shadow (enabled state). Do NOT show grey disabled button in this prototype.
+
+Chinese UI text only where specified. Keep typography crisp and readable. No English labels, no watermark, no fake status bar clutter beyond a clean phone chrome.
+NO TEXT outside the designed UI labels. No extra marketing paragraphs. No cards floating as detached badges on the background.

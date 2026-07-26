@@ -63,9 +63,15 @@ export class TitleScene implements Scene {
     this._mapEditMode = !this._mapEditMode;
     this._rebuild();
   };
+  /** 签到/任务领奖后回到首页时，货币与左栏红点都要跟着变 */
+  private _onHomeRefresh = (): void => {
+    if (SceneManager.current?.name !== 'title') return;
+    this._rebuild();
+  };
 
   onEnter(data?: unknown): void {
     EventBus.on('gm:mapEditToggle', this._onMapEditToggle);
+    EventBus.on('home:refresh', this._onHomeRefresh);
     const enter = data as TitleEnterData | undefined;
     this._minimalStrip = enter?.minimalStrip;
     if (this._minimalStrip !== 'l7like') {
@@ -99,6 +105,7 @@ export class TitleScene implements Scene {
 
   onExit(): void {
     EventBus.off('gm:mapEditToggle', this._onMapEditToggle);
+    EventBus.off('home:refresh', this._onHomeRefresh);
     this._editorTeardown?.();
     this._editorTeardown = null;
     this._mapEditMode = false;

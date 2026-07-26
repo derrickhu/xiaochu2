@@ -1,0 +1,25 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI chrome.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded ornaments.
+Palette: cream parchment (#fdf3df / #fff8ec) + soft gold trim (#e8a33d / #d4a24a) + warm brown accents.
+FORBIDDEN: photorealistic metal, purple glow, neon, heavy baroque filigree clutter, 3D PBR chrome, emoji, any text/letters/Chinese characters.
+
+Create ONE horizontal SCENE TITLE PLAQUE asset for a full-screen game header
+(transparent background, production UI sprite, ready for nine-slice).
+
+COMPOSITION:
+- Wide horizontal banner, roughly 3.2:1 aspect (about 720×220 feel)
+- Center: smooth cream parchment plate with subtle paper grain, gently arched top edge
+- Thin soft-gold double rim along top and bottom of the cream body
+- LEFT and RIGHT ends: large matching auspicious cloud (祥云) ornaments in soft gold,
+  glossy Q cel-shade (highlight + soft shadow), chubby rounded curls — NOT thin line-art,
+  NOT tiny scribbles. Clouds should feel premium and readable at phone UI size.
+- Very faint soft cloud watermark inside cream middle (low opacity), keep middle CLEAR for overlay text
+- Symmetrical left/right
+- Full transparent background outside the plaque silhouette (no gray box, no phone frame)
+- Clean alpha edges, no drop shadow under the whole plaque
+
+Use reference image for STYLE of cream+gold cloud plaque family ONLY — redesign ornaments to be
+clearer, richer, and more readable than a flat thin bar.
+
+NO TEXT, no labels, no captions, no writing anywhere in the image.

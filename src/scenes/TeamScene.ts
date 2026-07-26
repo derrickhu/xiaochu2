@@ -1,6 +1,6 @@
 /**
- * 编队场景：战前按 team_prep_ui_prototype_v1 布局；
- * 自由编队保留槽位 + 总览 + 宠物池。
+ * 编队场景：战前按 team_prep_ui_prototype_v1 布局。
+ * 仅接受带 stageId 的战前入口；自由编队底栏入口已拆除。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -17,6 +17,7 @@ import { STAGE_MAP, formatStageShortLabel, type StageDef } from '@/balance/stage
 import type { TeamMember } from '@/formulas/team';
 import { BACKGROUND_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
+import type { BattleContext } from '@/game/battleContext';
 import type { BattleEnterData } from './BattleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
@@ -41,6 +42,10 @@ import { bindPointerTap } from '@/utils/bindPointerTap';
 /** 战前编队：传入 stageId 时展示本关敌人，确认后进入战斗；缺省为自由编队 */
 export interface TeamEnterData {
   stageId?: string;
+  /** 副玩法上下文，原样透传给战斗与结算 */
+  context?: BattleContext;
+  /** 返回目标场景，缺省回主页（秘境/通天塔进来时回各自玩法页） */
+  backScene?: string;
 }
 
 export class TeamScene implements Scene {
@@ -59,6 +64,8 @@ export class TeamScene implements Scene {
   private _slotW = 108;
   private _slotH = 108;
   private _prepStage?: StageDef;
+  private _context?: BattleContext;
+  private _backScene = 'title';
   private _listContent: PIXI.Container | null = null;
   private _listItems = new Map<string, PIXI.Container>();
   private _listScroll = new ScrollListController();
@@ -71,6 +78,14 @@ export class TeamScene implements Scene {
     PlayerData.load();
     const enter = data as TeamEnterData | undefined;
     this._prepStage = enter?.stageId ? STAGE_MAP.get(enter.stageId) : undefined;
+    this._context = enter?.context;
+    this._backScene = enter?.backScene ?? 'title';
+    // 自由编队入口已拆除：无关卡上下文时退回来源页
+    if (!this._prepStage) {
+      Platform.showToast('请从关卡进入编队');
+      SceneManager.switchTo(this._backScene);
+      return;
+    }
     const token = this._enterSeq.next();
     this._build({ animate: true });
     void Game.warmScenePresent();
@@ -95,6 +110,8 @@ export class TeamScene implements Scene {
     this._listChecks.clear();
     this._listItems.clear();
     this._prepStage = undefined;
+    this._context = undefined;
+    this._backScene = 'title';
     this._prevAgg = null;
     this._prevTeam = [];
     this._prevChecked.clear();
@@ -126,7 +143,7 @@ export class TeamScene implements Scene {
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
 
     const back = makeBackButton({
-      onTap: () => SceneManager.switchTo('title'),
+      onTap: () => SceneManager.switchTo(this._backScene),
     });
     back.position.set(80, Game.safeHeaderCenterY);
     this.container.addChild(back);
@@ -305,7 +322,10 @@ export class TeamScene implements Scene {
       return;
     }
     Platform.vibrateShort('medium');
-    SceneManager.switchTo('battle', { stageId: this._prepStage.id } satisfies BattleEnterData);
+    SceneManager.switchTo('battle', {
+      stageId: this._prepStage.id,
+      context: this._context,
+    } satisfies BattleEnterData);
   }
 
   private _buildTitlePlaque(w: number, centerY: number): void {

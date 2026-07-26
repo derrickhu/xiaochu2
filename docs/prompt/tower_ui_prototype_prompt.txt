@@ -1,0 +1,53 @@
+Use the attached reference images for STYLE + UI chrome language ONLY
+(secret_realm cream/gold Q-xianxia + daily_quest clean light panels).
+Keep the same premium soft pastel Q-cultivation look, lighting, and density.
+Do NOT copy their layouts, portals, or exact widgets.
+
+GOAL: Full-screen mobile UI prototype for 「通天塔」(Sky Tower / Endless Climb mode)
+in a cute Q-version Chinese xianxia game. Portrait 9:16.
+
+GAME FEEL (must read at a glance):
+- Long climb: HP & skill CD carry between floors (resource attrition, not one-shot stages)
+- Checkpoint every 5 floors; defeat falls back to last checkpoint
+- Milestone rewards every 10 floors (灵玉 + 碎片)
+- Daily resets limited (e.g. 2)
+
+COMPOSITION (one cohesive first viewport, NOT a dashboard):
+1) TOP BAR
+   - Top-left: jade-teal circular back medallion with white left arrow + cream tassel (same family as secret realm back)
+   - Center: cream gold title plaque 「通天塔」 dark-brown calligraphy
+   - Top-right: small status 「重置 2/2」
+
+2) HERO VISUAL (dominant center, edge-to-edge soft atmosphere behind UI)
+   - Tall adorable Q-style immortal pagoda / sky tower piercing soft clouds
+   - Floating islands, misty mountains, warm cream-mint sky, soft glow
+   - Tower is the brand hero — cute, grand, readable; not hyper-realistic
+   - Slight golden light from upper floors
+
+3) STATUS CLUSTER (light cream cards, thin gold borders — like secret-realm side cards, clean not ornate)
+   - Main floating card over/near tower mid:
+     「历史最高 第 36 层」
+     「即将挑战 第 37 层 · 起手血量 72%」
+   - Small tip chip: 「血量跨层继承 · 每层回 10%」
+   - Optional thin checkpoint line: 「存档点 每 5 层」
+
+4) MILESTONE STRIP (one job section under status)
+   - Title 「层数里程碑」
+   - 3–4 compact reward nodes: 30层(已领) / 40层(待领发光) / 50层 / 60层
+   - Reward icons: green 灵玉 crystals + shard pouch (cute, small)
+
+5) BOTTOM CTA
+   - One large clean cream-gold plaque button 「挑战第 37 层」
+   - Concise & grand (like secret-realm battle CTA), NO heavy filigree clutter
+   - Soft gold double rim, scalloped ends OK, keep simple
+
+STYLE RULES:
+- Q版修仙风: soft, cute, pastel cream / mint / gold / jade
+- Clean light UI, thin elegant borders, generous breathing room
+- NO dark cyberpunk, NO purple neon, NO dense newspaper layout
+- NO cards-in-hero overload; panels float lightly, tower stays readable
+- Chinese UI labels as listed above are REQUIRED on this prototype (readable, correct)
+- No phone device frame, no watermark, no English UI chrome
+- Production-quality UI mock, sharp, polished
+
+Deliver a single 9:16 full-screen UI mock suitable as the official tower prototype.

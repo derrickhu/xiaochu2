@@ -1,0 +1,18 @@
+Use the reference image for layout/style only.
+Keep the same premium composition, lighting, framing, and UI density.
+Do not copy any existing text from the reference.
+
+Create ONE production UI sprite: a Chinese xianxia jade pendant BACK button.
+
+Exact look:
+- Circular polished translucent seafoam/teal jade medallion with soft gloss highlight (top-left) and subtle cloud swirl inside the jade
+- Center: stylized cream/white LEFT-pointing arrow (organic petal/flame shaped, NOT a geometric triangle)
+- Top: thin tan/gold cord loop through a small gold-brown bead, hanging the medallion
+- Bottom: small matching teal bead + full cream silk tassel hanging down
+- Soft studio lighting, elegant, clean, premium mobile game UI
+
+STRICT:
+- Transparent background outside the pendant
+- Single centered subject, vertical composition (cord + jade + tassel)
+- NO TEXT, no Chinese characters, no labels, no phone frame, no extra props
+- NO second copy / NO grid

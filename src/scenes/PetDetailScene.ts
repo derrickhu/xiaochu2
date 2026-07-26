@@ -22,6 +22,7 @@ import {
   ENEMY_PORTRAIT_FRAME, BACKGROUND_IMAGES, UI_FX_IMAGES, petShowcaseImage,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
+import { reportQuest } from '@/game/dailyQuestTracker';
 import {
   COLORS, FONT_SIZE, RADIUS,
   makeButton, makeCoverBackground, makePanel, makeText, makeProgressBar, makeTopBar,
@@ -1219,6 +1220,7 @@ export class PetDetailScene implements Scene {
       return;
     }
     Platform.vibrateShort('light');
+    reportQuest('petLevelUp');
     this._build();
     this._playGrowthFeedback(before, false);
     this._notifyAbilityUnlocks(beforeProgress);
@@ -1232,6 +1234,7 @@ export class PetDetailScene implements Scene {
       return;
     }
     Platform.vibrateShort('medium');
+    reportQuest('petStarUp');
     this._build();
     this._playGrowthFeedback(before, true);
     if (this._starRow) pulse(this._starRow, { peak: 1.22 });

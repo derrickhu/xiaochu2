@@ -39,6 +39,12 @@ function addCodexAvatar(
   });
 }
 
+/** 招募态：仅招募顺序里的下一只可直接买断，其余未拥有宠只显示获取提示 */
+export interface CodexRecruitInfo {
+  price: number;
+  affordable: boolean;
+}
+
 /** 未拥有卡：稀有度底板 + 剪影 + 获取提示。 */
 export function buildLockedCodexCard(
   item: PIXI.Container,
@@ -47,6 +53,7 @@ export function buildLockedCodexCard(
   cardH: number,
   S: number,
   cardBgTex: PIXI.Texture | null = null,
+  recruit?: CodexRecruitInfo,
 ): void {
   if (cardBgTex) {
     const bg = new PIXI.Sprite(cardBgTex);
@@ -79,12 +86,34 @@ export function buildLockedCodexCard(
   });
   attachRarityBadge(item, pet.rarity, 0, 0, avatarSize, { variant: 'codex' });
 
-  const lock = makeText('未获得', {
-    size: Math.round(11 * S), fill: COLORS.textSub,
+  const lock = makeText(recruit ? pet.name : '未获得', {
+    size: Math.round(11 * S), fill: recruit ? COLORS.textMain : COLORS.textSub,
     bold: true, anchor: 0.5,
   });
   lock.position.set(cardW / 2, 8 * S + avatarSize + 14 * S);
   item.addChild(lock);
+
+  if (recruit) {
+    const barW = cardW - 12 * S;
+    const barH = 20 * S;
+    const barY = cardH - barH - 6 * S;
+    const bar = makePanel({
+      width: barW, height: barH, radius: barH / 2, centered: false,
+      bg: recruit.affordable ? COLORS.btnRecruitBg : COLORS.panelBgAlt,
+      border: recruit.affordable ? COLORS.btnRecruitBorder : COLORS.panelBorderSoft,
+    });
+    bar.position.set(6 * S, barY);
+    item.addChild(bar);
+
+    const label = makeText(`招募 ${recruit.price}`, {
+      size: Math.round(10 * S),
+      fill: recruit.affordable ? COLORS.btnText : COLORS.textDisabled,
+      bold: true, anchor: 0.5,
+    });
+    label.position.set(cardW / 2, barY + barH / 2);
+    item.addChild(label);
+    return;
+  }
 
   const tip = makeText('？？？', {
     size: Math.round(11 * S), fill: COLORS.textDisabled, bold: true, anchor: 0.5,

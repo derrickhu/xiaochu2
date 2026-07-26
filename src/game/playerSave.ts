@@ -17,13 +17,55 @@ import {
 } from '@/config/CloudConfig';
 
 export { SAVE_KEY, LEGACY_SAVE_KEY } from '@/config/CloudConfig';
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 /** 单只灵宠的养成进度 */
 export interface OwnedPet {
   level: number;
   star: number;
   shards: number;
+}
+
+/** 日循环状态：跨日由 game/dailyReset.ts 统一整体归零 */
+export interface DailyState {
+  /** 本组数据所属日期（YYYY-MM-DD），与今日不符即重置 */
+  date: string;
+  /** 五行秘境今日已用次数 */
+  realmRuns: number;
+  /** questId → 进度计数 */
+  questProgress: Record<string, number>;
+  /** 今日已领奖的 questId（含全清奖励的哨兵 id） */
+  questClaimed: string[];
+  /** 每日首胜翻倍已发放的日期；与 date 分开存，避免重置漏判导致重复发放 */
+  firstWinDate: string;
+}
+
+/** 七日循环签到 */
+export interface CheckinState {
+  lastDate: string;
+  /** 连续签到天数（断签归零后重新从 1 起） */
+  streak: number;
+  /** 累计签到天数（统计用） */
+  totalDays: number;
+}
+
+/** 通天塔进度：runFloor/runHpPct 为「当前这轮爬塔」的续战快照 */
+export interface TowerState {
+  bestFloor: number;
+  /** 下一次进入的层数（1 起） */
+  runFloor: number;
+  /** 续战 HP 比例（0~1，1 = 满血起手） */
+  runHpPct: number;
+  /** 续战技能 CD 快照：petId → 剩余回合，缺失视为就绪 */
+  runCds: Record<string, number>;
+  /** 本轮已战败，需消耗重置次数才能继续 */
+  runEnded: boolean;
+  /** resetsUsed 所属日期 */
+  resetDate: string;
+  /** 今日已用重置次数（免费 + 广告） */
+  resetsUsed: number;
+  /** 已领取的层数里程碑 */
+  claimedMilestones: number[];
 }
 
 export interface SaveData {
@@ -51,6 +93,12 @@ export interface SaveData {
   codexRewarded: number;
   /** 侧边栏复访奖励最后领取日期（YYYY-MM-DD，抖音必接） */
   sidebarRewardDate: string;
+  /** 日循环（秘境次数 / 日常任务 / 首胜），v6 起 */
+  daily: DailyState;
+  /** 七日签到，v6 起 */
+  checkin: CheckinState;
+  /** 通天塔，v6 起 */
+  tower: TowerState;
 }
 
 /** 招募结果 */
@@ -69,6 +117,34 @@ export function initialOwned(): Record<string, OwnedPet> {
   return owned;
 }
 
+/** 指定日期的空日循环态（跨日重置与新号初始化共用） */
+export function emptyDailyState(date = ''): DailyState {
+  return {
+    date,
+    realmRuns: 0,
+    questProgress: {},
+    questClaimed: [],
+    firstWinDate: '',
+  };
+}
+
+export function emptyCheckinState(): CheckinState {
+  return { lastDate: '', streak: 0, totalDays: 0 };
+}
+
+export function emptyTowerState(): TowerState {
+  return {
+    bestFloor: 0,
+    runFloor: 1,
+    runHpPct: 1,
+    runCds: {},
+    runEnded: false,
+    resetDate: '',
+    resetsUsed: 0,
+    claimedMilestones: [],
+  };
+}
+
 export function initialData(): SaveData {
   return {
     version: SAVE_VERSION,
@@ -85,10 +161,16 @@ export function initialData(): SaveData {
     // 初始阵容不计入里程碑，从后续新宠开始累计
     codexRewarded: DEFAULT_TEAM.length,
     sidebarRewardDate: '',
+    daily: emptyDailyState(),
+    checkin: emptyCheckinState(),
+    tower: emptyTowerState(),
   };
 }
 
-/** 解析存档，缺字段回退默认；v3 起迁移灵宠 ID，v5 起 Boss 关统一到第 8 关 */
+/**
+ * 解析存档，缺字段回退默认；v3 起迁移灵宠 ID，v5 起 Boss 关统一到第 8 关，
+ * v6 起补齐 daily/checkin/tower（老档直接吃缺省空态，等价于「今天还没开始玩」）。
+ */
 export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown }): SaveData {
   const migrated = migratePetIdsInPartialSave(parsed);
   const owned = sanitizeOwned(migrated.ownedPets);
@@ -117,7 +199,66 @@ export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown
     sidebarRewardDate: typeof migrated.sidebarRewardDate === 'string'
       ? migrated.sidebarRewardDate
       : '',
+    daily: sanitizeDaily(migrated.daily),
+    checkin: sanitizeCheckin(migrated.checkin),
+    tower: sanitizeTower(migrated.tower),
   };
+}
+
+function sanitizeDaily(raw: unknown): DailyState {
+  const out = emptyDailyState();
+  if (!raw || typeof raw !== 'object') return out;
+  const d = raw as Partial<DailyState>;
+  if (typeof d.date === 'string') out.date = d.date;
+  if (typeof d.firstWinDate === 'string') out.firstWinDate = d.firstWinDate;
+  out.realmRuns = Math.max(0, typeof d.realmRuns === 'number' ? Math.floor(d.realmRuns) : 0);
+  if (d.questProgress && typeof d.questProgress === 'object') {
+    for (const [id, v] of Object.entries(d.questProgress as Record<string, unknown>)) {
+      const n = typeof v === 'number' ? Math.floor(v) : 0;
+      if (n > 0) out.questProgress[id] = n;
+    }
+  }
+  if (Array.isArray(d.questClaimed)) {
+    out.questClaimed = [...new Set(d.questClaimed.filter((id): id is string => typeof id === 'string'))];
+  }
+  return out;
+}
+
+function sanitizeCheckin(raw: unknown): CheckinState {
+  const out = emptyCheckinState();
+  if (!raw || typeof raw !== 'object') return out;
+  const c = raw as Partial<CheckinState>;
+  if (typeof c.lastDate === 'string') out.lastDate = c.lastDate;
+  out.streak = Math.max(0, typeof c.streak === 'number' ? Math.floor(c.streak) : 0);
+  out.totalDays = Math.max(0, typeof c.totalDays === 'number' ? Math.floor(c.totalDays) : 0);
+  return out;
+}
+
+function sanitizeTower(raw: unknown): TowerState {
+  const out = emptyTowerState();
+  if (!raw || typeof raw !== 'object') return out;
+  const t = raw as Partial<TowerState>;
+  out.bestFloor = Math.max(0, typeof t.bestFloor === 'number' ? Math.floor(t.bestFloor) : 0);
+  out.runFloor = Math.max(1, typeof t.runFloor === 'number' ? Math.floor(t.runFloor) : 1);
+  out.runHpPct = typeof t.runHpPct === 'number' && Number.isFinite(t.runHpPct)
+    ? Math.min(1, Math.max(0, t.runHpPct))
+    : 1;
+  out.runEnded = t.runEnded === true;
+  if (t.runCds && typeof t.runCds === 'object') {
+    for (const [id, v] of Object.entries(t.runCds as Record<string, unknown>)) {
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) {
+        out.runCds[id] = Math.floor(v);
+      }
+    }
+  }
+  if (typeof t.resetDate === 'string') out.resetDate = t.resetDate;
+  out.resetsUsed = Math.max(0, typeof t.resetsUsed === 'number' ? Math.floor(t.resetsUsed) : 0);
+  if (Array.isArray(t.claimedMilestones)) {
+    out.claimedMilestones = [...new Set(
+      t.claimedMilestones.filter((n): n is number => typeof n === 'number' && n > 0).map(Math.floor),
+    )];
+  }
+  return out;
 }
 
 /** v1 → v4：保留 coins/stars/team，拥有列表 = 默认队 ∪ 原队伍 */

@@ -1,0 +1,9 @@
+Use the attached tower UI mock for STYLE of the central pagoda ONLY.
+Create ONE production hero sprite: the cute soft Q xianxia sky pagoda from the mock.
+- Tall multi-tier cream walls + teal/mint roofs with upturned eaves
+- Warm glowing windows
+- Soft cel-like Q styling (not photoreal)
+- Standing upright, centered, full tower visible including base steps/cloud pedestal if present
+- Transparent background outside the tower (no landscape, no UI, no text)
+- Single subject, clean edges, production mobile game asset
+NO TEXT, no labels, no phone frame, no second copy.

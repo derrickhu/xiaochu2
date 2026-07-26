@@ -17,9 +17,11 @@ import { PET_MAP } from '@/balance/pets';
 import type { Element } from '@/balance/combat';
 import { getRarity } from '@/balance/rarity';
 import { ECONOMY } from '@/balance/economy';
+import { analytics } from '@/analytics';
 import { PlayerData } from '@/game/PlayerData';
 import { type PullOutcome } from '@/game/gacha/Gacha';
 import { gachaPoolPets } from '@/game/playerGacha';
+import { reportQuest } from '@/game/dailyQuestTracker';
 import {
   BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES,
 } from '@/config/Assets';
@@ -251,22 +253,33 @@ export class GachaScene implements Scene {
 
     this._tenPullBtn = makeActionButton({
       title: '十连',
-      subtitle: `${g.tenCost} 灵玉`,
+      subtitle: this._tenPullSubtitle(),
       width: btnW,
       height: btnH,
       variant: 'cream',
-      enabled: PlayerData.lingyu >= g.tenCost,
+      enabled: this._canTenPull,
       onTap: () => this._doPull(10),
     });
     this._tenPullBtn.position.set(w / 2 + btnW / 2 + gap / 2, y);
     this._page.addChild(this._tenPullBtn);
   }
 
+  /** 十连券优先于灵玉：券是签到发的定向奖励，留在背包里没有别的出口 */
+  private get _canTenPull(): boolean {
+    return PlayerData.tickets > 0 || PlayerData.lingyu >= ECONOMY.gacha.tenCost;
+  }
+
+  private _tenPullSubtitle(): string {
+    return PlayerData.tickets > 0
+      ? `十连券 ×${PlayerData.tickets}`
+      : `${ECONOMY.gacha.tenCost} 灵玉`;
+  }
+
   /** 结果浮层期间禁用主界面抽卡按钮（灵玉已扣但按钮 enabled 未刷新，会误触十连） */
   private _setMainPullButtonsEnabled(enabled: boolean): void {
     const g = ECONOMY.gacha;
     this._singlePullBtn?.setEnabled(enabled && PlayerData.lingyu >= g.singleCost);
-    this._tenPullBtn?.setEnabled(enabled && PlayerData.lingyu >= g.tenCost);
+    this._tenPullBtn?.setEnabled(enabled && this._canTenPull);
   }
 
   private _activePoolElement(): Element | undefined {
@@ -280,9 +293,13 @@ export class GachaScene implements Scene {
       return;
     }
     let list: PullOutcome[] | null;
+    let byTicket = false;
     if (count === 1) {
       const o = PlayerData.pullGachaSingle(Math.random, el);
       list = o ? [o] : null;
+    } else if (PlayerData.tickets > 0) {
+      list = PlayerData.pullGachaTenByTicket(Math.random, el);
+      byTicket = !!list;
     } else {
       list = PlayerData.pullGachaTen(Math.random, el);
     }
@@ -290,6 +307,15 @@ export class GachaScene implements Scene {
       Platform.showToast('灵玉不足');
       return;
     }
+    if (byTicket) Platform.showToast('已使用十连券 ×1');
+    reportQuest('gachaPull', count);
+    analytics.trackFountainDraw({
+      drawType: count === 10 ? 'ten' : 'single',
+      cost: byTicket ? 0 : count === 10 ? ECONOMY.gacha.tenCost : ECONOMY.gacha.singleCost,
+      element: el,
+      // SSR 及以上（rarity tier 3/4）计入高稀有出货
+      highRarityCount: list.filter((o) => o.rarity >= 3).length,
+    });
     this._lastCount = count;
     this._showResults(list);
   }
@@ -411,10 +437,11 @@ export class GachaScene implements Scene {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     const g = ECONOMY.gacha;
-    const cost = this._lastCount === 10 ? g.tenCost : g.singleCost;
     const el = this._activePoolElement();
-    const canRepull = PlayerData.lingyu >= cost
-      && PlayerData.gachaPoolIds(el).length > 0;
+    const affordable = this._lastCount === 10
+      ? this._canTenPull
+      : PlayerData.lingyu >= g.singleCost;
+    const canRepull = affordable && PlayerData.gachaPoolIds(el).length > 0;
 
     const btnW = 260;
     const y = h - 100;

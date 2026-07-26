@@ -122,6 +122,10 @@ export const BACKGROUND_IMAGES = {
   gachaEgg: `${PKG.scene}/images/bg/scene_gacha_egg.jpg`,
   /** 碎片商店专用背景（9:16 商铺内景） */
   shop: `${PKG.scene}/images/bg/scene_shop.jpg`,
+  /** 五行秘境专用背景（9:16 洞府山径，主包） */
+  realm: `${IMG}/bg/scene_realm.jpg`,
+  /** 通天塔专用背景（9:16 云海浮岛，主包） */
+  tower: `${IMG}/bg/scene_tower.jpg`,
 } as const;
 
 /** 战斗背景（pkg-scene） */
@@ -140,6 +144,8 @@ export function battleBgImage(element: Element): string {
 /** 主包 UI 贴图 */
 export const UI_IMAGES = {
   titleLogo: `${IMG}/ui/logo/title.png`,
+  /** 全局返回：玉佩流苏左箭头 */
+  btnBack: `${IMG}/ui/icon/btn_back.png`,
   navBar: `${IMG}/ui/bar/nav_bottom.png`,
   /** 底栏当前 tab 选中光晕 + 底部祥云（pkg-fx） */
   navTabActiveFx: `${PKG.fx}/images/ui/fx/nav_tab_active.png`,
@@ -148,10 +154,35 @@ export const UI_IMAGES = {
   navTeam: `${IMG}/ui/icon/nav_team.png`,
   /** 底栏「主线」= 首页章节地图 */
   navHome: `${IMG}/ui/icon/nav_home.png`,
+  /** 底栏「秘境」= 五行秘境洞府入口（勿复用礼物 rail_event） */
+  navRealm: `${IMG}/ui/icon/nav_realm.png`,
+  /** 五行秘境主卡洞府立绘 */
+  realmGateMetal: `${IMG}/ui/realm/realm_gate_metal.png`,
+  realmGateWood: `${IMG}/ui/realm/realm_gate_wood.png`,
+  realmGateWater: `${IMG}/ui/realm/realm_gate_water.png`,
+  realmGateFire: `${IMG}/ui/realm/realm_gate_fire.png`,
+  realmGateEarth: `${IMG}/ui/realm/realm_gate_earth.png`,
+  /** 秘境五行宝石钮（对齐 B 原型） */
+  realmOrbMetal: `${IMG}/ui/realm/realm_orb_metal.png`,
+  realmOrbWood: `${IMG}/ui/realm/realm_orb_wood.png`,
+  realmOrbWater: `${IMG}/ui/realm/realm_orb_water.png`,
+  realmOrbFire: `${IMG}/ui/realm/realm_orb_fire.png`,
+  realmOrbEarth: `${IMG}/ui/realm/realm_orb_earth.png`,
+  /** 秘境难度 pill（对齐 B 原型）；出战 CTA 复用 towerBtnCta */
+  realmDiffIdle: `${IMG}/ui/realm/realm_diff_idle.png`,
+  realmDiffSelected: `${IMG}/ui/realm/realm_diff_selected.png`,
+  /** @deprecated 编队出战已改用 towerBtnCta，保留路径以免旧包缺图 */
+  realmBtnCta: `${IMG}/ui/realm/realm_btn_cta.png`,
   /** 左侧玩法栏：签到 / 通天塔 / 日常 / 活动（对齐 home_hub_v4） */
   railCheckin: `${IMG}/ui/icon/rail_checkin.png`,
   railTower: `${IMG}/ui/icon/rail_tower.png`,
+  /** 通天塔主视觉宝塔立绘 */
+  towerPagoda: `${IMG}/ui/tower/tower_pagoda.png`,
+  /** 通天塔暖金杏渐变挑战匾钮 */
+  towerBtnCta: `${IMG}/ui/tower/tower_btn_cta.png`,
   railDaily: `${IMG}/ui/icon/rail_daily.png`,
+  /** 日常任务全清宝箱 */
+  questChest: `${IMG}/ui/icon/quest_chest.png`,
   railEvent: `${IMG}/ui/icon/rail_event.png`,
   /** 首页右下：桌面快捷方式 / 侧边栏复访入口 */
   homeDesktop: `${IMG}/ui/icon/home_desktop.png`,
@@ -161,6 +192,14 @@ export const UI_IMAGES = {
   iconCoin: `${IMG}/ui/icon/currency_coin.png`,
   iconExp: `${IMG}/ui/icon/currency_exp.png`,
   iconLingyu: `${IMG}/ui/icon/currency_lingyu.png`,
+  /** 十连券（签到大奖 / 召唤扣券） */
+  iconTicket: `${IMG}/ui/icon/currency_ticket.png`,
+  /** 灵宠碎片袋（签到 / 任务碎片奖励展示） */
+  iconShard: `${IMG}/ui/icon/currency_shard.png`,
+  /** 七日签到：普通日卡 / 今日高亮卡 / 第7天金光大奖条 */
+  checkinCardNormal: `${IMG}/ui/checkin/checkin_card_normal.png`,
+  checkinCardToday: `${IMG}/ui/checkin/checkin_card_today.png`,
+  checkinBannerDay7: `${IMG}/ui/checkin/checkin_banner_day7.png`,
   iconRecruit: `${IMG}/ui/icon/action_recruit.png`,
   /** 三维属性图标：生命 / 攻击 / 回复（全局统一） */
   iconStatHp: `${IMG}/ui/icon/stat_hp.png`,
@@ -174,6 +213,10 @@ export const UI_IMAGES = {
    * 文字背景匾（与战斗关卡匾同源）—— 主线章节名 / 战斗关卡标题等。
    */
   textBanner: `${IMG}/ui/plaque/text_banner.png`,
+  /** 弹窗标题匾（签到 / 日常等）—— 奶油祥云横匾，对齐 checkin 原型 */
+  modalTitlePlaque: `${IMG}/ui/plaque/modal_title.png`,
+  /** 全屏场景顶栏匾（秘境等）—— 拱顶金边祥云横匾 */
+  sceneTitlePlaque: `${IMG}/ui/plaque/scene_title.png`,
   /** 详情底栏行动按钮底板（奶油次按钮） */
   btnPlateCream: `${IMG}/ui/button/plate_cream.png`,
   /** 详情底栏行动按钮底板（翠绿主按钮） */
@@ -334,6 +377,7 @@ export const MAIN_PRELOAD_IMAGES: readonly string[] = [
   BOARD_IMAGES.light,
   BACKGROUND_IMAGES.home,
   BACKGROUND_IMAGES.titleScreen,
+  BACKGROUND_IMAGES.realm,
   ...Object.values(MAP_UI_IMAGES),
   ...Object.values(UI_IMAGES),
   ...Object.values(PET_FRAME_IMAGES),

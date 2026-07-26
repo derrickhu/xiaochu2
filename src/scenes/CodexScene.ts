@@ -10,7 +10,7 @@ import { TextureCache } from '@/core/TextureCache';
 import { CODEX_SHELL_IMAGES, codexPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI } from '@/balance/ui';
-import { PETS, type PetDef } from '@/balance/pets';
+import { PETS, PET_MAP, PET_ROLE_NAME, type PetDef } from '@/balance/pets';
 import { STAGES } from '@/balance/stages';
 import { CHAPTER_NAME } from '@/balance/stages';
 import {
@@ -19,8 +19,8 @@ import {
 import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS, FONT_SIZE,
-  makeBackButton, makeCoverBackground, makeIconLabel, makeText, makePageTitlePlaque,
-  staggerIn,
+  makeBackButton, makeButton, makeCoverBackground, makeIconLabel, makePanel, makeText,
+  makePageTitlePlaque, staggerIn,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
 import { bindPointerTap } from '@/utils/bindPointerTap';
@@ -132,7 +132,7 @@ export class CodexScene implements Scene {
 
     const expRow = makeIconLabel({
       iconPath: UI_IMAGES.iconExp, iconSize: 32,
-      text: `经验池 ${PlayerData.exp} · 点击灵宠进入养成`,
+      text: `经验池 ${PlayerData.exp} · 灵宠币 ${PlayerData.coins}`,
       size: FONT_SIZE.xs, fill: COLORS.textSub,
     });
     expRow.position.set(w / 2 - expRow.width / 2, Game.safeTop + 8);
@@ -209,6 +209,10 @@ export class CodexScene implements Scene {
     this._content = content;
     this.container.addChild(content);
 
+    // 招募只解锁顺序里的下一只，故仅该卡显示价格条
+    const recruitId = PlayerData.nextRecruit();
+    const recruitCost = PlayerData.nextRecruitPrice();
+
     const items: PIXI.Container[] = [];
     let maxBottom = 0;
     ordered.forEach((pet, i) => {
@@ -225,7 +229,10 @@ export class CodexScene implements Scene {
       if (state === 'owned') {
         buildOwnedCodexCard(item, pet, cardW, cardH, S, cardBgTex);
       } else {
-        buildLockedCodexCard(item, pet, cardW, cardH, S, cardBgTex);
+        buildLockedCodexCard(item, pet, cardW, cardH, S, cardBgTex,
+          pet.id === recruitId
+            ? { price: recruitCost, affordable: PlayerData.coins >= recruitCost }
+            : undefined);
       }
 
       item.eventMode = 'static';
@@ -277,6 +284,10 @@ export class CodexScene implements Scene {
       SceneManager.switchTo('petDetail', { petId: pet.id } satisfies PetDetailEnterData);
       return;
     }
+    if (pet.id === PlayerData.nextRecruit()) {
+      this._showRecruitConfirm(pet);
+      return;
+    }
     const drop = BOSS_DROP_STAGE.get(pet.id);
     const where = drop
       ? `${CHAPTER_NAME[drop.chapter] ?? `第${drop.chapter}章`} · ${drop.name}`
@@ -286,6 +297,103 @@ export class CodexScene implements Scene {
       return;
     }
     Platform.showToast('未获得 · 可通过召唤获取（UR 仅召唤）');
+  }
+
+  /** 灵宠币招募二次确认：扣币不可逆，不做直点直扣 */
+  private _showRecruitConfirm(pet: PetDef): void {
+    const w = Game.logicWidth;
+    const h = Game.logicHeight;
+    const price = PlayerData.nextRecruitPrice();
+    const affordable = PlayerData.coins >= price;
+
+    const overlay = new PIXI.Container();
+    overlay.eventMode = 'static';
+    overlay.hitArea = new PIXI.Rectangle(0, 0, w, h);
+    const dim = new PIXI.Graphics();
+    dim.beginFill(0x000000, 0.6);
+    dim.drawRect(0, 0, w, h);
+    dim.endFill();
+    overlay.addChild(dim);
+    this.container.addChild(overlay);
+
+    const close = (): void => {
+      if (!overlay.destroyed) overlay.destroy({ children: true });
+    };
+
+    const panelW = Math.min(560, w * 0.82);
+    const panelH = 340;
+    const panel = makePanel({
+      width: panelW, height: panelH, radius: 18, centered: false,
+      bg: COLORS.panelBg, border: COLORS.panelBorderSoft,
+    });
+    panel.position.set((w - panelW) / 2, (h - panelH) / 2);
+    overlay.addChild(panel);
+
+    const cx = w / 2;
+    const top = (h - panelH) / 2;
+
+    const title = makeText('招募灵宠', {
+      size: FONT_SIZE.md, fill: COLORS.textMain, bold: true, anchor: 0.5,
+    });
+    title.position.set(cx, top + 40);
+    overlay.addChild(title);
+
+    const petLine = makeText(`${pet.name} · ${PET_ROLE_NAME[pet.role]}`, {
+      size: FONT_SIZE.sm, fill: COLORS.accent, bold: true, anchor: 0.5,
+    });
+    petLine.position.set(cx, top + 100);
+    overlay.addChild(petLine);
+
+    const costRow = makeIconLabel({
+      iconPath: UI_IMAGES.iconCoin, iconSize: 34,
+      text: `${price}   （持有 ${PlayerData.coins}）`,
+      size: FONT_SIZE.sm, fill: affordable ? COLORS.textMain : COLORS.textDisabled,
+    });
+    costRow.position.set(cx - costRow.width / 2, top + 150);
+    overlay.addChild(costRow);
+
+    const tip = makeText(
+      affordable ? '招募按稀有度顺序解锁下一只' : '灵宠币不足 · 通关主线与日常可获得',
+      { size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: 0.5 },
+    );
+    tip.position.set(cx, top + 210);
+    overlay.addChild(tip);
+
+    const btnW = panelW * 0.4;
+    const btnY = top + panelH - 70;
+
+    const cancel = makeButton({
+      label: '取消', width: btnW, height: 64, variant: 'ghost',
+      onTap: close,
+    });
+    cancel.position.set(cx - btnW / 2 - 12, btnY);
+    overlay.addChild(cancel);
+
+    const ok = makeButton({
+      label: '招募', width: btnW, height: 64, variant: 'recruit', enabled: affordable,
+      onTap: () => {
+        close();
+        this._doRecruit();
+      },
+    });
+    ok.position.set(cx + btnW / 2 + 12, btnY);
+    overlay.addChild(ok);
+  }
+
+  private _doRecruit(): void {
+    const result = PlayerData.recruit();
+    if (!result) {
+      Platform.showToast('灵宠币不足');
+      return;
+    }
+    const name = PET_MAP.get(result.petId)?.name ?? '灵宠';
+    Platform.showToast(
+      result.duplicate
+        ? `重复招募 · ${name}碎片 +${result.shards ?? 0}`
+        : `招募成功 · ${name} 已加入`,
+    );
+    this._buildShell();
+    this._buildPetList(Game.safeTop + 118, { animate: false });
   }
 
 }

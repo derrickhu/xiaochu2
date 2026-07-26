@@ -26,7 +26,6 @@ import {
   makeBackButton, makeButton, makeCoverBackground, makePanel, makeText,
   attachRarityBadge, makeIconLabel, makeElementOrb,
   SceneFx, staggerIn, pulse,
-  buildBottomNav, BOTTOM_NAV_RESERVE,
 } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { pressFeedback } from '@/ui/motion';
@@ -470,11 +469,12 @@ export class ShopScene implements Scene {
       const empty = makeText('暂无可兑换碎片\n获得灵宠后即可在此购买碎片', {
         size: FONT_SIZE.sm, fill: COLORS.textSub, anchor: 0.5, align: 'center',
       });
-      empty.position.set(w / 2, (h - startY - BOTTOM_NAV_RESERVE) / 2);
+      empty.position.set(w / 2, (h - startY - 24) / 2);
       content.addChild(empty);
     }
 
-    const viewportH = h - startY - BOTTOM_NAV_RESERVE;
+    // 商店从左栏进入，无底栏，底部只留安全边距
+    const viewportH = h - startY - 24;
     const contentH = y + SHOP_UI.listBottomPad;
     const scrollMin = Math.min(startY, startY - Math.max(0, contentH - viewportH));
 
@@ -497,7 +497,6 @@ export class ShopScene implements Scene {
     if (animate) {
       staggerIn(animTargets, { stepDelay: 0.04, offsetY: 16, duration: 0.3 });
     }
-    buildBottomNav(this.container, w, h, 'shop');
     if (this._fx) this._fx.build(this.container, w, h);
   }
 

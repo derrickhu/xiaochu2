@@ -9,8 +9,13 @@ import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
 import { STAGES } from '@/balance/stages';
 import { PET_MAP } from '@/balance/pets';
+import { ECONOMY } from '@/balance/economy';
+import { DAILY_FIRST_WIN_MULT } from '@/balance/dailyQuest';
 import { UI_IMAGES, UI_PANEL_IMAGES, petAvatarPath } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
+import type { BattleContext } from '@/game/battleContext';
+import { reportQuest } from '@/game/dailyQuestTracker';
+import { settleContextVictory } from './battleContextSettle';
 import { Platform } from '@/core/PlatformService';
 import type { BattleController } from '@/game/battle/BattleController';
 import { formatStarTurnHint } from '@/formulas/stars';
@@ -36,7 +41,13 @@ const GOLD = 0xd4b87a;
 const GOLD_SOFT = 0xe0c896;
 const TITLE_BROWN = 0x5c3d24;
 const REWARD_GREEN = 0x3d9a5c;
-export interface BattleResultHooks {
+export interface BattleResultOptions {
+  /** 战斗开始时刻，用于经分 duration_ms */
+  battleStartedAt?: number;
+  /** 副玩法上下文；缺省 = 主线 */
+  context?: BattleContext;
+  /** 本场最高 Combo（日常任务判定） */
+  maxCombo?: number;
   /** 看广告复活成功后继续本场战斗 */
   onRevive?: () => void;
 }
@@ -63,31 +74,70 @@ export class BattleResultOverlay {
   show(
     ctrl: BattleController,
     win: boolean,
-    battleStartedAt = 0,
-    hooks: BattleResultHooks = {},
+    opts: BattleResultOptions = {},
   ): void {
     this.clear();
     this._open = true;
 
-    const durationMs = battleStartedAt > 0 ? Date.now() - battleStartedAt : 0;
+    const startedAt = opts.battleStartedAt ?? 0;
+    const durationMs = startedAt > 0 ? Date.now() - startedAt : 0;
 
     if (win) {
-      this._showVictory(ctrl, durationMs);
+      this._showVictory(ctrl, durationMs, opts);
     } else {
-      this._showDefeat(ctrl, durationMs, hooks);
+      this._showDefeat(ctrl, durationMs, opts);
     }
   }
 
-  private _showVictory(ctrl: BattleController, durationMs: number): void {
-    const result = ctrl.finish(true);
+  private _showVictory(
+    ctrl: BattleController,
+    durationMs: number,
+    opts: BattleResultOptions,
+  ): void {
+    const raw = ctrl.finish(true);
+    const context = opts.context;
+    const extraLines: string[] = [];
+
+    // 每日首胜翻倍：最便宜的回访钩子，直接放大本场基础产出
+    const firstWin = PlayerData.consumeFirstWin();
+    const result = firstWin
+      ? {
+        ...raw,
+        coins: raw.coins * DAILY_FIRST_WIN_MULT,
+        exp: raw.exp * DAILY_FIRST_WIN_MULT,
+      }
+      : raw;
+    if (firstWin) extraLines.push(`每日首胜 · 奖励 ×${DAILY_FIRST_WIN_MULT}`);
+
     let milestoneLingyu = 0;
     const newlyUnlocked: string[] = [];
-    milestoneLingyu = PlayerData.recordClear(ctrl.stage.id, result.stars, result.coins);
-    PlayerData.addExp(result.exp);
-    for (const s of result.shards) PlayerData.addShards(s.petId, s.count);
-    for (const pid of result.bossDropPets) {
-      if (PlayerData.unlockPet(pid)) newlyUnlocked.push(pid);
+
+    if (context) {
+      // 副玩法自带产出口径：不写主线星数、不发首通灵玉、不触发 Boss 直掉
+      PlayerData.addExp(result.exp);
+      PlayerData.addCoins(result.coins);
+      const skillCds: Record<string, number> = {};
+      for (const pet of ctrl.team) {
+        if (pet.skillCdLeft > 0) skillCds[pet.def.id] = pet.skillCdLeft;
+      }
+      extraLines.push(...settleContextVictory(context, {
+        hpPctLeft: ctrl.heroHp / Math.max(1, ctrl.heroMaxHp),
+        skillCds,
+      }));
+    } else {
+      const repeat = PlayerData.isRepeatClear(ctrl.stage.id);
+      milestoneLingyu = PlayerData.recordClear(ctrl.stage.id, result.stars, result.coins);
+      PlayerData.addExp(result.exp);
+      for (const s of result.shards) PlayerData.addShards(s.petId, s.count);
+      for (const pid of result.bossDropPets) {
+        if (PlayerData.unlockPet(pid)) newlyUnlocked.push(pid);
+      }
+      if (repeat) {
+        extraLines.push(`重复通关 · 灵宠币按 ${Math.round(ECONOMY.coin.repeatClearPct * 100)}% 结算`);
+      }
+      reportQuest('stageClear');
     }
+    reportQuest('comboReach', opts.maxCombo ?? 0);
     BattleResultOverlay._failCounts.delete(ctrl.stage.id);
 
     analytics.trackLevelClear(ctrl.stage.id, {
@@ -97,10 +147,14 @@ export class BattleResultOverlay {
       stageName: ctrl.stage.name,
     });
 
-    const progressHintText = battleProgressHint(ctrl.stage.id, milestoneLingyu > 0);
-    const nextStage = STAGES.find(
-      (s) => s.chapter === ctrl.stage.chapter && s.index === ctrl.stage.index + 1,
-    );
+    const progressHintText = context
+      ? null
+      : battleProgressHint(ctrl.stage.id, milestoneLingyu > 0);
+    const nextStage = context
+      ? undefined
+      : STAGES.find(
+        (s) => s.chapter === ctrl.stage.chapter && s.index === ctrl.stage.index + 1,
+      );
 
     const root = this._mountScrim();
     const card = new PIXI.Container();
@@ -149,6 +203,13 @@ export class BattleResultOverlay {
       y += 40;
     }
 
+    for (const line of extraLines) {
+      const chip = this._makeInfoChip(line, 0xfdf0d8, 0xb5701f);
+      chip.position.set(0, y + 18);
+      content.addChild(chip);
+      y += 40;
+    }
+
     if (progressHintText) {
       const chip = this._makeInfoChip(progressHintText, 0xe8f6e4, 0x4e8a36);
       chip.position.set(0, y + 18);
@@ -161,33 +222,7 @@ export class BattleResultOverlay {
     const btnW = Math.round(PANEL_W * 0.55);
     const btnH = Math.round(btnW / BTN_ASPECT);
     const btnGap = 14;
-    const btns: PIXI.Container[] = [];
-    if (nextStage) {
-      btns.push(makeActionButton({
-        title: '下一关', width: btnW, height: btnH, variant: 'gold',
-        fontSize: FONT_SIZE.md,
-        onTap: () => {
-          this.clear();
-          SceneManager.switchTo('team', { stageId: nextStage.id } satisfies TeamEnterData);
-        },
-      }));
-    }
-    btns.push(makeActionButton({
-      title: '再打一次', width: btnW, height: btnH, variant: 'cream',
-      fontSize: FONT_SIZE.md,
-      onTap: () => {
-        this.clear();
-        SceneManager.switchTo('battle', { stageId: ctrl.stage.id } satisfies BattleEnterData);
-      },
-    }));
-    btns.push(makeActionButton({
-      title: '返回主页', width: btnW, height: btnH, variant: 'cream',
-      fontSize: FONT_SIZE.md,
-      onTap: () => {
-        this.clear();
-        SceneManager.switchTo('title');
-      },
-    }));
+    const btns: PIXI.Container[] = this._buildVictoryButtons(ctrl, context, btnW, btnH, nextStage);
     for (const b of btns) {
       b.position.set(0, y + btnH / 2);
       content.addChild(b);
@@ -212,17 +247,87 @@ export class BattleResultOverlay {
     this._playCardEnter(card, panelH);
   }
 
+  /**
+   * 胜利页 CTA。
+   * 主线：下一关 / 再打一次 / 返回主页；
+   * 秘境：回秘境（次数在那里统一展示）；
+   * 通天塔：继续下一层（残血继承，故不提供「再打一次」）。
+   */
+  private _buildVictoryButtons(
+    ctrl: BattleController,
+    context: BattleContext | undefined,
+    btnW: number,
+    btnH: number,
+    nextStage: { id: string } | undefined,
+  ): PIXI.Container[] {
+    const btns: PIXI.Container[] = [];
+    const go = (scene: string, data?: unknown): void => {
+      this.clear();
+      SceneManager.switchTo(scene, data);
+    };
+
+    if (context?.kind === 'tower') {
+      btns.push(makeActionButton({
+        title: '继续下一层', width: btnW, height: btnH, variant: 'gold',
+        fontSize: FONT_SIZE.md,
+        onTap: () => go('tower'),
+      }));
+      btns.push(makeActionButton({
+        title: '返回主页', width: btnW, height: btnH, variant: 'cream',
+        fontSize: FONT_SIZE.md,
+        onTap: () => go('title'),
+      }));
+      return btns;
+    }
+
+    if (context?.kind === 'realm') {
+      btns.push(makeActionButton({
+        title: '返回秘境', width: btnW, height: btnH, variant: 'gold',
+        fontSize: FONT_SIZE.md,
+        onTap: () => go('realm'),
+      }));
+      btns.push(makeActionButton({
+        title: '返回主页', width: btnW, height: btnH, variant: 'cream',
+        fontSize: FONT_SIZE.md,
+        onTap: () => go('title'),
+      }));
+      return btns;
+    }
+
+    if (nextStage) {
+      btns.push(makeActionButton({
+        title: '下一关', width: btnW, height: btnH, variant: 'gold',
+        fontSize: FONT_SIZE.md,
+        onTap: () => go('team', { stageId: nextStage.id } satisfies TeamEnterData),
+      }));
+    }
+    btns.push(makeActionButton({
+      title: '再打一次', width: btnW, height: btnH, variant: 'cream',
+      fontSize: FONT_SIZE.md,
+      onTap: () => go('battle', { stageId: ctrl.stage.id } satisfies BattleEnterData),
+    }));
+    btns.push(makeActionButton({
+      title: '返回主页', width: btnW, height: btnH, variant: 'cream',
+      fontSize: FONT_SIZE.md,
+      onTap: () => go('title'),
+    }));
+    return btns;
+  }
+
   private _showDefeat(
     ctrl: BattleController,
     durationMs: number,
-    hooks: BattleResultHooks,
+    opts: BattleResultOptions,
   ): void {
+    const context = opts.context;
     const defeatRefund = ctrl.defeatExpRefund();
     const fails = (BattleResultOverlay._failCounts.get(ctrl.stage.id) ?? 0) + 1;
 
     const commitDefeat = (navigate: () => void): void => {
       BattleResultOverlay._failCounts.set(ctrl.stage.id, fails);
       if (defeatRefund > 0) PlayerData.addExp(defeatRefund);
+      // 塔战败封盘：需消耗每日重置次数才能从最近存档点续爬
+      if (context?.kind === 'tower') PlayerData.towerEndRun();
       ctrl.finish(false);
       analytics.trackLevelFail(ctrl.stage.id, {
         durationMs,
@@ -299,13 +404,14 @@ export class BattleResultOverlay {
     const reviveW = Math.round(PANEL_W * 0.74);
     const reviveH = Math.round(reviveW / BTN_ASPECT);
     const reviveBtn = this._makeReviveButton(reviveW, reviveH, async () => {
+      analytics.trackAdShow('battle_revive', { context: opts.context?.kind ?? 'mainline' });
       const ok = await Platform.showRewardedVideo();
       if (!ok) {
         Platform.showToast('广告未完成，请重试');
         return;
       }
       this.clear();
-      hooks.onRevive?.();
+      opts.onRevive?.();
     });
     reviveBtn.position.set(0, y + reviveH / 2);
     content.addChild(reviveBtn);
@@ -314,12 +420,21 @@ export class BattleResultOverlay {
     const halfGap = 14;
     const halfW = Math.round((reviveW - halfGap) / 2);
     const halfH = Math.round(halfW / BTN_ASPECT);
-    const retry = makeActionButton({
-      title: '重试', width: halfW, height: halfH, variant: 'cream',
-      fontSize: FONT_SIZE.md,
-      onTap: () => commitDefeat(() => {
+    // 秘境次数已扣、塔已封盘，原地重试都不成立，退回各自的玩法首页
+    const retryTitle = context ? (context.kind === 'tower' ? '返回通天塔' : '返回秘境') : '重试';
+    const retryNav = (): void => {
+      if (context?.kind === 'tower') {
+        SceneManager.switchTo('tower');
+      } else if (context?.kind === 'realm') {
+        SceneManager.switchTo('realm');
+      } else {
         SceneManager.switchTo('battle', { stageId: ctrl.stage.id } satisfies BattleEnterData);
-      }),
+      }
+    };
+    const retry = makeActionButton({
+      title: retryTitle, width: halfW, height: halfH, variant: 'cream',
+      fontSize: FONT_SIZE.md,
+      onTap: () => commitDefeat(retryNav),
     });
     retry.position.set(-(halfW + halfGap) / 2, y + halfH / 2);
     content.addChild(retry);
@@ -606,7 +721,7 @@ export class BattleResultOverlay {
     const entries: { label: string; icon: string; scene: string }[] = [
       { label: '召唤', icon: UI_IMAGES.iconRecruit, scene: 'gacha' },
       { label: '商店', icon: UI_IMAGES.navShop, scene: 'shop' },
-      { label: '编队', icon: UI_IMAGES.navTeam, scene: 'team' },
+      { label: '灵宠', icon: UI_IMAGES.navPet, scene: 'codex' },
     ];
     const gap = 128;
     const startX = -((entries.length - 1) * gap) / 2;

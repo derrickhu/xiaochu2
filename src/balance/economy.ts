@@ -16,6 +16,11 @@ export const ECONOMY = {
     perStarBonus: 0.2,
     /** Boss 关产出倍率 */
     bossMultiplier: 2.0,
+    /**
+     * 重复通关产出比例：主线不耗体力，全额发币等于开放无限刷，
+     * 资源与秘境/任务产出会同时失去意义。量级对齐 defeat.expRefundPct。
+     */
+    repeatClearPct: 0.25,
   },
 
   /** ── 招募定价 ── */

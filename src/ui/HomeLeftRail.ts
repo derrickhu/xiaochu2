@@ -1,7 +1,7 @@
 /**
  * 首页左侧栏（对齐 home_layout_demo_b）
  *
- * 上组 = 副玩法（签到 / 通天塔 / 日常 / 活动）
+ * 上组 = 轻量入口（签到 / 日常 / 商店）；秘境与通天塔已抬到底栏
  * 分隔线
  * 下组 = 平台福利（侧边栏 / 桌面，抖音必接）
  */
@@ -9,9 +9,11 @@ import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
 import { EventBus } from '@/core/EventBus';
 import { Platform } from '@/core/PlatformService';
+import { SceneManager } from '@/core/SceneManager';
 import { SidebarService } from '@/core/SidebarService';
 import { DesktopShortcutService } from '@/core/DesktopShortcutService';
 import { PlayerData } from '@/game/PlayerData';
+import { hasClaimableQuest } from '@/game/dailyQuestTracker';
 import { UI_IMAGES } from '@/config/Assets';
 import { COLORS, FONT_SIZE } from './theme';
 import { makePanel } from './Panel';
@@ -19,7 +21,7 @@ import { makeText } from './text';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { pressFeedback } from './motion';
 
-export type HomeRailId = 'checkin' | 'tower' | 'daily' | 'event' | 'sidebar' | 'desktop';
+export type HomeRailId = 'checkin' | 'daily' | 'shop' | 'sidebar' | 'desktop';
 
 export interface HomeRailItem {
   id: HomeRailId;
@@ -35,13 +37,39 @@ export interface HomeRailItem {
   onTap?: () => void;
 }
 
-/** 副玩法入口；加玩法时往这里追加即可 */
+/** 左栏轻量入口；秘境/通天塔在底栏 */
 export const DEFAULT_HOME_RAIL: readonly HomeRailItem[] = [
-  { id: 'checkin', label: '签到', glyph: '签', iconPath: UI_IMAGES.railCheckin, badge: true },
-  { id: 'tower', label: '通天塔', glyph: '塔', iconPath: UI_IMAGES.railTower },
+  { id: 'checkin', label: '签到', glyph: '签', iconPath: UI_IMAGES.railCheckin },
   { id: 'daily', label: '日常', glyph: '常', iconPath: UI_IMAGES.railDaily },
-  { id: 'event', label: '活动', glyph: '活', iconPath: UI_IMAGES.railEvent },
+  { id: 'shop', label: '商店', glyph: '店', iconPath: UI_IMAGES.navShop },
 ];
+
+/**
+ * 首页左栏实时项：红点与跳转都依赖当日存档状态，故每次建栏时现算，
+ * 不能像 DEFAULT_HOME_RAIL 那样做成模块级常量。
+ */
+export function buildHomePlayRailItems(): HomeRailItem[] {
+  return DEFAULT_HOME_RAIL.map((item) => {
+    switch (item.id) {
+      case 'checkin':
+        return {
+          ...item,
+          badge: PlayerData.canCheckinToday,
+          onTap: () => EventBus.emit('checkin:open'),
+        };
+      case 'daily':
+        return {
+          ...item,
+          badge: hasClaimableQuest(),
+          onTap: () => EventBus.emit('daily-quest:open'),
+        };
+      case 'shop':
+        return { ...item, onTap: () => SceneManager.switchTo('shop') };
+      default:
+        return { ...item };
+    }
+  });
+}
 
 /** Demo B：分隔线下的平台福利入口 */
 export function buildHomeWelfareRailItems(): HomeRailItem[] {
@@ -101,7 +129,7 @@ export function buildHomeLeftRail(
   root.position.set(opts.x, opts.y);
   parent.addChild(root);
 
-  const playItems = opts.items ?? DEFAULT_HOME_RAIL;
+  const playItems = opts.items ?? buildHomePlayRailItems();
   let y = 0;
   for (const item of playItems) {
     const btn = makeRailButton(item);
@@ -188,12 +216,7 @@ function makeRailButton(item: HomeRailItem): PIXI.Container {
     }
   }
 
-  const onTap = item.onTap ?? (() => {
-    const tip = item.id === 'tower'
-      ? '通天塔即将开放（与主线关卡不同的爬塔玩法）'
-      : `${item.label}即将开放`;
-    Platform.showToast(tip);
-  });
+  const onTap = item.onTap ?? (() => Platform.showToast(`${item.label}即将开放`));
 
   root.eventMode = 'static';
   root.cursor = 'pointer';

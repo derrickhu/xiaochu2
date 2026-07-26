@@ -1,0 +1,24 @@
+Use the attached tower UI prototype as the BASE scene.
+KEEP: the Q-soft pagoda art, background, top back/title/reset, milestone strip, bottom CTA button, overall color mood.
+CHANGE ONLY: redesign the RIGHT STATUS BOARD typography & layout — current stacked boxes look messy.
+
+STATUS BOARD REDESIGN (far-right, slim, elegant, do not cover tower center):
+One single clean floating cream card (NOT three separate random boxes), thin gold rim, soft rounded corners, light parchment fill ~88% opacity.
+
+Inside card vertical rhythm (top → bottom), generous padding, clear hierarchy:
+1) Tiny eyebrow label centered or left: 「本轮状态」 in soft brown, small
+2) Primary line, large & bold: 「第 37 层」
+3) Secondary line under it: 「起手血量 72%」 with a thin cute HP bar (cream track + jade/gold fill)
+4) Hairline divider
+5) Compact meta row: 「最高 36」 · 「存档每5层」
+6) Footer tip in smaller text: 「血量跨层继承 · 每层回10%」
+
+Visual rules:
+- One card, one column, aligned left edges of text
+- No overlapping labels, no cramped wrapping, no duplicate big numbers fighting
+- Card width ~22% of screen max; sit on far right with air gap from tower trunk
+- Readable Chinese, polished mobile UI mock
+- Keep rest of screen almost identical to the reference
+
+NO bottom-nav changes required; if present keep subtle. No phone frame. No watermark.
+Aspect 9:16 full UI mock.

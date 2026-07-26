@@ -40,9 +40,13 @@ export function pullGachaTen(
   data: SaveData,
   rng: () => number = Math.random,
   element?: Element,
+  /** 十连券已在调用方扣除，这里跳过灵玉结算 */
+  opts?: { free?: boolean },
 ): PullOutcome[] | null {
-  if (data.lingyu < ECONOMY.gacha.tenCost) return null;
-  data.lingyu -= ECONOMY.gacha.tenCost;
+  if (!opts?.free) {
+    if (data.lingyu < ECONOMY.gacha.tenCost) return null;
+    data.lingyu -= ECONOMY.gacha.tenCost;
+  }
   const state: GachaState = { sinceHigh: data.gachaSinceHigh };
   const outcomes = pullTen(
     rng, state, (id) => isOwned(data, id),

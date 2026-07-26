@@ -1,89 +1,90 @@
 /**
  * 全局返回按钮（单一真源）
  *
- * 对齐原型：奶油胶囊 + 左侧返回箭头图标 +「返回」棕字。
+ * 玉佩流苏图标（btn_back.png）：顶绳 + 青绿玉璧左箭头 + 底穗。
  * 各场景顶栏 / 战斗顶栏统一引用 makeBackButton，禁止再手写 ghost「返回」。
  */
 import * as PIXI from 'pixi.js';
-import { COLORS, FONT_SIZE, RADIUS } from './theme';
-import { makeText } from './text';
+import { TextureCache } from '@/core/TextureCache';
+import { UI_IMAGES } from '@/config/Assets';
 import { pressFeedback } from './motion';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
 export interface BackButtonOpts {
   onTap: () => void;
-  /** 默认「返回」 */
+  /** @deprecated 玉佩图标不再显示文字，保留仅为兼容旧调用 */
   label?: string;
-  width?: number;
+  /** 显示高度（含绳与流苏）；宽度按贴图比例 */
   height?: number;
+  width?: number;
 }
 
-/** 标准尺寸（设计坐标 750 宽） */
-export const BACK_BUTTON_SIZE = { width: 128, height: 54 } as const;
-
 /**
- * 绘制左侧返回箭头（圆润左指 chevron，与原型小图标一致）。
- * 原点在图标中心；颜色走 theme.btnBackText。
+ * 标准显示尺寸（设计坐标 750 宽）。
+ * 玉璧中心对齐顶栏 safeHeaderCenterY；绳在上、穗在下。
  */
-function drawBackChevron(g: PIXI.Graphics, color: number, scale = 1): void {
-  const s = scale;
-  // 厚实圆润「‹」：外侧轮廓略宽，内侧切出厚度
-  g.beginFill(color, 1);
-  g.moveTo(6 * s, -11 * s);
-  g.quadraticCurveTo(5 * s, -11.5 * s, 4 * s, -10.5 * s);
-  g.lineTo(-8 * s, -1 * s);
-  g.quadraticCurveTo(-10 * s, 0, -8 * s, 1 * s);
-  g.lineTo(4 * s, 10.5 * s);
-  g.quadraticCurveTo(5 * s, 11.5 * s, 6 * s, 11 * s);
-  g.lineTo(8.5 * s, 8 * s);
-  g.lineTo(-3 * s, 0);
-  g.lineTo(8.5 * s, -8 * s);
+export const BACK_BUTTON_SIZE = { width: 72, height: 120 } as const;
+
+/** 贴图内玉璧中心相对坐标（相对整图宽高） */
+const JADE_ANCHOR = { x: 0.5, y: 0.396 } as const;
+
+function drawFallback(parent: PIXI.Container, displayH: number): void {
+  const r = displayH * 0.22;
+  const g = new PIXI.Graphics();
+  g.beginFill(0x6db8a8, 0.95);
+  g.lineStyle(3, 0xd8c49a, 1);
+  g.drawCircle(0, 0, r);
+  g.endFill();
+  // 左箭头
+  g.lineStyle(0);
+  g.beginFill(0xfff8ec, 1);
+  g.moveTo(r * 0.25, -r * 0.35);
+  g.lineTo(-r * 0.35, 0);
+  g.lineTo(r * 0.25, r * 0.35);
+  g.lineTo(r * 0.1, r * 0.15);
+  g.lineTo(-r * 0.05, 0);
+  g.lineTo(r * 0.1, -r * 0.15);
   g.closePath();
   g.endFill();
+  parent.addChild(g);
 }
 
 export function makeBackButton(opts: BackButtonOpts): PIXI.Container {
-  const label = opts.label ?? '返回';
-  const width = opts.width ?? BACK_BUTTON_SIZE.width;
-  const height = opts.height ?? BACK_BUTTON_SIZE.height;
-  const radius = Math.min(RADIUS.button, height / 2);
+  const displayH = opts.height ?? BACK_BUTTON_SIZE.height;
+  const displayW = opts.width
+    ?? Math.round(displayH * (BACK_BUTTON_SIZE.width / BACK_BUTTON_SIZE.height));
 
   const btn = new PIXI.Container();
-  const bg = new PIXI.Graphics();
+  const slot = new PIXI.Container();
+  btn.addChild(slot);
 
-  // 外圈淡青晕
-  bg.beginFill(COLORS.btnBackGlow, 0.55);
-  bg.drawRoundedRect(-width / 2 - 3, -height / 2 - 3, width + 6, height + 6, radius + 3);
-  bg.endFill();
-  // 奶油底 + 金棕描边
-  bg.beginFill(COLORS.btnBackBg, 1);
-  bg.lineStyle(2.5, COLORS.btnBackBorder, 1);
-  bg.drawRoundedRect(-width / 2, -height / 2, width, height, radius);
-  bg.endFill();
-  bg.lineStyle(0);
+  const apply = (tex: PIXI.Texture): void => {
+    slot.removeChildren().forEach((c) => c.destroy());
+    const sp = new PIXI.Sprite(tex);
+    // 锚在玉璧中心，使 position 的 Y 对齐顶栏中心
+    sp.anchor.set(JADE_ANCHOR.x, JADE_ANCHOR.y);
+    const scale = Math.min(displayW / Math.max(1, tex.width), displayH / Math.max(1, tex.height));
+    sp.scale.set(scale);
+    slot.addChild(sp);
+  };
 
-  const icon = new PIXI.Graphics();
-  drawBackChevron(icon, COLORS.btnBackText, 1);
+  const path = UI_IMAGES.btnBack;
+  const cached = TextureCache.get(path);
+  if (cached) {
+    apply(cached);
+  } else {
+    drawFallback(slot, displayH);
+    void TextureCache.load(path).then((tex) => {
+      if (!slot.destroyed) apply(tex);
+    }).catch(() => null);
+  }
 
-  const text = makeText(label, {
-    size: FONT_SIZE.sm,
-    fill: COLORS.btnBackText,
-    bold: true,
-    anchor: 0.5,
-  });
-
-  // 图标 + 文字水平居中为一组
-  const gap = 8;
-  const iconW = 18;
-  const groupW = iconW + gap + text.width;
-  const groupLeft = -groupW / 2;
-  icon.position.set(groupLeft + iconW / 2, 0);
-  text.position.set(groupLeft + iconW + gap + text.width / 2, 0);
-
-  btn.addChild(bg, icon, text);
+  // 点击区覆盖玉璧为主，并略含上下绳穗，避免点空
+  const hitW = displayW + 16;
+  const hitH = displayH * 0.72;
   btn.eventMode = 'static';
   btn.cursor = 'pointer';
-  btn.hitArea = new PIXI.Rectangle(-width / 2 - 4, -height / 2 - 4, width + 8, height + 8);
+  btn.hitArea = new PIXI.Rectangle(-hitW / 2, -hitH * 0.42, hitW, hitH);
   btn.interactiveChildren = false;
   bindPointerTap(btn, opts.onTap);
   pressFeedback(btn);

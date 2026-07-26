@@ -16,7 +16,7 @@ import { COLORS, FONT_SIZE } from './theme';
 import { makeText } from './text';
 
 export type NamePlaqueSize = 'sm' | 'md' | 'lg' | 'xl';
-export type NamePlaquePlate = 'title' | 'banner';
+export type NamePlaquePlate = 'title' | 'banner' | 'modal' | 'scene';
 
 export interface NamePlaqueOpts {
   /** 匾上文字 */
@@ -89,6 +89,27 @@ const PLATE_STYLE: Record<NamePlaquePlate, PlateStyle> = {
     defaultStroke: false,
     defaultMaxW: 560,
   },
+  /** 签到 / 日常弹窗顶匾：祥云奶油横匾（贴图已缩到 720×217） */
+  modal: {
+    path: UI_IMAGES.modalTitlePlaque,
+    // 显示高必须 > sliceTb*2，否则九宫上下帽挤扁中段 → 匾扁、字被缩没
+    height: 118,
+    sliceLr: 140,
+    sliceTb: 34,
+    defaultFill: COLORS.textTitle,
+    defaultStroke: true,
+    defaultMaxW: 540,
+  },
+  /** 全屏场景顶栏匾：奶油金边祥云匾（对齐秘境 B 原型，720×176） */
+  scene: {
+    path: UI_IMAGES.sceneTitlePlaque,
+    height: 96,
+    sliceLr: 150,
+    sliceTb: 28,
+    defaultFill: COLORS.textTitle,
+    defaultStroke: true,
+    defaultMaxW: 480,
+  },
 };
 
 /**
@@ -106,6 +127,50 @@ export function makePageTitlePlaque(opts: {
     plate: 'title',
     size: 'lg',
     height: 104,
+    minWidth: minW,
+    maxWidth: maxW,
+    disabled: opts.disabled,
+  }) as NamePlaqueView;
+}
+
+/**
+ * 弹窗标题匾（每日签到 / 每日任务）：祥云奶油横匾，对齐 checkin 原型。
+ */
+export function makeModalTitlePlaque(opts: {
+  text: string;
+  /** 弹窗内容宽，用于夹匾宽 */
+  panelWidth: number;
+  disabled?: boolean;
+}): NamePlaqueView {
+  // 匾宽略收，给左右祥云留帽；字号用 xl，避免再被中段裁窄缩没
+  const maxW = Math.min(520, opts.panelWidth - 100);
+  const minW = Math.min(420, maxW);
+  return makeNamePlaque({
+    text: opts.text,
+    plate: 'modal',
+    size: 'xl',
+    height: 118,
+    minWidth: minW,
+    maxWidth: maxW,
+    disabled: opts.disabled,
+  }) as NamePlaqueView;
+}
+
+/**
+ * 全屏场景顶栏匾（五行秘境等）：拱顶金边祥云匾，两侧留给返回 / 资源胶囊。
+ */
+export function makeSceneTitlePlaque(opts: {
+  text: string;
+  screenWidth: number;
+  disabled?: boolean;
+}): NamePlaqueView {
+  const maxW = Math.min(460, opts.screenWidth - 260);
+  const minW = Math.min(380, maxW);
+  return makeNamePlaque({
+    text: opts.text,
+    plate: 'scene',
+    size: 'lg',
+    height: 96,
     minWidth: minW,
     maxWidth: maxW,
     disabled: opts.disabled,
@@ -216,8 +281,11 @@ export function makeNamePlaque(opts: NamePlaqueOpts): PIXI.Container {
     title.scale.set(textMax / visualTextW);
   }
 
-  const tex = TextureCache.get(style.path);
-  if (tex) {
+  const plateHost = new PIXI.Container();
+  root.addChild(plateHost);
+
+  const mountPlate = (tex: PIXI.Texture): void => {
+    plateHost.removeChildren().forEach((c) => c.destroy());
     const plane = new PIXI.NineSlicePlane(
       tex, style.sliceLr, style.sliceTb, style.sliceLr, style.sliceTb,
     );
@@ -225,11 +293,20 @@ export function makeNamePlaque(opts: NamePlaqueOpts): PIXI.Container {
     plane.height = plaqueH;
     plane.pivot.set(plaqueW / 2, plaqueH / 2);
     if (disabled) plane.alpha = 0.55;
-    root.addChild(plane);
+    plateHost.addChild(plane);
+  };
+
+  const cached = TextureCache.get(style.path);
+  if (cached) {
+    mountPlate(cached);
   } else {
+    // 同步回落，避免「只有字没有匾」；纹理到位后替换
     const fb = makeFallbackPlaque(plaqueW, plaqueH);
     if (disabled) fb.alpha = 0.55;
-    root.addChild(fb);
+    plateHost.addChild(fb);
+    void TextureCache.load(style.path).then((tex) => {
+      if (!plateHost.destroyed) mountPlate(tex);
+    }).catch(() => null);
   }
 
   title.position.set(0, 0);

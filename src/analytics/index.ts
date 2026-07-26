@@ -138,6 +138,46 @@ export const analytics = {
       reason: params.reason || 'defeat',
     });
   },
+
+  // ── 留存玩法（日循环 / 长线内容）──
+
+  /** 每日签到；day = 七日循环内第几天，streak = 连签天数 */
+  trackCheckinSign(params: { day: number; streak: number; totalDays: number }): void {
+    track(EVENT_NAMES.CHECKIN_SIGN, {
+      day: Math.max(0, Math.floor(params.day)),
+      streak: Math.max(0, Math.floor(params.streak)),
+      total_days: Math.max(0, Math.floor(params.totalDays)),
+    });
+  },
+
+  /** 单条日常任务领奖（含全清奖励，quest_id = dq_all_clear） */
+  trackDailyQuestClaim(questId: string, params: { questName?: string; reward?: string } = {}): void {
+    track(EVENT_NAMES.DAILY_QUEST_CLAIM, {
+      quest_id: questId,
+      quest_name: params.questName || '',
+      reward: params.reward || '',
+    });
+  },
+
+  /** 召唤抽取（单抽 / 十连） */
+  trackFountainDraw(params: {
+    drawType: 'single' | 'ten';
+    cost: number;
+    element?: string;
+    highRarityCount?: number;
+  }): void {
+    track(EVENT_NAMES.FOUNTAIN_DRAW, {
+      draw_type: params.drawType,
+      cost: Math.max(0, Math.floor(params.cost)),
+      element: params.element || 'all',
+      high_rarity_count: Math.max(0, Math.floor(params.highRarityCount ?? 0)),
+    });
+  },
+
+  /** 激励视频曝光；scene 必须稳定，便于按广告位聚合 */
+  trackAdShow(scene: string, extra: AnalyticsParams = {}): void {
+    track(EVENT_NAMES.AD_SHOW, { scene, ad_type: 'reward', ...extra });
+  },
 };
 
 function mapPlatform(): PlatformName {

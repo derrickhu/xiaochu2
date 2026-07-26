@@ -1,7 +1,8 @@
 /**
- * 底部五格导航：灵宠 | 召唤 | 主线 | 商店 | 编队
+ * 底部五格导航：灵宠 | 召唤 | 主线 | 秘境 | 通天塔
  *
- * 「主线」= 首页 TitleScene（章节地图），与左侧「通天塔」等副玩法不重叠。
+ * 「主线」= 首页 TitleScene（章节地图）；秘境/通天塔为日循环与长线一级入口。
+ * 商店下沉到左栏；编队只保留战前流程，不再占底栏。
  * 对齐截图/home_hub_v4：生成云形奶油板贴图 + 大号图标 + 选中金环光晕 + 奶油标签胶囊。
  */
 import * as PIXI from 'pixi.js';
@@ -16,7 +17,7 @@ import { makeText } from './text';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { pressFeedback } from './motion';
 
-export type BottomNavTab = 'codex' | 'gacha' | 'home' | 'shop' | 'team';
+export type BottomNavTab = 'codex' | 'gacha' | 'home' | 'realm' | 'tower';
 
 /**
  * 底栏占位高度（逻辑像素）。
@@ -153,12 +154,13 @@ export function buildBottomNav(
       onTap: () => { if (active !== 'home') SceneManager.switchTo('title'); },
     },
     {
-      tab: 'shop', label: '商店', icon: UI_IMAGES.navShop, x: xs[3],
-      onTap: () => { if (active !== 'shop') SceneManager.switchTo('shop'); },
+      tab: 'realm', label: '秘境', icon: UI_IMAGES.navRealm, x: xs[3],
+      highlight: PlayerData.realmRunsLeft > 0,
+      onTap: () => { if (active !== 'realm') SceneManager.switchTo('realm'); },
     },
     {
-      tab: 'team', label: '编队', icon: UI_IMAGES.navTeam, x: xs[4],
-      onTap: () => { if (active !== 'team') SceneManager.switchTo('team'); },
+      tab: 'tower', label: '通天塔', icon: UI_IMAGES.railTower, x: xs[4],
+      onTap: () => { if (active !== 'tower') SceneManager.switchTo('tower'); },
     },
   ];
 

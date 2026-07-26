@@ -25,12 +25,16 @@ import { PetDetailScene } from '@/scenes/PetDetailScene';
 import { CodexScene } from '@/scenes/CodexScene';
 import { GachaScene } from '@/scenes/GachaScene';
 import { ShopScene } from '@/scenes/ShopScene';
+import { SecretRealmScene } from '@/scenes/SecretRealmScene';
+import { TowerScene } from '@/scenes/TowerScene';
 import { GMManager } from '@/core/GMManager';
 import { OverlayManager } from '@/core/OverlayManager';
 import { GMPanel } from '@/ui/GMPanel';
 import { GMEntryButton } from '@/ui/GMEntryButton';
 import { SidebarPanel } from '@/ui/SidebarPanel';
 import { DesktopShortcutPanel } from '@/ui/DesktopShortcutPanel';
+import { CheckinPanel } from '@/ui/CheckinPanel';
+import { DailyQuestPanel } from '@/ui/DailyQuestPanel';
 
 declare const GameGlobal: any;
 
@@ -105,7 +109,12 @@ async function main(): Promise<void> {
   SceneManager.register(new CodexScene());
   SceneManager.register(new GachaScene());
   SceneManager.register(new ShopScene());
+  SceneManager.register(new SecretRealmScene());
+  SceneManager.register(new TowerScene());
   SceneManager.switchTo('title');
+
+  OverlayManager.container.addChild(new CheckinPanel());
+  OverlayManager.container.addChild(new DailyQuestPanel());
 
   if (GMManager.isRuntimeAllowed) {
     OverlayManager.container.addChild(new GMPanel());

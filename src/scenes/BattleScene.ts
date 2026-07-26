@@ -36,13 +36,15 @@ import { BoardView } from '@/game/board/BoardView';
 import { BattleController, type PetAttack, type TurnResolution } from '@/game/battle/BattleController';
 import type { EnemyActResult } from '@/game/battle/battleTypes';
 import { PlayerData } from '@/game/PlayerData';
+import type { BattleContext } from '@/game/battleContext';
+import { TOWER } from '@/balance/tower';
 import { delay } from './battle/battleWidgets';
 import { computeBattleLayout, type BattleLayout } from './battle/BattleLayout';
 import { BattleFx, type TurnPetDamageSummary } from './battle/BattleFx';
 import { BattleHud } from './battle/BattleHud';
 import { BattleStatusIcons } from './battle/BattleStatusIcons';
 import { BattlePetBar } from './battle/BattlePetBar';
-import { BattleResultOverlay } from './battle/BattleResultOverlay';
+import { BattleResultOverlay, type BattleResultOptions } from './battle/BattleResultOverlay';
 import { presentSkillCast, type SkillCastDeps } from './battle/battleSkillPresenter';
 import { analytics } from '@/analytics';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
@@ -54,6 +56,8 @@ import { COLORS } from '@/ui/theme';
 
 export interface BattleEnterData {
   stageId: string;
+  /** 副玩法上下文（秘境 / 通天塔）；缺省 = 主线 */
+  context?: BattleContext;
 }
 
 /** 汇总本回合各宠物累计伤害，供总伤害出现时槽位常驻展示 */
@@ -115,13 +119,32 @@ export class BattleScene implements Scene {
   private readonly _enterSeq = new SceneEnterSeq();
   private readonly _gmInstantClear = (): string => this._executeGmInstantClear();
   private _battleStartedAt = 0;
+  private _context: BattleContext | undefined;
+  /** 本场最高 Combo（日常任务「单场 N 连击」判定） */
+  private _maxCombo = 0;
 
   onEnter(data?: unknown): void {
     PlayerData.load();
 
-    const stageId = (data as BattleEnterData | undefined)?.stageId ?? STAGES[0].id;
+    const enter = data as BattleEnterData | undefined;
+    const stageId = enter?.stageId ?? STAGES[0].id;
+    this._context = enter?.context;
+    this._maxCombo = 0;
     this._ctrl = new BattleController(stageId, PlayerData.team, Math.random,
       (id) => ({ level: PlayerData.petLevel(id), star: PlayerData.petStar(id) }));
+    // 秘境次数在真正开打时才扣：编队页返回不该白吃一次
+    if (this._context?.kind === 'realm') {
+      PlayerData.consumeRealmRun();
+    }
+    // 通天塔：HP 与技能 CD 跨层继承，不回满 —— 塔从「单场爆发」变成「资源损耗战」的关键
+    if (this._context?.kind === 'tower') {
+      const tower = PlayerData.tower;
+      const pct = Math.max(TOWER.minCarryHpPct, tower.runHpPct);
+      this._ctrl.heroHp = Math.max(1, Math.floor(this._ctrl.heroMaxHp * pct));
+      for (const pet of this._ctrl.team) {
+        pet.skillCdLeft = Math.max(pet.skillCdLeft, tower.runCds[pet.def.id] ?? 0);
+      }
+    }
     this._board = new BoardModel();
     if (this._ctrl.sealOrbCount > 0) {
       this._board.sealRandom(this._ctrl.sealOrbCount);
@@ -397,6 +420,8 @@ export class BattleScene implements Scene {
 
       if (isStale()) return;
 
+      this._maxCombo = Math.max(this._maxCombo, allGroups.length);
+
       if (allGroups.length >= 7) {
         this._fx.flash(0xfff3c8, 0.22, 0.35);
         this._fx.shakeMedium();
@@ -543,7 +568,7 @@ export class BattleScene implements Scene {
     this._ctrl.enemy.hp = 0;
     this._settleBattleVisuals();
     this._resultOpen = true;
-    this._overlay.show(this._ctrl, true, this._battleStartedAt);
+    this._overlay.show(this._ctrl, true, this._resultOptions());
     return `已通关：${this._ctrl.stage.name}`;
   }
 
@@ -607,9 +632,17 @@ export class BattleScene implements Scene {
     }
     SfxManager.playVictory();
     this._resultOpen = true;
-    this._overlay.show(this._ctrl, true, this._battleStartedAt);
+    this._overlay.show(this._ctrl, true, this._resultOptions());
     await delay(0.3);
     return true;
+  }
+
+  private _resultOptions(): BattleResultOptions {
+    return {
+      battleStartedAt: this._battleStartedAt,
+      context: this._context,
+      maxCombo: this._maxCombo,
+    };
   }
 
   /** 回合/战斗逻辑已落定后，把表现层强制收敛到稳定帧，避免真机残留中间态。 */
@@ -625,7 +658,8 @@ export class BattleScene implements Scene {
   private _showDefeatOverlay(): void {
     this._resultOpen = true;
     this._busy = true;
-    this._overlay.show(this._ctrl, false, this._battleStartedAt, {
+    this._overlay.show(this._ctrl, false, {
+      ...this._resultOptions(),
       onRevive: () => this._reviveFromAd(),
     });
   }

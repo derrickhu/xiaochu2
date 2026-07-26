@@ -1,0 +1,6 @@
+Use the attached tower UI mock for STYLE + atmosphere ONLY.
+Create a CLEAN full-screen 9:16 background plate for the Tower mode.
+KEEP the soft mint-cream Q xianxia landscape: floating islands, misty mountains, soft clouds, glowing particles, grassy foreground with warm yellow flowers.
+REMOVE all UI chrome completely: no title plaque, no back button, no status card, no milestone panel, no CTA button, no bottom nav, no Chinese text, no icons.
+Leave the CENTER mostly open/soft (gentle mist) so a separate tower sprite can be composited later — do NOT paint a solid detailed pagoda filling the middle; at most a faint distant tiny pavilion far in background is OK.
+NO TEXT. Soft painterly Q-cultivation look, pastel, clean production game background.

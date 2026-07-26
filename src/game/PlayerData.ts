@@ -23,11 +23,18 @@ import {
   migrateLegacySave,
   parseSaveData,
   SAVE_KEY,
+  type CheckinState,
+  type DailyState,
   type OwnedPet,
   type RecruitResult,
   type SaveData,
+  type TowerState,
 } from './playerSave';
+import { ensureDailyFresh, isConsecutiveDay } from './dailyReset';
 import { DEV_LEGACY_SAVE_KEYS } from '@/config/CloudConfig';
+import { CHECKIN_CYCLE_DAYS } from '@/balance/checkin';
+import { checkpointFloorOf, TOWER } from '@/balance/tower';
+import { SECRET_REALM } from '@/balance/secretRealm';
 import {
   addLingyu as addLingyuToSave,
   gachaPoolPets as gachaPoolPetsFromSave,
@@ -284,6 +291,19 @@ class PlayerDataClass {
     return outcomes;
   }
 
+  /** 十连券十连：扣券不扣灵玉（签到第 7 天等发的券唯一出口）。无券返回 null */
+  pullGachaTenByTicket(
+    rng: () => number = Math.random,
+    element?: Element,
+  ): PullOutcome[] | null {
+    if (this._data.tickets <= 0) return null;
+    const outcomes = pullGachaTenFromSave(this._data, rng, element, { free: true });
+    if (!outcomes) return null;
+    this._data.tickets--;
+    this._save();
+    return outcomes;
+  }
+
   // ═══════════ 解锁灵宠（Boss 掉落 / 抽卡 / 招募） ═══════════
 
   /**
@@ -442,13 +462,16 @@ class PlayerDataClass {
 
   /**
    * 通关结算：星数取历史最佳，灵宠币累加；首通额外发灵玉（里程碑产出）。
+   *
+   * 重复通关按 ECONOMY.coin.repeatClearPct 衰减发币 —— 主线不耗体力，
+   * 不衰减就可以无限刷同一关，后面的秘境/任务产出全部失去意义。
    * @returns 本次首通发放的灵玉（非首通为 0）
    */
   recordClear(stageId: string, stars: number, coins: number): number {
     const best = this._data.stars[stageId] ?? 0;
     const firstClear = best === 0 && stars > 0;
     if (stars > best) this._data.stars[stageId] = stars;
-    this._data.coins += coins;
+    this._data.coins += firstClear ? coins : Math.floor(coins * ECONOMY.coin.repeatClearPct);
 
     let lingyu = 0;
     if (firstClear) {
@@ -460,6 +483,194 @@ class PlayerDataClass {
     }
     this._save();
     return lingyu;
+  }
+
+  /** 该关是否已通过（重复通关产出衰减，UI 结算页据此提示） */
+  isRepeatClear(stageId: string): boolean {
+    return (this._data.stars[stageId] ?? 0) > 0;
+  }
+
+  // ═══════════ 日循环（秘境次数 / 日常任务 / 每日首胜） ═══════════
+
+  /** 读日循环状态前先对齐今天，保证所有调用方看到的都是当日数据 */
+  private _daily(): DailyState {
+    if (ensureDailyFresh(this._data)) this._save();
+    return this._data.daily;
+  }
+
+  get daily(): Readonly<DailyState> {
+    return this._daily();
+  }
+
+  /** 五行秘境今日剩余次数 */
+  get realmRunsLeft(): number {
+    return Math.max(0, SECRET_REALM.dailyRuns - this._daily().realmRuns);
+  }
+
+  /** 扣一次秘境次数（次数不足返回 false） */
+  consumeRealmRun(): boolean {
+    if (this.realmRunsLeft <= 0) return false;
+    this._daily().realmRuns++;
+    this._save();
+    return true;
+  }
+
+  questProgress(questId: string): number {
+    return this._daily().questProgress[questId] ?? 0;
+  }
+
+  /** 累加任务进度（已领奖的任务不再累加，避免进度虚高） */
+  addQuestProgress(questId: string, amount = 1): void {
+    if (amount <= 0) return;
+    const daily = this._daily();
+    if (daily.questClaimed.includes(questId)) return;
+    daily.questProgress[questId] = (daily.questProgress[questId] ?? 0) + Math.floor(amount);
+    this._save();
+  }
+
+  isQuestClaimed(questId: string): boolean {
+    return this._daily().questClaimed.includes(questId);
+  }
+
+  /** 标记任务已领奖（重复领取返回 false） */
+  markQuestClaimed(questId: string): boolean {
+    const daily = this._daily();
+    if (daily.questClaimed.includes(questId)) return false;
+    daily.questClaimed.push(questId);
+    this._save();
+    return true;
+  }
+
+  /** 今日首胜翻倍是否仍可享受 */
+  get firstWinAvailable(): boolean {
+    return this._daily().firstWinDate !== localDateKey();
+  }
+
+  /** 消费今日首胜翻倍名额；已用过返回 false */
+  consumeFirstWin(): boolean {
+    const daily = this._daily();
+    const today = localDateKey();
+    if (daily.firstWinDate === today) return false;
+    daily.firstWinDate = today;
+    this._save();
+    return true;
+  }
+
+  // ═══════════ 七日签到 ═══════════
+
+  get checkin(): Readonly<CheckinState> {
+    return this._data.checkin;
+  }
+
+  get canCheckinToday(): boolean {
+    return this._data.checkin.lastDate !== localDateKey();
+  }
+
+  /** 今日签到对应七日循环的第几天（1~7），未签到时即为「待签的那一天」 */
+  get checkinDayIndex(): number {
+    const c = this._data.checkin;
+    const today = localDateKey();
+    if (c.lastDate === today) return ((c.streak - 1) % CHECKIN_CYCLE_DAYS) + 1;
+    const nextStreak = isConsecutiveDay(c.lastDate, today) ? c.streak + 1 : 1;
+    return ((nextStreak - 1) % CHECKIN_CYCLE_DAYS) + 1;
+  }
+
+  /** 执行签到，返回本次是循环内第几天（1~7）；今日已签返回 null */
+  doCheckin(): number | null {
+    const today = localDateKey();
+    const c = this._data.checkin;
+    if (c.lastDate === today) return null;
+    c.streak = isConsecutiveDay(c.lastDate, today) ? c.streak + 1 : 1;
+    c.lastDate = today;
+    c.totalDays++;
+    this._save();
+    return ((c.streak - 1) % CHECKIN_CYCLE_DAYS) + 1;
+  }
+
+  // ═══════════ 通天塔 ═══════════
+
+  get tower(): Readonly<TowerState> {
+    if (ensureDailyFresh(this._data)) this._save();
+    return this._data.tower;
+  }
+
+  /** 通天塔今日剩余重置次数（免费 + 广告） */
+  get towerResetsLeft(): number {
+    return Math.max(0, TOWER.dailyResets - this.tower.resetsUsed);
+  }
+
+  /** 下一次重置是否需要看广告（免费额度已用完） */
+  get towerResetNeedsAd(): boolean {
+    return this.tower.resetsUsed >= TOWER.freeResets;
+  }
+
+  /** 本轮是否已战败封盘（需重置才能再进） */
+  get towerRunEnded(): boolean {
+    return this.tower.runEnded;
+  }
+
+  /**
+   * 爬塔推进：记录下一层与续战血量比例（塔的核心差异点 —— HP 不回满）。
+   * @returns 是否刷新了历史最高层
+   */
+  towerAdvance(clearedFloor: number, nextHpPct: number, cds: Record<string, number> = {}): boolean {
+    const t = this._data.tower;
+    const isBest = clearedFloor > t.bestFloor;
+    if (isBest) t.bestFloor = clearedFloor;
+    t.runFloor = clearedFloor + 1;
+    t.runHpPct = Math.min(1, Math.max(TOWER.minCarryHpPct, nextHpPct));
+    t.runCds = cds;
+    this._save();
+    return isBest;
+  }
+
+  /** 战败封盘：本轮就此结束，重置后从最近存档点重来 */
+  towerEndRun(): void {
+    this._data.tower.runEnded = true;
+    this._save();
+  }
+
+  /**
+   * 消耗一次重置：回退到最近存档点，满血续战。
+   * @returns 次数不足返回 false
+   */
+  towerReset(): boolean {
+    if (this.towerResetsLeft <= 0) return false;
+    const t = this._data.tower;
+    t.resetsUsed++;
+    t.runFloor = checkpointFloorOf(t.runFloor);
+    t.runHpPct = 1;
+    t.runCds = {};
+    t.runEnded = false;
+    this._save();
+    return true;
+  }
+
+  /** 领取层数里程碑；已领过返回 false */
+  claimTowerMilestone(floor: number): boolean {
+    const t = this._data.tower;
+    if (t.claimedMilestones.includes(floor)) return false;
+    t.claimedMilestones.push(floor);
+    this._save();
+    return true;
+  }
+
+  isTowerMilestoneClaimed(floor: number): boolean {
+    return this._data.tower.claimedMilestones.includes(floor);
+  }
+
+  /** 招募券（十连券）发放 */
+  addTickets(amount: number): void {
+    if (amount <= 0) return;
+    this._data.tickets += Math.floor(amount);
+    this._save();
+  }
+
+  /** 灵宠币发放（任务 / 签到 / 秘境结算共用） */
+  addCoins(amount: number): void {
+    if (amount <= 0) return;
+    this._data.coins += Math.floor(amount);
+    this._save();
   }
 
   private _save(): void {

@@ -1,0 +1,11 @@
+Game UI asset sheet, 3 panels in ONE horizontal row on pure white background (#FFFFFF), equal spacing, NO text, NO labels.
+
+Panel 1 LEFT: daily check-in reward CARD frame for normal/future days. Portrait rounded rectangle cream parchment panel, soft gold thin border, delicate golden cloud corner ornaments at four corners, empty center for icons, soft casual Eastern fantasy mobile game style, polished.
+
+Panel 2 MIDDLE: same card but TODAY highlighted state — brighter cream, thicker ornate gold border with soft golden glow halo outside the border, slightly richer corner ornaments, empty center.
+
+Panel 3 RIGHT: wide horizontal GRAND PRIZE banner frame for day 7 — landscape rounded rectangle, rich golden gradient fill (warm gold to amber), ornate gold filigree border, white/cream cloud motifs in bottom corners, sparkling shiny premium look, empty center for reward icons, NO text.
+
+Consistent art style, clean edges, UI-ready frames only. NO Chinese text, NO English text, NO numbers, NO watermarks.
+
+Reference: docs/ui/checkin_panel_prototype.png

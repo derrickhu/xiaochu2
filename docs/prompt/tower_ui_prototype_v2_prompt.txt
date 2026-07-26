@@ -1,0 +1,27 @@
+Use the attached previous tower prototype as LAYOUT reference ONLY.
+Fix two problems:
+1) The pagoda looks too realistic — make it MUCH more Q / chibi / cute (bigger head proportions for cute architectural charm, softer simplified shapes, toy-like immortal tower, rounded roofs, chubby tiers, sparkly cute glow — NOT photoreal architecture).
+2) The right status card is too big and covers the tower — SHRINK it a lot, make it a slim floating chip stack on the far RIGHT edge, low opacity cream, thin border. Leave the tower body mostly clear and centered.
+
+Also keep STYLE family of Q版修仙风 (pastel cream / mint / gold / jade), like secret-realm light UI.
+
+GOAL: Full-screen mobile UI prototype 「通天塔」, portrait 9:16.
+
+COMPOSITION:
+1) TOP: jade tassel back (top-left) + cream gold plaque 「通天塔」 + tiny 「重置 2/2」 top-right
+2) HERO: SUPER Q cute sky pagoda dead-CENTER, tall but adorable, soft clouds, floating islands, mint-cream sky. Tower must be the clear star — mostly unobstructed.
+3) STATUS (slim, far-right, compact — do NOT cover tower center):
+   - One small card or two tiny stacked chips only:
+     「最高 36层」
+     「挑战 37层 · HP 72%」
+   - Optional one-line tiny tip under chips: 「跨层继承 · 每层回10%」
+   - Keep width ~20% of screen max; lots of transparent margin from tower
+4) MILESTONE: thin horizontal strip BELOW tower mid/lower, not covering tower body much — 「里程碑」 30已领 / 40待领 / 50 / 60 with small icons
+5) BOTTOM CTA: clean cream-gold plaque 「挑战第37层」 (simple, grand, not heavy filigree)
+6) NO bottom navigation bar this time (tower is a secondary page)
+
+STRICT STYLE:
+- More Q, cute, soft, simplified — reject realism
+- Status UI must be SMALL and side-hugging
+- Chinese labels required and readable
+- No phone frame, no watermark, no English chrome

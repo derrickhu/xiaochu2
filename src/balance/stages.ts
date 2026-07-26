@@ -39,6 +39,11 @@ export interface StageDef {
   mechanics?: readonly string[];
   hintTags?: readonly string[];
   hintText?: string;
+  /**
+   * 展示名覆盖（副玩法关卡用）。秘境/通天塔的 chapter 只是数值缩放输入（允许小数），
+   * 直接按 `章-关` 渲染会漏出配平参数，故由此字段接管顶栏与编队标题。
+   */
+  displayLabel?: string;
 }
 
 export const CHAPTER_STAGE_COUNT: Readonly<Record<number, number>> = {
@@ -393,7 +398,19 @@ export const STAGES: readonly StageDef[] = [
   ...CHAPTER_1, ...CHAPTER_2, ...CHAPTER_3, ...TRIAL_STAGES,
 ];
 
-export const STAGE_MAP: ReadonlyMap<string, StageDef> = new Map(STAGES.map((s) => [s.id, s]));
+const STAGE_REGISTRY = new Map<string, StageDef>(STAGES.map((s) => [s.id, s]));
+
+/**
+ * 关卡查表：主线 8 章 + 副玩法动态注册的关卡（秘境 / 通天塔）。
+ * 副玩法关卡只进这张表，不进 STAGES，以免污染章节地图、图鉴与经分关卡序号。
+ */
+export const STAGE_MAP: ReadonlyMap<string, StageDef> = STAGE_REGISTRY;
+
+/** 注册主线之外动态生成的关卡，使其可被 BattleController 与资源预载解析 */
+export function registerExtraStage(stage: StageDef): StageDef {
+  STAGE_REGISTRY.set(stage.id, stage);
+  return stage;
+}
 
 export const CHAPTERS: readonly number[] = [...new Set(STAGES.map((s) => s.chapter))].sort((a, b) => a - b);
 
@@ -402,8 +419,10 @@ export function stagesOfChapter(chapter: number): readonly StageDef[] {
 }
 
 /** 短标签：1-1 青苔林边（编队 / 战斗顶栏） */
-export function formatStageShortLabel(stage: Pick<StageDef, 'chapter' | 'index' | 'name'>): string {
-  return `${stage.chapter}-${stage.index} ${stage.name}`;
+export function formatStageShortLabel(
+  stage: Pick<StageDef, 'chapter' | 'index' | 'name'> & { displayLabel?: string },
+): string {
+  return stage.displayLabel ?? `${stage.chapter}-${stage.index} ${stage.name}`;
 }
 
 /** 战斗顶栏：章节关卡号 + 名称，Boss 关附加标记 */
