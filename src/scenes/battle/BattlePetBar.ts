@@ -347,6 +347,11 @@ export class BattlePetBar {
     this._petPointer = null;
   }
 
+  /** 供战斗场景在打开怪物详情等时收起技能气泡 */
+  dismissSkillPreview(): void {
+    this._hideSkillPreview();
+  }
+
   private _hideSkillPreview(): void {
     this._skillPreview?.dismiss();
     this._skillPreview = null;

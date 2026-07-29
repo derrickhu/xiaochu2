@@ -15,7 +15,7 @@ import {
 } from '@/balance/chapterMap';
 import { ChapterMapLayoutStore } from '@/game/chapterMapLayoutStore';
 import { getStageType } from '@/balance/stageTypes';
-import { ELITE_MODE, hasEliteVariant } from '@/balance/eliteMode';
+import { ELITE_MODE, eliteStageIdOf, hasEliteVariant } from '@/balance/eliteMode';
 import type { StageDef } from '@/balance/stages';
 import { CHAPTER_REWARD_PET } from '@/balance/stages';
 import { PET_MAP } from '@/balance/pets';
@@ -35,9 +35,13 @@ const BOSS_PET_SIZE = 160;
 /** 相对 Boss 关节点：偏左、略上 */
 const BOSS_PET_OFFSET_X = -110;
 const BOSS_PET_OFFSET_Y = -NODE_H * 0.35;
-/** 通关星：主界面要明显大于石礅 */
+/** 通关星：主界面要明显大于石礅（主星 = 普通难度） */
 const NODE_STAR_SIZE = 22;
 const NODE_STAR_GAP = 3;
+/** 精英星：次要徽标，略小于普通主星 */
+const NODE_ELITE_STAR_SIZE = 14;
+const NODE_ELITE_STAR_GAP = 2;
+const ELITE_STAR_TINT = 0x4aa3ff;
 /** 关卡路径节点略下移（屏幕像素），背景仍满屏；勿加在 world 上否则顶栏下露底色 */
 const TITLE_MAP_NODE_TOP_INSET = 32;
 
@@ -123,7 +127,10 @@ function buildStageNode(
   pos: MapPoint,
   opts: {
     unlocked: boolean;
+    /** 普通难度星（主进度） */
     stars: number;
+    /** 精英难度星（次要徽标；未解锁精英时为 0） */
+    eliteStars: number;
     active: boolean;
     onTap: () => void;
     scroll: ScrollListController;
@@ -167,6 +174,8 @@ function buildStageNode(
     wrap.addChild(num);
   }
 
+  // 主星 = 普通难度（解锁链只认这套）
+  const normalStarY = -NODE_H * 0.95 - NODE_STAR_SIZE * 0.15;
   if (opts.stars > 0) {
     const starLine = makeStarRow({
       star: opts.stars,
@@ -176,7 +185,7 @@ function buildStageNode(
       gap: NODE_STAR_GAP,
       anchor: 'center',
     });
-    starLine.position.set(0, -NODE_H * 0.95 - NODE_STAR_SIZE * 0.15);
+    starLine.position.set(0, normalStarY);
     wrap.addChild(starLine);
   }
 
@@ -201,15 +210,13 @@ function buildStageNode(
     });
     badge.position.set(-NODE_W * 0.28, -NODE_H * 0.72);
     wrap.addChild(badge);
-  } else if (opts.unlocked && opts.stars >= ELITE_MODE.unlockStars && hasEliteVariant(stage)) {
-    // 精英模式的开关在编队页，地图上只给一个「这关还有内容」的提示，
-    // 否则 3 星之后整章节点都是死的，玩家不会知道还能再打
-    const badge = makeText('精英可挑战', {
-      size: FONT_SIZE.xxs, fill: getStageType('elite').color, bold: true, anchor: 0.5,
-      strokeColor: 0x2a3444, strokeWidth: 2,
-    });
-    badge.position.set(-NODE_W * 0.22, -NODE_H * 0.72);
-    wrap.addChild(badge);
+  } else if (
+    opts.unlocked
+    && opts.stars >= ELITE_MODE.unlockStars
+    && hasEliteVariant(stage)
+  ) {
+    // 次要：精英角标 + 蓝星（进度独立，不替代普通主星）
+    attachEliteProgress(wrap, opts.eliteStars, normalStarY);
   }
 
   if (opts.active && opts.unlocked && opts.stars === 0) {
@@ -237,6 +244,48 @@ function buildStageNode(
   }
 
   return wrap;
+}
+
+/** 普通满 3 星后：节点上方叠「精英」短牌 + 蓝系小星 */
+function attachEliteProgress(
+  wrap: PIXI.Container,
+  eliteStars: number,
+  normalStarY: number,
+): void {
+  const row = new PIXI.Container();
+  const badge = makeText('精英', {
+    size: FONT_SIZE.xxs,
+    fill: getStageType('elite').color,
+    bold: true,
+    anchor: [0, 0.5],
+    strokeColor: 0x2a3444,
+    strokeWidth: 2,
+  });
+  row.addChild(badge);
+
+  const stars = makeStarRow({
+    star: eliteStars,
+    maxStar: 3,
+    style: 'sprite',
+    starSize: NODE_ELITE_STAR_SIZE,
+    gap: NODE_ELITE_STAR_GAP,
+    anchor: 'left',
+  });
+  // 点亮星改蓝，暗星保持灰
+  for (const child of stars.children) {
+    if (child instanceof PIXI.Sprite && child.alpha >= 0.9) {
+      child.tint = ELITE_STAR_TINT;
+    }
+  }
+  stars.position.set(badge.width + 4, 0);
+  row.addChild(stars);
+
+  const bounds = row.getLocalBounds();
+  row.position.set(
+    -bounds.width / 2 - bounds.x,
+    normalStarY - NODE_STAR_SIZE * 0.55 - NODE_ELITE_STAR_SIZE * 0.5,
+  );
+  wrap.addChild(row);
 }
 
 /**
@@ -429,6 +478,7 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
     const node = buildStageNode(stage, positions[i], {
       unlocked: PlayerData.isUnlocked(stage),
       stars: PlayerData.starsOf(stage.id),
+      eliteStars: PlayerData.starsOf(eliteStageIdOf(stage.id)),
       active: i === activeIdx,
       onTap: () => opts.onStageTap(stage.id),
       scroll: opts.scroll,

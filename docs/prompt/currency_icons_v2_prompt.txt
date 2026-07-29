@@ -1,0 +1,15 @@
+Game UI currency icon sheet for a Chinese casual Q-version mini-game.
+
+Layout: horizontal 3 columns × 1 row, equal square cells, solid light gray (#E8E8E8) background behind each icon for clean cutout later. Generous padding inside each cell so icons do not touch edges.
+
+Style: soft 3D glossy mobile-game icons, simple and readable at small size (top bar ~40px), same lighting family across all three. NO TEXT, no labels, no captions, no writing, no plus buttons, no dark pill bars, no UI chrome — icons only.
+
+Use the reference image for icon SUBJECT and silhouette only (lightning stamina, gold star-coin, green jade bi). Do not copy the dark resource bars or numbers.
+
+Cell 1 — Stamina (体力): bright lime-green lightning bolt, thick darker green outline, slight glossy 3D bevel, centered in the cell, readable silhouette.
+
+Cell 2 — Pet Coin (灵宠币): thick golden metal coin, circular, star-shaped cutout/indent in the center, warm gold rim highlights and soft shadow, premium but simple.
+
+Cell 3 — Spirit Jade (灵玉): dark-to-mid green translucent Chinese jade bi disc (flat ring with round hole in center), polished glossy reflections, circular silhouette.
+
+Keep all three icons similar visual weight and circular/compact bounding shape. Transparent-ready solid gray backdrop, not checkerboard.

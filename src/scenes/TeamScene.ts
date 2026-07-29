@@ -16,7 +16,7 @@ import {
 import { STAGE_MAP, formatStageShortLabel, type StageDef } from '@/balance/stages';
 import { resolveLeaderSkill } from '@/balance/leaderSkill';
 import {
-  ELITE_MODE, eliteStageOf, hasEliteVariant, isEliteUnlocked,
+  baseStageIdOf, hasEliteVariant, isEliteStageId,
 } from '@/balance/eliteMode';
 import type { TeamMember } from '@/formulas/team';
 import { BACKGROUND_IMAGES } from '@/config/Assets';
@@ -70,9 +70,8 @@ export class TeamScene implements Scene {
   private _slotW = 108;
   private _slotH = 108;
   private _prepStage?: StageDef;
-  /** 关卡入口传入的原关（精英开关会把 _prepStage 切到变体，原关要留一份） */
+  /** 原关（精英变体进战时仍指向普通关，供只读标签） */
   private _baseStage?: StageDef;
-  private _eliteOn = false;
   private _context?: BattleContext;
   private _backScene = 'title';
   private _listContent: PIXI.Container | null = null;
@@ -86,9 +85,15 @@ export class TeamScene implements Scene {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
     const enter = data as TeamEnterData | undefined;
-    this._baseStage = enter?.stageId ? STAGE_MAP.get(enter.stageId) : undefined;
-    this._eliteOn = false;
-    this._prepStage = this._baseStage;
+    const entered = enter?.stageId ? STAGE_MAP.get(enter.stageId) : undefined;
+    // 难度已在地图弹层选定：精英 id 进战时 prep=变体，base=原关
+    if (entered && isEliteStageId(entered.id)) {
+      this._prepStage = entered;
+      this._baseStage = STAGE_MAP.get(baseStageIdOf(entered.id)) ?? entered;
+    } else {
+      this._prepStage = entered;
+      this._baseStage = entered;
+    }
     this._context = enter?.context;
     this._backScene = enter?.backScene ?? 'title';
     // 自由编队入口已拆除：无关卡上下文时退回来源页
@@ -122,7 +127,6 @@ export class TeamScene implements Scene {
     this._listItems.clear();
     this._prepStage = undefined;
     this._baseStage = undefined;
-    this._eliteOn = false;
     this._context = undefined;
     this._backScene = 'title';
     this._prevAgg = null;
@@ -179,7 +183,10 @@ export class TeamScene implements Scene {
     const panelW = 690;
     let y = Game.safeTop + 24;
 
-    const stageLabel = makeText(formatStageShortLabel(stage), {
+    // 只读难度后缀（切换在地图弹层完成，编队页不可改）
+    const labelStage = this._baseStage ?? stage;
+    const modeSuffix = this._readOnlyModeSuffix();
+    const stageLabel = makeText(`${formatStageShortLabel(labelStage)}${modeSuffix}`, {
       size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5,
     });
     stageLabel.position.set(w / 2, Game.safeHeaderCenterY + 36);
@@ -189,8 +196,6 @@ export class TeamScene implements Scene {
     intel.root.position.set((w - panelW) / 2, y);
     this.container.addChild(intel.root);
     y += intel.height + 10;
-
-    y = this._buildEliteToggle(w, y);
 
     const teamTitle = makeSectionTitle('我的队伍', panelW);
     teamTitle.position.set(w / 2, y + 12);
@@ -292,62 +297,14 @@ export class TeamScene implements Scene {
     this.container.addChild(startBtn);
   }
 
-  /**
-   * 精英模式开关（3 星通关后出现）。
-   *
-   * 开关做在编队页而不是章节地图上：玩家在这里本来就要看敌情卡与体力单价，
-   * 难度切换的后果（敌人变强、体力 9、掉通用碎片）当场就能读到；
-   * 做在地图上则是「盲选难度」，还要再加一层弹窗。
-   */
-  private _buildEliteToggle(w: number, y: number): number {
+  /** 编队顶栏只读难度；无可精英变体的关（Boss 等）不加后缀 */
+  private _readOnlyModeSuffix(): string {
+    const prep = this._prepStage;
     const base = this._baseStage;
-    if (!base || this._context) return y;
-    if (!hasEliteVariant(base)) return y;
-
-    const unlocked = isEliteUnlocked(base, (id) => PlayerData.starsOf(id));
-    const chip = new PIXI.Container();
-    const label = this._eliteOn
-      ? `精英模式 · 已开启 ×${ELITE_MODE.difficultyMult}`
-      : unlocked
-        ? `精英模式 ×${ELITE_MODE.difficultyMult} · 掉通用碎片`
-        : `精英模式 · 需 ${ELITE_MODE.unlockStars} 星通关解锁`;
-    const text = makeText(label, {
-      size: FONT_SIZE.xxs,
-      fill: this._eliteOn ? COLORS.white : (unlocked ? COLORS.accentDeep : COLORS.textSub),
-      bold: true,
-      anchor: 0.5,
-    });
-    const chipW = Math.ceil(text.width) + 32;
-    const chipH = 34;
-    const bg = new PIXI.Graphics();
-    bg.beginFill(this._eliteOn ? COLORS.accentDeep : 0xfff8ec, unlocked ? 0.96 : 0.7);
-    bg.lineStyle(2, this._eliteOn ? COLORS.accentDeep : 0xe0c896, 1);
-    bg.drawRoundedRect(-chipW / 2, -chipH / 2, chipW, chipH, chipH / 2);
-    bg.endFill();
-    chip.addChild(bg, text);
-    chip.position.set(w / 2, y + chipH / 2);
-    chip.hitArea = new PIXI.Rectangle(-chipW / 2, -chipH / 2, chipW, chipH);
-    chip.eventMode = 'static';
-    chip.cursor = 'pointer';
-    chip.interactiveChildren = false;
-    bindPointerTap(chip, () => this._toggleElite(unlocked));
-    this.container.addChild(chip);
-    return y + chipH + 6;
-  }
-
-  private _toggleElite(unlocked: boolean): void {
-    const base = this._baseStage;
-    if (!base) return;
-    if (!unlocked) {
-      Platform.showToast(`${ELITE_MODE.unlockStars} 星通关本关后解锁精英模式`);
-      return;
-    }
-    const next = this._eliteOn ? base : eliteStageOf(base);
-    if (!next) return;
-    this._eliteOn = !this._eliteOn;
-    this._prepStage = next;
-    Platform.vibrateShort('light');
-    this._build({ animate: false });
+    if (!prep || !base || this._context) return '';
+    if (isEliteStageId(prep.id)) return ' · 精英';
+    if (hasEliteVariant(base)) return ' · 普通';
+    return '';
   }
 
   private _buildFreeLayout(w: number): void {

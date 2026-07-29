@@ -46,6 +46,10 @@ import { BattleHud } from './battle/BattleHud';
 import { BattleStatusIcons } from './battle/BattleStatusIcons';
 import { BattlePetBar } from './battle/BattlePetBar';
 import { BattleResultOverlay, type BattleResultOptions } from './battle/BattleResultOverlay';
+import {
+  showEnemyDetailDialog,
+  type EnemyDetailHandle,
+} from './battle/EnemyDetailDialog';
 import { presentSkillCast, type SkillCastDeps } from './battle/battleSkillPresenter';
 import { analytics } from '@/analytics';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
@@ -106,6 +110,8 @@ export class BattleScene implements Scene {
   private _statusIcons!: BattleStatusIcons;
   private _petBar!: BattlePetBar;
   private _overlay!: BattleResultOverlay;
+  private _enemyDetailLayer!: PIXI.Container;
+  private _enemyDetail: EnemyDetailHandle | null = null;
 
   private _busy = false;
   /** 失败结算浮层打开中：锁输入，暂不 finish，支持看广告复活 */
@@ -211,6 +217,7 @@ export class BattleScene implements Scene {
 
   onExit(): void {
     this._alive = false;
+    this._closeEnemyDetail();
     BgmManager.resumeNormal();
     GMManager.unregisterInstantClearHandler();
     this._resolveSeq++;
@@ -249,19 +256,6 @@ export class BattleScene implements Scene {
     });
     backBtn.position.set(80, headerY);
     this.container.addChild(backBtn);
-
-    if (GMManager.isEnabled) {
-      const gmSkip = makeButton({
-        label: 'GM', width: 88, height: 48, variant: 'danger',
-        onTap: () => { GMManager.executeCommand('instant_clear'); },
-      });
-      // 避开右上角微信胶囊/收起区：靠左于胶囊，纵向落到 safeTop 下方
-      gmSkip.position.set(
-        Math.min(w - 70, Game.contentRightX(16)),
-        Game.safeTop + 28,
-      );
-      this.container.addChild(gmSkip);
-    }
 
     // 敌人区（尽早 refresh，避免后续组件构建异常时立绘/背景未挂上）
     this._hud.buildEnemyArea(this.container);
@@ -302,10 +296,44 @@ export class BattleScene implements Scene {
     // 关卡号顶栏（最后绘制，保证不被敌人区背景遮挡）
     this._hud.buildStageHeader(this.container);
 
+    // 怪物详情浮层（结算层之下；点怪打开）
+    this._enemyDetailLayer = new PIXI.Container();
+    this.container.addChild(this._enemyDetailLayer);
+    this._hud.bindEnemyDetailTap(
+      () => this._openEnemyDetail(),
+      () => this._alive && !this._resultOpen,
+    );
+
+    // 跳过关卡须在敌人详情热区之后挂载，否则全宽点怪区会吃掉点击
+    if (GMManager.isEnabled) {
+      const skipBtn = makeButton({
+        label: '跳过关卡', width: 148, height: 48, variant: 'danger',
+        onTap: () => { GMManager.executeCommand('instant_clear'); },
+      });
+      // 避开右上角微信胶囊/收起区：靠左于胶囊，纵向落到 safeTop 下方
+      skipBtn.position.set(
+        Math.min(w - 90, Game.contentRightX(16)),
+        Game.safeTop + 28,
+      );
+      this.container.addChild(skipBtn);
+    }
+
     this._overlay.build(this.container);
 
     // 初始刷新槽位 CD / 状态行
     this._refreshSkillUi();
+  }
+
+  private _openEnemyDetail(): void {
+    if (!this._alive || this._resultOpen) return;
+    this._petBar.dismissSkillPreview();
+    this._enemyDetail?.dismiss();
+    this._enemyDetail = showEnemyDetailDialog(this._enemyDetailLayer, this._ctrl);
+  }
+
+  private _closeEnemyDetail(): void {
+    this._enemyDetail?.dismiss();
+    this._enemyDetail = null;
   }
 
   // ════════════ 每帧 ════════════
@@ -596,6 +624,7 @@ export class BattleScene implements Scene {
     while (this._ctrl.hasNextWave()) this._ctrl.nextWave();
     this._ctrl.enemy.hp = 0;
     this._settleBattleVisuals();
+    this._closeEnemyDetail();
     this._resultOpen = true;
     this._overlay.show(this._ctrl, true, this._resultOptions());
     return `已通关：${this._ctrl.stage.name}`;
@@ -660,6 +689,7 @@ export class BattleScene implements Scene {
       return false;
     }
     SfxManager.playVictory();
+    this._closeEnemyDetail();
     this._resultOpen = true;
     this._overlay.show(this._ctrl, true, this._resultOptions());
     await delay(0.3);
@@ -685,6 +715,7 @@ export class BattleScene implements Scene {
 
   /** 失败结算：暂不 finish，支持看广告复活后继续本场 */
   private _showDefeatOverlay(): void {
+    this._closeEnemyDetail();
     this._resultOpen = true;
     this._busy = true;
     this._overlay.show(this._ctrl, false, {

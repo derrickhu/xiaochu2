@@ -434,11 +434,11 @@ export class DailyQuestPanel extends PIXI.Container {
       grantReward(reward);
       await this._playClaimFx(reward);
       Platform.showToast(`奖励翻倍 · ${formatReward(reward)}`, 'success');
-      if (!this._isOpen) return;
-      this._refresh();
       EventBus.emit('home:refresh');
     } finally {
+      // 必须先清 busy 再刷 UI，否则新建广告钮会带着 enabled:false
       this._busy = false;
+      if (this._isOpen) this._refresh();
     }
   }
 
@@ -527,90 +527,77 @@ export class DailyQuestPanel extends PIXI.Container {
   private async _claimOne(quest: DailyQuestDef): Promise<void> {
     if (this._busy || !isQuestDone(quest) || PlayerData.isQuestClaimed(quest.id)) return;
     this._busy = true;
-    if (!PlayerData.markQuestClaimed(quest.id)) {
+    try {
+      if (!PlayerData.markQuestClaimed(quest.id)) return;
+      grantReward(quest.reward);
+      analytics.trackDailyQuestClaim(quest.id, {
+        questName: quest.name,
+        reward: formatReward(quest.reward),
+      });
+      await this._playClaimFx(quest.reward);
+      Platform.showToast(`领取成功 · ${formatReward(quest.reward)}`, 'success');
+      EventBus.emit('home:refresh');
+    } finally {
       this._busy = false;
-      return;
+      if (this._isOpen) this._refresh();
     }
-    grantReward(quest.reward);
-    analytics.trackDailyQuestClaim(quest.id, {
-      questName: quest.name,
-      reward: formatReward(quest.reward),
-    });
-    await this._playClaimFx(quest.reward);
-    Platform.showToast(`领取成功 · ${formatReward(quest.reward)}`, 'success');
-    if (!this._isOpen) {
-      this._busy = false;
-      return;
-    }
-    this._refresh();
-    this._busy = false;
-    EventBus.emit('home:refresh');
   }
 
   private async _claimAllClear(): Promise<void> {
     if (this._busy || !canClaimAllClear()) return;
     this._busy = true;
-    if (!PlayerData.markQuestClaimed(QUEST_ALL_CLEAR_ID)) {
+    try {
+      if (!PlayerData.markQuestClaimed(QUEST_ALL_CLEAR_ID)) return;
+      grantReward(QUEST_ALL_CLEAR_REWARD);
+      analytics.trackDailyQuestClaim(QUEST_ALL_CLEAR_ID, {
+        questName: '全部完成',
+        reward: formatReward(QUEST_ALL_CLEAR_REWARD),
+      });
+      await this._playClaimFx(QUEST_ALL_CLEAR_REWARD);
+      Platform.showToast(`领取成功 · ${formatReward(QUEST_ALL_CLEAR_REWARD)}`, 'success');
+      EventBus.emit('home:refresh');
+    } finally {
       this._busy = false;
-      return;
+      if (this._isOpen) this._refresh();
     }
-    grantReward(QUEST_ALL_CLEAR_REWARD);
-    analytics.trackDailyQuestClaim(QUEST_ALL_CLEAR_ID, {
-      questName: '全部完成',
-      reward: formatReward(QUEST_ALL_CLEAR_REWARD),
-    });
-    await this._playClaimFx(QUEST_ALL_CLEAR_REWARD);
-    Platform.showToast(`领取成功 · ${formatReward(QUEST_ALL_CLEAR_REWARD)}`, 'success');
-    if (!this._isOpen) {
-      this._busy = false;
-      return;
-    }
-    this._refresh();
-    this._busy = false;
-    EventBus.emit('home:refresh');
   }
 
   private async _claimAll(): Promise<void> {
     if (this._busy || !hasClaimableQuest()) return;
     this._busy = true;
-
-    const claimed: RewardBundle[] = [];
-    for (const quest of todayQuests()) {
-      if (!isQuestDone(quest) || PlayerData.isQuestClaimed(quest.id)) continue;
-      if (!PlayerData.markQuestClaimed(quest.id)) continue;
-      grantReward(quest.reward);
-      claimed.push(quest.reward);
-      analytics.trackDailyQuestClaim(quest.id, {
-        questName: quest.name,
-        reward: formatReward(quest.reward),
-      });
-    }
-    if (canClaimAllClear()) {
-      if (PlayerData.markQuestClaimed(QUEST_ALL_CLEAR_ID)) {
-        grantReward(QUEST_ALL_CLEAR_REWARD);
-        claimed.push(QUEST_ALL_CLEAR_REWARD);
-        analytics.trackDailyQuestClaim(QUEST_ALL_CLEAR_ID, {
-          questName: '全部完成',
-          reward: formatReward(QUEST_ALL_CLEAR_REWARD),
+    try {
+      const claimed: RewardBundle[] = [];
+      for (const quest of todayQuests()) {
+        if (!isQuestDone(quest) || PlayerData.isQuestClaimed(quest.id)) continue;
+        if (!PlayerData.markQuestClaimed(quest.id)) continue;
+        grantReward(quest.reward);
+        claimed.push(quest.reward);
+        analytics.trackDailyQuestClaim(quest.id, {
+          questName: quest.name,
+          reward: formatReward(quest.reward),
         });
       }
-    }
+      if (canClaimAllClear()) {
+        if (PlayerData.markQuestClaimed(QUEST_ALL_CLEAR_ID)) {
+          grantReward(QUEST_ALL_CLEAR_REWARD);
+          claimed.push(QUEST_ALL_CLEAR_REWARD);
+          analytics.trackDailyQuestClaim(QUEST_ALL_CLEAR_ID, {
+            questName: '全部完成',
+            reward: formatReward(QUEST_ALL_CLEAR_REWARD),
+          });
+        }
+      }
 
-    if (claimed.length === 0) {
-      this._busy = false;
-      return;
-    }
+      if (claimed.length === 0) return;
 
-    const merged = mergeRewards(claimed);
-    await this._playClaimFx(merged);
-    Platform.showToast(`领取成功 · ${formatReward(merged)}`, 'success');
-    if (!this._isOpen) {
+      const merged = mergeRewards(claimed);
+      await this._playClaimFx(merged);
+      Platform.showToast(`领取成功 · ${formatReward(merged)}`, 'success');
+      EventBus.emit('home:refresh');
+    } finally {
       this._busy = false;
-      return;
+      if (this._isOpen) this._refresh();
     }
-    this._refresh();
-    this._busy = false;
-    EventBus.emit('home:refresh');
   }
 
   private async _playClaimFx(reward: RewardBundle): Promise<void> {

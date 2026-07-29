@@ -8,7 +8,7 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { UI } from '@/balance/ui';
-import { CHAPTERS, CHAPTER_NAME, stagesOfChapter } from '@/balance/stages';
+import { CHAPTERS, CHAPTER_NAME, STAGE_MAP, stagesOfChapter } from '@/balance/stages';
 import { PlayerData } from '@/game/PlayerData';
 import {
   makeCurrencyLabel, makeChapterNavArrow, NAV_ARROW_SIZE,
@@ -21,6 +21,7 @@ import { ScrollListController } from '@/ui/ScrollList';
 import { GMManager } from '@/core/GMManager';
 import { EventBus } from '@/core/EventBus';
 import type { TeamEnterData } from './TeamScene';
+import { showStageEntryDialog, type StageEntryDialogHandle } from './StageEntryDialog';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { buildTitleScreenWorld } from './chapterMapView';
 import { attachChapterMapEditor } from './chapterMapEditor';
@@ -56,6 +57,8 @@ export class TitleScene implements Scene {
   private _minimalStrip: TitleEnterData['minimalStrip'];
   private _scroll = new ScrollListController();
   private _worldRoot: PIXI.Container | null = null;
+  private _dialogLayer: PIXI.Container | null = null;
+  private _stageEntry: StageEntryDialogHandle | null = null;
   private _mapEditMode = false;
   private _editorTeardown: (() => void) | null = null;
   private _onMapEditToggle = (): void => {
@@ -106,10 +109,13 @@ export class TitleScene implements Scene {
   }
 
   private _rebuild(): void {
+    this._stageEntry?.dismiss();
+    this._stageEntry = null;
     this._editorTeardown?.();
     this._editorTeardown = null;
     this._scroll.detach();
     this._worldRoot = null;
+    this._dialogLayer = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
     this._build();
     void ensurePetAvatars(titleHomePetAvatarEntries(this._chapter));
@@ -127,11 +133,14 @@ export class TitleScene implements Scene {
     EventBus.off('gm:mapEditToggle', this._onMapEditToggle);
     EventBus.off('gm:focusChapter', this._onFocusChapter);
     EventBus.off('home:refresh', this._onHomeRefresh);
+    this._stageEntry?.dismiss();
+    this._stageEntry = null;
     this._editorTeardown?.();
     this._editorTeardown = null;
     this._mapEditMode = false;
     this._scroll.detach();
     this._worldRoot = null;
+    this._dialogLayer = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
   }
 
@@ -150,7 +159,7 @@ export class TitleScene implements Scene {
       mapEditMode,
       onStageTap: (stageId) => {
         if (mapEditMode) return;
-        SceneManager.switchTo('team', { stageId } satisfies TeamEnterData);
+        this._openStageEntry(stageId);
       },
     });
     this._worldRoot = mapWorld.world;
@@ -178,6 +187,26 @@ export class TitleScene implements Scene {
     this._buildChapterNav(w, TitleScene.chapterNavY());
     this._buildLeftRail(h);
     this._buildBottomNav(w, h);
+
+    // 弹层置顶：盖住地图与导航
+    this._dialogLayer = new PIXI.Container();
+    this.container.addChild(this._dialogLayer);
+  }
+
+  /** 点关 → 详情弹层 → 确认后再进编队 */
+  private _openStageEntry(stageId: string): void {
+    const stage = STAGE_MAP.get(stageId);
+    if (!stage || !this._dialogLayer) return;
+    this._stageEntry?.dismiss();
+    this._stageEntry = showStageEntryDialog(this._dialogLayer, stage, {
+      onConfirm: (id) => {
+        this._stageEntry = null;
+        SceneManager.switchTo('team', { stageId: id } satisfies TeamEnterData);
+      },
+      onClose: () => {
+        this._stageEntry = null;
+      },
+    });
   }
 
   private _buildBottomNav(w: number, h: number): void {
@@ -242,11 +271,12 @@ export class TitleScene implements Scene {
       }).catch(() => null);
     }
 
+    const nameLeft = avSize / 2 + 12;
     const name = makeText(HOME_DISPLAY_NAME, {
       size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
     });
     try { name.updateText(true); } catch { /* noop */ }
-    name.position.set(avSize / 2 + 12, 0);
+    name.position.set(nameLeft, 0);
     profile.addChild(name);
     this.container.addChild(profile);
 
@@ -260,17 +290,32 @@ export class TitleScene implements Scene {
     bindPointerTap(stamina, () => EventBus.emit('stamina:open', 0));
     const lingyu = makeCurrencyLabel('lingyu', PlayerData.lingyu);
     const coins = makeCurrencyLabel('coin', PlayerData.coins);
-    const gap = 14;
-    // 真正左对齐：跟在头像昵称右侧，不再右贴胶囊（真机右贴必叠「收起」）
-    const afterNameX = padX + avSize / 2 + 12 + name.width + 20;
-    const rightLimit = Game.contentRightX(GMManager.isEnabled ? 72 : 28);
     const items = [stamina, lingyu, coins];
-    const totalW = items.reduce((s, it) => s + it.width, 0) + gap * (items.length - 1);
-    // 若昵称过长挤到右限，整体再左收，优先保证不进胶囊
-    let rowX = afterNameX;
-    if (rowX + totalW > rightLimit) {
-      rowX = Math.max(padX + avSize + 8, rightLimit - totalW);
+    const rightLimit = Game.contentRightX(GMManager.isEnabled ? 72 : 28);
+    const nameGap = 18;
+    const measureRow = (g: number): number =>
+      items.reduce((s, it) => s + it.width, 0) + g * (items.length - 1);
+
+    // 货币不得叠昵称：空间不够先压 gap，再截断昵称；禁止再把整行往左拽到名字上
+    let gap = 14;
+    while (gap > 6 && padX + nameLeft + name.width + nameGap + measureRow(gap) > rightLimit) {
+      gap -= 2;
     }
+    const nameMaxW = Math.max(
+      64,
+      rightLimit - padX - nameLeft - nameGap - measureRow(gap),
+    );
+    if (name.width > nameMaxW) {
+      let t = HOME_DISPLAY_NAME;
+      while (t.length > 1) {
+        t = t.slice(0, -1);
+        name.text = `${t}…`;
+        try { name.updateText(true); } catch { /* noop */ }
+        if (name.width <= nameMaxW) break;
+      }
+    }
+
+    let rowX = padX + nameLeft + name.width + nameGap;
     for (const item of items) {
       item.position.set(rowX, centerY);
       this.container.addChild(item);

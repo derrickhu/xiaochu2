@@ -17,9 +17,11 @@ import type { BattleContext } from '@/game/battleContext';
 import { checkStaminaFor } from '@/game/staminaGate';
 import { reportQuest } from '@/game/dailyQuestTracker';
 import { settleContextVictory } from './battleContextSettle';
+import { playBossPetReveal } from './BossPetReveal';
 import { Platform } from '@/core/PlatformService';
 import type { BattleController } from '@/game/battle/BattleController';
 import { formatStarTurnHint } from '@/formulas/stars';
+import { getRarity } from '@/balance/rarity';
 import {
   COLORS, FONT_FAMILY_DISPLAY, FONT_SIZE,
   makeActionButton, makePanel, makeText, makeStarRow,
@@ -205,11 +207,12 @@ export class BattleResultOverlay {
     content.addChild(rewardBox);
     y += rewardBox.boxH + 14;
 
+    // 章末 Boss 直掉：全屏亮相后再进结算；板上只留轻量收服条作备忘
     if (newlyUnlocked.length > 0) {
-      const drop = this._buildDropLine(newlyUnlocked);
-      drop.position.set(0, y + 18);
-      content.addChild(drop);
-      y += 40;
+      const ribbon = this._buildPetDropRibbon(newlyUnlocked);
+      ribbon.position.set(0, y + 22);
+      content.addChild(ribbon);
+      y += 48;
     }
 
     for (const line of extraLines) {
@@ -258,7 +261,22 @@ export class BattleResultOverlay {
     }
 
     content.position.set(0, -panelH / 2 + padTop);
-    this._playCardEnter(card, panelH);
+
+    if (newlyUnlocked.length > 0) {
+      // 先播全屏收服演出，再弹出胜利结算板
+      card.alpha = 0;
+      card.visible = false;
+      void playBossPetReveal({
+        parent: this._overlayLayer,
+        petIds: newlyUnlocked,
+        onDone: () => {
+          card.visible = true;
+          this._playCardEnter(card, panelH);
+        },
+      });
+    } else {
+      this._playCardEnter(card, panelH);
+    }
   }
 
   /**
@@ -759,13 +777,14 @@ export class BattleResultOverlay {
     return card;
   }
 
-  private _buildDropLine(ids: string[]): PIXI.Container {
-    const c = new PIXI.Container();
-    const names = ids.map((pid) => PET_MAP.get(pid)?.name ?? pid).join('、');
-    c.addChild(makeText(`${names} · 获得灵宠`, {
-      size: FONT_SIZE.xs, fill: COLORS.accentDeep, bold: true, anchor: 0.5,
-    }));
-    return c;
+  /** 结算板上的轻量备忘条（重头戏在全屏 BossPetReveal） */
+  private _buildPetDropRibbon(ids: string[]): PIXI.Container {
+    const petId = ids[0];
+    const pet = PET_MAP.get(petId);
+    const rar = getRarity(pet?.rarity ?? 1);
+    const more = ids.length > 1 ? ` 等${ids.length}只` : '';
+    const label = `已收服 ${pet?.name ?? petId}${more} · ${rar.code}`;
+    return this._makeInfoChip(label, 0xfff0d0, rar.color);
   }
 
   private _buildGrowthGuide(

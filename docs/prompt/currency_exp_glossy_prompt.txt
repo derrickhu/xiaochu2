@@ -1,0 +1,8 @@
+Mobile game UI currency icon, single circular badge only.
+Exact style match to reference: glossy lime-green orb button, polished 3D glass look.
+Bright lime green inner disc, thin darker green rim ring.
+Soft white crescent highlight on upper-left for glossy dome.
+Centered bold rounded sans-serif letters "EXP" in cream / pale yellow, thick dark-green outline for readability.
+Clean transparent or plain off-white studio background, icon centered, generous empty margin around the circle.
+No other icons, no coins, no stars, no sparkles clutter, no Chinese characters, no watermark, no UI chrome.
+Square composition, icon fills most of the frame but not clipped.

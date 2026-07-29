@@ -7,9 +7,17 @@ alwaysApply: true
 
 生成或替换 **需要透明底的 PNG**（UI 面板、立绘、图标等）时，**必须**走 `remove-background` skill，不得用 flood-fill / 色键等临时脚本代替。
 
+## 落盘路径（强制）
+
+原图 / 抠底 / 定稿 **只** 写旁路美术仓，禁止写本仓 `xiaochu2/game_assets/`：
+
+`/Users/huyi/dk_proj/game_assets/xiaochu2/assets/{raw,split,nobg,final}/`
+
+运行时再拷入 `minigame/images/...`。
+
 ## 标准流程
 
-1. 原图落盘（GenerateImage 或 `docs/prompt/` 对应 raw）
+1. 原图落盘到上述 `raw/`（GenerateImage；prompt 文本可放本仓 `docs/prompt/`）
 2. **抠底**（单张）：
 
 ```bash

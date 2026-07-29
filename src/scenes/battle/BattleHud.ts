@@ -37,6 +37,7 @@ import type { BattleFx } from './BattleFx';
 import { ComboDisplay } from './ComboDisplay';
 import { COLORS, FONT_SIZE, RADIUS } from '@/ui/theme';
 import { makeText } from '@/ui/text';
+import { bindPointerTap } from '@/utils/bindPointerTap';
 
 export class BattleHud {
   private _stageTitleText!: PIXI.Text;
@@ -56,6 +57,8 @@ export class BattleHud {
   private _enemyAreaTop = 0;
   private _enemyAreaBottom = 0;
   private _enemyContainer!: PIXI.Container;
+  /** 点击立绘/血条区打开怪物详情（透明热区） */
+  private _enemyHitZone!: PIXI.Container;
   private _enemyHpFill!: PIXI.Graphics;
   private _enemyHpFrame!: PIXI.Sprite | null;
   private _enemyHpText!: PIXI.Text;
@@ -332,6 +335,23 @@ export class BattleHud {
     this._enemyElementRow = new PIXI.Container();
     this._enemyElementRow.position.set(w / 2, enemyTagY);
     parent.addChild(this._enemyElementRow);
+
+    // 透明热区：立绘区上沿 → 克制标签下沿（不盖顶栏返回钮）
+    const hitTop = this._layout.spriteZoneTop;
+    const hitBottom = enemyTagY + 18;
+    this._enemyHitZone = new PIXI.Container();
+    this._enemyHitZone.eventMode = 'static';
+    this._enemyHitZone.cursor = 'pointer';
+    this._enemyHitZone.hitArea = new PIXI.Rectangle(0, hitTop, w, Math.max(40, hitBottom - hitTop));
+    parent.addChild(this._enemyHitZone);
+  }
+
+  /**
+   * 绑定「点怪看详情」。须在 buildEnemyArea 之后调用。
+   * guard：结算/演出中可禁止打开。
+   */
+  bindEnemyDetailTap(onTap: () => void, guard?: () => boolean): void {
+    bindPointerTap(this._enemyHitZone, onTap, { guard });
   }
 
   buildHeroBar(parent: PIXI.Container): void {

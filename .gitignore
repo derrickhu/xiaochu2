@@ -36,3 +36,7 @@ logs/
 
 # 本地临时产物（布局示意稿、切图中间层、调试导出等，勿进仓库）
 tmp/
+
+# 美术原图/中间产物统一放旁路仓库 game_assets（Git LFS），禁止落进本仓
+# 正确路径：/Users/huyi/dk_proj/game_assets/xiaochu2/assets/{raw,split,nobg,final}/
+game_assets/

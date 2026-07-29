@@ -317,10 +317,11 @@ export class CheckinPanel extends PIXI.Container {
       playClaimBurst(this._fxLayer, from.x, from.y);
       playRewardFly(this._fxLayer, reward, from);
       Platform.showToast(`奖励翻倍 · ${formatReward(reward)}`, 'success');
-      if (this._isOpen) this._refresh();
       EventBus.emit('home:refresh');
     } finally {
+      // 先清 signing 再刷，否则广告 CTA 会以 enabled:false 建出来
       this._signing = false;
+      if (this._isOpen) this._refresh();
     }
   }
 
@@ -670,13 +671,10 @@ export class CheckinPanel extends PIXI.Container {
 
     // 飞效播完再刷新格子状态，避免图标瞬间消失
     await waitSec(Math.max(0.35, flySec * 0.55));
-    if (!this._isOpen) {
-      this._signing = false;
-      return;
-    }
-    this._refresh();
-    this._signing = false;
     EventBus.emit('home:refresh');
+    // 先清 signing 再刷：否则「看广告」钮会带着 enabled:false（关窗重开才恢复）
+    this._signing = false;
+    if (this._isOpen) this._refresh();
   }
 }
 
