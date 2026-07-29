@@ -52,7 +52,11 @@ export type SkillVfxId =
   | 'enemySqueeze'
   | 'enemyHealBlock'
   | 'enemyEnrage'
-  | 'enemySkillSeal';
+  | 'enemySkillSeal'
+  | 'enemyAtkDebuff'
+  | 'enemyResolve'
+  | 'enemyElementAbsorb'
+  | 'enemyCounter';
 
 /** 转珠形状：random=随机若干颗，row=整行，col=整列，cross=十字 */
 export type ConvertShape = 'random' | 'row' | 'col' | 'cross';
@@ -202,6 +206,31 @@ export type SkillEffectDef =
   | {
       kind: 'skillSeal';
       /** 敌方技能封印：随机封印一只宠物主动技 turns 回合 */
+      turns: number;
+    }
+  | {
+      kind: 'atkDebuff';
+      /** 敌方削攻：turns 回合内我方全部伤害 ×mult（如 0.6 = 打八折的反向，降四成） */
+      mult: number;
+      turns: number;
+    }
+  | {
+      kind: 'resolve';
+      /** 敌方凝意：turns 回合内免疫眩晕与威吓（专治控制链锁死 Boss） */
+      turns: number;
+    }
+  | {
+      kind: 'elementAbsorb';
+      /** 敌方属性吸收：被吸属性的消珠伤害 ×mult（如 0.2） */
+      mult: number;
+      turns: number;
+      /** 缺省 = 自动取「克制敌人自身」的属性，即玩家几乎必然在用的那一色 */
+      element?: Element;
+    }
+  | {
+      kind: 'counterAttack';
+      /** 敌方反击：我方本回合每次消珠出手反弹 敌攻 × multiplier */
+      multiplier: number;
       turns: number;
     };
 

@@ -1,0 +1,20 @@
+Single square game UI currency icon, centered, premium mobile xianxia style matching existing currency icons (polished 3D fantasy render, soft filigree accents, soft glow).
+
+Subject: immortal peach (仙桃) as STAMINA / energy resource — instantly readable as a peach fruit even at 48px.
+
+Design:
+- Plump ripe peach silhouette, warm pink-to-coral flesh with soft peach-orange blush and a bright creamy highlight on the upper left
+- Classic peach cleft groove down the front
+- Two small fresh jade-green leaves at the top stem, plus a tiny warm-gold ornamental stem clasp (simple, not bulky)
+- Soft warm golden rim light so it reads as a premium currency token, NOT a food item photo
+- Optional faint warm sparkles around the fruit (very subtle)
+- Clear solid silhouette, high contrast against dark/transparent UI
+
+Style match (use reference images for polish level only):
+- Same rendering quality as the blue jade-coin currency icon and the cyan gem coin: glossy, soft speculars, slight magical glow
+- Warm palette (pink/coral/gold/green leaves) — must NOT look cool-blue like lingyu or mana flame
+
+Composition:
+- One icon only, centered, generous padding, no frame, no badge, no plate
+- Pure black background for easy cutout
+- NO TEXT, no labels, no captions, no Chinese characters, no numbers, no watermark

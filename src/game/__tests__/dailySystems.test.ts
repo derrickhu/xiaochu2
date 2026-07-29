@@ -16,12 +16,14 @@ describe('每日重置', () => {
     data.daily = emptyDailyState('2026-07-25');
     data.daily.realmRuns = 3;
     data.daily.questClaimed.push('dq_clear3');
+    data.daily.adUsage.stamina_refill = 3;
     data.tower.resetDate = '2026-07-25';
     data.tower.resetsUsed = TOWER.dailyResets;
 
     expect(ensureDailyFresh(data, '2026-07-26')).toBe(true);
     expect(data.daily.realmRuns).toBe(0);
     expect(data.daily.questClaimed).toEqual([]);
+    expect(data.daily.adUsage).toEqual({});
     expect(data.tower.resetsUsed).toBe(0);
   });
 

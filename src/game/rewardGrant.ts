@@ -14,6 +14,8 @@ export interface GrantedReward {
   exp: number;
   tickets: number;
   shards: { petId: string; count: number }[];
+  universal: number;
+  stamina: number;
 }
 
 /** 按倍率放大奖励包（每日首胜翻倍等） */
@@ -27,6 +29,8 @@ export function scaleReward(r: RewardBundle, mult: number): RewardBundle {
     exp: scale(r.exp),
     tickets: scale(r.tickets),
     shards: scale(r.shards),
+    universal: scale(r.universal),
+    stamina: scale(r.stamina),
   };
 }
 
@@ -35,7 +39,9 @@ export function scaleReward(r: RewardBundle, mult: number): RewardBundle {
  * @param rng 注入随机源，便于测试与回放
  */
 export function grantReward(r: RewardBundle, rng: () => number = Math.random): GrantedReward {
-  const out: GrantedReward = { lingyu: 0, coins: 0, exp: 0, tickets: 0, shards: [] };
+  const out: GrantedReward = {
+    lingyu: 0, coins: 0, exp: 0, tickets: 0, shards: [], universal: 0, stamina: 0,
+  };
 
   if (r.lingyu) {
     PlayerData.addLingyu(r.lingyu);
@@ -59,6 +65,14 @@ export function grantReward(r: RewardBundle, rng: () => number = Math.random): G
       PlayerData.addShards(petId, r.shards);
       out.shards.push({ petId, count: r.shards });
     }
+  }
+  if (r.universal) {
+    PlayerData.addUniversalShards(r.universal);
+    out.universal = r.universal;
+  }
+  if (r.stamina) {
+    PlayerData.addStamina(r.stamina);
+    out.stamina = r.stamina;
   }
   return out;
 }

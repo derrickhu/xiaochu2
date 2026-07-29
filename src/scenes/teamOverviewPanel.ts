@@ -7,6 +7,7 @@ import {
   teamAtk,
   teamEffectAggregate,
   teamElements,
+  teamLeaderSkill,
   teamMaxHp,
   teamRcv,
   type TeamMember,
@@ -76,8 +77,17 @@ export function refreshTeamOverviewPanel(
 
   // 全队属性行：增伤/减伤/治疗强化/护盾/回血（均为队伍级；个体暴击不在此展示）
   const passiveRow = buildTeamEffectsRow(dmg, shield, regen, damageReduction, healBonus);
-  passiveRow.position.set(0, top + 100);
+  passiveRow.position.set(0, top + 96);
   root.addChild(passiveRow);
+
+  const leader = teamLeaderSkill(members);
+  if (leader) {
+    const leaderLine = makeText(`队长 ${members[0].def.name} · ${leader.text}`, {
+      size: FONT_SIZE.xs, fill: COLORS.accentDeep, bold: true, anchor: 0.5,
+    });
+    leaderLine.position.set(0, top + 126);
+    root.addChild(leaderLine);
+  }
 
   const covered = teamElements(members);
   const missing = ELEMENTS.filter((e) => !covered.has(e));
@@ -90,7 +100,7 @@ export function refreshTeamOverviewPanel(
       fill: missing.length === 0 ? COLORS.btnSuccessBorder : COLORS.accentDeep,
     },
   );
-  coverText.position.set(0, top + 140);
+  coverText.position.set(0, top + 154);
   root.addChild(coverText);
 
   if (prev) {

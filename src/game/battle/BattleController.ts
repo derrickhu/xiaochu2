@@ -17,7 +17,11 @@ import { STAGE_MAP, type StageDef } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
 import { ECONOMY } from '@/balance/economy';
 import { stageDrops } from '@/formulas/economyOutput';
-import { teamMaxHp, teamRcv, teamElements, petAtkInTeam, teamEffectAggregate, petSelfCombatProfile, type TeamMember } from '@/formulas/team';
+import {
+  teamMaxHp, teamRcv, teamElements, petAtkInTeam, teamEffectAggregate, petSelfCombatProfile,
+  teamLeaderSkill, leaderComboBonus, type TeamMember,
+} from '@/formulas/team';
+import type { ResolvedLeaderSkill } from '@/balance/leaderSkill';
 import { applyDamageReduction } from '@/formulas/damage';
 import type { MatchGroup } from '@/game/board/BoardModel';
 import { BattleStatusStore, type StatusInstance } from './BattleStatus';
@@ -65,6 +69,8 @@ export class BattleController {
   // ── 关卡机制（机制节奏表 stageMechanics.ts 解析） ──
   /** 开局封印珠数量（0 = 无） */
   readonly sealOrbCount: number;
+  /** 开局整列封印的列数（0 = 无） */
+  readonly sealColumnCount: number;
   /** 心珠是否不回血（禁心） */
   readonly noHeartHeal: boolean;
   /** 被禁用的属性珠（消除无伤害） */
@@ -81,6 +87,10 @@ export class BattleController {
   readonly passiveRegenPerTurn: number;
   /** 被动：常驻全队增伤总乘区（合并 ladder + 招牌/星级 teamDamageBonus） */
   readonly teamDamageMult: number;
+  /** 队长技：辅助队长的每连额外倍率（其余 role 的队长技走三维乘区，已含在 atk/hp/rcv 里） */
+  readonly leaderComboBonus: number;
+  /** 队长技解析结果（战斗内 UI 展示用；无人上阵为 null） */
+  readonly leaderSkill: ResolvedLeaderSkill | null;
 
   // ── 战斗属性（阶段十二，构造时定值，全队属性聚合后封顶） ──
   readonly teamDamageReduction: number;
@@ -145,6 +155,8 @@ export class BattleController {
     const teamFx = teamEffectAggregate(members);
     this.passiveRegenPerTurn = Math.floor(this.heroMaxHp * teamFx.regenPct);
     this.teamDamageMult = teamFx.teamDamageMult;
+    this.leaderSkill = teamLeaderSkill(members);
+    this.leaderComboBonus = leaderComboBonus(members);
     this.teamDamageReduction = teamFx.damageReduction;
     this.teamHealBonus = teamFx.healBonus;
     const startShield = Math.floor(this.heroMaxHp * teamFx.startShieldPct);
@@ -157,6 +169,7 @@ export class BattleController {
 
     const mech = resolveMechanics(stage.mechanics);
     this.sealOrbCount = mech.sealOrbs;
+    this.sealColumnCount = mech.sealColumns;
     this.noHeartHeal = mech.noHeartHeal;
     this.bannedElements = new Set(mech.bannedElements);
     this.mechanicHints = mech.hints;
@@ -227,11 +240,15 @@ export class BattleController {
       teamRcvTotal: this.teamRcvTotal,
       noHeartHeal: this.noHeartHeal,
       passiveRegenPerTurn: this.passiveRegenPerTurn,
-      teamDamageMult: (this.dmgBuff?.mult ?? 1.0) * this.teamDamageMult,
+      teamDamageMult: (this.dmgBuff?.mult ?? 1.0)
+        * this.teamDamageMult
+        * this._statuses.teamAtkDebuffMult(),
+      leaderComboBonus: this.leaderComboBonus,
       teamHealBonus: this.teamHealBonus,
       guaranteedCrit: this._statuses.hasGuaranteedCrit(),
       heartHealMult: this._statuses.heartHealMult(),
       elementBuffMult: (el) => this._statuses.elementBuffMult(el),
+      elementAbsorbMult: (el) => this._statuses.elementAbsorbMult(el),
       rng: this._rng,
       elementTraitDamageMult: (pet, defender) => this._elementTraitDamageMult(pet.def, defender),
       counterRelation: (attacker, defender) => this._counterRelation(attacker, defender),
@@ -252,6 +269,17 @@ export class BattleController {
   applyPetAttack(attack: PetAttack): { enemyDead: boolean } {
     this.enemy.hp = Math.max(0, this.enemy.hp - attack.damage);
     return { enemyDead: this.enemy.hp <= 0 };
+  }
+
+  /**
+   * 反击结算：敌人处于反击态时，按本回合我方出手次数一次性反弹。
+   * 逐次反弹在表现上会和错峰起飞的攻击动画搅在一起（多次受击闪烁），
+   * 故合并为一击结算，数值口径不变（hits × 敌攻 × 乘区），也便于模拟器镜像。
+   */
+  applyCounterStrike(hits: number): { damage: number; absorbed: number; heroDead: boolean } | null {
+    const mult = this._statuses.counterStrikeMult();
+    if (mult <= 0 || hits <= 0) return null;
+    return this.applyEnemyDamage(Math.floor(this.enemy.atk * mult * hits));
   }
 
   /** 是否还有下一波敌人 */
@@ -403,6 +431,8 @@ export class BattleController {
       teamDamageMult: this.teamDamageMult,
       teamHealBonus: this.teamHealBonus,
       enemyEnraged: !!this._statuses.get('enemy', 'enrage'),
+      enemyResolute: this._statuses.isResolute(),
+      teamAtkDebuffMult: this._statuses.teamAtkDebuffMult(),
       rng: this._rng,
     });
   }

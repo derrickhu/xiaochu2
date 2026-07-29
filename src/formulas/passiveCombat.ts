@@ -10,6 +10,7 @@ import {
 } from '@/balance/passiveEffects';
 import type { PetDef } from '@/balance/pets';
 import type { StatBlock } from '@/balance/petRoles';
+import { resolveLeaderSkill, type ResolvedLeaderSkill } from '@/balance/leaderSkill';
 import type { TeamMember } from './team';
 
 type StatKey = keyof StatBlock;
@@ -94,13 +95,41 @@ function auraConditionMet(
   return count >= e.aura.count;
 }
 
-/** 三维/光环乘区（替代 teamTraitMultiplier） */
+/**
+ * 队长技解析：编队首位生效，没人上阵时返回 null。
+ * 战斗、模拟器、编队 UI 全部经此读取，避免「显示的队长技和实际生效的不是一回事」。
+ */
+export function teamLeaderSkill(members: readonly TeamMember[]): ResolvedLeaderSkill | null {
+  const leader = members[0];
+  if (!leader) return null;
+  return resolveLeaderSkill(leader.def.role, leader.def.rarity);
+}
+
+/** 队长技提供的每 Combo 额外倍率（非辅助队长为 0） */
+export function leaderComboBonus(members: readonly TeamMember[]): number {
+  const skill = teamLeaderSkill(members);
+  return skill && skill.effect.kind === 'comboBonus' ? skill.value : 0;
+}
+
+/** 队长技提供的三维乘区（非对应 stat 返回 1） */
+function leaderStatMultiplier(members: readonly TeamMember[], stat: StatKey): number {
+  const skill = teamLeaderSkill(members);
+  if (!skill || skill.effect.kind !== 'statTeam' || skill.effect.stat !== stat) return 1;
+  return 1 + skill.value;
+}
+
+/**
+ * 三维/光环乘区（替代 teamTraitMultiplier）。
+ *
+ * 队长技的三维加成挂在这里而不是单独开一路乘区：petAtkInTeam / petHpInTeam / petRcvInTeam
+ * 都收口在此，挂进来后战斗、模拟器、战力展示、敌情卡会同时正确，不需要各自记得叠一次。
+ */
 export function teamStatMultiplier(
   members: readonly TeamMember[],
   target: TeamMember,
   stat: StatKey,
 ): number {
-  let mult = 1;
+  let mult = leaderStatMultiplier(members, stat);
   for (const source of members) {
     const bundle = resolvePetPassiveBundle(
       source.def.role, source.def.rarity, { level: source.level, star: source.star },

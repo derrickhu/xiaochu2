@@ -4,6 +4,7 @@ import { resolveEncounter } from '@/balance/enemies';
 import type { SkillVfxId } from '@/balance/skills';
 import type { StageDef } from '@/balance/stages';
 import { skillForEnemy } from '@/game/battle/SkillEngine';
+import { initialPhaseState } from '@/game/battle/bossPhase';
 import { enemyStats } from './growth';
 import { GROWTH } from '@/balance/growth';
 
@@ -13,8 +14,16 @@ export interface SimEnemy {
   hp: number;
   atk: number;
   def_: number;
+  /** 出场攻击：Boss 阶段 atkMult 的基准（口径同 EnemyUnit） */
+  baseAtk: number;
   attackCountdown: number;
+  /** 当前攻击间隔（Boss 阶段可覆写） */
+  attackInterval: number;
+  /** 当前技能表（Boss 阶段可追加） */
+  skillIds: string[];
   skillCds: number[];
+  /** 已进入的 Boss 阶段数 */
+  phaseIndex: number;
   charging: { mult: number; skillId: string; releaseVfx: SkillVfxId } | null;
   dmgReduction: { reduction: number; turnsLeft: number } | null;
 }
@@ -34,6 +43,7 @@ export function spawnSimEnemy(stage: StageDef, waveIndex: number): SimEnemy {
     skillCds: (def.skillIds ?? []).map((id) => skillForEnemy(id).cd),
     charging: null,
     dmgReduction: null,
+    ...initialPhaseState(def, stats.atk),
   };
 }
 

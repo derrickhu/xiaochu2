@@ -123,6 +123,36 @@ export class BoardModel {
     return picked;
   }
 
+  /**
+   * 整列封印 count 列（锁列机制）：挑当前未封印珠最多的列，避免锁到几乎全封的列而形同虚设。
+   * 复用同一套封印/解封规则（相邻消除即解封），只是初始形态是竖条而非散点，
+   * 因此对盘面空间的压迫更集中：一整列消失会直接掐断纵向连消路线。
+   */
+  sealColumns(count: number): Cell[] {
+    const sealed: Cell[] = [];
+    for (let i = 0; i < count; i++) {
+      let bestCol = -1;
+      let bestFree = 0;
+      for (let c = 0; c < this.cols; c++) {
+        let free = 0;
+        for (let r = 0; r < this.rows; r++) {
+          if (this.grid[r][c] && !this._locked[r][c]) free++;
+        }
+        if (free > bestFree) {
+          bestFree = free;
+          bestCol = c;
+        }
+      }
+      if (bestCol < 0) break;
+      for (let r = 0; r < this.rows; r++) {
+        if (!this.grid[r][bestCol] || this._locked[r][bestCol]) continue;
+        this._locked[r][bestCol] = true;
+        sealed.push({ r, c: bestCol });
+      }
+    }
+    return sealed;
+  }
+
   /** 取该格用于消除判定的颜色：封印珠视为 null（不参与连消） */
   private _matchColor(row: number, col: number): OrbType | null {
     return this._locked[row][col] ? null : this.grid[row][col];

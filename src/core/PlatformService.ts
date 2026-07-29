@@ -47,6 +47,12 @@ class PlatformServiceClass {
   /** 底层平台 API 对象（wx / tt / null） */
   private _api: any;
 
+  /** adUnitId → 激励视频实例（宿主本身也是单例，这里避免重复注册回调） */
+  private _adCache = new Map<string, any>();
+
+  /** 当前在播广告的 Promise resolver，null = 无广告在播 */
+  private _adResolve: ((ok: boolean) => void) | null = null;
+
   constructor() {
     this.name = detectMinigamePlatform();
     this._api = getNativePlatformApi(this.name);
@@ -301,36 +307,65 @@ class PlatformServiceClass {
 
   /**
    * 激励视频广告。已配置 createRewardedVideoAd 则拉起；
-   * 否则开发/本地环境短暂提示后视为成功，便于联调「看广告复活」。
+   * 否则开发/本地环境短暂提示后视为成功，便于联调各广告位。
+   *
+   * 广告实例按 adUnitId 缓存并只注册一次回调：宿主的 createRewardedVideoAd 对同一
+   * adUnitId 返回同一单例，每次播放都重新 onClose 会让回调越积越多，
+   * 同一次关闭被回调 N 次（第二次以后打到已结束的 Promise 上，静默丢失奖励）。
    */
-  showRewardedVideo(): Promise<boolean> {
+  showRewardedVideo(adUnitId = ''): Promise<boolean> {
     return new Promise((resolve) => {
+      // 同一时刻只允许一支广告在播，避免两个入口的奖励串到一起
+      if (this._adResolve) {
+        resolve(false);
+        return;
+      }
+
+      let ad: any = null;
       try {
-        const create = this._api?.createRewardedVideoAd;
-        if (typeof create === 'function') {
-          const ad = create.call(this._api, { adUnitId: '' });
-          if (ad?.onClose && ad?.show) {
-            let settled = false;
-            const done = (ok: boolean) => {
-              if (settled) return;
-              settled = true;
-              resolve(ok);
-            };
-            ad.onClose((res: { isEnded?: boolean }) => done(!!res?.isEnded));
-            ad.onError?.(() => done(false));
-            const p = ad.show();
-            if (p?.catch) p.catch(() => done(false));
-            return;
-          }
-        }
+        ad = this._rewardedAd(adUnitId);
       } catch (_) { /* fall through mock */ }
 
-      this.showToast('广告播放中…');
-      setTimeout(() => {
-        this.showToast('复活成功', 'success');
-        resolve(true);
-      }, 700);
+      if (!ad) {
+        this.showToast('广告播放中…');
+        setTimeout(() => resolve(true), 700);
+        return;
+      }
+
+      this._adResolve = resolve;
+      try {
+        const p = ad.show();
+        // 拉取失败先 load 再播一次：小游戏侧常见于弱网首次拉取超时
+        if (p?.catch) {
+          p.catch(() => {
+            const l = ad.load?.();
+            if (l?.then) l.then(() => ad.show()).catch(() => this._settleAd(false));
+            else this._settleAd(false);
+          });
+        }
+      } catch (_) {
+        this._settleAd(false);
+      }
     });
+  }
+
+  private _rewardedAd(adUnitId: string): any {
+    const cached = this._adCache.get(adUnitId);
+    if (cached) return cached;
+    const create = this._api?.createRewardedVideoAd;
+    if (typeof create !== 'function') return null;
+    const ad = create.call(this._api, { adUnitId });
+    if (!ad?.onClose || !ad?.show) return null;
+    ad.onClose((res: { isEnded?: boolean }) => this._settleAd(!!res?.isEnded));
+    ad.onError?.(() => this._settleAd(false));
+    this._adCache.set(adUnitId, ad);
+    return ad;
+  }
+
+  private _settleAd(ok: boolean): void {
+    const resolve = this._adResolve;
+    this._adResolve = null;
+    resolve?.(ok);
   }
 
   showModal(title: string, content: string): void {

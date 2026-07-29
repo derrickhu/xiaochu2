@@ -65,6 +65,10 @@ export const SKILL_VFX: readonly SkillVfxDef[] = [
   { id: 'enemyHealBlock', kind: 'teamDebuff', floatText: '禁疗' },
   { id: 'enemyEnrage', kind: 'enemyWarn', floatText: '狂暴' },
   { id: 'enemySkillSeal', kind: 'teamDebuff', floatText: '技能封印' },
+  { id: 'enemyAtkDebuff', kind: 'teamDebuff', floatText: '攻击削弱' },
+  { id: 'enemyResolve', kind: 'enemySelf', floatText: '凝意' },
+  { id: 'enemyElementAbsorb', kind: 'enemySelf', floatText: '属性吸收' },
+  { id: 'enemyCounter', kind: 'enemySelf', floatText: '反击态' },
 ];
 
 export const SKILL_VFX_MAP: ReadonlyMap<SkillVfxId, SkillVfxDef> =

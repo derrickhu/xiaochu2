@@ -7,7 +7,7 @@
 import { Platform } from '@/core/PlatformService';
 import { PersistService } from '@/core/PersistService';
 import { localDateKey } from '@/core/SidebarService';
-import { STAGES, type StageDef } from '@/balance/stages';
+import { STAGES, CHAPTER_REWARD_PET, type StageDef } from '@/balance/stages';
 import {
   PETS, PET_MAP, DEFAULT_TEAM, TEAM_SIZE,
   INITIAL_PET_LEVEL, INITIAL_PET_STAR,
@@ -31,10 +31,14 @@ import {
   type TowerState,
 } from './playerSave';
 import { ensureDailyFresh, isConsecutiveDay } from './dailyReset';
+import {
+  msToFull, msToNextPoint, settleStamina, staminaCap,
+} from './staminaService';
 import { DEV_LEGACY_SAVE_KEYS } from '@/config/CloudConfig';
 import { CHECKIN_CYCLE_DAYS } from '@/balance/checkin';
 import { checkpointFloorOf, TOWER } from '@/balance/tower';
 import { SECRET_REALM } from '@/balance/secretRealm';
+import { AD_PLACEMENTS, type AdPlacementId } from '@/balance/monetization';
 import {
   addLingyu as addLingyuToSave,
   gachaPoolPets as gachaPoolPetsFromSave,
@@ -73,6 +77,10 @@ class PlayerDataClass {
           return;
         }
       }
+      // 一份都读不到 = 新号：必须显式回到初始档。
+      // 走到这里的另一条路是「云端覆盖后重载」，此时若沿用内存里的旧数据，
+      // 清档就会变成「看起来清了、下次保存又把旧数据写回去」。
+      this._data = initialData();
     } catch (e) {
       console.warn('[PlayerData] 存档解析失败，使用初始数据', e);
       this._data = initialData();
@@ -154,14 +162,63 @@ class PlayerDataClass {
     return cost !== null && this.petShards(petId) >= cost;
   }
 
-  starUp(petId: string): boolean {
+  /**
+   * 升星结算方案：本体碎片不足时，缺口可用通用碎片按稀有度折算补齐。
+   * UI 与 starUp 共用同一口径，避免「按钮亮着但扣不动」。
+   */
+  starUpPlan(petId: string): {
+    cost: number;
+    shards: number;
+    /** 本体碎片缺口 */
+    shortfall: number;
+    /** 补齐缺口需要的通用碎片（0 = 本体碎片已够） */
+    universalCost: number;
+    /** 通用碎片是否够补 */
+    affordable: boolean;
+  } | null {
     const cost = this.starUpCost(petId);
     const o = this._data.ownedPets[petId];
-    if (!o || cost === null || o.shards < cost) return false;
-    o.shards -= cost;
+    const pet = PET_MAP.get(petId);
+    if (!o || !pet || cost === null) return null;
+    const shortfall = Math.max(0, cost - o.shards);
+    const rate = ECONOMY.universal.exchangeRate[pet.rarity] ?? 1;
+    const universalCost = shortfall * rate;
+    return {
+      cost,
+      shards: o.shards,
+      shortfall,
+      universalCost,
+      affordable: shortfall === 0 || this._data.universalShards >= universalCost,
+    };
+  }
+
+  /** @param useUniversal 本体碎片不足时是否允许消耗通用碎片补齐 */
+  starUp(petId: string, useUniversal = false): boolean {
+    const plan = this.starUpPlan(petId);
+    const o = this._data.ownedPets[petId];
+    if (!o || !plan) return false;
+    if (plan.shortfall > 0) {
+      if (!useUniversal || !plan.affordable) return false;
+      this._data.universalShards -= plan.universalCost;
+      o.shards = 0;
+    } else {
+      o.shards -= plan.cost;
+    }
     o.star++;
     this._save();
     return true;
+  }
+
+  // ═══════════ 通用碎片 ═══════════
+
+  get universalShards(): number {
+    return this._data.universalShards;
+  }
+
+  addUniversalShards(amount: number): void {
+    if (amount <= 0) return;
+    this._data.universalShards += Math.floor(amount);
+    this._save();
   }
 
   addExp(amount: number): void {
@@ -270,6 +327,11 @@ class PlayerDataClass {
     return this._data.gachaSinceHigh;
   }
 
+  /** UR 天井计数（已连续未出 UR 抽数） */
+  get gachaSinceUr(): number {
+    return this._data.gachaSinceUr;
+  }
+
   addLingyu(amount: number): void {
     if (!addLingyuToSave(this._data, amount)) return;
     this._save();
@@ -278,6 +340,14 @@ class PlayerDataClass {
   /** 单抽：扣灵玉，结算保底/重复转碎片。灵玉不足返回 null。element 限定五行召唤池 */
   pullGachaSingle(rng: () => number = Math.random, element?: Element): PullOutcome | null {
     const outcome = pullGachaSingleFromSave(this._data, rng, element);
+    if (!outcome) return null;
+    this._save();
+    return outcome;
+  }
+
+  /** 广告免费单抽：次数由 adGate 在播放后扣，这里只负责不收灵玉 */
+  pullGachaFree(rng: () => number = Math.random, element?: Element): PullOutcome | null {
+    const outcome = pullGachaSingleFromSave(this._data, rng, element, { free: true });
     if (!outcome) return null;
     this._save();
     return outcome;
@@ -403,6 +473,25 @@ class PlayerDataClass {
     return true;
   }
 
+  /**
+   * 设为队长（移到首位）。队长技只认 team[0]，所以「换队长」就是换顺序，
+   * 其余成员保持相对次序不变（避免顺便把编队洗了）。
+   * @returns false = 不在队中或已经是队长
+   */
+  setLeader(petId: string): boolean {
+    const idx = this._data.team.indexOf(petId);
+    if (idx <= 0) return false;
+    this._data.team.splice(idx, 1);
+    this._data.team.unshift(petId);
+    this._save();
+    return true;
+  }
+
+  /** 当前队长（无人上阵为 undefined） */
+  get leaderId(): string | undefined {
+    return this._data.team[0];
+  }
+
   /** 下阵；至少保留 1 只，最后一只不可移除 */
   removeFromTeam(petId: string): boolean {
     if (this._data.team.length <= 1) return false;
@@ -445,6 +534,32 @@ class PlayerDataClass {
     return first ? this.isUnlocked(first) : false;
   }
 
+  /**
+   * GM：静默解锁到指定关（把目标关之前的主线全部标为 3★）。
+   * 不发币/灵玉，避免跳关污染经济；Boss 掉落宠照常发放，方便测后期编队。
+   */
+  gmUnlockUpTo(chapter: number, index: number): { cleared: number; petsGranted: number; targetId: string } {
+    const target = STAGES.find((s) => s.chapter === chapter && s.index === index);
+    if (!target) throw new Error(`无效关卡 ${chapter}-${index}`);
+
+    let cleared = 0;
+    let petsGranted = 0;
+    for (const s of STAGES) {
+      const before = s.chapter < chapter || (s.chapter === chapter && s.index < index);
+      if (!before) continue;
+      if ((this._data.stars[s.id] ?? 0) < 3) {
+        this._data.stars[s.id] = 3;
+        cleared += 1;
+      }
+      if (s.isBoss) {
+        const petId = CHAPTER_REWARD_PET[s.chapter];
+        if (petId && this.unlockPet(petId)) petsGranted += 1;
+      }
+    }
+    this._save();
+    return { cleared, petsGranted, targetId: target.id };
+  }
+
   // ═══════════ 抖音侧边栏复访奖励 ═══════════
 
   get sidebarRewardClaimedToday(): boolean {
@@ -463,8 +578,9 @@ class PlayerDataClass {
   /**
    * 通关结算：星数取历史最佳，灵宠币累加；首通额外发灵玉（里程碑产出）。
    *
-   * 重复通关按 ECONOMY.coin.repeatClearPct 衰减发币 —— 主线不耗体力，
-   * 不衰减就可以无限刷同一关，后面的秘境/任务产出全部失去意义。
+   * 重复通关按 ECONOMY.coin.repeatClearPct 衰减发币。体力落地后重复刷已经有体力门控，
+   * 但仍保留衰减：首通产出要明显厚于重刷，否则「推新章」会输给「回头刷熟关」，
+   * 而第 1 章本身免体力，不衰减就是一个无成本的刷币口。
    * @returns 本次首通发放的灵玉（非首通为 0）
    */
   recordClear(stageId: string, stars: number, coins: number): number {
@@ -502,9 +618,15 @@ class PlayerDataClass {
     return this._daily();
   }
 
-  /** 五行秘境今日剩余次数 */
+  /**
+   * 五行秘境今日剩余次数（含广告加次数）。
+   * 广告加的次数直接读 adUsage 计数，不再另存一个 bonusRuns 字段 ——
+   * 「看了几次广告」与「多了几次次数」本来就是同一个数，存两份必然对不上。
+   */
   get realmRunsLeft(): number {
-    return Math.max(0, SECRET_REALM.dailyRuns - this._daily().realmRuns);
+    const daily = this._daily();
+    const bonus = daily.adUsage.realm_extra_run ?? 0;
+    return Math.max(0, SECRET_REALM.dailyRuns + bonus - daily.realmRuns);
   }
 
   /** 扣一次秘境次数（次数不足返回 false） */
@@ -552,6 +674,28 @@ class PlayerDataClass {
     const today = localDateKey();
     if (daily.firstWinDate === today) return false;
     daily.firstWinDate = today;
+    this._save();
+    return true;
+  }
+
+  // ═══════════ 广告位日限（8 个位共用一份计数，播放链路见 game/adGate.ts） ═══════════
+
+  /** 某广告位今日剩余可看次数 */
+  adUsesLeft(id: AdPlacementId): number {
+    return Math.max(0, AD_PLACEMENTS[id].dailyLimit - (this._daily().adUsage[id] ?? 0));
+  }
+
+  /** 清空今日广告计数（GM 调试用；秘境的广告加次数也会一并回收） */
+  resetAdUsage(): void {
+    this._daily().adUsage = {};
+    this._save();
+  }
+
+  /** 记一次广告观看（广告播完后由 adGate 调用）；已达日限返回 false */
+  consumeAdUse(id: AdPlacementId): boolean {
+    if (this.adUsesLeft(id) <= 0) return false;
+    const daily = this._daily();
+    daily.adUsage[id] = (daily.adUsage[id] ?? 0) + 1;
     this._save();
     return true;
   }
@@ -657,6 +801,89 @@ class PlayerDataClass {
 
   isTowerMilestoneClaimed(floor: number): boolean {
     return this._data.tower.claimedMilestones.includes(floor);
+  }
+
+  // ═══════════ 体力 ═══════════
+
+  /**
+   * 体力上限：按已通关章数成长。
+   * 「已通关」= 该章 Boss 关有星，未通任何章时为 1 章档位。
+   */
+  get staminaMax(): number {
+    return staminaCap(this._clearedChapters());
+  }
+
+  /** 当前体力（读取即惰性补点） */
+  get stamina(): number {
+    this._settleStamina();
+    return this._data.stamina.value;
+  }
+
+  /** 距下一点恢复的毫秒数（已满为 0） */
+  get staminaNextPointMs(): number {
+    this._settleStamina();
+    return msToNextPoint(this._data.stamina, this.staminaMax);
+  }
+
+  /** 距满瓶的毫秒数（已满为 0） */
+  get staminaFullMs(): number {
+    this._settleStamina();
+    return msToFull(this._data.stamina, this.staminaMax);
+  }
+
+  /** 今日广告回体剩余次数 */
+  get staminaAdLeft(): number {
+    return this.adUsesLeft('stamina_refill');
+  }
+
+  hasStamina(cost: number): boolean {
+    return cost <= 0 || this.stamina >= cost;
+  }
+
+  /** 扣体力；不足返回 false（不做部分扣减） */
+  consumeStamina(cost: number): boolean {
+    if (cost <= 0) return true;
+    this._settleStamina();
+    const st = this._data.stamina;
+    if (st.value < cost) return false;
+    // 从满瓶掉下来的那一刻才开始计恢复，否则会白送一段离线额度
+    if (st.value >= this.staminaMax) st.lastRegenMs = Date.now();
+    st.value -= cost;
+    this._save();
+    return true;
+  }
+
+  /** 体力发放（签到 / 任务 / 广告）；允许顶破上限 */
+  addStamina(amount: number): void {
+    if (amount <= 0) return;
+    this._settleStamina();
+    this._data.stamina.value += Math.floor(amount);
+    this._save();
+  }
+
+  /**
+   * 广告回体：次数用尽返回 false。
+   * 走 adGate 时次数已由 adGate 扣过，这里只发体力；直接调用（GM / 测试）则自行扣次数。
+   */
+  claimStaminaAd(consumeUse = true): boolean {
+    if (consumeUse && !this.consumeAdUse('stamina_refill')) return false;
+    this.addStamina(ECONOMY.stamina.adRefill);
+    return true;
+  }
+
+  private _settleStamina(): void {
+    if (settleStamina(this._data.stamina, this.staminaMax)) this._save();
+  }
+
+  /** 已通关章数（用于体力上限成长）；未通任何章时为 1 */
+  private _clearedChapters(): number {
+    let cleared = 0;
+    for (const s of STAGES) {
+      if (s.isBoss && s.chapter >= 1 && this.starsOf(s.id) > 0) {
+        cleared = Math.max(cleared, s.chapter);
+      }
+    }
+    return Math.max(1, cleared);
   }
 
   /** 招募券（十连券）发放 */

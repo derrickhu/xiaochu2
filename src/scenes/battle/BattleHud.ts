@@ -29,6 +29,7 @@ import { enemyImage, UI_BATTLE_IMAGES } from '@/config/Assets';
 import { makeElementOrb } from '@/ui';
 import { formatStageBattleHeader } from '@/balance/stages';
 import type { BattleController, EnemyActResult } from '@/game/battle/BattleController';
+import { phaseHpMarkers } from '@/game/battle/bossPhase';
 import type { BoardView } from '@/game/board/BoardView';
 import { delay } from './battleWidgets';
 import type { BattleLayout } from './BattleLayout';
@@ -455,6 +456,7 @@ export class BattleHud {
         this._enemyHpFill, x, L.enemyHpBarY,
         L.enemyHpBarWidth, L.enemyHpBarHeight, shown, white, 'enemy',
         !!this._enemyHpFrame,
+        phaseHpMarkers(this._ctrl.enemy.def),
       );
     }
     {
@@ -508,6 +510,8 @@ export class BattleHud {
     shown: number, white: number,
     kind: 'enemy' | 'hero',
     hasFrame: boolean,
+    /** Boss 阶段血线（0~1），在条上画竖直刻线预告转阶段位置 */
+    phaseMarkers: readonly number[] = [],
   ): void {
     const r = bh / 2;
     g.clear();
@@ -552,6 +556,15 @@ export class BattleHud {
       // 顶部高光（模拟 mockup 渐变）
       g.beginFill(0xffffff, 0.28);
       g.drawRoundedRect(ix + 2, iy + 1, Math.max(iw * shown - 4, 0), ih * 0.38, ir / 2);
+      g.endFill();
+    }
+
+    // 阶段血线：已跨过的转暗，未到的亮金——让玩家能预判「还有几段」
+    for (const m of phaseMarkers) {
+      if (m <= 0 || m >= 1) continue;
+      const passed = shown <= m;
+      g.beginFill(passed ? 0x6b5320 : 0xffd451, passed ? 0.5 : 0.95);
+      g.drawRect(ix + iw * m - 1.5, iy, 3, ih);
       g.endFill();
     }
   }
@@ -1221,6 +1234,40 @@ export class BattleHud {
     });
     await tweenScale(c, { x: 1, y: 1 }, {
       duration: 0.2, ease: Ease.easeInQuad,
+    }, {
+      onFallback: () => {
+        resetScale(c, 1);
+      },
+    });
+  }
+
+  /**
+   * Boss 转阶段：金紫爆发 + 立绘拉伸 + 阶段名横幅。
+   * 比狂暴更重（时长、震屏、粒子量），因为这是一场战斗里最多两三次的结构性节点，
+   * 玩家必须清楚意识到「打法要变了」。
+   */
+  async playEnemyPhaseShift(fx: BattleFx, label: string): Promise<void> {
+    const { enemyCenterX, enemyCenterY } = this._layout;
+    fx.flash(0xffc447, 0.34, 0.5);
+    fx.burst({
+      x: enemyCenterX, y: enemyCenterY,
+      color: 0xffd451, count: 26, speed: 420, gravity: -90, size: 19, life: 0.75,
+    });
+    fx.burst({
+      x: enemyCenterX, y: enemyCenterY,
+      color: 0x9b5cff, count: 18, speed: 300, gravity: -60, size: 15, life: 0.9,
+    });
+    fx.spawnFloat(label, enemyCenterX, enemyCenterY - 70, 0xffd451, 1.8);
+    fx.shakeMedium();
+    Platform.vibrateLong();
+    this.refreshEnemyHp();
+    const c = this._enemyContainer;
+    if (!displayAlive(c)) return;
+    cancelDisplayTweens(c);
+    await tweenScale(c, { x: 1.26, y: 0.86 }, { duration: 0.14, ease: Ease.easeOutQuad });
+    await tweenScale(c, { x: 0.92, y: 1.16 }, { duration: 0.14, ease: Ease.easeInOutQuad });
+    await tweenScale(c, { x: 1, y: 1 }, {
+      duration: 0.22, ease: Ease.easeOutBack,
     }, {
       onFallback: () => {
         resetScale(c, 1);

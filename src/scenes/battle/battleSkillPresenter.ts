@@ -166,11 +166,16 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
         presentSkillEnemyDamage(deps, el, damage);
       }
-      fx.spawnFloat(`眩晕 ${result.turns ?? 0} 回合`, enemyCenterX, enemyCenterY - 76, 0xfff176, 1.2);
-      fx.burst({
-        x: enemyCenterX, y: enemyCenterY - 50,
-        color: 0xfff176, count: 10, speed: 160, gravity: -60, size: 12, life: 0.7,
-      });
+      // 敌人凝意时控制段落空：必须给出「免疫」反馈，否则玩家以为技能白放了却看不出原因
+      if (result.immuneControl) {
+        fx.spawnFloat('免疫控制！', enemyCenterX, enemyCenterY - 76, 0xb0bec5, 1.2);
+      } else {
+        fx.spawnFloat(`眩晕 ${result.turns ?? 0} 回合`, enemyCenterX, enemyCenterY - 76, 0xfff176, 1.2);
+        fx.burst({
+          x: enemyCenterX, y: enemyCenterY - 50,
+          color: 0xfff176, count: 10, speed: 160, gravity: -60, size: 12, life: 0.7,
+        });
+      }
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
       break;
@@ -223,8 +228,10 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
           if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
         }
         fx.spawnFloat(
-          `威吓！敌人攻击推迟 ${result.enemyAttackDelay ?? 0} 回合`,
-          enemyCenterX, enemyCenterY - 50, 0xffd54f, 1.15,
+          result.immuneControl
+            ? '免疫控制！'
+            : `威吓！敌人攻击推迟 ${result.enemyAttackDelay ?? 0} 回合`,
+          enemyCenterX, enemyCenterY - 50, result.immuneControl ? 0xb0bec5 : 0xffd54f, 1.15,
         );
         hud.refreshEnemyCd();
         break;

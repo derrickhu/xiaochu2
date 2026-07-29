@@ -41,11 +41,17 @@ function localContains(
  * 祖先链上若有 mask，设计点必须落在 mask 形状内（对齐 Pixi 视觉裁切）。
  * 滚动列表用 Graphics.drawRect 做视口 mask 时，滚出视口的卡片不再可点。
  */
+/** mask 可能是容器本身，也可能是包了一层的 MaskData */
+function resolveMaskObject(mask: PIXI.Container | PIXI.MaskData | null): PIXI.Container | null {
+  if (!mask) return null;
+  const obj = mask instanceof PIXI.MaskData ? mask.maskObject : mask;
+  return (obj as PIXI.Container | null) ?? null;
+}
+
 function insideAncestorMasks(target: PIXI.Container, dx: number, dy: number): boolean {
   let cur: PIXI.Container | null = target;
   while (cur) {
-    const raw = cur.mask as PIXI.Container | { maskObject?: PIXI.Container } | null;
-    const maskObj = raw && 'maskObject' in raw ? raw.maskObject ?? null : raw;
+    const maskObj = resolveMaskObject(cur.mask);
     if (maskObj) {
       const local = designPointToContainerLocal(maskObj, dx, dy);
       if (!localContains(local, maskObj.hitArea, maskObj)) return false;

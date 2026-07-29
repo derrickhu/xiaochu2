@@ -9,6 +9,7 @@ export * from './SceneFx';
 export * from './ResourceFlyFx';
 export * from './Button';
 export * from './ActionButton';
+export * from './CloseButton';
 export * from './BackButton';
 export * from './WarmGoldCtaButton';
 export * from './ElementOrb';

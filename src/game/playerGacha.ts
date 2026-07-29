@@ -6,7 +6,14 @@ import {
   PETS,
   type PetDef,
 } from '@/balance/pets';
-import { pullOne, pullTen, type GachaState, type PullOutcome } from '@/game/gacha/Gacha';
+import {
+  bannerWeightFn,
+  pullOne,
+  pullTen,
+  type GachaState,
+  type PullOutcome,
+} from '@/game/gacha/Gacha';
+import { isFeatured } from '@/balance/gachaBanner';
 import type { SaveData } from './playerSave';
 
 export type { PullOutcome } from '@/game/gacha/Gacha';
@@ -22,16 +29,21 @@ export function pullGachaSingle(
   data: SaveData,
   rng: () => number = Math.random,
   element?: Element,
+  /** 广告免费单抽：跳过灵玉结算，保底计数与出货口径完全一致 */
+  opts?: { free?: boolean },
 ): PullOutcome | null {
-  if (data.lingyu < ECONOMY.gacha.singleCost) return null;
-  data.lingyu -= ECONOMY.gacha.singleCost;
-  const state: GachaState = { sinceHigh: data.gachaSinceHigh };
+  if (!opts?.free) {
+    if (data.lingyu < ECONOMY.gacha.singleCost) return null;
+    data.lingyu -= ECONOMY.gacha.singleCost;
+  }
+  const state = gachaStateOf(data);
+  const pool = gachaPoolPets(element);
   const outcome = pullOne(
     rng, state, (id) => isOwned(data, id), 1,
-    gachaPoolPets(element),
+    pool, bannerWeightFn(pool),
   );
   applyPull(data, outcome);
-  data.gachaSinceHigh = state.sinceHigh;
+  writeGachaState(data, state);
   return outcome;
 }
 
@@ -47,14 +59,24 @@ export function pullGachaTen(
     if (data.lingyu < ECONOMY.gacha.tenCost) return null;
     data.lingyu -= ECONOMY.gacha.tenCost;
   }
-  const state: GachaState = { sinceHigh: data.gachaSinceHigh };
+  const state = gachaStateOf(data);
+  const pool = gachaPoolPets(element);
   const outcomes = pullTen(
     rng, state, (id) => isOwned(data, id),
-    gachaPoolPets(element),
+    pool, bannerWeightFn(pool),
   );
   for (const outcome of outcomes) applyPull(data, outcome);
-  data.gachaSinceHigh = state.sinceHigh;
+  writeGachaState(data, state);
   return outcomes;
+}
+
+function gachaStateOf(data: SaveData): GachaState {
+  return { sinceHigh: data.gachaSinceHigh, sinceUr: data.gachaSinceUr };
+}
+
+function writeGachaState(data: SaveData, state: GachaState): void {
+  data.gachaSinceHigh = state.sinceHigh;
+  data.gachaSinceUr = state.sinceUr;
 }
 
 function isOwned(data: SaveData, petId: string): boolean {
@@ -82,15 +104,25 @@ export function gachaPoolPets(element?: Element): PetDef[] {
 
 /** 落库单次抽卡结果：新宠解锁 / 重复转碎片（不触发保存，批量后统一存） */
 function applyPull(data: SaveData, outcome: PullOutcome): void {
+  outcome.featured = isFeatured(outcome.petId);
   if (outcome.duplicate) {
     const owned = data.ownedPets[outcome.petId];
     if (owned) owned.shards += outcome.shards;
     else data.pendingShards[outcome.petId] =
       (data.pendingShards[outcome.petId] ?? 0) + outcome.shards;
+    applyUniversalBonus(data, outcome);
   } else {
     unlockPetInSave(data, outcome.petId);
     applyEscortPack(data, outcome);
   }
+}
+
+/** 重复 SSR/UR 追加通用碎片：让「又是这只」也能推进别的宠升星 */
+function applyUniversalBonus(data: SaveData, outcome: PullOutcome): void {
+  const gain = ECONOMY.gacha.duplicateUniversal[outcome.rarity] ?? 0;
+  if (gain <= 0) return;
+  data.universalShards += gain;
+  outcome.universal = gain;
 }
 
 /** NEW SSR/UR 护航包：附赠本体碎片 + 通用经验，并回写到 outcome 供 UI 展示 */

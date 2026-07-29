@@ -1,7 +1,7 @@
 /**
  * 关卡表（纯数据，零逻辑）
  *
- * 64 关 · 8 章 × 每章固定 8 关 · 每章 Boss 直掉 1 只灵宠（SR/SSR）+ 首教 1 种可玩挑战。
+ * 128 关 · 16 章 × 每章固定 8 关 · 每章 Boss 直掉 1 只灵宠（SR/SSR）+ 首教 1 种可玩挑战。
  * 统一关数便于运营与章节地图路径点复用。
  */
 import type { Element } from './combat';
@@ -9,6 +9,7 @@ import type { StageType } from './stageTypes';
 import type { EncounterRef } from './enemies';
 import { CREATURE_MAP } from './creatures';
 import { STARTER_CREATURE_IDS } from './creatures';
+import { LATE_CHAPTER_BOSS_PETS } from './creatureRoster';
 import type { Rarity } from './rarity';
 import {
   type BossChallengeKind,
@@ -46,21 +47,17 @@ export interface StageDef {
   displayLabel?: string;
 }
 
-export const CHAPTER_STAGE_COUNT: Readonly<Record<number, number>> = {
-  1: 8, 2: 8, 3: 8, 4: 8, 5: 8, 6: 8, 7: 8, 8: 8,
-};
+/** 主线总章数（16 章 × 8 关 = 128 关） */
+export const MAIN_CHAPTER_COUNT = 16;
+
+export const CHAPTER_STAGE_COUNT: Readonly<Record<number, number>> = Object.fromEntries(
+  Array.from({ length: MAIN_CHAPTER_COUNT }, (_, i) => [i + 1, 8]),
+);
 
 /** 各章 Boss 掉落宠期望稀有度（仅 SR/SSR；1~2 章 SR，3 章起 SSR；UR 仅抽卡） */
-export const CHAPTER_BOSS_DROP_RARITY: Readonly<Record<number, Rarity>> = {
-  1: 2,
-  2: 2,
-  3: 3,
-  4: 3,
-  5: 3,
-  6: 3,
-  7: 3,
-  8: 3,
-};
+export const CHAPTER_BOSS_DROP_RARITY: Readonly<Record<number, Rarity>> = Object.fromEntries(
+  Array.from({ length: MAIN_CHAPTER_COUNT }, (_, i) => [i + 1, i + 1 <= 2 ? 2 : 3]),
+);
 
 /** @deprecated 旧名，测试/工具兼容 */
 export const CHAPTER_CAPTURE_RARITY = CHAPTER_BOSS_DROP_RARITY;
@@ -78,6 +75,8 @@ export const CHAPTER_REWARD_PET: Readonly<Record<number, string>> = {
   6: 'pet_010', // SSR 治疗 · 土
   7: 'pet_029', // SSR 辅助 · 土
   8: 'pet_016', // SSR 输出 · 木
+  // 第 9~16 章从量产名录取（排布理由见 creatureRoster.LATE_CHAPTER_BOSS_PETS）
+  ...LATE_CHAPTER_BOSS_PETS,
 };
 
 const mob = (id: string): EncounterRef => ({ kind: 'mob', id });
@@ -302,7 +301,7 @@ const CHAPTER_3: readonly StageDef[] = [
   }),
 ];
 
-// ── 历练 4～8 章（统一每章 8 关） ──
+// ── 历练 4～16 章（统一每章 8 关，声明式生成） ──
 interface TrialChapterDef {
   chapter: number;
   name: string;
@@ -310,7 +309,14 @@ interface TrialChapterDef {
   difficultyBase: number;
   bossDropPetId: string;
   bossChallenge: BossChallengeKind;
-  /** 长度 = stageCount - 1，仅已学挑战 */
+  /**
+   * 长度 = stageCount - 1，仅已学挑战。
+   *
+   * 末位（index = stageCount - 1）是「临门验队关」：必须挑够重的 archetype
+   * （boardRock / highDefense 的傀儡系，或 noHeart 的双波），否则 Boss 首波会相对
+   * 前一关形成断崖，撞 BUDGET_GUARDRAIL.bossFirstWaveMaxRatio。
+   * 单波轻怪（boardSeal 的毒蝎、multiWave 的史莱姆）不要放末位。
+   */
   fillerChallenges: readonly BossChallengeKind[];
   fillerNames: readonly string[];
 }
@@ -323,13 +329,13 @@ const TRIAL_CHAPTERS: readonly TrialChapterDef[] = [
   {
     chapter: 4, name: '炽土试炼', stageCount: 8, difficultyBase: 1.0,
     bossDropPetId: 'pet_025', bossChallenge: 'boardRock',
-    fillerChallenges: ['multiWave', 'boardSeal', 'highDefense', 'multiWave', 'boardSeal', 'highDefense', 'multiWave'],
+    fillerChallenges: ['multiWave', 'boardSeal', 'highDefense', 'multiWave', 'boardSeal', 'multiWave', 'highDefense'],
     fillerNames: ['炽土前哨', '熔岩小径', '岩傀儡阵', '焦土深谷', '封印残阵', '炎纹廊道', '炽石祭坛'],
   },
   {
     chapter: 5, name: '灵兽秘境', stageCount: 8, difficultyBase: 1.02,
     bossDropPetId: 'pet_011', bossChallenge: 'selfHeal',
-    fillerChallenges: ['boardRock', 'highDefense', 'boardSeal', 'multiWave', 'boardRock', 'highDefense', 'boardSeal'],
+    fillerChallenges: ['boardRock', 'highDefense', 'boardSeal', 'multiWave', 'boardSeal', 'highDefense', 'boardRock'],
     fillerNames: ['秘境入口', '顽石迷阵', '巨像守卫', '灵泉浅滩', '熔岩岔路', '古阵核心', '秘境深廊'],
   },
   {
@@ -350,6 +356,71 @@ const TRIAL_CHAPTERS: readonly TrialChapterDef[] = [
     fillerChallenges: ['noHeart', 'chargeHit', 'selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'noHeart'],
     fillerNames: ['虚空门扉', '禁心廊道', '蓄力深渊', '寒潭虚影', '顽石天阶', '封印核心', '封元前厅'],
   },
+
+  /*
+   * ── 第 9~16 章 ──
+   * 每章仍只首教 1 种新挑战（bossChallenge），铺垫关只复用已学的；
+   * 新挑战的载体是 Boss 本体的技能与阶段（见 creatureRoster.bossMonster），
+   * 不是单靠 difficultyBase 把数值抬上去。
+   *
+   * difficultyBase 全部压平在 1.08（= 第 8 章的值），**不再逐章加码**。
+   * 原因是实测结论：敌人数值已按 chapterGrowth^(章-1) 复利外推（HP 1.36 / ATK 1.29），
+   * 而养成锚点受 5★ 99 级封顶，第 9~16 章只能给出约 +5 级/章。两条曲线本就在拉开，
+   * 若再叠一层 difficultyBase 爬坡，后期铺垫关的 TTK 会顶穿目标带。
+   * 章节压力交给复利曲线与机制（新挑战、Boss 阶段）承担，difficulty 只留章内 +0.05/关 的爬坡。
+   *
+   * 末位铺垫关同样必须挑够重的 archetype（见 fillerChallenges 注释），
+   * 新挑战里 resolveTank（磐岩傀儡）/ phaseShift（幽晶魔像）属重档，
+   * attackDown（枯翼魔蝠单波）偏轻，不放末位。
+   */
+  {
+    chapter: 9, name: '锐金洞天', stageCount: 8, difficultyBase: 1.08,
+    bossDropPetId: LATE_CHAPTER_BOSS_PETS[9], bossChallenge: 'highAttack',
+    fillerChallenges: ['chargeHit', 'noHeart', 'boardRock', 'selfHeal', 'boardSeal', 'highAttack', 'highDefense'],
+    fillerNames: ['金铁回廊', '禁心矿脉', '顽石熔窑', '寒潭金池', '封印铸台', '锐锋试场', '洞天前殿'],
+  },
+  {
+    chapter: 10, name: '灵芝药谷', stageCount: 8, difficultyBase: 1.08,
+    bossDropPetId: LATE_CHAPTER_BOSS_PETS[10], bossChallenge: 'phaseShift',
+    fillerChallenges: ['highAttack', 'selfHeal', 'boardSeal', 'noHeart', 'chargeHit', 'boardRock', 'phaseShift'],
+    fillerNames: ['药谷入口', '灵泉暖池', '封印花田', '禁心幽径', '蓄力蕊台', '顽石药圃', '晶像回廊'],
+  },
+  {
+    chapter: 11, name: '沧溟海眼', stageCount: 8, difficultyBase: 1.08,
+    bossDropPetId: LATE_CHAPTER_BOSS_PETS[11], bossChallenge: 'elementAbsorb',
+    fillerChallenges: ['phaseShift', 'selfHeal', 'boardRock', 'highAttack', 'noHeart', 'elementAbsorb', 'highDefense'],
+    fillerNames: ['潮汐阶', '寒蛟浅滩', '顽石礁盘', '风暴之喉', '禁心漩涡', '吞灵深潭', '海眼前庭'],
+  },
+  {
+    chapter: 12, name: '熔岩魔渊', stageCount: 8, difficultyBase: 1.08,
+    bossDropPetId: LATE_CHAPTER_BOSS_PETS[12], bossChallenge: 'counterStrike',
+    fillerChallenges: ['elementAbsorb', 'chargeHit', 'boardSeal', 'phaseShift', 'noHeart', 'counterStrike', 'highDefense'],
+    fillerNames: ['焦岩栈道', '蓄力火喉', '封印岩窟', '晶像熔室', '禁心火海', '荆棘熔巢', '魔渊前厅'],
+  },
+  {
+    chapter: 13, name: '厚土神墟', stageCount: 8, difficultyBase: 1.08,
+    bossDropPetId: LATE_CHAPTER_BOSS_PETS[13], bossChallenge: 'attackDown',
+    fillerChallenges: ['counterStrike', 'attackDown', 'boardRock', 'elementAbsorb', 'selfHeal', 'phaseShift', 'highDefense'],
+    fillerNames: ['神墟外垣', '摧锋沙丘', '顽石陵道', '吞灵地穴', '灵泉暗河', '晶像祭坛', '神墟内殿'],
+  },
+  {
+    chapter: 14, name: '赤霄天阙', stageCount: 8, difficultyBase: 1.08,
+    bossDropPetId: LATE_CHAPTER_BOSS_PETS[14], bossChallenge: 'resolveTank',
+    fillerChallenges: ['attackDown', 'counterStrike', 'noHeart', 'phaseShift', 'elementAbsorb', 'boardRock', 'resolveTank'],
+    fillerNames: ['天阙云阶', '荆棘火廊', '禁心霄顶', '晶像天桥', '吞灵云海', '顽石天柱', '磐岩关门'],
+  },
+  {
+    chapter: 15, name: '玄冥寒渊', stageCount: 8, difficultyBase: 1.08,
+    bossDropPetId: LATE_CHAPTER_BOSS_PETS[15], bossChallenge: 'lockedColumn',
+    fillerChallenges: ['resolveTank', 'lockedColumn', 'attackDown', 'counterStrike', 'elementAbsorb', 'phaseShift', 'resolveTank'],
+    fillerNames: ['寒渊冰阶', '锁灵冰壁', '摧锋寒风', '荆棘冰棘', '吞灵寒潭', '晶像冰宫', '玄冥壁垒'],
+  },
+  {
+    chapter: 16, name: '苍虬天境', stageCount: 8, difficultyBase: 1.08,
+    bossDropPetId: LATE_CHAPTER_BOSS_PETS[16], bossChallenge: 'finalTrial',
+    fillerChallenges: ['lockedColumn', 'resolveTank', 'counterStrike', 'elementAbsorb', 'attackDown', 'phaseShift', 'finalTrial'],
+    fillerNames: ['天境门阶', '磐岩天关', '荆棘回廊', '吞灵云渊', '摧锋神道', '晶像天枢', '终局试场'],
+  },
 ];
 
 function buildTrialChapter(def: TrialChapterDef): StageDef[] {
@@ -360,14 +431,25 @@ function buildTrialChapter(def: TrialChapterDef): StageDef[] {
 
   def.fillerChallenges.forEach((ch, i) => {
     const index = i + 1;
+    /*
+     * 关卡类型按奇偶轮替（普通/精英），但**末位的临门验队关一律算精英**。
+     *
+     * 原本 index 7 因为「7 是奇数」被判成普通关，这纯属奇偶规则的副作用：
+     * 这一关按设计要挑最重的 archetype（见 fillerChallenges 注释），
+     * 塞进普通关的 TTK 目标带（2~6 回合）里必然超界 —— 后期章节的减伤怪
+     * 一开减伤，输出直接打七折，光靠砍血量拉不回来。
+     * 归到精英档（3~8 回合）既符合它的实际强度，奖励也跟着对上。
+     */
+    const isLast = index === def.fillerChallenges.length;
+    const elite = isLast || index % 2 === 0;
     stages.push(fillerStage({
       id: `stage_${def.chapter}_${index}`,
       chapter: def.chapter,
       index,
       name: def.fillerNames[i] ?? `历练 ${index}`,
       element: c.element,
-      type: index % 2 === 0 ? 'elite' : 'normal',
-      dropTableId: index % 2 === 0 ? 'dt_trial_elite' : 'dt_trial_normal',
+      type: elite ? 'elite' : 'normal',
+      dropTableId: elite ? 'dt_trial_elite' : 'dt_trial_normal',
       difficulty: def.difficultyBase + i * 0.05,
       starTurnLimit: 14 + def.chapter + i,
       challenge: ch,
@@ -401,7 +483,7 @@ export const STAGES: readonly StageDef[] = [
 const STAGE_REGISTRY = new Map<string, StageDef>(STAGES.map((s) => [s.id, s]));
 
 /**
- * 关卡查表：主线 8 章 + 副玩法动态注册的关卡（秘境 / 通天塔）。
+ * 关卡查表：主线 16 章 + 副玩法动态注册的关卡（秘境 / 通天塔）。
  * 副玩法关卡只进这张表，不进 STAGES，以免污染章节地图、图鉴与经分关卡序号。
  */
 export const STAGE_MAP: ReadonlyMap<string, StageDef> = STAGE_REGISTRY;

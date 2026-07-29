@@ -4,8 +4,9 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { PlayerData } from '../PlayerData';
-import { PETS, DEFAULT_TEAM } from '@/balance/pets';
+import { PETS, PET_MAP, DEFAULT_TEAM } from '@/balance/pets';
 import { ECONOMY } from '@/balance/economy';
+import { STAGE_MAP } from '@/balance/stages';
 
 beforeAll(() => {
   PlayerData.load();
@@ -79,6 +80,27 @@ describe('升级 / 升星', () => {
     expect(PlayerData.petShards(other)).toBe(0);
     expect(PlayerData.canStarUp(other)).toBe(false);
     expect(PlayerData.starUp(other)).toBe(false);
+  });
+
+  it('通用碎片按稀有度折算补齐缺口，未开启则拒绝', () => {
+    const target = DEFAULT_TEAM[2];
+    const plan0 = PlayerData.starUpPlan(target)!;
+    expect(plan0.shortfall).toBe(plan0.cost);
+    const rate = ECONOMY.universal.exchangeRate[PET_MAP.get(target)!.rarity] ?? 1;
+    expect(plan0.universalCost).toBe(plan0.cost * rate);
+    expect(plan0.affordable).toBe(false);
+
+    // 通用碎片不够 → 仍然拒绝
+    PlayerData.addUniversalShards(plan0.universalCost - 1);
+    expect(PlayerData.starUp(target, true)).toBe(false);
+
+    PlayerData.addUniversalShards(1);
+    const star = PlayerData.petStar(target);
+    // 未显式开启通用碎片时保持旧行为（纯本体碎片口径）
+    expect(PlayerData.starUp(target)).toBe(false);
+    expect(PlayerData.starUp(target, true)).toBe(true);
+    expect(PlayerData.petStar(target)).toBe(star + 1);
+    expect(PlayerData.universalShards).toBe(0);
   });
 });
 
@@ -160,5 +182,21 @@ describe('抖音侧边栏复访奖励', () => {
     expect(PlayerData.lingyu).toBe(before + ECONOMY.sidebar.lingyuReward);
     expect(PlayerData.sidebarRewardClaimedToday).toBe(true);
     expect(PlayerData.claimSidebarReward()).toBe(false);
+  });
+});
+
+describe('GM 跳关解锁', () => {
+  it('gmUnlockUpTo 解锁目标关且不污染经济', () => {
+    const coinsBefore = PlayerData.coins;
+    const lingyuBefore = PlayerData.lingyu;
+    const r = PlayerData.gmUnlockUpTo(4, 1);
+    expect(r.targetId).toBe('stage_4_1');
+    expect(PlayerData.isChapterUnlocked(4)).toBe(true);
+    expect(PlayerData.isUnlocked(STAGE_MAP.get('stage_4_1')!)).toBe(true);
+    expect(PlayerData.isCleared('stage_3_8')).toBe(true);
+    expect(PlayerData.starsOf('stage_3_8')).toBe(3);
+    expect(PlayerData.isCleared('stage_4_1')).toBe(false);
+    expect(PlayerData.coins).toBe(coinsBefore);
+    expect(PlayerData.lingyu).toBe(lingyuBefore);
   });
 });

@@ -6,6 +6,8 @@ import {
   type SkillResult,
   type SkillRuntimeContext,
 } from './SkillEngine';
+import { enterBossPhase, pendingBossPhase } from './bossPhase';
+import { ELEMENT_NAME } from '@/balance/ui';
 import type { EnemyActResult, EnemyUnit } from './battleTypes';
 
 const idle = (): EnemyActResult => ({
@@ -29,13 +31,37 @@ export function runEnemyTurnAction(ctx: EnemyTurnContext): EnemyActResult {
   const enemy = ctx.enemy;
   if (enemy.hp <= 0) return idle();
 
+  // 转阶段优先于一切（含眩晕与蓄力）：血线是硬触发，且转阶段本身消耗这一回合，
+  // 玩家因此拿到一个「看见 Boss 变身」的呼吸窗口，而不是被新形态立刻连打。
+  const phase = pendingBossPhase(enemy);
+  if (phase) {
+    enterBossPhase(enemy, phase);
+    enemy.charging = null;
+    const base: EnemyActResult = {
+      action: 'phaseShift', damage: 0, absorbed: 0, heroDead: false, healed: 0,
+      phaseLabel: phase.label,
+    };
+    if (!phase.onEnterSkillId) return base;
+
+    const skill = skillForEnemy(phase.onEnterSkillId);
+    const fired = runSkill(skill, ctx.enemyCaster(), ctx.runtimeContext());
+    if (!fired) return base;
+    const hit = fired.damageEvents.find((e) => e.target === 'hero');
+    if (hit) {
+      const applied = ctx.applyEnemyDamage(hit.amount);
+      return { ...base, ...applied };
+    }
+    ctx.applySkillResult(fired);
+    return { ...base, skillName: fired.skill.name };
+  }
+
   if (ctx.isStunned() && !enemy.charging) return idle();
 
   if (enemy.charging) {
     const charging = enemy.charging;
     const skill = skillForEnemy(charging.skillId);
     enemy.charging = null;
-    enemy.attackCountdown = enemy.def.attackInterval;
+    enemy.attackCountdown = enemy.attackInterval;
     const skillResult = runChargedAttack(
       skill,
       ctx.enemyCaster(),
@@ -47,7 +73,7 @@ export function runEnemyTurnAction(ctx: EnemyTurnContext): EnemyActResult {
     return { action: 'chargedAttack', ...hit, healed: 0 };
   }
 
-  const skillIds = enemy.def.skillIds ?? [];
+  const skillIds = enemy.skillIds;
   for (let i = 0; i < skillIds.length; i++) {
     if (enemy.skillCds[i] > 0) enemy.skillCds[i]--;
   }
@@ -63,7 +89,7 @@ export function runEnemyTurnAction(ctx: EnemyTurnContext): EnemyActResult {
 
   enemy.attackCountdown--;
   if (enemy.attackCountdown > 0) return idle();
-  enemy.attackCountdown = enemy.def.attackInterval;
+  enemy.attackCountdown = enemy.attackInterval;
   const hit = ctx.applyEnemyDamage(enemy.atk);
   return { action: 'attack', ...hit, healed: 0 };
 }
@@ -73,7 +99,7 @@ function followUpBasicAttack(ctx: EnemyTurnContext, base: EnemyActResult): Enemy
   const enemy = ctx.enemy;
   enemy.attackCountdown--;
   if (enemy.attackCountdown > 0) return base;
-  enemy.attackCountdown = enemy.def.attackInterval;
+  enemy.attackCountdown = enemy.attackInterval;
   const hit = ctx.applyEnemyDamage(enemy.atk);
   return {
     ...base,
@@ -134,6 +160,31 @@ function applyEnemySkillResult(ctx: EnemyTurnContext, result: SkillResult): Enem
   const skillSeal = result.statusEvents.find((e) => e.status === 'skillSeal');
   if (skillSeal) {
     return { ...base, action: 'skillSeal', sealedPetIndex: skillSeal.value, turns: skillSeal.turns };
+  }
+  const atkDebuff = result.statusEvents.find((e) => e.status === 'atkDebuff');
+  if (atkDebuff) {
+    return { ...base, action: 'atkDebuff', value: atkDebuff.value, turns: atkDebuff.turns };
+  }
+  const absorb = result.statusEvents.find((e) => e.status === 'elementAbsorb');
+  if (absorb) {
+    return followUpBasicAttack(ctx, {
+      ...base,
+      action: 'elementAbsorb',
+      value: absorb.value,
+      turns: absorb.turns,
+      absorbElementName: absorb.element ? ELEMENT_NAME[absorb.element] : undefined,
+    });
+  }
+  const counter = result.statusEvents.find((e) => e.status === 'counterStrike');
+  if (counter) {
+    return followUpBasicAttack(ctx, {
+      ...base, action: 'counterStrike', value: counter.value, turns: counter.turns,
+    });
+  }
+  const resolve = result.statusEvents.find((e) => e.status === 'resolve');
+  if (resolve) {
+    // 自身 buff，不占普攻（与减伤同口径）：凝意的代价是一个技能位，不是一回合输出
+    return followUpBasicAttack(ctx, { ...base, action: 'resolve', turns: resolve.turns });
   }
   return idle();
 }

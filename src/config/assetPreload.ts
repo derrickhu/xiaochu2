@@ -33,6 +33,7 @@ import {
 import { resolvePetPassiveBundle } from '@/balance/passiveEffects';
 import { loadSubpackagesForPaths } from '@/config/Subpackages';
 import { preloadPetAvatarTextures } from '@/config/petAvatarTexture';
+import { CdnAssetService } from '@/core/CdnAssetService';
 
 /** 灵宠池系页面共用壳（背景 + 标题匾） */
 export const PET_POOL_SHELL_IMAGES: readonly string[] = [
@@ -113,12 +114,17 @@ export interface PetAvatarPreloadEntry {
   star?: number;
 }
 
-/** 图鉴：全部灵宠头像（已拥有用当前星级） */
+/** 图鉴：全部灵宠头像（已拥有优先，用当前星级）—— 真机 CDN 并发有限，先保可见卡 */
 export function codexPetAvatarEntries(): PetAvatarPreloadEntry[] {
-  return PETS.map((pet) => ({
+  const owned = new Set(PlayerData.ownedPets);
+  const toEntry = (pet: (typeof PETS)[number]): PetAvatarPreloadEntry => ({
     petId: pet.id,
-    star: PlayerData.isOwned(pet.id) ? PlayerData.petStar(pet.id) : 1,
-  }));
+    star: owned.has(pet.id) ? PlayerData.petStar(pet.id) : 1,
+  });
+  return [
+    ...PETS.filter((p) => owned.has(p.id)).map(toEntry),
+    ...PETS.filter((p) => !owned.has(p.id)).map(toEntry),
+  ];
 }
 
 /** 编队页：已拥有灵宠 + 可选本关敌人（含敌技图标） */
@@ -247,10 +253,17 @@ export function titleLeadPetAvatarEntry(): PetAvatarPreloadEntry | null {
   return { petId: lead, star: PlayerData.petStar(lead) };
 }
 
-/** 预加载灵宠头像（旧 ID 已映射到 canonical 路径 + 限并发） */
+/** 预加载灵宠头像（CDN 先下 + 分包 + 纹理解码；entries 顺序即优先级） */
 export async function ensurePetAvatars(entries: readonly PetAvatarPreloadEntry[]): Promise<void> {
   if (entries.length === 0) return;
   const paths = entries.flatMap(({ petId, star = 1 }) => [...petAvatarLoadPaths(petId, star)]);
-  await loadSubpackagesForPaths(paths);
+  await Promise.all([
+    CdnAssetService.preloadPaths(paths).catch((e) => {
+      console.warn('[ensurePetAvatars] CDN 预热失败', e);
+    }),
+    loadSubpackagesForPaths(paths).catch((e) => {
+      console.warn('[ensurePetAvatars] 分包加载失败', e);
+    }),
+  ]);
   await preloadPetAvatarTextures(entries);
 }

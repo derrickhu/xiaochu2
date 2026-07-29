@@ -1,0 +1,28 @@
+One horizontal strip: exactly 3 equal square panels in a single row (1 row x 3 columns), thick solid black separators, pure black background in every panel.
+
+Premium mobile xianxia game UI currency icons, SAME art style across all three:
+- polished soft-3D fantasy render, glossy speculars, gentle magical glow
+- warm gold filigree accents used consistently (same metal color and ornate density)
+- cute-premium (not grimdark), readable at 48px
+- each icon centered with similar visual weight and silhouette fill (~85% of panel)
+- NO TEXT, no labels, no captions, no Chinese characters, no numbers, no watermarks
+
+Panel 1 — STAMINA (体力 / 仙桃):
+- plump immortal peach, pink-to-coral warm flesh, clear peach cleft
+- two small jade-green leaves + simple gold stem clasp
+- instantly reads as a peach fruit (energy / stamina)
+
+Panel 2 — LINGYU (灵玉):
+- translucent icy jade bi-disc (圆玉璧) with square hole in center (古币玉感)
+- pale cyan-mint jade body, inner soft glow
+- slim elegant gold cloud filigree rim (not bulky)
+- instantly reads as precious jade currency (NOT a flame, NOT a gem egg)
+
+Panel 3 — PET COIN (灵宠币):
+- round metal coin (must look like a COIN: thick rim, circular silhouette)
+- warm antique gold / soft bronze face
+- center motif: cute tiny paw print or simple chubby pet silhouette embossed
+- subtle cyan enamel inlay accent only in the emboss (keeps pet theme)
+- instantly reads as spendable coin currency (NOT an oval gemstone)
+
+Keep lighting direction identical (top-left key light). Same render polish level for all three.

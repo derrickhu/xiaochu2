@@ -22,13 +22,24 @@ export interface CdnManifest {
 
 type ProgressCallback = (loaded: number, total: number) => void;
 
+/** 真机 wx.downloadFile / request 合计并发约 10；自建队列避免瞬间打满后超时失败 */
+const DOWNLOAD_CONCURRENCY = 4;
+
 class CdnAssetServiceClass {
   private readonly _config: CdnConfig = CDN_CONFIG;
   private readonly _cdnPrefixes = this._config.cdnDirs.map((d) => this._prefix(d));
   private readonly _bundledPrefixes = this._config.bundledDirs.map((d) => this._prefix(d));
   private _manifest: CdnManifest | null = null;
   private _manifestReady = false;
+  /**
+   * 仅「成功拉到非空云端 manifest」时为 true。
+   * 空缓存 / 拉失败时若仍按 files[path] 判无，会把全部 CDN 下载误杀，
+   * 真机上就只剩本地残留缓存（常见：只剩第一只宠头像）。
+   */
+  private _manifestAuthoritative = false;
   private _downloadQueue = new Map<string, Promise<boolean>>();
+  private _downloadWaiters: Array<() => void> = [];
+  private _downloadActive = 0;
   private _localExistsCache = new Map<string, boolean>();
   private _accessLog = new Map<string, number>();
   private _accessFrame = 0;
@@ -84,17 +95,24 @@ class CdnAssetServiceClass {
 
     if (!this.isCdnPath(logicalPath)) return logicalPath;
 
+    // manifest 尚未就绪时先拉一次，避免空清单把下载误杀
+    if (!this._manifestReady) {
+      await this.fetchManifest().catch(() => false);
+    }
+
     const ok = await this.download(logicalPath);
     if (ok && this._isCacheValid(logicalPath)) return this._getCachePath(logicalPath);
 
-    console.warn(`[CDN] 资源未从云端就绪，使用本地逻辑路径: ${logicalPath}`);
-    return logicalPath;
+    // 瘦包后本地已无文件：禁止回落逻辑路径（createImage 必失败，且会污染失败重试）
+    if (this._packageFileExists(logicalPath)) return logicalPath;
+    throw new Error(`[CDN] 下载失败且包内无文件: ${logicalPath}`);
   }
 
   async fetchManifest(): Promise<boolean> {
     if (!this.enabled) {
       this._manifest = { files: {} };
       this._manifestReady = true;
+      this._manifestAuthoritative = false;
       return false;
     }
 
@@ -104,22 +122,44 @@ class CdnAssetServiceClass {
       return false;
     }
 
-    /** 勿用 downloadFile 拉 manifest.json（CloudBase 域名 JSON 协议层会炸） */
-    const url = `${this._getCdnUrl('manifest.json')}?_t=${Date.now()}`;
+    // 无 query：部分端上对带 ?_t= 的 downloadFile 校验更严；缓存靠客户端时间戳文件名即可
+    const url = this._getCdnUrl('manifest.json');
     try {
-      const text = await this._requestText(url);
+      /**
+       * 小游戏优先 downloadFile 拉 manifest（与 xiao_chu 一致）。
+       * 抖音上 request / downloadFile 是两套白名单；即便 request 已配同一域名，
+       * 真机会话有时仍缓存旧名单导致 request 报 not valid domain。
+       * 资源图本身也走 downloadFile，清单同源最稳。
+       */
+      let text = '';
+      let via = 'downloadFile';
+      try {
+        text = await this._downloadText(url);
+      } catch (dlErr) {
+        const dlMsg = String((dlErr as Error)?.message || dlErr);
+        console.warn('[CDN] downloadFile 拉 manifest 失败，回退 request:', dlMsg);
+        via = 'request';
+        text = await this._requestText(`${url}?_t=${Date.now()}`);
+      }
       if (!text) {
         this._loadCachedManifest();
         return false;
       }
 
-      this._manifest = JSON.parse(text) as CdnManifest;
+      const parsed = JSON.parse(text) as CdnManifest;
+      const count = Object.keys(parsed.files || {}).length;
+      this._manifest = parsed;
       this._manifestReady = true;
+      this._manifestAuthoritative = count > 0;
       this._ensureCacheDir(this._getCachePath('manifest.json'));
       try {
         fs.writeFileSync(this._getCachePath('manifest.json'), text, 'utf-8');
       } catch (_) { /* ignore */ }
-      return true;
+      console.log(`[CDN] manifest 就绪 via=${via}, files=${count}`);
+      if (count === 0) {
+        console.warn('[CDN] 云端 manifest 文件列表为空，下载不做「名单外跳过」');
+      }
+      return count > 0;
     } catch (e) {
       console.warn('[CDN] manifest 拉取失败，使用本地缓存:', e);
       this._loadCachedManifest();
@@ -127,32 +167,72 @@ class CdnAssetServiceClass {
     }
   }
 
+  /** downloadFile → 读临时文件文本（manifest / 兜底） */
+  private async _downloadText(url: string): Promise<string> {
+    const fs = this._getFs();
+    if (!fs) throw new Error('getFileSystemManager unavailable');
+    const res = await Platform.downloadFile(url);
+    if (!res.tempFilePath) throw new Error('downloadFile missing tempFilePath');
+    let text = '';
+    try {
+      text = String(fs.readFileSync(res.tempFilePath, 'utf-8') || '');
+    } catch (e) {
+      // 少数端 utf-8 读失败时再试默认编码
+      text = String(fs.readFileSync(res.tempFilePath) || '');
+      if (typeof text !== 'string') text = '';
+    }
+    if (!text) throw new Error('downloaded manifest empty');
+    return text;
+  }
+
+  /** 权威 manifest 才把「名单外」当不存在；空清单绝不拦下载 */
+  private _knownMissing(logicalPath: string): boolean {
+    if (!this._manifestAuthoritative) return false;
+    const files = this._manifest?.files;
+    return !!files && !files[logicalPath];
+  }
+
   async download(path: string): Promise<boolean> {
     const logicalPath = this._normalize(path);
     if (!this.isCdnPath(logicalPath)) return true;
     if (this._isCacheValid(logicalPath)) return true;
-    // manifest 已知无此文件 → 直接跳过，避免旧文件名 404 刷屏
-    if (this._manifestReady && this._manifest?.files && !this._manifest.files[logicalPath]) {
-      return false;
-    }
+    if (this._knownMissing(logicalPath)) return false;
 
     const inflight = this._downloadQueue.get(logicalPath);
     if (inflight) return inflight;
 
-    const task = this._downloadWithRetry(logicalPath).finally(() => {
+    const task = this._runDownloadSlot(() => this._downloadWithRetry(logicalPath)).finally(() => {
       this._downloadQueue.delete(logicalPath);
     });
     this._downloadQueue.set(logicalPath, task);
     return task;
   }
 
+  private _runDownloadSlot<T>(job: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const run = () => {
+        this._downloadActive += 1;
+        job().then(resolve, reject).finally(() => {
+          this._downloadActive -= 1;
+          const next = this._downloadWaiters.shift();
+          if (next) next();
+        });
+      };
+      if (this._downloadActive < DOWNLOAD_CONCURRENCY) run();
+      else this._downloadWaiters.push(run);
+    });
+  }
+
   /** 静默预下载；超时后仍 resolve，后台任务可继续 */
   async preloadPaths(paths: readonly string[], onProgress?: ProgressCallback): Promise<void> {
+    if (!this._manifestReady) {
+      await this.fetchManifest().catch(() => false);
+    }
     const cdnPaths = paths
       .map((p) => this._normalize(p))
       .filter((p) => {
         if (!this.isCdnPath(p) || this._isCacheValid(p) || this._packageFileExists(p)) return false;
-        if (this._manifestReady && this._manifest?.files && !this._manifest.files[p]) return false;
+        if (this._knownMissing(p)) return false;
         return true;
       });
 
@@ -279,6 +359,9 @@ class CdnAssetServiceClass {
       this._manifest = { files: {} };
     }
     this._manifestReady = true;
+    const count = Object.keys(this._manifest.files || {}).length;
+    // 本地残留 manifest 可作权威；完全空则放开下载，靠 URL 直拉
+    this._manifestAuthoritative = count > 0;
   }
 
   private _isCacheValid(logicalPath: string): boolean {

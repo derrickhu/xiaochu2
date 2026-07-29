@@ -13,14 +13,16 @@ import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import { gachaPreloadImages, gachaPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ELEMENT_NAME } from '@/balance/ui';
-import { PET_MAP } from '@/balance/pets';
+import { PETS, PET_MAP } from '@/balance/pets';
 import type { Element } from '@/balance/combat';
 import { getRarity } from '@/balance/rarity';
+import { CURRENT_BANNER, featuredPetRate } from '@/balance/gachaBanner';
 import { ECONOMY } from '@/balance/economy';
 import { analytics } from '@/analytics';
 import { PlayerData } from '@/game/PlayerData';
 import { type PullOutcome } from '@/game/gacha/Gacha';
 import { gachaPoolPets } from '@/game/playerGacha';
+import { adUsesLeft, adUsesLeftText, watchAd } from '@/game/adGate';
 import { reportQuest } from '@/game/dailyQuestTracker';
 import {
   BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES,
@@ -53,6 +55,8 @@ export class GachaScene implements Scene {
   /** 主界面抽卡按钮（结果浮层打开时需禁用，避免误触底层十连） */
   private _singlePullBtn: ActionButtonHandle | null = null;
   private _tenPullBtn: ActionButtonHandle | null = null;
+  private _freePullBtn: ActionButtonHandle | null = null;
+  private _freePulling = false;
   private readonly _enterSeq = new SceneEnterSeq();
 
   onEnter(): void {
@@ -209,18 +213,26 @@ export class GachaScene implements Scene {
     this._page.addChild(bar);
 
     // 底注文案必须落在进度框主体宽度内，避免「溢出花边」
-    const noteStr = '十连必出 SR 或以上 · UR 概率更高';
-    const floorNote = makeText(noteStr, {
-      size: FONT_SIZE.xs, fill: COLORS.textSub, bold: false, anchor: 0.5,
-    });
-    try { floorNote.updateText(true); } catch { /* noop */ }
+    const urRemain = Math.max(0, ECONOMY.gacha.pityUR - PlayerData.gachaSinceUr);
     // 进度框左右约 14.5% 花边，可读区约 71%
     const noteMaxW = Math.floor(barW * 0.68);
-    if (floorNote.width > noteMaxW) {
-      floorNote.scale.set(noteMaxW / floorNote.width);
+    const addNote = (str: string, dy: number, fill: number): void => {
+      const note = makeText(str, {
+        size: FONT_SIZE.xs, fill, bold: false, anchor: 0.5,
+      });
+      try { note.updateText(true); } catch { /* noop */ }
+      if (note.width > noteMaxW) note.scale.set(noteMaxW / note.width);
+      note.position.set(w / 2, y + dy);
+      this._page.addChild(note);
+    };
+    addNote(`十连必出 SR 或以上 · UR 天井还差 ${urRemain} 抽`, 80, COLORS.textSub);
+    const up = PET_MAP.get(CURRENT_BANNER.featuredUr);
+    if (up) {
+      const urCount = PETS.filter((p) => p.rarity === 4).length;
+      const rate = featuredPetRate(up.id, getRarity(4).gachaRate, urCount);
+      const pct = (rate * 100).toFixed(1);
+      addNote(`本期 UP：${up.name} ${pct}% · 另 2 只 SSR 同步提升`, 108, getRarity(4).color);
     }
-    floorNote.position.set(w / 2, y + 80);
-    this._page.addChild(floorNote);
   }
 
   /** @returns 匾高度，供下方灵玉/保底区排布 */
@@ -262,6 +274,46 @@ export class GachaScene implements Scene {
     });
     this._tenPullBtn.position.set(w / 2 + btnW / 2 + gap / 2, y);
     this._page.addChild(this._tenPullBtn);
+
+    this._buildFreePullChip(w, y - btnH / 2 - 52);
+  }
+
+  /**
+   * 广告免费单抽（IAA，日 1 次）：抽卡页是留存最强的回访钩子，
+   * 「今天还有一次免费」比任何签到提示都更能把人拉回来。
+   * 出货口径与付费单抽完全一致（同一 pullOne，保底计数照走），否则免费抽会变成体感更差的假福利。
+   */
+  private _buildFreePullChip(w: number, y: number): void {
+    if (adUsesLeft('free_gacha_pull') <= 0) return;
+    // 成功态底板金边吃掉上下内边距，双行文案需要更高胶囊才不贴底
+    this._freePullBtn = makeActionButton({
+      title: '看广告免费单抽',
+      subtitle: adUsesLeftText('free_gacha_pull'),
+      width: 360,
+      height: 84,
+      variant: 'success',
+      fontSize: 22,
+      onTap: () => { void this._doFreePull(); },
+    });
+    this._freePullBtn.position.set(w / 2, y);
+    this._page.addChild(this._freePullBtn);
+  }
+
+  private async _doFreePull(): Promise<void> {
+    if (this._freePulling) return;
+    this._freePulling = true;
+    try {
+      if (!await watchAd('free_gacha_pull')) return;
+      this._doPull(1, { free: true });
+      if (adUsesLeft('free_gacha_pull') <= 0) {
+        this._freePullBtn?.destroy();
+        this._freePullBtn = null;
+      } else {
+        this._freePullBtn?.setLabels('看广告免费单抽', adUsesLeftText('free_gacha_pull'));
+      }
+    } finally {
+      this._freePulling = false;
+    }
   }
 
   /** 十连券优先于灵玉：券是签到发的定向奖励，留在背包里没有别的出口 */
@@ -286,7 +338,7 @@ export class GachaScene implements Scene {
     return this._elementFilter ?? undefined;
   }
 
-  private _doPull(count: 1 | 10): void {
+  private _doPull(count: 1 | 10, opts?: { free?: boolean }): void {
     const el = this._activePoolElement();
     if (PlayerData.gachaPoolIds(el).length === 0) {
       Platform.showToast(el ? `${ELEMENT_NAME[el]}系暂无可召唤生物` : '召唤池为空');
@@ -295,7 +347,9 @@ export class GachaScene implements Scene {
     let list: PullOutcome[] | null;
     let byTicket = false;
     if (count === 1) {
-      const o = PlayerData.pullGachaSingle(Math.random, el);
+      const o = opts?.free
+        ? PlayerData.pullGachaFree(Math.random, el)
+        : PlayerData.pullGachaSingle(Math.random, el);
       list = o ? [o] : null;
     } else if (PlayerData.tickets > 0) {
       list = PlayerData.pullGachaTenByTicket(Math.random, el);
@@ -311,7 +365,9 @@ export class GachaScene implements Scene {
     reportQuest('gachaPull', count);
     analytics.trackFountainDraw({
       drawType: count === 10 ? 'ten' : 'single',
-      cost: byTicket ? 0 : count === 10 ? ECONOMY.gacha.tenCost : ECONOMY.gacha.singleCost,
+      cost: byTicket || opts?.free
+        ? 0
+        : count === 10 ? ECONOMY.gacha.tenCost : ECONOMY.gacha.singleCost,
       element: el,
       // SSR 及以上（rarity tier 3/4）计入高稀有出货
       highRarityCount: list.filter((o) => o.rarity >= 3).length,

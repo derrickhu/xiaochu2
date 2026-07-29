@@ -6,11 +6,16 @@
  */
 import { EventBus } from '@/core/EventBus';
 import { Platform } from '@/core/PlatformService';
+import { SceneManager } from '@/core/SceneManager';
 import { ChapterMapLayoutStore } from '@/game/chapterMapLayoutStore';
 import { PlayerData } from '@/game/PlayerData';
 import { MAX_PET_STAR } from '@/balance/growth';
 import { PET_AWAKEN_STAR } from '@/config/Assets';
 import { PET_MAP } from '@/balance/pets';
+import { AD_PLACEMENTS, AD_PLACEMENT_IDS } from '@/balance/monetization';
+import {
+  MAIN_CHAPTER_COUNT, STAGES, formatStageShortLabel,
+} from '@/balance/stages';
 
 const GM_STORAGE_KEY = 'xiaochu2_gm';
 
@@ -101,7 +106,7 @@ class GMManagerClass {
     }
   }
 
-  /** 战斗场景注册一键通关回调（onEnter 注册，onExit 注销） */
+  /** 战斗场景注册一键通关回调（onEnter 注册，onExit 清除） */
   registerInstantClearHandler(fn: () => string): void {
     this._instantClearHandler = fn;
   }
@@ -110,12 +115,46 @@ class GMManagerClass {
     this._instantClearHandler = null;
   }
 
+  /**
+   * 解锁到指定关（目标关可打，之前主线全部 3★）。
+   * 刷新首页并切到目标章。
+   */
+  unlockToStage(chapter: number, index: number): string {
+    if (!this.isEnabled) return 'GM 未激活';
+    const ch = Math.max(1, Math.min(MAIN_CHAPTER_COUNT, Math.floor(chapter)));
+    const idx = Math.max(1, Math.min(8, Math.floor(index)));
+    const stage = STAGES.find((s) => s.chapter === ch && s.index === idx);
+    if (!stage) return `无效关卡 ${ch}-${idx}`;
+
+    PlayerData.load();
+    const r = PlayerData.gmUnlockUpTo(ch, idx);
+    EventBus.emit('gm:focusChapter', ch);
+    EventBus.emit('home:refresh');
+    const label = formatStageShortLabel(stage);
+    const petBit = r.petsGranted > 0 ? `，Boss 宠 +${r.petsGranted}` : '';
+    Platform.showToast(`已解锁 ${label}`, 'success');
+    return `可打 ${label}（新标 ${r.cleared} 关${petBit}）`;
+  }
+
+  /** 解锁路径后直接进编队开战 */
+  enterStage(chapter: number, index: number): string {
+    const ch = Math.max(1, Math.min(MAIN_CHAPTER_COUNT, Math.floor(chapter)));
+    const idx = Math.max(1, Math.min(8, Math.floor(index)));
+    const msg = this.unlockToStage(ch, idx);
+    if (msg.startsWith('GM') || msg.startsWith('无效')) return msg;
+    const stage = STAGES.find((s) => s.chapter === ch && s.index === idx);
+    if (!stage) return msg;
+    EventBus.emit('gm:close');
+    SceneManager.switchTo('team', { stageId: stage.id });
+    return `${msg} → 已进编队`;
+  }
+
   private _registerCommands(): void {
     this._commands.push({
       id: 'toggle_map_edit',
       group: '主界面',
       name: '编辑关卡位置',
-      desc: '切换主界面关卡节点拖拽编辑（左右切换章节均可编辑）',
+      desc: '切换主线节点拖拽编辑',
       execute: () => {
         EventBus.emit('gm:mapEditToggle');
         EventBus.emit('gm:close');
@@ -126,7 +165,7 @@ class GMManagerClass {
       id: 'export_map_layout',
       group: '主界面',
       name: '导出关卡布局',
-      desc: '控制台一条日志输出 JSON + bundled TS',
+      desc: '控制台输出 JSON + bundled TS',
       execute: () => {
         const counts = ChapterMapLayoutStore.listSavedCounts();
         if (!counts.length) {
@@ -148,7 +187,7 @@ class GMManagerClass {
       id: 'instant_clear',
       group: '战斗',
       name: '一键通关',
-      desc: '立即击杀当前关卡敌人并结算胜利（需在战斗中使用）',
+      desc: '秒杀当前关敌人并结算（战斗中）',
       execute: () => {
         if (!this._instantClearHandler) return '请进入战斗后使用';
         return this._instantClearHandler();
@@ -160,7 +199,7 @@ class GMManagerClass {
       id: 'exp_plus_10k',
       group: '养成',
       name: '经验 +1万',
-      desc: '全局宠物经验池 +10000，详情页可连续升级',
+      desc: '全局经验池 +10000',
       execute: () => {
         PlayerData.load();
         PlayerData.addExp(10_000);
@@ -171,7 +210,7 @@ class GMManagerClass {
       id: 'exp_plus_100k',
       group: '养成',
       name: '经验 +10万',
-      desc: '全局宠物经验池 +100000',
+      desc: '全局经验池 +100000',
       execute: () => {
         PlayerData.load();
         PlayerData.addExp(100_000);
@@ -182,36 +221,72 @@ class GMManagerClass {
       id: 'shards_owned_plus_50',
       group: '养成',
       name: '已拥有碎片 +50',
-      desc: '每只已拥有灵宠 +50 碎片（够测小幅升星）',
+      desc: '每只已拥有灵宠 +50 碎片',
       execute: () => this._addShardsToOwned(50),
     });
     this._commands.push({
       id: 'shards_owned_plus_200',
       group: '养成',
       name: '已拥有碎片 +200',
-      desc: '每只已拥有灵宠 +200 碎片（覆盖 2★→3★ 等成本）',
+      desc: '每只已拥有灵宠 +200 碎片',
       execute: () => this._addShardsToOwned(200),
     });
     this._commands.push({
       id: 'shards_team_next_star',
       group: '养成',
       name: '编队补齐下一星碎片',
-      desc: '当前编队每只宠刚好补足升一星所需碎片（不自动升）',
+      desc: '编队刚好补足升一星碎片',
       execute: () => this._fillTeamNextStarShards(),
     });
     this._commands.push({
       id: 'team_star_awaken',
       group: '养成',
       name: `编队升到 ${PET_AWAKEN_STAR}★（觉醒脸）`,
-      desc: `编队自动补碎片并升到 ${PET_AWAKEN_STAR}★，用于测觉醒头像`,
+      desc: `补碎片并升到 ${PET_AWAKEN_STAR}★`,
       execute: () => this._starUpTeamTo(PET_AWAKEN_STAR),
     });
     this._commands.push({
       id: 'team_star_max',
       group: '养成',
       name: `编队升到 ${MAX_PET_STAR}★`,
-      desc: '编队补碎片并升到满星',
+      desc: '补碎片并升到满星',
       execute: () => this._starUpTeamTo(MAX_PET_STAR),
+    });
+    this._commands.push({
+      id: 'universal_plus_500',
+      group: '养成',
+      name: '通用碎片 +500',
+      desc: '测升星折算（UR 2:1）',
+      execute: () => {
+        PlayerData.load();
+        PlayerData.addUniversalShards(500);
+        return `通用碎片 = ${PlayerData.universalShards}`;
+      },
+    });
+    this._commands.push({
+      id: 'stamina_fill',
+      group: '养成',
+      name: '体力回满 +999',
+      desc: '连续验关免体力门禁',
+      execute: () => {
+        PlayerData.load();
+        PlayerData.addStamina(999);
+        return `体力 = ${PlayerData.stamina}/${PlayerData.staminaMax}`;
+      },
+    });
+    this._commands.push({
+      id: 'ads_reset',
+      group: '养成',
+      name: '广告次数重置',
+      desc: '清空今日 8 个广告位计数',
+      execute: () => {
+        PlayerData.load();
+        PlayerData.resetAdUsage();
+        const left = AD_PLACEMENT_IDS
+          .map((id) => `${AD_PLACEMENTS[id].name}${PlayerData.adUsesLeft(id)}`)
+          .join(' ');
+        return `已重置：${left}`;
+      },
     });
   }
 

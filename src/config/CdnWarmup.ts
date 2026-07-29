@@ -5,11 +5,12 @@ import { AUDIO } from '@/config/Audio';
 import { petAvatarLoadPaths } from '@/config/Assets';
 import { CdnAssetService } from '@/core/CdnAssetService';
 import { Platform } from '@/core/PlatformService';
+import { SfxManager } from '@/core/SfxManager';
 import { PlayerData } from '@/game/PlayerData';
 
 let started = false;
 
-/** 启动后 fire-and-forget：拉 manifest + 预热已拥有灵宠头像与主 BGM */
+/** 启动后 fire-and-forget：拉 manifest + 预热灵宠头像 / 全量音频 */
 export function warmupCdnAssets(): void {
   if (started || !Platform.isMinigame || !CdnAssetService.enabled) return;
   started = true;
@@ -26,8 +27,12 @@ export function warmupCdnAssets(): void {
       return [...petAvatarLoadPaths(id, star)];
     });
 
-    void CdnAssetService.preloadPaths([...petPaths, AUDIO.mainBgm, AUDIO.bossBgm]).catch((e) => {
-      console.warn('[CDN] 资源预热失败', e);
-    });
+    // 瘦包后 pkg-audio 已空：BGM + 战斗 SFX 都要从 CDN 拉，再交给 SfxManager 建池
+    const audioPaths = Object.values(AUDIO);
+    void CdnAssetService.preloadPaths([...petPaths, ...audioPaths])
+      .then(() => SfxManager.warmup())
+      .catch((e) => {
+        console.warn('[CDN] 资源预热失败', e);
+      });
   })();
 }

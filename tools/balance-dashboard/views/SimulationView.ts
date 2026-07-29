@@ -1,4 +1,5 @@
-import { STAGES } from '@/balance/stages';
+import { MAIN_CHAPTER_COUNT, STAGES } from '@/balance/stages';
+import { getChapterBudget } from '@/balance/growth';
 import { simulateBattle, simulateMatrix } from '@/formulas/simulation';
 import {
   buildTeam, COMBO_MODELS, formatResult, type StageReportRow,
@@ -25,9 +26,11 @@ export function renderSimulationView(container: HTMLElement): void {
         <label>等级 <input id="sim-lv" type="number" value="${INITIAL_PET_LEVEL}" min="1" max="99" style="width:60px"/></label>
         <label>星级 <input id="sim-star" type="number" value="${INITIAL_PET_STAR}" min="1" max="5" style="width:50px"/></label>
         <label>章节 <select id="sim-chapter">
-          ${[1, 2, 3, 4, 5, 6, 7, 8].map((c) => `<option value="${c}">第${c}章</option>`).join('')}
+          ${Array.from({ length: MAIN_CHAPTER_COUNT }, (_, i) => i + 1)
+            .map((c) => `<option value="${c}">第${c}章</option>`).join('')}
         </select></label>
         <button type="button" class="primary" id="sim-run-ch">跑本章矩阵</button>
+        <button type="button" id="sim-run-budget">按本章养成预算跑</button>
         <button type="button" id="sim-run-one">单关模拟</button>
         <select id="sim-stage">${STAGES.map((s) => `<option value="${s.id}">${s.id}</option>`).join('')}</select>
       </div>
@@ -37,6 +40,7 @@ export function renderSimulationView(container: HTMLElement): void {
   const output = container.querySelector('#sim-output') as HTMLElement;
   const runChapter = container.querySelector('#sim-run-ch') as HTMLButtonElement;
   const runOne = container.querySelector('#sim-run-one') as HTMLButtonElement;
+  const runBudget = container.querySelector('#sim-run-budget') as HTMLButtonElement;
 
   function getTeam() {
     const preset = (container.querySelector('#sim-team') as HTMLSelectElement).value;
@@ -66,6 +70,22 @@ export function renderSimulationView(container: HTMLElement): void {
       const rows = simulateMatrix(team, ids);
       renderMatrix(rows);
     });
+  });
+
+  /**
+   * 按本章「首通产出」等级跑：手填等级最容易跑出一个现实中不存在的队伍，
+   * 于是数值看起来全绿。养成预算与 simulation.test.ts 的门禁同源。
+   */
+  runBudget.addEventListener('click', () => {
+    output.textContent = '计算中…';
+    const ch = Number((container.querySelector('#sim-chapter') as HTMLSelectElement).value);
+    const preset = (container.querySelector('#sim-team') as HTMLSelectElement).value;
+    const budget = getChapterBudget(ch);
+    (container.querySelector('#sim-lv') as HTMLInputElement).value = String(budget.clearLevel);
+    (container.querySelector('#sim-star') as HTMLInputElement).value = String(budget.enterStar);
+    const team = buildTeam(TEAM_PRESETS[preset] ?? DEFAULT_TEAM, budget.clearLevel, budget.enterStar);
+    const ids = STAGES.filter((s) => s.chapter === ch).map((s) => s.id);
+    queueMicrotask(() => renderMatrix(simulateMatrix(team, ids)));
   });
 
   runOne.addEventListener('click', () => {

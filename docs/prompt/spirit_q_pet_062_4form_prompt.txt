@@ -1,0 +1,53 @@
+ART STYLE (MANDATORY — xiaochu2 Spirit v2 locked):
+Unified Q-version cute-chibi xianxia guofeng mobile game character art.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions, big glossy eyes, moe spirit-pet look.
+Airy cute, NOT dark fantasy / NOT photoreal.
+FORBIDDEN: photorealistic, dark horror, heavy oil paint, cyberpunk neon, purple-on-white AI defaults, 3D PBR, tiny ant-sized characters, huge empty margins.
+NO TEXT, no labels, no captions, no watermarks, no UI frames, no speech bubbles, no panel borders.
+
+LAYOUT (MANDATORY):
+Exactly ONE image, 2 columns × 2 rows equal panels (seamless 2x2 sprite sheet).
+Plain solid soft cream background in every cell (easy cutout).
+Base vs awakened MUST be instantly readable as different power stages — EXPLOSIVE contrast — while body footprint stays similar for UI frames.
+
+SIZE / FRAMING HARD RULES:
+- Awakened body FOOTPRINT / height stays in the same band as base (NOT a giant).
+
+AWAKENED UPGRADE (MANDATORY — dramatic):
+Base = cute everyday spirit-pet, softer colors, simpler gear.
+Awakened = CLEAR ascended look with HIGH CONTRAST:
+- Palette jump: brighter / more saturated accents vs muted base
+- Silhouette evolve: ornate armor/crest/wings/ribbons still inside same cell mass
+- Strong VFX: bold aura rings, particle storm, rune circles, elemental burst behind character
+- Face still cute moe; eyes glow; markings appear
+- Must feel "wow power-up" at a glance — NOT thin gold trim only
+
+CELL MAP:
+1) TOP-LEFT — Base pet bust avatar, slight 3/4, chest-up. Calm cute.
+2) BOTTOM-LEFT — Awakened bust (_s3): SAME footprint, EXPLOSIVE upgrade.
+3) TOP-RIGHT — Enemy tier1 full body standing chibi. Calm combat pose.
+4) BOTTOM-RIGHT — Enemy tier2 awakened full body: SAME height band, EXPLOSIVE burst / evolved armor.
+
+FRAMING (describe only, never draw):
+- Left column = bust portraits: head and chest fill most of the cell, comfortably centered, small even margin around.
+- Right column = full-body standing figures: the figure is tall in its cell, feet resting just above the bottom edge with a thin margin.
+- Awakened figure keeps the same height and body mass as the base figure.
+- ABSOLUTELY NO measurement guides, rulers, brackets, arrows, percentages, dimension marks, grid lines, panel borders or annotations of any kind.
+
+SUBJECT pet_062 「涟漪灵螺」(water element, support):
+cute chubby sea-snail spirit, pearl-white spiral shell with cyan ripple patterns, small soft body peeking out. Q-chibi spirit-pet proportions.
+
+POSE: lively cheering pose, one paw/hand raised, buoyant expression.
+
+BASE (TOP-LEFT bust + TOP-RIGHT full body): muted everyday palette, simple gear, calm friendly look.
+
+AWAKENED (BOTTOM-LEFT bust + BOTTOM-RIGHT full body) — DRAMATIC upgrade, must read at a glance:
+- Palette / VFX jump: bright cyan-azure accents, ice crystals and pearl light, swirling water ribbons, frost rune rings
+- Gear evolves into ornate ascended armor / crest / ribbons, still inside the same cell mass
+- Eyes glow, elemental markings appear on body
+- Same body height band as base cells — NOT a giant
+- Face stays cute moe, never scary
+
+CELL MAP: 1) TOP-LEFT base bust 2) BOTTOM-LEFT awakened bust explosive 3) TOP-RIGHT base full body 4) BOTTOM-RIGHT awakened full body explosive
+
+NO TEXT, no labels, no captions, no writing anywhere in the image.

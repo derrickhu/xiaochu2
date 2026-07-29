@@ -31,6 +31,7 @@ export async function preloadPetAvatarTextures(
 
 /**
  * 异步挂头像：有缓存立刻画；否则占位并在 CDN/加载完成后设纹理。
+ * 同时监听 texture:loaded，避免「先失败后后台下好」时 UI 不刷新。
  * 返回取消函数。
  */
 export function bindPetAvatarSprite(
@@ -40,18 +41,30 @@ export function bindPetAvatarSprite(
   onApplied?: (tex: PIXI.Texture) => void,
 ): () => void {
   let cancelled = false;
+  const paths = new Set(petAvatarLoadPaths(petId, star));
+  const canonical = petAvatarPath(petId, star);
   const apply = (tex: PIXI.Texture) => {
     if (cancelled || sprite.destroyed) return;
     sprite.texture = tex;
     onApplied?.(tex);
   };
+  const onLoaded = (path: string) => {
+    if (cancelled || (!paths.has(path) && path !== canonical)) return;
+    const tex = TextureCache.get(canonical) ?? TextureCache.getFirst([...paths]);
+    if (tex) apply(tex);
+  };
+  const unsub = TextureCache.onTextureLoaded(onLoaded);
+
   const existing = getPetAvatarTexture(petId, star);
   if (existing) {
     apply(existing);
-    return () => { cancelled = true; };
+  } else {
+    void loadPetAvatarTexture(petId, star).then((tex) => {
+      if (tex) apply(tex);
+    });
   }
-  void loadPetAvatarTexture(petId, star).then((tex) => {
-    if (tex) apply(tex);
-  });
-  return () => { cancelled = true; };
+  return () => {
+    cancelled = true;
+    unsub();
+  };
 }

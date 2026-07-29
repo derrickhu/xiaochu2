@@ -8,9 +8,13 @@ import {
   makeDelayAttack,
   makeDot,
   makeElementBuff,
+  makeEnemyAtkDebuff,
   makeEnemyCharge,
+  makeEnemyCounter,
+  makeEnemyElementAbsorb,
   makeEnemyEnrage,
   makeEnemyGuard,
+  makeEnemyResolve,
   makeEnemyHeal,
   makeEnemyHealBlock,
   makeEnemyPoison,
@@ -29,10 +33,12 @@ import {
   makeStun,
   makeTeamNuke,
 } from './blueprints';
+import { makeComposite } from './composite';
+import { MATRIX_SKILLS } from './petMatrix';
+import { SIGNATURE_SKILLS } from './signatures';
 
 export const SKILLS: readonly SkillDef[] = [
   // ── 宠物技能（蓝图生成，去重） ──
-  makeNuke({ id: PET_SKILL_IDS.metalSlash, name: '银光斩', element: 'metal', multiplier: 6, cd: 4, flavor: '挥出银光利爪' }),
   makeConvert({ id: PET_SKILL_IDS.transmuteMetal, name: '点金术', to: 'metal', count: 6, cd: 7 }),
   makeHeal({ id: PET_SKILL_IDS.woodHeal, name: '青藤抚愈', healPct: 0.3, cd: 5, flavor: '青藤缠绕治愈' }),
   makeTeamNuke({ id: PET_SKILL_IDS.woodVolley, name: '万藤齐发', multiplier: 1.4, cd: 7, flavor: '号令全队齐射' }),
@@ -53,16 +59,9 @@ export const SKILLS: readonly SkillDef[] = [
   makeMultiHit({ id: PET_SKILL_IDS.woodMultiHit, name: '青藤连弩', element: 'wood', multiplier: 2.2, hits: 3, cd: 5, flavor: '藤箭连发' }),
   makeHeal({ id: PET_SKILL_IDS.woodBigHeal, name: '灵木回春', healPct: 0.4, cd: 6, flavor: '灵木之力涌动' }),
   makeConvert({ id: PET_SKILL_IDS.earthConvertRow, name: '裂地成行', to: 'earth', count: 0, shape: 'row', cd: 6, flavor: '震开大地' }),
-  makeHeal({ id: PET_SKILL_IDS.earthHeal, name: '厚土庇佑', healPct: 0.35, cd: 6, flavor: '厚土滋养', extraConvert: { to: 'heart', count: 4 } }),
 
   // ── 目标十三·技能唯一化：12 个新独占技（消灭全部两两复用 + 钥匙宠改造） ──
-  // UR 机制型招牌技
-  makeGuaranteedCrit({ id: PET_SKILL_IDS.thunderCrit, name: '雷纹共振', turns: 2, cd: 7, flavor: '蝉翼雷纹共鸣' }),
   makePurify({ id: PET_SKILL_IDS.shadowPurify, name: '玄影净世', cd: 6, healPct: 0.15, flavor: '玄影展翼拂尘' }),
-  makeHaste({ id: PET_SKILL_IDS.chaosHaste, name: '混沌轮回', amount: 1, healPct: 0.25, cd: 7, flavor: '逆转混沌之流' }),
-  makeElementBuff({ id: PET_SKILL_IDS.voidResonance, name: '虚空共鸣', element: 'water', mult: 1.5, turns: 2, cd: 6, flavor: '魔眼凝视深渊' }),
-  makeGravity({ id: PET_SKILL_IDS.skyfallGravity, name: '天外陨灭', pct: 0.25, cd: 8, flavor: '引天外陨星', damage: { element: 'fire', multiplier: 4 } }),
-  makeShield({ id: PET_SKILL_IDS.riftShield, name: '裂隙晶壁', shieldPct: 0.3, cd: 7, flavor: '晶甲展开裂隙屏障', delayAttack: 1 }),
   // SSR 复合技（钥匙宠：净世斩解毒 / 加时对抗时间压缩 / 玄龟护盾）
   makeCleanseNuke({ id: PET_SKILL_IDS.goldenCleanse, name: '金羽净世', element: 'metal', multiplier: 4.5, cd: 6, flavor: '金羽拂过邪祟' }),
   makeExtraTime({ id: PET_SKILL_IDS.earthTime, name: '厚土怀抱', seconds: 3, turns: 3, cd: 6, healPct: 0.2, flavor: '大地包容万物' }),
@@ -71,6 +70,73 @@ export const SKILLS: readonly SkillDef[] = [
   // SR 强化/双效果技
   makeConvert({ id: PET_SKILL_IDS.starCross, name: '星辉十字阵', to: 'wood', count: 0, shape: 'cross', cd: 7, flavor: '星辉落成十字' }),
   makeShield({ id: PET_SKILL_IDS.frostGuard, name: '霜潮护幕', shieldPct: 0.22, cd: 6, flavor: '霜潮环绕成幕', extraConvert: { to: 'heart', count: 3 } }),
+
+  // ── v0.5 招牌技升级：核心 30 只里效果偏单薄的 SSR / UR 补足层数 ──
+  // 分层目标是「SSR 双效 / UR 三效」。原先这 7 只只有 1~2 段，与量产名录的
+  // SSR/UR 不对等（见 signatures.ts）。这里保留各自的主效数值，只补功能段，
+  // 避免直接抬高直伤破坏 powerBudget 的 TTK 预算。
+  // 例外：pet_002 / 006 / 008 / 022 四只维持单段，作为「纯粹输出型 UR」——
+  // 它们的类目（multiNuke / dot / nuke）受跨稀有倒挂审计约束，加段会牵动整条阶梯。
+  makeComposite({
+    id: PET_SKILL_IDS.voidResonance, name: '虚空共鸣', category: 'buff', target: 'team', cd: 6,
+    tags: ['属性增伤', '转珠'], flavor: '魔眼凝视深渊',
+    segments: [
+      { kind: 'elementBuff', element: 'water', mult: 1.5, turns: 2 },
+      { kind: 'convert', to: 'water', count: 4 },
+    ],
+  }),
+  makeComposite({
+    id: PET_SKILL_IDS.fireBoost, name: '战意鼓舞', category: 'buff', target: 'team', cd: 6,
+    tags: ['增伤', '转珠'], flavor: '战凰长鸣鼓舞全队',
+    segments: [
+      { kind: 'damageBuff', mult: 1.5, turns: 2 },
+      { kind: 'convert', to: 'fire', count: 4 },
+    ],
+  }),
+  makeComposite({
+    id: PET_SKILL_IDS.earthHeartConvert, name: '大地恩泽', category: 'convert', target: 'board', cd: 6,
+    tags: ['转珠', '治疗'], flavor: '大地赐福',
+    segments: [
+      { kind: 'convert', to: 'heart', count: 5 },
+      { kind: 'heal', pct: 0.2 },
+    ],
+  }),
+  makeComposite({
+    id: PET_SKILL_IDS.thunderCrit, name: '雷纹共振', category: 'buff', target: 'team', cd: 7,
+    tags: ['暴击', '增伤', '转珠'], flavor: '蝉翼雷纹共鸣',
+    segments: [
+      { kind: 'guaranteedCrit', turns: 2 },
+      { kind: 'damageBuff', mult: 1.3, turns: 2 },
+      { kind: 'convert', to: 'metal', count: 4 },
+    ],
+  }),
+  makeComposite({
+    id: PET_SKILL_IDS.chaosHaste, name: '混沌轮回', category: 'haste', target: 'team', cd: 7,
+    tags: ['缩CD', '治疗', '转珠'], flavor: '逆转混沌之流',
+    segments: [
+      { kind: 'haste', amount: 1 },
+      { kind: 'heal', pct: 0.25 },
+      { kind: 'convert', to: 'heart', count: 4 },
+    ],
+  }),
+  makeComposite({
+    id: PET_SKILL_IDS.skyfallGravity, name: '天外陨灭', category: 'gravity', target: 'enemy', cd: 8,
+    tags: ['重力', '伤害', '破防'], flavor: '引天外陨星',
+    segments: [
+      { kind: 'gravity', pct: 0.25 },
+      { kind: 'damage', element: 'fire', multiplier: 4 },
+      { kind: 'defenseBreak', pct: 0.4, turns: 2 },
+    ],
+  }),
+  makeComposite({
+    id: PET_SKILL_IDS.riftShield, name: '裂隙晶壁', category: 'shield', target: 'team', cd: 7,
+    tags: ['护盾', '威吓', '治疗'], flavor: '晶甲展开裂隙屏障',
+    segments: [
+      { kind: 'shield', pct: 0.3 },
+      { kind: 'delayAttack', turns: 1 },
+      { kind: 'heal', pct: 0.18 },
+    ],
+  }),
 
   // ── 敌人技能（蓝图生成） ──
   makeEnemyGuard({ id: ENEMY_SKILL_IDS.golemGuard, name: '岩盾', reduction: 0.5, turns: 2, cd: 3 }),
@@ -87,6 +153,31 @@ export const SKILLS: readonly SkillDef[] = [
   makeEnemyHealBlock({ id: ENEMY_SKILL_IDS.healBlock, name: '禁疗诅咒', mult: 0.5, turns: 2, cd: 4 }),
   makeEnemyEnrage({ id: ENEMY_SKILL_IDS.enrage, name: '血怒', atkMult: 1.5, threshold: 0.35, cd: 2 }),
   makeEnemySkillSeal({ id: ENEMY_SKILL_IDS.skillSeal, name: '封灵印', turns: 2, cd: 5 }),
+
+  // ── 后期章节（9~16）梯度变体 ──
+  // 9 只杂怪要撑 16 章，若只靠 enemyStats 放大数值，第 12 章的碎石傀儡和第 3 章手感一模一样。
+  // 这里同机制换档：压力来自「同一招更狠」，玩家已学会的应对方式仍然有效，只是余量更小。
+  makeEnemySealOrbs({ id: ENEMY_SKILL_IDS.sealOrbsHeavy, name: '封灵大咒', count: 6, cd: 4 }),
+  makeEnemyPoison({ id: ENEMY_SKILL_IDS.poisonTeamHeavy, name: '腐骨毒渊', multiplier: 0.8, turns: 3, cd: 4 }),
+  makeEnemyTimeSqueeze({ id: ENEMY_SKILL_IDS.timeSqueezeHeavy, name: '时之重枷', seconds: 6, turns: 2, cd: 4 }),
+  makeEnemyHealBlock({ id: ENEMY_SKILL_IDS.healBlockHeavy, name: '绝疗诅咒', mult: 0.25, turns: 2, cd: 4 }),
+  makeEnemySkillSeal({ id: ENEMY_SKILL_IDS.skillSealHeavy, name: '万灵封印', turns: 3, cd: 5 }),
+  makeEnemyGuard({ id: ENEMY_SKILL_IDS.golemGuardHeavy, name: '磐岩壁垒', reduction: 0.65, turns: 3, cd: 4 }),
+  makeEnemyHeal({ id: ENEMY_SKILL_IDS.serpentHealHeavy, name: '玄水复苏', healPct: 0.25, cd: 4 }),
+  makeEnemyCharge({ id: ENEMY_SKILL_IDS.chargeHeavy, name: '灭世一击', multiplier: 2.8, cd: 4 }),
+  makeEnemyEnrage({ id: ENEMY_SKILL_IDS.enrageHeavy, name: '狂血', atkMult: 1.8, threshold: 0.3, cd: 2 }),
+
+  // ── 新机制：削攻（逼玩家带净化）与凝意（破控制链）──
+  makeEnemyAtkDebuff({ id: ENEMY_SKILL_IDS.atkDebuff, name: '摧锋', mult: 0.6, turns: 2, cd: 4 }),
+  makeEnemyAtkDebuff({ id: ENEMY_SKILL_IDS.atkDebuffHeavy, name: '断锋', mult: 0.45, turns: 2, cd: 5 }),
+  makeEnemyResolve({ id: ENEMY_SKILL_IDS.resolve, name: '凝意', turns: 3, cd: 5 }),
+  makeEnemyElementAbsorb({ id: ENEMY_SKILL_IDS.elementAbsorb, name: '五行吸纳', mult: 0.2, turns: 2, cd: 5 }),
+  makeEnemyCounter({ id: ENEMY_SKILL_IDS.counterStrike, name: '荆棘反噬', multiplier: 0.22, turns: 3, cd: 5 }),
+
+  // ── 量产名录 pet_031~pet_100 的技能（见 creatureRoster.ts）──
+  // R/SR 由「蓝图 × 属性」矩阵生成，SSR/UR 为手写复合招牌技
+  ...MATRIX_SKILLS,
+  ...SIGNATURE_SKILLS,
 ];
 
 export const SKILL_MAP: ReadonlyMap<string, SkillDef> = new Map(SKILLS.map((s) => [s.id, s]));

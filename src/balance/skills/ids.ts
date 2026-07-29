@@ -1,5 +1,4 @@
 export const PET_SKILL_IDS = {
-  metalSlash: 'pet_metal_slash',
   transmuteMetal: 'pet_transmute_metal',
   woodHeal: 'pet_wood_heal',
   woodVolley: 'pet_wood_volley',
@@ -19,7 +18,6 @@ export const PET_SKILL_IDS = {
   woodMultiHit: 'pet_wood_multi_hit',
   woodBigHeal: 'pet_wood_big_heal',
   earthConvertRow: 'pet_earth_convert_row',
-  earthHeal: 'pet_earth_heal',
   // ── 目标十三：技能唯一化（消灭复用，30 宠 30 独占技） ──
   thunderCrit: 'pet_thunder_crit',
   shadowPurify: 'pet_shadow_purify',
@@ -49,4 +47,20 @@ export const ENEMY_SKILL_IDS = {
   healBlock: 'enemy_heal_block',
   enrage: 'enemy_enrage',
   skillSeal: 'enemy_skill_seal',
+  // ── 后期章节（9~16）梯度变体：同机制加压，让复用的杂怪在高章节换一副面孔 ──
+  sealOrbsHeavy: 'enemy_seal_orbs_heavy',
+  poisonTeamHeavy: 'enemy_poison_team_heavy',
+  timeSqueezeHeavy: 'enemy_time_squeeze_heavy',
+  healBlockHeavy: 'enemy_heal_block_heavy',
+  skillSealHeavy: 'enemy_skill_seal_heavy',
+  golemGuardHeavy: 'enemy_golem_guard_heavy',
+  serpentHealHeavy: 'enemy_serpent_heal_heavy',
+  chargeHeavy: 'enemy_charge_heavy',
+  enrageHeavy: 'enemy_enrage_heavy',
+  // ── 新机制：削攻与免控 ──
+  atkDebuff: 'enemy_atk_debuff',
+  atkDebuffHeavy: 'enemy_atk_debuff_heavy',
+  resolve: 'enemy_resolve',
+  elementAbsorb: 'enemy_element_absorb',
+  counterStrike: 'enemy_counter_strike',
 } as const;

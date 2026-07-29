@@ -454,7 +454,8 @@ export class ShopScene implements Scene {
     this.container.addChild(content);
 
     const animTargets: PIXI.Container[] = [];
-    let y = 0;
+    let y = this._universalSection(content, animTargets, 0);
+    y += 8;
     if (recommended.length > 0) {
       y = this._section(
         content, animTargets,
@@ -549,9 +550,87 @@ export class ShopScene implements Scene {
     }
   }
 
-  private _section(
+  /**
+   * 通用碎片兑换：灵宠币的主要后期出口。
+   *
+   * 定向包只能推「已拥有的那只」，而深池下真正卡人的是 UR 升满星要 13 只重复。
+   * 通用碎片单价高于定向包（同样 10 点碎片贵 50%），换来的是可指向任意宠。
+   */
+  private _universalSection(
+    content: PIXI.Container, animTargets: PIXI.Container[], contentY: number,
+  ): number {
+    const w = Game.logicWidth;
+    const { packSize, cost } = {
+      packSize: ECONOMY.shop.universalPackSize,
+      cost: ECONOMY.shop.universalPackCost,
+    };
+    const y = this._sectionHeading(content, animTargets, '通用碎片 · 可换任意灵宠', contentY);
+
+    const rowW = w - SHOP_UI.padX * 2;
+    const row = new PIXI.Container();
+    row.position.set(w / 2, y + SHOP_UI.rowH / 2);
+    addNineSliceBg(row, UI_SHOP_IMAGES.rowPanel, rowW, SHOP_UI.rowH, SHOP_UI.rowSlice, () => {
+      const g = new PIXI.Graphics();
+      g.beginFill(0xfff6e2, 0.96);
+      g.lineStyle(2, COLORS.panelBorder, 1);
+      g.drawRoundedRect(-rowW / 2, -SHOP_UI.rowH / 2, rowW, SHOP_UI.rowH, 16);
+      g.endFill();
+      return g;
+    });
+
+    const { w: buyW } = shopBuyButtonSize(packSize, cost);
+    const buyCenterX = rowW / 2 - SHOP_UI.buyPad - buyW / 2 + SHOP_UI.coinBarOffsetX;
+
+    const icon = makeIconLabel({
+      iconPath: UI_IMAGES.iconShard,
+      iconSize: 56,
+      text: '',
+      size: SHOP_UI.nameSize,
+    });
+    icon.position.set(-rowW / 2 + 46, 0);
+    row.addChild(icon);
+
+    const name = makeText('通用碎片', {
+      size: SHOP_UI.nameSize, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+    });
+    name.position.set(-rowW / 2 + 92, -14);
+    row.addChild(name);
+
+    const sub = makeText(`持有 ${PlayerData.universalShards} · 升星可替代任意灵宠碎片`, {
+      size: SHOP_UI.subSize, fill: COLORS.textSub, anchor: [0, 0.5],
+    });
+    sub.position.set(-rowW / 2 + 92, 16);
+    row.addChild(sub);
+
+    const buy = makeShopBuyButton(
+      packSize, cost, PlayerData.coins >= cost,
+      () => {
+        if (!PlayerData.spendCoins(cost)) {
+          Platform.showToast('灵宠币不足');
+          return;
+        }
+        PlayerData.addUniversalShards(packSize);
+        Platform.vibrateShort('light');
+        Platform.showToast(`通用碎片 +${packSize}`, 'success');
+        sub.text = `持有 ${PlayerData.universalShards} · 升星可替代任意灵宠碎片`;
+        this._refreshCoins();
+        buy.setEnabled(PlayerData.coins >= cost);
+        for (const r of this._rows.values()) r.buy.setEnabled(PlayerData.coins >= r.cost);
+      },
+      () => this._scroll.moved,
+    );
+    buy.position.set(buyCenterX, 0);
+    row.addChild(buy);
+
+    content.addChild(row);
+    animTargets.push(row);
+    return y + SHOP_UI.rowH + SHOP_UI.rowGap;
+  }
+
+  /** 分段标题条（宠物列表与通用碎片行共用） */
+  private _sectionHeading(
     content: PIXI.Container, animTargets: PIXI.Container[],
-    heading: string, pets: PetDef[], absStartY: number, contentY: number,
+    heading: string, contentY: number,
   ): number {
     const w = Game.logicWidth;
     const barW = w - SHOP_UI.padX * 2;
@@ -565,15 +644,20 @@ export class ShopScene implements Scene {
       bar.position.set(w / 2, headY);
       content.addChild(bar);
     }
-
     const head = makeText(heading, {
       size: FONT_SIZE.xxs, fill: COLORS.accentDeep, bold: true, anchor: 0.5,
     });
     head.position.set(w / 2, headY);
     content.addChild(head);
     animTargets.push(head);
+    return headY + 28;
+  }
 
-    let y = headY + 28;
+  private _section(
+    content: PIXI.Container, animTargets: PIXI.Container[],
+    heading: string, pets: PetDef[], absStartY: number, contentY: number,
+  ): number {
+    let y = this._sectionHeading(content, animTargets, heading, contentY);
     for (const pet of pets) {
       const row = this._buildRow(pet, y, absStartY);
       content.addChild(row);

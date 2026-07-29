@@ -61,21 +61,29 @@ export interface RarityDef {
   levelCapBonus?: number;
 }
 
+/**
+ * v0.5 概率重排（配合 30 → 100 宠扩容）：R55 / SR30 / SSR11 / UR4。
+ *
+ * 为什么高档反而放宽：卡池深度从 30 涨到 100，同档概率被摊薄到「抽到也不是想要的那只」。
+ * 旧值 R60/SR26.5/SSR10/UR3.5 是按 30 宠配的，UR 3.5% 摊到 10 只 = 单只 0.35%；
+ * 现在靠 UP 池（gachaBanner.ts）把当期 UR 提到该档一半概率来解决「抽不到指定目标」，
+ * 总出货率同步小幅上调，避免深池带来的体感倒退。
+ */
 export const RARITY_PROFILES: Readonly<Record<Rarity, RarityDef>> = {
   1: {
-    tier: 1, code: 'R', name: '普通', color: 0x6fd86a, gachaWeight: 60, gachaRate: 0.60, statMult: 1.0,
+    tier: 1, code: 'R', name: '普通', color: 0x6fd86a, gachaWeight: 55, gachaRate: 0.55, statMult: 1.0,
     ui: { badgeBg: 0x234a22, badgeText: 0x9ef098, badgeBorder: 0x6fd86a },
   },
   2: {
-    tier: 2, code: 'SR', name: '精良', color: 0x4aa3ff, gachaWeight: 25, gachaRate: 0.265, statMult: 1.2,
+    tier: 2, code: 'SR', name: '精良', color: 0x4aa3ff, gachaWeight: 30, gachaRate: 0.30, statMult: 1.2,
     ui: { badgeBg: 0x1a3560, badgeText: 0x8ec5ff, badgeBorder: 0x4aa3ff },
   },
   3: {
-    tier: 3, code: 'SSR', name: '稀有', color: 0xb06bff, gachaWeight: 10, gachaRate: 0.10, statMult: 1.45,
+    tier: 3, code: 'SSR', name: '稀有', color: 0xb06bff, gachaWeight: 11, gachaRate: 0.11, statMult: 1.45,
     ui: { badgeBg: 0x3c1860, badgeText: 0xd4a8ff, badgeBorder: 0xb06bff },
   },
   4: {
-    tier: 4, code: 'UR', name: '史诗', color: 0xffb43d, gachaWeight: 4, gachaRate: 0.035, statMult: 1.75,
+    tier: 4, code: 'UR', name: '史诗', color: 0xffb43d, gachaWeight: 4, gachaRate: 0.04, statMult: 1.75,
     ui: { badgeBg: 0x5a4010, badgeText: 0xffe68c, badgeBorder: 0xffb43d },
   },
 };

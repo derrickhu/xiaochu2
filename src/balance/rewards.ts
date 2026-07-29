@@ -14,6 +14,10 @@ export interface RewardBundle {
   shards?: number;
   /** 碎片限定属性（秘境按当日属性出货） */
   shardElement?: 'metal' | 'wood' | 'water' | 'fire' | 'earth';
+  /** 通用碎片（可折算成任意宠的本体碎片） */
+  universal?: number;
+  /** 体力 */
+  stamina?: number;
 }
 
 /** 一句话奖励描述（面板列表与 Toast 共用） */
@@ -30,5 +34,7 @@ export function formatReward(r: RewardBundle): string {
       : null;
     parts.push(el ? `${el}系碎片 ×${r.shards}` : `随机灵宠碎片 ×${r.shards}`);
   }
+  if (r.universal) parts.push(`通用碎片 ×${r.universal}`);
+  if (r.stamina) parts.push(`体力 ×${r.stamina}`);
   return parts.join('  ');
 }

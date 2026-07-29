@@ -14,11 +14,14 @@ import { CHECKIN_DAYS, checkinDay } from '@/balance/checkin';
 import { formatReward } from '@/balance/rewards';
 import { PlayerData } from '@/game/PlayerData';
 import { grantReward } from '@/game/rewardGrant';
+import { adUsesLeft, watchAd } from '@/game/adGate';
+import { AD_REWARD_MULT } from '@/balance/monetization';
 import { analytics } from '@/analytics';
 import { UI_IMAGES } from '@/config/Assets';
+import { ensureAssets } from '@/config/Subpackages';
 import {
   COLORS, FONT_SIZE, FONT_FAMILY_DISPLAY,
-  makeActionButton, makePanel, makeText, makeModalTitlePlaque, pulse,
+  makeActionButton, makeCloseButton, makePanel, makeText, makeModalTitlePlaque, pulse,
 } from '@/ui';
 import {
   playClaimBurst, playRewardFly,
@@ -59,13 +62,23 @@ export class CheckinPanel extends PIXI.Container {
     this._refresh();
     this.alpha = 0;
     TweenManager.to({ target: this, props: { alpha: 1 }, duration: 0.2, ease: Ease.easeOutQuad });
-    // 预热奖励图标 / 卡面底板，避免首次打开闪空图
-    void TextureCache.preload([
+    // 卡面/匾走 CDN：先 ensureAssets（含下载）再刷一次，避免真机首开空图
+    void this._hydrateAssets();
+  }
+
+  private async _hydrateAssets(): Promise<void> {
+    const paths = [
       UI_IMAGES.iconLingyu, UI_IMAGES.iconCoin, UI_IMAGES.iconTicket, UI_IMAGES.iconShard,
+      UI_IMAGES.iconStamina,
       UI_IMAGES.railCheckin, UI_IMAGES.modalTitlePlaque,
       UI_IMAGES.checkinCardNormal, UI_IMAGES.checkinCardToday, UI_IMAGES.checkinBannerDay7,
       UI_IMAGES.btnPlateSuccess, UI_IMAGES.btnPlateCream,
-    ]);
+    ];
+    await ensureAssets(paths).catch((e) => {
+      console.warn('[Checkin] 资源预热失败', e);
+    });
+    if (!this._isOpen) return;
+    this._refresh();
   }
 
   close(): void {
@@ -109,13 +122,8 @@ export class CheckinPanel extends PIXI.Container {
     plaque.position.set(0, -PANEL_H / 2 + 18);
     this._content.addChild(plaque);
 
-    const closeBtn = makeText('✕', {
-      size: FONT_SIZE.lg, fill: COLORS.textSub, anchor: 0.5,
-    });
+    const closeBtn = makeCloseButton({ onTap: () => this.close() });
     closeBtn.position.set(PANEL_W / 2 - 36, -PANEL_H / 2 + 36);
-    closeBtn.eventMode = 'static';
-    closeBtn.cursor = 'pointer';
-    closeBtn.on('pointertap', () => this.close());
     this._content.addChild(closeBtn);
 
     this._body = new PIXI.Container();
@@ -275,17 +283,45 @@ export class CheckinPanel extends PIXI.Container {
   }
 
   private _buildCta(todayIndex: number, canSign: boolean): void {
+    // 已签到后 CTA 位空着可惜：换成翻倍广告位（日 1 次），签到前不出现避免抢主 CTA
+    const doubleReady = !canSign && adUsesLeft('checkin_double') > 0;
     const btn = makeActionButton({
-      title: canSign ? `签到 · 第 ${todayIndex} 天` : '今日已签到',
+      title: canSign
+        ? `签到 · 第 ${todayIndex} 天`
+        : (doubleReady ? `看广告 · 奖励 ×${AD_REWARD_MULT}` : '今日已签到'),
+      subtitle: doubleReady ? formatReward(checkinDay(todayIndex).reward) : undefined,
       width: 380,
       height: 78,
-      variant: canSign ? 'success' : 'cream',
-      enabled: canSign && !this._signing,
-      fontSize: FONT_SIZE.lg,
-      onTap: () => void this._sign(),
+      variant: canSign || doubleReady ? 'success' : 'cream',
+      enabled: (canSign || doubleReady) && !this._signing,
+      // 双行（看广告+奖励）用 md，避免大字顶出绿钮金边
+      fontSize: doubleReady ? FONT_SIZE.md : FONT_SIZE.lg,
+      onTap: () => void (canSign ? this._sign() : this._doubleReward(todayIndex)),
     });
     btn.position.set(0, PANEL_H / 2 - 56);
     this._body.addChild(btn);
+  }
+
+  /** 签到奖励翻倍（IAA）：补发一份当日奖励 */
+  private async _doubleReward(todayIndex: number): Promise<void> {
+    if (this._signing) return;
+    this._signing = true;
+    try {
+      if (!await watchAd('checkin_double', { day: todayIndex })) return;
+      const reward = checkinDay(todayIndex).reward;
+      grantReward(reward);
+      const from = this._todayCellGlobal ?? {
+        x: Game.logicWidth / 2,
+        y: Game.logicHeight / 2,
+      };
+      playClaimBurst(this._fxLayer, from.x, from.y);
+      playRewardFly(this._fxLayer, reward, from);
+      Platform.showToast(`奖励翻倍 · ${formatReward(reward)}`, 'success');
+      if (this._isOpen) this._refresh();
+      EventBus.emit('home:refresh');
+    } finally {
+      this._signing = false;
+    }
   }
 
   private _makeDayCell(

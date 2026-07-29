@@ -41,18 +41,48 @@ describe('技能蓝图与分类', () => {
     }
   });
 
-  it('同类直伤共用蓝图：金/水突刺结构一致（仅文案/数值差异）', () => {
-    const metal = getSkill(PET_SKILL_IDS.metalSlash);
-    const water = getSkill(PET_SKILL_IDS.waterPierce);
-    expect(metal.category).toBe('nuke');
-    expect(water.category).toBe('nuke');
-    expect(damageMultiplier(metal.effects)).toBe(damageMultiplier(water.effects));
-    expect(metal.tags).toEqual(water.tags);
+  it('同蓝图跨属性结构一致：同档矩阵直伤只差属性与文案', () => {
+    // 量产矩阵按 blueprint × element 生成，同一稀有度档内数值必须完全一致，
+    // 否则「换属性」会变成「换强度」，配色解法就失去意义。
+    const rNukes = SKILLS.filter((s) => /^pet_[a-z]+_nuke_r$/.test(s.id));
+    expect(rNukes.length, 'R 档矩阵直伤应覆盖多个属性').toBeGreaterThanOrEqual(2);
+    const [first, ...rest] = rNukes;
+    for (const s of rest) {
+      expect(s.category, s.id).toBe(first.category);
+      expect(damageMultiplier(s.effects), s.id).toBe(damageMultiplier(first.effects));
+      expect(s.tags, s.id).toEqual(first.tags);
+      expect(s.cd, s.id).toBe(first.cd);
+    }
   });
 
   it('文案由参数生成，不与数值漂移（600% / 700%）', () => {
-    expect(getSkill(PET_SKILL_IDS.metalSlash).desc).toContain('600%');
+    expect(getSkill(PET_SKILL_IDS.waterPierce).desc).toContain('600%');
     expect(getSkill(PET_SKILL_IDS.fireBurst).desc).toContain('700%');
+  });
+});
+
+describe('技能表与花名册双向闭合', () => {
+  const petSkillIds = new Set(SKILLS.filter((s) => s.owner === 'pet').map((s) => s.id));
+  const referenced = new Set([...PET_MAP.values()].map((p) => p.skillId));
+
+  it('每只宠的 skillId 都能查到技能定义', () => {
+    for (const [id, pet] of PET_MAP) {
+      expect(petSkillIds.has(pet.skillId), `${id}(${pet.name}) 引用了不存在的技能 ${pet.skillId}`).toBe(true);
+    }
+  });
+
+  it('没有孤儿宠物技（定义了却没有宠物引用）', () => {
+    const orphans = [...petSkillIds].filter((id) => !referenced.has(id));
+    expect(orphans, `孤儿技会白占包体与图鉴：${orphans.join(', ')}`).toEqual([]);
+  });
+
+  it('一技一主：宠物技不共用（招牌技是身份，量产蓝图也按属性各生成一份）', () => {
+    const bySkill = new Map<string, string[]>();
+    for (const [id, pet] of PET_MAP) {
+      bySkill.set(pet.skillId, [...(bySkill.get(pet.skillId) ?? []), id]);
+    }
+    const shared = [...bySkill].filter(([, owners]) => owners.length > 1);
+    expect(shared.map(([s, o]) => `${s}←${o.join('/')}`), '技能被多只宠共用').toEqual([]);
   });
 });
 
@@ -64,7 +94,7 @@ describe('技能展示 display', () => {
   });
 
   it('describeSkillBudget 含预算与 UR 参考', () => {
-    const s = getSkill(PET_SKILL_IDS.metalSlash);
+    const s = getSkill(PET_SKILL_IDS.waterPierce);
     const text = describeSkillBudget(s);
     expect(text).toContain('预算指数 6');
     expect(text).toContain('UR≈');
@@ -72,7 +102,7 @@ describe('技能展示 display', () => {
   });
 
   it('describeSkillEffects 含倍率摘要', () => {
-    const text = describeSkillEffects(getSkill(PET_SKILL_IDS.metalSlash));
+    const text = describeSkillEffects(getSkill(PET_SKILL_IDS.waterPierce));
     expect(text).toContain('600%');
     expect(text).toContain('casterAtk');
   });

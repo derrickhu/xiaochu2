@@ -45,6 +45,27 @@ describe('封印珠机制', () => {
     expect(b.isLocked(1, 1)).toBe(false);
   });
 
+  it('sealColumns 锁整列，且不重复锁同一列', () => {
+    const b = new BoardModel(seededRng(11));
+    const first = b.sealColumns(1);
+    expect(first).toHaveLength(b.rows);
+    const col = first[0].c;
+    for (let r = 0; r < b.rows; r++) expect(b.isLocked(r, col)).toBe(true);
+
+    // 第二次应挑另一列：挑「未封印珠最多」的列，已锁列不会再被选中
+    const second = b.sealColumns(1);
+    expect(second).toHaveLength(b.rows);
+    expect(second[0].c).not.toBe(col);
+  });
+
+  it('锁列后该列不参与连消，纵向路线被掐断', () => {
+    const b = new BoardModel(seededRng(13));
+    const col = b.sealColumns(1)[0].c;
+    for (let r = 0; r < b.rows; r++) b.set(r, col, 'fire');
+    const groups = b.findMatches();
+    expect(groups.some((g) => g.cells.some((c) => c.c === col))).toBe(false);
+  });
+
   it('封印珠不会被转珠技能命中', () => {
     const b = new BoardModel(seededRng(9));
     b.set(2, 2, 'wood');

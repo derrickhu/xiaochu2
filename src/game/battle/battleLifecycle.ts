@@ -5,6 +5,7 @@ import { enemyStats } from '@/formulas/growth';
 import { GROWTH } from '@/balance/growth';
 import { starsFromTurns } from '@/formulas/stars';
 import { skillForEnemy } from './SkillEngine';
+import { initialPhaseState } from './bossPhase';
 import type { BattleResult, EnemyUnit } from './battleTypes';
 
 export function buildBattleResult(params: {
@@ -17,18 +18,18 @@ export function buildBattleResult(params: {
   const { win, stage, turnsUsed, tookDamage, waves } = params;
   if (!win) {
     return {
-      win, stars: 0, coins: 0, exp: 0, shards: [],
+      win, stars: 0, coins: 0, exp: 0, shards: [], universal: 0,
       turnsUsed, noDamage: !tookDamage, bossDropPets: [],
     };
   }
   const stars = starsFromTurns(turnsUsed, stage.starTurnLimit);
-  const coins = stageCoinReward(stage.chapter, stars, stage.isBoss);
+  const coins = stageCoinReward(stage.chapter, stars, stage.type);
   const drops = stageDrops(stage.dropTableId, stage.chapter, stars, stage.type);
   const bossDropPets = [
     ...new Set(waves.map((w) => w.bossDropPetId).filter((id): id is string => !!id)),
   ];
   return {
-    win, stars, coins, exp: drops.exp, shards: drops.shards,
+    win, stars, coins, exp: drops.exp, shards: drops.shards, universal: drops.universal,
     turnsUsed, noDamage: !tookDamage, bossDropPets,
   };
 }
@@ -52,5 +53,6 @@ export function spawnBattleEnemy(
     skillCds: (def.skillIds ?? []).map((id) => skillForEnemy(id).cd),
     charging: null,
     dmgReduction: null,
+    ...initialPhaseState(def, stats.atk),
   };
 }

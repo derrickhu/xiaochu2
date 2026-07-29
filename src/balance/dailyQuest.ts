@@ -4,6 +4,7 @@
  * 每天从任务池按日期轮换出 4 条，全清额外奖励。进度由 EventBus 事件驱动，
  * 状态存 SaveData.daily.questProgress，跨日整体重置。
  */
+import { ECONOMY } from './economy';
 import type { RewardBundle } from './rewards';
 
 /** 任务触发源：与 EventBus 事件一一对应 */
@@ -64,8 +65,16 @@ export const QUEST_MAP: ReadonlyMap<string, DailyQuestDef> =
 /** 全清奖励占位 id（与任务 id 同一命名空间，共用 questClaimed 列表） */
 export const QUEST_ALL_CLEAR_ID = 'dq_all_clear';
 
-/** 全清额外奖励：只发可直接花的货币（灵玉 + 灵宠币），不发随机碎片 */
-export const QUEST_ALL_CLEAR_REWARD: RewardBundle = { lingyu: 50, coins: 500 };
+/**
+ * 全清额外奖励：只发可直接花的货币（灵玉 + 灵宠币 + 通用碎片），不发随机碎片。
+ * 通用碎片走这里而非随机碎片，是为了让「每天全清」成为可规划的定向升星来源。
+ */
+export const QUEST_ALL_CLEAR_REWARD: RewardBundle = {
+  lingyu: 50,
+  coins: 500,
+  universal: ECONOMY.universal.dailyAllClear,
+  stamina: ECONOMY.stamina.checkinBonus,
+};
 
 /** 每日出题数 */
 export const DAILY_QUEST_COUNT = 4;

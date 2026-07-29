@@ -27,14 +27,16 @@ export function rewardFlyIcons(r: RewardBundle): string[] {
   if (r.coins) icons.push(UI_IMAGES.iconCoin);
   if (r.exp) icons.push(UI_IMAGES.iconExp);
   if (r.tickets) icons.push(UI_IMAGES.iconTicket);
-  if (r.shards) icons.push(UI_IMAGES.iconShard);
+  if (r.shards || r.universal) icons.push(UI_IMAGES.iconShard);
+  if (r.stamina) icons.push(UI_IMAGES.iconStamina);
   return icons;
 }
 
 /** 签到/任务格子上展示的主图标（复合奖励优先券/碎片） */
 export function primaryRewardIcon(r: RewardBundle): string {
   if (r.tickets) return UI_IMAGES.iconTicket;
-  if (r.shards) return UI_IMAGES.iconShard;
+  if (r.shards || r.universal) return UI_IMAGES.iconShard;
+  if (r.stamina) return UI_IMAGES.iconStamina;
   if (r.lingyu) return UI_IMAGES.iconLingyu;
   if (r.coins) return UI_IMAGES.iconCoin;
   if (r.exp) return UI_IMAGES.iconExp;
@@ -45,6 +47,8 @@ export function primaryRewardIcon(r: RewardBundle): string {
 export function primaryRewardAmount(r: RewardBundle): string {
   if (r.tickets) return `×${r.tickets}`;
   if (r.shards) return `×${r.shards}`;
+  if (r.universal) return `×${r.universal}`;
+  if (r.stamina) return `×${r.stamina}`;
   if (r.lingyu) return `×${r.lingyu}`;
   if (r.coins) return `×${r.coins}`;
   if (r.exp) return `×${r.exp}`;

@@ -21,6 +21,7 @@ import {
 import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import { grantReward } from '@/game/rewardGrant';
+import { watchAd } from '@/game/adGate';
 import type { BattleContext } from '@/game/battleContext';
 import {
   COLORS, FONT_SIZE, FONT_FAMILY_DISPLAY, BOTTOM_NAV_RESERVE,
@@ -557,14 +558,8 @@ export class TowerScene implements Scene {
   }
 
   private async _reset(needsAd: boolean): Promise<void> {
-    if (needsAd) {
-      analytics.trackAdShow('tower_reset');
-      const ok = await Platform.showRewardedVideo();
-      if (!ok) {
-        Platform.showToast('广告未完成，请重试');
-        return;
-      }
-    }
+    // 次数上限由 TOWER.dailyResets 代管，故本位在 AD_PLACEMENTS 里标 gatedElsewhere
+    if (needsAd && !await watchAd('tower_reset', { floor: PlayerData.tower.runFloor })) return;
     if (!PlayerData.towerReset()) {
       Platform.showToast('今日重置次数已用完');
       return;

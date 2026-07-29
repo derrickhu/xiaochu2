@@ -14,6 +14,7 @@ import { DAILY_FIRST_WIN_MULT } from '@/balance/dailyQuest';
 import { UI_IMAGES, UI_PANEL_IMAGES, petAvatarPath } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import type { BattleContext } from '@/game/battleContext';
+import { checkStaminaFor } from '@/game/staminaGate';
 import { reportQuest } from '@/game/dailyQuestTracker';
 import { settleContextVictory } from './battleContextSettle';
 import { Platform } from '@/core/PlatformService';
@@ -23,6 +24,9 @@ import {
   COLORS, FONT_FAMILY_DISPLAY, FONT_SIZE,
   makeActionButton, makePanel, makeText, makeStarRow,
 } from '@/ui';
+import type { ActionButtonHandle } from '@/ui/ActionButton';
+import { adUsesLeft, adUsesLeftText, watchAd } from '@/game/adGate';
+import { AD_REWARD_MULT } from '@/balance/monetization';
 import type { BattleEnterData } from '../BattleScene';
 import type { TeamEnterData } from '../TeamScene';
 import { battleProgressHint } from './battleProgressHints';
@@ -111,11 +115,14 @@ export class BattleResultOverlay {
 
     let milestoneLingyu = 0;
     const newlyUnlocked: string[] = [];
+    // 实发币额：重复通关会打折，翻倍广告必须按「实发」翻，否则重刷旧关能靠广告套出全额
+    let coinsGranted = result.coins;
 
     if (context) {
       // 副玩法自带产出口径：不写主线星数、不发首通灵玉、不触发 Boss 直掉
       PlayerData.addExp(result.exp);
       PlayerData.addCoins(result.coins);
+      PlayerData.addUniversalShards(result.universal);
       const skillCds: Record<string, number> = {};
       for (const pet of ctrl.team) {
         if (pet.skillCdLeft > 0) skillCds[pet.def.id] = pet.skillCdLeft;
@@ -126,9 +133,11 @@ export class BattleResultOverlay {
       }));
     } else {
       const repeat = PlayerData.isRepeatClear(ctrl.stage.id);
+      if (repeat) coinsGranted = Math.floor(result.coins * ECONOMY.coin.repeatClearPct);
       milestoneLingyu = PlayerData.recordClear(ctrl.stage.id, result.stars, result.coins);
       PlayerData.addExp(result.exp);
       for (const s of result.shards) PlayerData.addShards(s.petId, s.count);
+      PlayerData.addUniversalShards(result.universal);
       for (const pid of result.bossDropPets) {
         if (PlayerData.unlockPet(pid)) newlyUnlocked.push(pid);
       }
@@ -223,6 +232,11 @@ export class BattleResultOverlay {
     const btnH = Math.round(btnW / BTN_ASPECT);
     const btnGap = 14;
     const btns: PIXI.Container[] = this._buildVictoryButtons(ctrl, context, btnW, btnH, nextStage);
+    // 翻倍位放在导航钮之上：一旦玩家点了「下一关」，本场奖励就再也翻不了了
+    const doubleBtn = this._buildDoubleRewardButton(
+      ctrl.stage.id, coinsGranted, result.exp, btnW, btnH,
+    );
+    if (doubleBtn) btns.unshift(doubleBtn);
     for (const b of btns) {
       b.position.set(0, y + btnH / 2);
       content.addChild(b);
@@ -245,6 +259,49 @@ export class BattleResultOverlay {
 
     content.position.set(0, -panelH / 2 + padTop);
     this._playCardEnter(card, panelH);
+  }
+
+  /**
+   * 结算奖励翻倍（IAA）：看完广告补发一份等额币与经验。
+   *
+   * 只补差额而不重算一遍产出，是为了让翻倍额与页面上已展示的奖励严格对齐 ——
+   * 重新走一遍 finish() 会把首通灵玉、Boss 直掉、星数里程碑一起再发一次。
+   * 次数用尽或本场无产出（塔续爬等）时不出这个位，避免出现点不动的按钮。
+   */
+  private _buildDoubleRewardButton(
+    stageId: string,
+    coins: number,
+    exp: number,
+    btnW: number,
+    btnH: number,
+  ): ActionButtonHandle | null {
+    if (adUsesLeft('victory_double') <= 0) return null;
+    const bonusCoins = Math.floor(coins * (AD_REWARD_MULT - 1));
+    const bonusExp = Math.floor(exp * (AD_REWARD_MULT - 1));
+    if (bonusCoins <= 0 && bonusExp <= 0) return null;
+
+    let claimed = false;
+    const btn = makeActionButton({
+      title: `看广告 · 奖励 ×${AD_REWARD_MULT}`,
+      subtitle: adUsesLeftText('victory_double'),
+      width: btnW,
+      height: btnH,
+      variant: 'success',
+      fontSize: FONT_SIZE.md,
+      onTap: () => {
+        void (async () => {
+          if (claimed) return;
+          if (!await watchAd('victory_double', { stageId })) return;
+          claimed = true;
+          if (bonusCoins > 0) PlayerData.addCoins(bonusCoins);
+          if (bonusExp > 0) PlayerData.addExp(bonusExp);
+          btn.setEnabled(false);
+          btn.setLabels(`奖励已翻倍 ×${AD_REWARD_MULT}`, `灵宠币 +${bonusCoins} · 经验 +${bonusExp}`);
+          Platform.showToast(`奖励翻倍：灵宠币 +${bonusCoins}`, 'success');
+        })();
+      },
+    });
+    return btn;
   }
 
   /**
@@ -304,7 +361,11 @@ export class BattleResultOverlay {
     btns.push(makeActionButton({
       title: '再打一次', width: btnW, height: btnH, variant: 'cream',
       fontSize: FONT_SIZE.md,
-      onTap: () => go('battle', { stageId: ctrl.stage.id } satisfies BattleEnterData),
+      // 重打跳过编队页直进战斗，体力门禁必须在这里补一道，否则可绕过扣费
+      onTap: () => {
+        if (!checkStaminaFor(ctrl.stage, context)) return;
+        go('battle', { stageId: ctrl.stage.id } satisfies BattleEnterData);
+      },
     }));
     btns.push(makeActionButton({
       title: '返回主页', width: btnW, height: btnH, variant: 'cream',
@@ -403,19 +464,17 @@ export class BattleResultOverlay {
     // 原型：主 CTA 约板宽 74%，高按 success 底板 3.2:1
     const reviveW = Math.round(PANEL_W * 0.74);
     const reviveH = Math.round(reviveW / BTN_ASPECT);
-    const reviveBtn = this._makeReviveButton(reviveW, reviveH, async () => {
-      analytics.trackAdShow('battle_revive', { context: opts.context?.kind ?? 'mainline' });
-      const ok = await Platform.showRewardedVideo();
-      if (!ok) {
-        Platform.showToast('广告未完成，请重试');
-        return;
-      }
-      this.clear();
-      opts.onRevive?.();
-    });
-    reviveBtn.position.set(0, y + reviveH / 2);
-    content.addChild(reviveBtn);
-    y += reviveH + 14;
+    // 复活有日限（此前无限）：无限复活等于任何关都能硬耗过去，Boss 与体力门控同时失效
+    if (adUsesLeft('battle_revive') > 0) {
+      const reviveBtn = this._makeReviveButton(reviveW, reviveH, async () => {
+        if (!await watchAd('battle_revive', { context: context?.kind ?? 'mainline' })) return;
+        this.clear();
+        opts.onRevive?.();
+      });
+      reviveBtn.position.set(0, y + reviveH / 2);
+      content.addChild(reviveBtn);
+      y += reviveH + 14;
+    }
 
     const halfGap = 14;
     const halfW = Math.round((reviveW - halfGap) / 2);
@@ -434,7 +493,11 @@ export class BattleResultOverlay {
     const retry = makeActionButton({
       title: retryTitle, width: halfW, height: halfH, variant: 'cream',
       fontSize: FONT_SIZE.md,
-      onTap: () => commitDefeat(retryNav),
+      onTap: () => {
+        // 主线重试直进战斗，同样要过体力门禁；玩法首页只是导航，不拦
+        if (!context && !checkStaminaFor(ctrl.stage)) return;
+        commitDefeat(retryNav);
+      },
     });
     retry.position.set(-(halfW + halfGap) / 2, y + halfH / 2);
     content.addChild(retry);
@@ -568,6 +631,15 @@ export class BattleResultOverlay {
         amountFill: 0x7a5cff,
       });
     }
+    if (result.universal > 0 && items.length < 3) {
+      items.push({
+        iconPath: UI_IMAGES.iconShard,
+        name: '通用碎片',
+        amount: `+${result.universal}`,
+        amountFill: 0x7a5cff,
+        holdHint: `持有 ${PlayerData.universalShards}`,
+      });
+    }
     if (milestoneLingyu > 0 && items.length < 3) {
       items.push({
         iconPath: UI_IMAGES.iconLingyu,
@@ -666,13 +738,13 @@ export class BattleResultOverlay {
     card.addChild(amt);
 
     if (holdHint) {
+      // 持有数含阿拉伯数字：勿用宋体展示字（真机小字号下 96 易糊成 %）
       const t = makeText(holdHint, {
-        size: 13, fill: COLORS.textSub, bold: true, anchor: 0.5,
-        fontFamily: FONT_FAMILY_DISPLAY,
+        size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5,
       });
       try { t.updateText(true); } catch { /* noop */ }
       const pw = Math.min(w - 12, Math.ceil(t.width) + 18);
-      const ph = 24;
+      const ph = 26;
       const pill = new PIXI.Container();
       pill.addChild(makePanel({
         width: pw, height: ph, radius: ph / 2,

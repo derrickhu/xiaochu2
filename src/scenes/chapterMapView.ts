@@ -15,11 +15,12 @@ import {
 } from '@/balance/chapterMap';
 import { ChapterMapLayoutStore } from '@/game/chapterMapLayoutStore';
 import { getStageType } from '@/balance/stageTypes';
+import { ELITE_MODE, hasEliteVariant } from '@/balance/eliteMode';
 import type { StageDef } from '@/balance/stages';
 import { CHAPTER_REWARD_PET } from '@/balance/stages';
 import { PET_MAP } from '@/balance/pets';
 import { PlayerData } from '@/game/PlayerData';
-import { BACKGROUND_IMAGES, MAP_UI_IMAGES } from '@/config/Assets';
+import { BACKGROUND_IMAGES, chapterRegionBg, MAP_UI_IMAGES } from '@/config/Assets';
 import { getPetAvatarTexture, loadPetAvatarTexture } from '@/config/petAvatarTexture';
 import { COLORS, FONT_SIZE, makeText, makeStarRow } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
@@ -199,6 +200,15 @@ function buildStageNode(
       strokeColor: 0x2a3444, strokeWidth: 2,
     });
     badge.position.set(-NODE_W * 0.28, -NODE_H * 0.72);
+    wrap.addChild(badge);
+  } else if (opts.unlocked && opts.stars >= ELITE_MODE.unlockStars && hasEliteVariant(stage)) {
+    // 精英模式的开关在编队页，地图上只给一个「这关还有内容」的提示，
+    // 否则 3 星之后整章节点都是死的，玩家不会知道还能再打
+    const badge = makeText('精英可挑战', {
+      size: FONT_SIZE.xxs, fill: getStageType('elite').color, bold: true, anchor: 0.5,
+      strokeColor: 0x2a3444, strokeWidth: 2,
+    });
+    badge.position.set(-NODE_W * 0.22, -NODE_H * 0.72);
     wrap.addChild(badge);
   }
 
@@ -401,8 +411,9 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
   world.position.set(fit.offsetX, fit.offsetY);
   root.addChild(world);
 
-  const bgTex = TextureCache.get(BACKGROUND_IMAGES.titleScreen)
-    ?? TextureCache.get(BACKGROUND_IMAGES.chapterMap)
+  // 按 4 章一区换背景；区域图未到位（或走 CDN 尚未拉到）时回落首屏图，不留白
+  const bgTex = TextureCache.get(chapterRegionBg(opts.chapter))
+    ?? TextureCache.get(BACKGROUND_IMAGES.titleScreen)
     ?? TextureCache.get(BACKGROUND_IMAGES.home);
   if (bgTex) {
     layoutDesignBackground(world, bgTex, designW, designH);

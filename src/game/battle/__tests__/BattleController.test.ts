@@ -6,6 +6,9 @@ import { ENEMY_SKILL_IDS } from '@/balance/skills';
 import { skillForEnemy } from '../SkillEngine';
 import { resolvePlayerTurnDamage, type ResolvePlayerTurnOptions } from '../battleTurnResolution';
 import { calcHeal } from '@/formulas/damage';
+import { counterElementOf, ELEMENTS, type Element } from '@/balance/combat';
+import { ELEMENT_NAME } from '@/balance/ui';
+import type { MatchGroup } from '@/game/board/BoardModel';
 import type { EnemyUnit, TeamPet } from '../battleTypes';
 
 const STAGE_ID = STAGES[0].id;
@@ -219,12 +222,16 @@ describe('技能效果', () => {
 });
 
 describe('怪物技能', () => {
-  /** 替换当前敌人的技能组（测试专用） */
+  /**
+   * 替换当前敌人的技能组（测试专用）。
+   * 写的是 EnemyUnit 上的技能表而非 def：Boss 阶段会追加技能，故运行时以单位为准，
+   * def 只是出场模板（就地改 def 还会污染共享同模板的其它波次）。
+   */
   function setEnemySkillIds(
     ctrl: BattleController,
     skillIds: readonly string[],
   ): void {
-    ctrl.enemy.def = { ...ctrl.enemy.def, skillIds };
+    ctrl.enemy.skillIds = [...skillIds];
     ctrl.enemy.skillCds = skillIds.map((id) => skillForEnemy(id).cd);
   }
 
@@ -284,6 +291,111 @@ describe('怪物技能', () => {
     // turns 个敌人回合后状态消失（释放当回合记 1）
     ctrl.enemyAct();
     expect(ctrl.enemy.dmgReduction).toBeNull();
+  });
+
+  it('削攻：我方消珠伤害按乘区打折，净化技可解除', () => {
+    // pet_011 金羽仙鹤 = 金羽净世（直伤 + 驱散），用于验证 debuff 可被净化解除
+    const ctrl = makeCtrl(['pet_005', 'pet_011']);
+    const groups = [{ orb: 'water' as const, cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }] }];
+    ctrl.beginResolve();
+    const plain = ctrl.resolveTurn(groups).attacks[0].damage;
+
+    setEnemySkillIds(ctrl, [ENEMY_SKILL_IDS.atkDebuff]);
+    ctrl.enemy.skillCds[0] = 0;
+    const r = ctrl.enemyAct();
+    expect(r.action).toBe('atkDebuff');
+
+    ctrl.beginResolve();
+    const weakened = ctrl.resolveTurn(groups).attacks[0].damage;
+    // 削攻乘区在伤害公式内部参与结算（非事后再乘），故与 plain×0.6 逐项取整可差 1 点
+    expect(weakened).toBeLessThan(plain);
+    expect(Math.abs(weakened - plain * 0.6)).toBeLessThanOrEqual(1);
+
+    const purifyIdx = ctrl.team.findIndex((p) => p.skill.effects.some((e) => e.kind === 'purify'));
+    expect(purifyIdx).toBeGreaterThanOrEqual(0);
+    ctrl.beginPlayerTurn();
+    ctrl.team[purifyIdx].skillCdLeft = 0;
+    ctrl.castSkill(purifyIdx);
+
+    ctrl.beginResolve();
+    expect(ctrl.resolveTurn(groups).attacks[0].damage).toBe(plain);
+  });
+
+  it('凝意：眩晕落空但同技能的直伤照常结算（免控不等于免疫整招）', () => {
+    // pet_005 冰魄仙鹤 = 冰封锁影（直伤 4 倍 + 眩晕 1 回合）
+    const ctrl = makeCtrl(['pet_005']);
+    setEnemySkillIds(ctrl, [ENEMY_SKILL_IDS.resolve]);
+    ctrl.enemy.skillCds[0] = 0;
+    expect(ctrl.enemyAct().action).toBe('resolve');
+
+    const hpBefore = ctrl.enemy.hp;
+    ctrl.team[0].skillCdLeft = 0;
+    const cast = ctrl.castSkill(0);
+
+    expect(cast.damage).toBeGreaterThan(0);
+    expect(ctrl.enemy.hp).toBe(hpBefore - cast.damage!);
+    // 关键：控制段被吞，敌人下回合照常行动
+    expect(ctrl.enemyAct().action).not.toBe('stunned');
+  });
+
+  it('凝意：已在凝意中不再续，避免 CD 到就无限续成永久免控', () => {
+    const ctrl = makeCtrl(['pet_005']);
+    setEnemySkillIds(ctrl, [ENEMY_SKILL_IDS.resolve]);
+    ctrl.enemy.skillCds[0] = 0;
+    expect(ctrl.enemyAct().action).toBe('resolve');
+
+    ctrl.enemy.skillCds[0] = 0;
+    expect(ctrl.enemyAct().action).not.toBe('resolve');
+  });
+
+  it('属性吸收：只掐被吸那一色，其余属性照常打', () => {
+    // 不指定 element 时运行期取「克制敌人自身」的那一色，即玩家必然在用的输出色
+    const ctrl = makeCtrl();
+    const absorbed = counterElementOf(ctrl.enemy.def.element);
+    const other = ELEMENTS.find((e) => e !== absorbed && ctrl.team.some((p) => p.def.element === e));
+    expect(other, '测试队需覆盖两种以上属性').toBeDefined();
+    const groupOf = (orb: Element): MatchGroup[] =>
+      [{ orb, cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }] }];
+
+    // 队伍不一定带克制色宠，带了才有可比基线；否则只验另一色不受影响
+    const hasAbsorbedPet = ctrl.team.some((p) => p.def.element === absorbed);
+    ctrl.beginResolve();
+    const plainAbsorbed = hasAbsorbedPet ? ctrl.resolveTurn(groupOf(absorbed)).attacks[0].damage : 0;
+    ctrl.beginResolve();
+    const plainOther = ctrl.resolveTurn(groupOf(other!)).attacks[0].damage;
+
+    setEnemySkillIds(ctrl, [ENEMY_SKILL_IDS.elementAbsorb]);
+    ctrl.enemy.skillCds[0] = 0;
+    const r = ctrl.enemyAct();
+    expect(r.action).toBe('elementAbsorb');
+    expect(r.absorbElementName).toBe(ELEMENT_NAME[absorbed]);
+
+    if (hasAbsorbedPet) {
+      ctrl.beginResolve();
+      const dampened = ctrl.resolveTurn(groupOf(absorbed)).attacks[0].damage;
+      expect(dampened).toBeLessThan(plainAbsorbed);
+      expect(Math.abs(dampened - plainAbsorbed * 0.2)).toBeLessThanOrEqual(1);
+    }
+    ctrl.beginResolve();
+    expect(ctrl.resolveTurn(groupOf(other!)).attacks[0].damage).toBe(plainOther);
+  });
+
+  it('反击：按本回合出手次数反弹，回合数耗尽后停止', () => {
+    const ctrl = makeCtrl();
+    // 未进入反击态时不该有任何反弹，否则等于给所有敌人白送一份持续伤害
+    expect(ctrl.applyCounterStrike(3)).toBeNull();
+
+    setEnemySkillIds(ctrl, [ENEMY_SKILL_IDS.counterStrike]);
+    ctrl.enemy.skillCds[0] = 0;
+    const r = ctrl.enemyAct();
+    expect(r.action).toBe('counterStrike');
+
+    const one = ctrl.applyCounterStrike(1);
+    const three = ctrl.applyCounterStrike(3);
+    expect(one!.damage).toBeGreaterThan(0);
+    // 3 次出手的反伤应约等于 1 次的 3 倍（减伤/护盾在同一口径内，允许取整误差）
+    expect(three!.damage + three!.absorbed).toBeGreaterThan(one!.damage + one!.absorbed);
+    expect(ctrl.applyCounterStrike(0), '没出手就不该被反击').toBeNull();
   });
 });
 
@@ -347,10 +459,12 @@ describe('resolvePlayerTurnDamage：治疗强化 / 全队增伤透传（纯函�
     noHeartHeal: false,
     passiveRegenPerTurn: 0,
     teamDamageMult: 1,
+    leaderComboBonus: 0,
     teamHealBonus: 0,
     guaranteedCrit: false,
     heartHealMult: 1,
     elementBuffMult: () => 1,
+    elementAbsorbMult: () => 1,
     rng: () => 0.99,
     elementTraitDamageMult: () => 1,
     counterRelation: () => 0,

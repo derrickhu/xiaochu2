@@ -178,6 +178,27 @@ export const analytics = {
   trackAdShow(scene: string, extra: AnalyticsParams = {}): void {
     track(EVENT_NAMES.AD_SHOW, { scene, ad_type: 'reward', ...extra });
   },
+
+  /**
+   * 激励视频关闭。completed 区分「看完发奖」与「中途退出」——
+   * 只报曝光会让完播率无从计算，而完播率是激励位值不值得留的唯一判据。
+   */
+  trackAdClose(scene: string, completed: boolean, extra: AnalyticsParams = {}): void {
+    track(EVENT_NAMES.AD_CLOSE, { scene, ad_type: 'reward', completed, ...extra });
+  },
+
+  /** 内购发起（IAP 未开启时不会触发，桩先落地保证开付费当天就有数） */
+  trackPurchaseInitiate(skuId: string, priceFen: number): void {
+    track(EVENT_NAMES.PURCHASE_INITIATE, { sku_id: skuId, price_fen: Math.floor(priceFen) });
+  },
+
+  trackPurchaseComplete(skuId: string, priceFen: number): void {
+    track(EVENT_NAMES.PURCHASE_COMPLETE, { sku_id: skuId, price_fen: Math.floor(priceFen) });
+  },
+
+  trackPurchaseFail(skuId: string, reason: string): void {
+    track(EVENT_NAMES.PURCHASE_FAIL, { sku_id: skuId, reason: reason.slice(0, 120) });
+  },
 };
 
 function mapPlatform(): PlatformName {

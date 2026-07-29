@@ -3,7 +3,7 @@
  *
  * 宠物主动技、敌人技能、模拟器都应通过这里执行效果，避免多处 switch 分叉。
  */
-import type { Element, OrbType } from '@/balance/combat';
+import { counterElementOf, type Element, type OrbType } from '@/balance/combat';
 import type { PetDef } from '@/balance/pets';
 import type { SkillDef, SkillEffectDef, SkillVfxId, ConvertShape } from '@/balance/skills';
 import { getSkill, resolveSkillVfx, getSkillTierBonus, getSkillStarOverride } from '@/balance/skills';
@@ -45,6 +45,8 @@ export interface SkillRuntimeContext {
   teamHealBonus: number;
   /** 敌人是否已狂暴（enrage 每场只触发一次）；默认 false */
   enemyEnraged?: boolean;
+  /** 敌人是否凝意中（免疫眩晕与威吓）；默认 false */
+  enemyResolute?: boolean;
   /** 队伍人数（敌方技能封印随机选目标用）；默认 0 */
   teamSize?: number;
   /** 随机源（敌方技能封印选目标）；默认 Math.random */
@@ -127,7 +129,11 @@ export interface SkillResult {
     | 'timeSqueeze'
     | 'healBlock'
     | 'enrage'
-    | 'skillSeal';
+    | 'skillSeal'
+    | 'atkDebuff'
+    | 'resolve'
+    | 'elementAbsorb'
+    | 'counterStrike';
   vfxEvents: readonly SkillVfxId[];
   damageEvents: DamageEvent[];
   healEvents: HealEvent[];
@@ -139,6 +145,8 @@ export interface SkillResult {
   cleanseTeam?: boolean;
   /** delayEnemyAttack：敌人普攻倒计时 +N */
   enemyAttackDelay?: number;
+  /** 敌人凝意导致眩晕/威吓落空（其余效果仍生效），供演出提示「免疫」 */
+  immuneControl?: boolean;
 }
 
 /**
@@ -299,6 +307,14 @@ function inferAction(skill: SkillDef): SkillResult['action'] {
       return 'enrage';
     case 'skillSeal':
       return 'skillSeal';
+    case 'atkDebuff':
+      return 'atkDebuff';
+    case 'resolve':
+      return 'resolve';
+    case 'elementAbsorb':
+      return 'elementAbsorb';
+    case 'counterAttack':
+      return 'counterStrike';
   }
 }
 
@@ -376,7 +392,13 @@ const EFFECT_HANDLERS: { [K in SkillEffectDef['kind']]: EffectHandler<K> } = {
     return true;
   },
 
-  stun: (effect, { vfx, result }) => {
+  stun: (effect, { vfx, ctx, result }) => {
+    // 凝意中的敌人免控：只让眩晕这一段落空，技能其余段（如附带直伤）照常结算，
+    // 因此这里不能 return false —— 那会让整个技能不触发。
+    if (ctx.enemyResolute) {
+      result.immuneControl = true;
+      return true;
+    }
     result.statusEvents.push({
       target: 'enemy',
       status: 'stun',
@@ -495,7 +517,11 @@ const EFFECT_HANDLERS: { [K in SkillEffectDef['kind']]: EffectHandler<K> } = {
     return true;
   },
 
-  delayEnemyAttack: (effect, { result }) => {
+  delayEnemyAttack: (effect, { ctx, result }) => {
+    if (ctx.enemyResolute) {
+      result.immuneControl = true;
+      return true;
+    }
     result.enemyAttackDelay = (result.enemyAttackDelay ?? 0) + effect.turns;
     return true;
   },
@@ -577,6 +603,59 @@ const EFFECT_HANDLERS: { [K in SkillEffectDef['kind']]: EffectHandler<K> } = {
       status: 'enrage',
       value: effect.atkMult,
       stack: 'ignoreIfPresent',
+      vfx,
+    });
+    return true;
+  },
+
+  atkDebuff: (effect, { vfx, result }) => {
+    result.statusEvents.push({
+      target: 'team',
+      status: 'atkDebuff',
+      value: effect.mult,
+      turns: effect.turns,
+      stack: 'replace',
+      vfx,
+    });
+    return true;
+  },
+
+  elementAbsorb: (effect, { vfx, ctx, result }) => {
+    // 缺省吸「克制自己」的那一色：玩家打 Boss 必然带克制队，吸这色才真正逼换队
+    const element = effect.element ?? counterElementOf(ctx.enemy.element);
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'elementAbsorb',
+      value: effect.mult,
+      turns: effect.turns,
+      stack: 'replace',
+      element,
+      vfx,
+    });
+    return true;
+  },
+
+  counterAttack: (effect, { vfx, result }) => {
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'counterStrike',
+      value: effect.multiplier,
+      turns: effect.turns,
+      stack: 'replace',
+      vfx,
+    });
+    return true;
+  },
+
+  resolve: (effect, { vfx, ctx, result }) => {
+    // 已在凝意中不重复叠加（否则每次 CD 到就无限续，等于永久免控）
+    if (ctx.enemyResolute) return false;
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'resolve',
+      value: 1,
+      turns: effect.turns,
+      stack: 'replace',
       vfx,
     });
     return true;

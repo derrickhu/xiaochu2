@@ -24,6 +24,8 @@ export interface MechanicDef {
   // ── board 轴参数 ──
   /** 开局封印珠数量（board 轴） */
   sealOrbs?: number;
+  /** 开局整列封印的列数（board 轴，锁列） */
+  sealColumns?: number;
   // ── rule 轴参数 ──
   /** 心珠不回血（禁心） */
   noHeartHeal?: boolean;
@@ -44,6 +46,13 @@ export const MECHANICS: Readonly<Record<string, MechanicDef>> = {
     desc: '更高密度的封印珠（顽石变体），需要更主动地清理周边解封。',
     uiHint: '盘面顽石封印较多：优先清理周边解封',
     sealOrbs: 6,
+  },
+  orb_locked_col: {
+    id: 'orb_locked_col', axis: 'board', name: '锁列',
+    desc: '开局整列封印。与散点封印同规则（相邻消除解封），但压迫集中：'
+      + '一整列不可用会直接掐断纵向连消路线，逼玩家先花几手拆封而不是直接铺 Combo。',
+    uiHint: '盘面有一整列被锁：先从两侧消除拆封',
+    sealColumns: 1,
   },
 
   // ── enemy 轴（映射到 enemies.ts 既有技能组合，标签用于节奏与提示） ──
@@ -103,6 +112,38 @@ export const MECHANICS: Readonly<Record<string, MechanicDef>> = {
     id: 'enemy_skill_seal_enrage', axis: 'enemy', name: '技能封印+狂暴',
     desc: '敌人封印宠物主动技，低血后狂暴强化攻击（Ch8 终章复合）。',
     uiHint: '敌人会封技能且低血狂暴：速杀或重力爆发',
+  },
+
+  // ── enemy 轴（第 9~16 章：逐章首教一种新机制，载体见 bossChallenge.ts）──
+  enemy_phase: {
+    id: 'enemy_phase', axis: 'enemy', name: '形态转换',
+    desc: '敌人跨过血线切换形态，攻击节奏与技能表都会变（Ch10 首教）。',
+    uiHint: '敌人会转形态：血条分段处留一手爆发',
+  },
+  enemy_absorb: {
+    id: 'enemy_absorb', axis: 'enemy', name: '属性吸收',
+    desc: '敌人吸收克制自身的属性，那一色伤害近乎归零，逼中途换输出色（Ch11 首教）。',
+    uiHint: '敌人会吸收克制色：备好第二种输出属性',
+  },
+  enemy_counter: {
+    id: 'enemy_counter', axis: 'enemy', name: '反击态',
+    desc: '敌人反击态下我方每次出手都会被反弹，铺 Combo 越多反伤越重（Ch12 首教）。',
+    uiHint: '敌人反击态：少而重地打，别无脑铺 Combo',
+  },
+  enemy_atk_down: {
+    id: 'enemy_atk_down', axis: 'enemy', name: '削攻',
+    desc: '敌人削弱我方全部伤害，可被净化技解除（Ch13 首教）。',
+    uiHint: '敌人会削弱我方伤害：带净化技解除',
+  },
+  enemy_resolve_guard: {
+    id: 'enemy_resolve_guard', axis: 'enemy', name: '免控坚壁',
+    desc: '敌人凝意期间免疫眩晕与威吓，控制链打法失效（Ch14 首教）。',
+    uiHint: '敌人免疫控制：靠破防与爆发硬拆',
+  },
+  enemy_final_trial: {
+    id: 'enemy_final_trial', axis: 'enemy', name: '终局试炼',
+    desc: '终章复合：转形态 + 属性吸收 + 免控同场，对养成与编队的总检验（Ch16）。',
+    uiHint: '终局试炼：克制/爆发/续航全要到位',
   },
 
   // ── rule 轴 ──
@@ -173,18 +214,22 @@ export function getMechanic(id: string): MechanicDef | undefined {
 /** 汇总一组机制 id 的运行期效果（供战斗/模拟读取） */
 export interface MechanicEffects {
   sealOrbs: number;
+  sealColumns: number;
   noHeartHeal: boolean;
   bannedElements: Element[];
   hints: string[];
 }
 
 export function resolveMechanics(ids: readonly string[] | undefined): MechanicEffects {
-  const eff: MechanicEffects = { sealOrbs: 0, noHeartHeal: false, bannedElements: [], hints: [] };
+  const eff: MechanicEffects = {
+    sealOrbs: 0, sealColumns: 0, noHeartHeal: false, bannedElements: [], hints: [],
+  };
   if (!ids) return eff;
   for (const id of ids) {
     const m = MECHANICS[id];
     if (!m) continue;
     if (m.sealOrbs) eff.sealOrbs = Math.max(eff.sealOrbs, m.sealOrbs);
+    if (m.sealColumns) eff.sealColumns = Math.max(eff.sealColumns, m.sealColumns);
     if (m.noHeartHeal) eff.noHeartHeal = true;
     if (m.banElement && !eff.bannedElements.includes(m.banElement)) eff.bannedElements.push(m.banElement);
     eff.hints.push(m.uiHint);

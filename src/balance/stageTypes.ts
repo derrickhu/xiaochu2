@@ -16,7 +16,7 @@ export interface StageTypeDef {
   name: string;
   /** UI 标识色 */
   color: number;
-  /** 体力消耗（体力系统未落地前仅作展示与预留） */
+  /** 体力消耗（实际扣减口径见 game/staminaService.ts 的 stageStaminaCost） */
   staminaCost: number;
   /** 灵宠币产出倍率 */
   coinMult: number;
@@ -34,8 +34,10 @@ export const STAGE_TYPE_PROFILES: Readonly<Record<StageType, StageTypeDef>> = {
     staminaCost: 6, coinMult: 1.0, expMult: 1.0, shardMult: 1.0, refresh: 'always',
   },
   elite: {
+    // expMult 1.5：精英模式是「同一关再打一次」，经验回报必须明显高于普通关，
+    // 否则 3 星后玩家没有任何理由回头挑战（币与碎片的差已由 coinMult/shardMult 给出）
     type: 'elite', name: '精英', color: 0x4aa3ff,
-    staminaCost: 9, coinMult: 1.4, expMult: 1.3, shardMult: 1.6, refresh: 'always',
+    staminaCost: 9, coinMult: 1.4, expMult: 1.5, shardMult: 1.6, refresh: 'always',
   },
   boss: {
     type: 'boss', name: 'BOSS', color: 0xffb43d,

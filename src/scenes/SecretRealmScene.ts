@@ -18,6 +18,7 @@ import {
 } from '@/balance/secretRealm';
 import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
+import { adUsesLeft, watchAd } from '@/game/adGate';
 import type { BattleContext } from '@/game/battleContext';
 import {
   COLORS, FONT_SIZE, FONT_FAMILY_DISPLAY, BOTTOM_NAV_RESERVE,
@@ -646,8 +647,11 @@ export class SecretRealmScene implements Scene {
       (REALM_TIERS.find((t) => t.tier === this._selectedTier) ?? REALM_TIERS[0]).unlockChapter,
     );
     const canEnter = isOpen && runsOk && unlocked;
+    // 次数用尽是「已经想玩」的最强信号，此时才出广告位（IAA，日 2 次）
+    const adRun = isOpen && unlocked && !runsOk && adUsesLeft('realm_extra_run') > 0;
     let title = '编队出战';
-    if (!isOpen) title = '今日未开放';
+    if (adRun) title = '看广告 +1 次';
+    else if (!isOpen) title = '今日未开放';
     else if (!runsOk) title = '次数已用完';
     else if (!unlocked) title = '难度未解锁';
 
@@ -656,8 +660,12 @@ export class SecretRealmScene implements Scene {
       title,
       width: CTA_BTN_W,
       height: CTA_BTN_H,
-      enabled: canEnter,
+      enabled: canEnter || adRun,
       onTap: () => {
+        if (adRun) {
+          void this._watchExtraRun();
+          return;
+        }
         this._enterRealm(
           realm,
           REALM_TIERS.find((t) => t.tier === this._selectedTier) ?? REALM_TIERS[0],
@@ -666,6 +674,13 @@ export class SecretRealmScene implements Scene {
     });
     btn.position.set(w / 2, y + CTA_BTN_H / 2);
     this._body!.addChild(btn);
+  }
+
+  /** 广告加次数：realmRunsLeft 直接读广告计数，看完即多一次，无需另发道具 */
+  private async _watchExtraRun(): Promise<void> {
+    if (!await watchAd('realm_extra_run', { tier: this._selectedTier })) return;
+    Platform.showToast('秘境次数 +1', 'success');
+    this._refreshBody();
   }
 
   /** 难度 pill 底板贴图 */

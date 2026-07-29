@@ -128,6 +128,29 @@ export const BACKGROUND_IMAGES = {
   tower: `${PKG.scene}/images/bg/scene_tower.jpg`,
 } as const;
 
+/**
+ * 章节地图区域背景：16 章按 4 章一区分成 4 大区。
+ *
+ * 第 1 区沿用主包内的 title_screen（首屏也用它，必须留在主包）；
+ * 第 2~4 区的图落 pkg-scene（已配 CDN，不占微信主包体积），出图前 fallback 到第 1 区。
+ */
+export const CHAPTER_REGION_COUNT = 4;
+export const CHAPTER_REGION_BG: readonly string[] = [
+  BACKGROUND_IMAGES.titleScreen,
+  `${PKG.scene}/images/bg/chapter_region_2.jpg`,
+  `${PKG.scene}/images/bg/chapter_region_3.jpg`,
+  `${PKG.scene}/images/bg/chapter_region_4.jpg`,
+];
+
+/** 章号 → 区域背景路径（每 4 章换一张；越界钳到末区） */
+export function chapterRegionBg(chapter: number): string {
+  const idx = Math.min(
+    CHAPTER_REGION_BG.length - 1,
+    Math.max(0, Math.ceil(chapter / CHAPTER_REGION_COUNT) - 1),
+  );
+  return CHAPTER_REGION_BG[idx];
+}
+
 /** 战斗背景（pkg-scene） */
 export const BATTLE_BG_IMAGES: Readonly<Record<Element, string>> = {
   metal: `${PKG.scene}/images/bg/battle_metal.jpg`,
@@ -201,6 +224,8 @@ export const UI_IMAGES = {
   iconCoin: `${IMG}/ui/icon/currency_coin.png`,
   iconExp: `${IMG}/ui/icon/currency_exp.png`,
   iconLingyu: `${IMG}/ui/icon/currency_lingyu.png`,
+  /** 体力（仙桃） */
+  iconStamina: `${IMG}/ui/icon/currency_stamina.png`,
   /** 十连券（签到大奖 / 召唤扣券） */
   iconTicket: `${IMG}/ui/icon/currency_ticket.png`,
   /** 灵宠碎片袋（签到 / 任务碎片奖励展示） */
@@ -319,8 +344,8 @@ const SKILL_ICON_ALIASES: Readonly<Record<string, string>> = {
   enemy_golem_guard: 'pet_earth_shield',
   enemy_panda_guard: 'pet_frost_guard',
   enemy_serpent_heal: 'pet_wood_heal',
-  enemy_panda_heal: 'pet_earth_heal',
-  enemy_blade_charge: 'pet_metal_slash',
+  enemy_panda_heal: 'pet_wood_heal',
+  enemy_blade_charge: 'pet_fire_burst',
   enemy_lion_charge: 'pet_fire_burst',
   enemy_seal_orbs: 'pet_shadow_purify',
   enemy_poison_team: 'pet_fire_dot',
@@ -328,9 +353,24 @@ const SKILL_ICON_ALIASES: Readonly<Record<string, string>> = {
   enemy_heal_block: 'pet_rift_shield',
   enemy_enrage: 'pet_chaos_haste',
   enemy_skill_seal: 'pet_skyfall_gravity',
+  // 后期章节梯度变体复用同机制的图标（同一招换档，视觉上不该换个东西）
+  enemy_seal_orbs_heavy: 'pet_shadow_purify',
+  enemy_poison_team_heavy: 'pet_fire_dot',
+  enemy_time_squeeze_heavy: 'pet_abyss_delay',
+  enemy_heal_block_heavy: 'pet_rift_shield',
+  enemy_skill_seal_heavy: 'pet_skyfall_gravity',
+  enemy_golem_guard_heavy: 'pet_earth_shield',
+  enemy_serpent_heal_heavy: 'pet_wood_heal',
+  enemy_charge_heavy: 'pet_fire_burst',
+  enemy_enrage_heavy: 'pet_chaos_haste',
+  enemy_atk_debuff: 'pet_metal_def_break',
+  enemy_atk_debuff_heavy: 'pet_metal_def_break',
+  enemy_resolve: 'pet_earth_shield',
+  enemy_element_absorb: 'pet_shadow_purify',
+  enemy_counter_strike: 'pet_metal_multi_hit',
 };
 
-function resolveSkillIconId(skillId: string): string {
+export function resolveSkillIconId(skillId: string): string {
   return SKILL_ICON_ALIASES[skillId] ?? skillId;
 }
 

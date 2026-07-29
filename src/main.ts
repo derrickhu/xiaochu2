@@ -35,6 +35,7 @@ import { SidebarPanel } from '@/ui/SidebarPanel';
 import { DesktopShortcutPanel } from '@/ui/DesktopShortcutPanel';
 import { CheckinPanel } from '@/ui/CheckinPanel';
 import { DailyQuestPanel } from '@/ui/DailyQuestPanel';
+import { StaminaPanel } from '@/ui/StaminaPanel';
 import {
   LOADING_SPLASH_IMAGES,
   LoadingScreenOverlay,
@@ -137,6 +138,7 @@ async function main(): Promise<void> {
 
   OverlayManager.container.addChild(new CheckinPanel());
   OverlayManager.container.addChild(new DailyQuestPanel());
+  OverlayManager.container.addChild(new StaminaPanel());
 
   if (GMManager.isRuntimeAllowed) {
     OverlayManager.container.addChild(new GMPanel());

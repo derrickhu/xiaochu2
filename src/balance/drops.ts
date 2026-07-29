@@ -37,12 +37,20 @@ const MAIN_DROP_TABLES: Readonly<Record<string, DropTable>> = {
   dt_trial_normal: { id: 'dt_trial_normal', expBase: 260, shards: [] },
   dt_trial_elite: { id: 'dt_trial_elite', expBase: 300, shards: [] },
 
-  /** 4～8 章 Boss 收录关（每章 1 只） */
+  /** 4～16 章 Boss 收录关（每章 1 只）：经验按 +20/章 递进，终章额外加码 */
   dt_ch4_boss: { id: 'dt_ch4_boss', expBase: 340, shards: [] },
   dt_ch5_boss: { id: 'dt_ch5_boss', expBase: 360, shards: [] },
   dt_ch6_boss: { id: 'dt_ch6_boss', expBase: 380, shards: [] },
   dt_ch7_boss: { id: 'dt_ch7_boss', expBase: 400, shards: [] },
   dt_ch8_boss: { id: 'dt_ch8_boss', expBase: 450, shards: [] },
+  dt_ch9_boss: { id: 'dt_ch9_boss', expBase: 470, shards: [] },
+  dt_ch10_boss: { id: 'dt_ch10_boss', expBase: 490, shards: [] },
+  dt_ch11_boss: { id: 'dt_ch11_boss', expBase: 510, shards: [] },
+  dt_ch12_boss: { id: 'dt_ch12_boss', expBase: 530, shards: [] },
+  dt_ch13_boss: { id: 'dt_ch13_boss', expBase: 550, shards: [] },
+  dt_ch14_boss: { id: 'dt_ch14_boss', expBase: 570, shards: [] },
+  dt_ch15_boss: { id: 'dt_ch15_boss', expBase: 590, shards: [] },
+  dt_ch16_boss: { id: 'dt_ch16_boss', expBase: 640, shards: [] },
 };
 
 export const DROP_TABLES: Readonly<Record<string, DropTable>> = {

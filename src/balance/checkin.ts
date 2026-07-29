@@ -3,6 +3,7 @@
  *
  * 成本最低的回访钩子：断签重置到第 1 天，第 7 天给十连券 + 碎片包做周锚点。
  */
+import { ECONOMY } from './economy';
 import type { RewardBundle } from './rewards';
 
 export const CHECKIN_CYCLE_DAYS = 7;
@@ -15,15 +16,19 @@ export interface CheckinDayDef {
   highlight?: boolean;
 }
 
-/** 签到只发「能花的东西」：灵玉 / 灵宠币 / 碎片 / 十连券；经验主线与秘境已经很多，不占签到坑位 */
+/**
+ * 签到只发「能花的东西」：灵玉 / 灵宠币 / 碎片 / 体力 / 十连券；
+ * 经验主线与秘境已经很多，不占签到坑位。
+ * 体力放在第 2、5 天：把「今天能多打几场」和回访日错开，避免同一天资源堆一起。
+ */
 export const CHECKIN_DAYS: readonly CheckinDayDef[] = [
   { day: 1, reward: { lingyu: 30 } },
-  { day: 2, reward: { coins: 300 } },
+  { day: 2, reward: { coins: 300, stamina: ECONOMY.stamina.checkinBonus } },
   { day: 3, reward: { shards: 5 } },
   { day: 4, reward: { lingyu: 50 } },
-  { day: 5, reward: { coins: 800 } },
+  { day: 5, reward: { coins: 800, stamina: ECONOMY.stamina.checkinBonus } },
   { day: 6, reward: { shards: 12 } },
-  { day: 7, reward: { tickets: 1, shards: 20 }, highlight: true },
+  { day: 7, reward: { tickets: 1, shards: 20, universal: 20 }, highlight: true },
 ];
 
 export function checkinDay(day: number): CheckinDayDef {

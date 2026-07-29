@@ -1,5 +1,7 @@
 import { PET_ROLE_NAME, type PetRole } from '@/balance/petRoles';
 import { ROLE_PASSIVE_L0, ROLE_PASSIVE_LADDER, type PassiveLayer } from '@/balance/passives';
+import { LEADER_SKILL_BY_ROLE, resolveLeaderSkill } from '@/balance/leaderSkill';
+import { RARITIES, getRarity } from '@/balance/rarity';
 import { panelTitle, aiPromptChip } from '../components/AiPromptChip';
 
 function layerDesc(layer: PassiveLayer): string {
@@ -34,5 +36,21 @@ export function renderPassivesView(container: HTMLElement): void {
     html += aiPromptChip('passives.ts', `ROLE_PASSIVE_LADDER.${role}`, role, '调整被动阶梯');
   }
   html += '</section>';
+
+  // 队长技与被动同源（role × rarity 阶梯），并排看才能判断两者方向有没有互相抵消
+  html += `<section class="panel">${panelTitle('队长技', 'leaderSkill.ts · 编队首位生效，强度乘 RARITY_PASSIVE_POWER')}`;
+  html += '<table class="data"><thead><tr><th>定位</th><th>技名</th>'
+    + `${RARITIES.map((r) => `<th>${getRarity(r).code}</th>`).join('')}</tr></thead><tbody>`;
+  for (const role of roles) {
+    const def = LEADER_SKILL_BY_ROLE[role];
+    const cells = RARITIES
+      .map((r) => `<td>${resolveLeaderSkill(role, r).text.split('：')[1] ?? ''}</td>`)
+      .join('');
+    html += `<tr><td>${PET_ROLE_NAME[role]}</td><td>${def.name}</td>${cells}</tr>`;
+  }
+  html += '</tbody></table>';
+  html += aiPromptChip('leaderSkill.ts', 'LEADER_SKILL_BY_ROLE', 'leader', '调整队长技强度');
+  html += '</section>';
+
   container.innerHTML = html;
 }

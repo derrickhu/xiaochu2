@@ -24,6 +24,7 @@ import {
   teamElements,
   teamEffectAggregate,
   petSelfCombatProfile,
+  leaderComboBonus,
   type TeamMember,
 } from './team';
 import {
@@ -35,6 +36,7 @@ import {
   type SkillResult,
   type SkillRuntimeContext,
 } from '@/game/battle/SkillEngine';
+import { enterBossPhase, pendingBossPhase } from '@/game/battle/bossPhase';
 import { orbGroupDamage } from './simulationDamage';
 import { spawnSimEnemy, type SimEnemy } from './simulationEnemy';
 import {
@@ -99,6 +101,8 @@ export function simulateBattle(
   const teamFx = teamEffectAggregate(members);
   const passiveRegenPerTurn = Math.floor(heroMaxHp * teamFx.regenPct);
   const teamDamageMult = teamFx.teamDamageMult;
+  // 队长技：辅助队长的每连加成；三维档队长技已经含在 petAtkInTeam/teamMaxHp 里
+  const comboBonus = leaderComboBonus(members);
   const teamDmgReduction = teamFx.damageReduction;
   const teamHealBonus = teamFx.healBonus;
 
@@ -126,7 +130,14 @@ export function simulateBattle(
     enemyDot: { amount: number; turnsLeft: number } | null;
     heroDot: { amount: number; turnsLeft: number } | null;
     healBlock: { mult: number; turnsLeft: number } | null;
-  } = { dmgBuff: null, enemyDefBreak: null, enemyDot: null, heroDot: null, healBlock: null };
+    atkDebuff: { mult: number; turnsLeft: number } | null;
+    resolve: { turnsLeft: number } | null;
+    absorb: { element: Element; mult: number; turnsLeft: number } | null;
+    counter: { mult: number; turnsLeft: number } | null;
+  } = {
+    dmgBuff: null, enemyDefBreak: null, enemyDot: null, heroDot: null,
+    healBlock: null, atkDebuff: null, resolve: null, absorb: null, counter: null,
+  };
   const effEnemyDef = (): number =>
     st.enemyDefBreak ? Math.floor(enemy.def_ * (1 - st.enemyDefBreak.pct)) : enemy.def_;
 
@@ -148,7 +159,7 @@ export function simulateBattle(
     }
 
     enemyReduction = enemy.dmgReduction?.reduction ?? 0;
-    buffMult = (st.dmgBuff?.mult ?? 1.0) * teamDamageMult;
+    buffMult = (st.dmgBuff?.mult ?? 1.0) * teamDamageMult * (st.atkDebuff?.mult ?? 1);
     dmgToEnemy = 0;
     healThisTurn = passiveRegenPerTurn;
 
@@ -171,14 +182,18 @@ export function simulateBattle(
     }
 
     // ── 转珠消除：覆盖元素造伤，心珠回血 ──
+    let hitsThisTurn = 0;
     for (const el of covered) {
       if (bannedSet.has(el)) continue; // 禁用属性珠：消除无伤害
       const pet = firstPetOf(el);
       if (!pet) continue;
+      hitsThisTurn += groupsPerType;
+      // 属性吸收：被吸那一色伤害打折（镜像 battleTurnResolution.elementAbsorbMult）
+      const absorb = st.absorb && st.absorb.element === el ? st.absorb.mult : 1;
       dmgToEnemy += groupsPerType * orbGroupDamage(
         pet.atk, el, enemy, effEnemyDef(), model, buffMult, enemyReduction,
-        { critRate: pet.critRate, critDamage: pet.critDamage },
-      );
+        { critRate: pet.critRate, critDamage: pet.critDamage }, comboBonus,
+      ) * absorb;
     }
     // 持续伤害（点燃）：每回合对敌人结算
     if (st.enemyDot) dmgToEnemy += st.enemyDot.amount;
@@ -189,6 +204,19 @@ export function simulateBattle(
 
     heroHp = Math.min(heroMaxHp, heroHp + healThisTurn);
     enemy.hp = Math.max(0, enemy.hp - Math.floor(dmgToEnemy));
+
+    // 反击态：按本回合出手次数反弹（镜像 BattleController.applyCounterStrike）。
+    // 计入 maxEnemyHit，好让「单次最重一击 ≤ 血池 75%」的护栏也能抓住致死反击。
+    if (st.counter && hitsThisTurn > 0 && enemy.hp > 0) {
+      const raw = Math.floor(enemy.atk * st.counter.mult * hitsThisTurn);
+      const reduced = applyDamageReduction(raw, teamDmgReduction);
+      maxEnemyHit = Math.max(maxEnemyHit, reduced);
+      const absorbed = Math.min(shield, reduced);
+      shield -= absorbed;
+      heroHp = Math.max(0, heroHp - (reduced - absorbed));
+      if (reduced - absorbed > 0) tookDamage = true;
+      if (heroHp <= 0) return finish(false);
+    }
 
     // ── 敌人死亡 → 进波；新敌人当回合不行动 ──
     if (enemy.hp <= 0) {
@@ -253,6 +281,22 @@ export function simulateBattle(
       st.healBlock.turnsLeft--;
       if (st.healBlock.turnsLeft <= 0) st.healBlock = null;
     }
+    if (st.atkDebuff) {
+      st.atkDebuff.turnsLeft--;
+      if (st.atkDebuff.turnsLeft <= 0) st.atkDebuff = null;
+    }
+    if (st.resolve) {
+      st.resolve.turnsLeft--;
+      if (st.resolve.turnsLeft <= 0) st.resolve = null;
+    }
+    if (st.absorb) {
+      st.absorb.turnsLeft--;
+      if (st.absorb.turnsLeft <= 0) st.absorb = null;
+    }
+    if (st.counter) {
+      st.counter.turnsLeft--;
+      if (st.counter.turnsLeft <= 0) st.counter = null;
+    }
   }
 
   function runtimeContext(): SkillRuntimeContext {
@@ -268,10 +312,11 @@ export function simulateBattle(
       heroMaxHp,
       teamRcvTotal: rcvTotal,
       teamAtkTotal: team.reduce((sum, p) => sum + p.atk, 0),
-      teamDamageBuffMult: (st.dmgBuff?.mult ?? 1) * teamDamageMult,
+      teamDamageBuffMult: (st.dmgBuff?.mult ?? 1) * teamDamageMult * (st.atkDebuff?.mult ?? 1),
       enemyDamageReduction: enemy.dmgReduction?.reduction ?? 0,
       teamHealBonus,
       enemyEnraged,
+      enemyResolute: !!st.resolve,
       teamSize: team.length,
       // 模拟器确定性：技能封印固定选第 0 只
       rng: () => 0,
@@ -323,6 +368,16 @@ export function simulateBattle(
         st.enemyDefBreak = { pct: Math.max(st.enemyDefBreak?.pct ?? 0, event.value), turnsLeft: event.turns ?? 0 };
       } else if (event.status === 'healBlock') {
         st.healBlock = { mult: event.value, turnsLeft: event.turns ?? 0 };
+      } else if (event.status === 'atkDebuff') {
+        st.atkDebuff = { mult: event.value, turnsLeft: event.turns ?? 0 };
+      } else if (event.status === 'resolve') {
+        st.resolve = { turnsLeft: event.turns ?? 0 };
+      } else if (event.status === 'elementAbsorb') {
+        if (event.element) {
+          st.absorb = { element: event.element, mult: event.value, turnsLeft: event.turns ?? 0 };
+        }
+      } else if (event.status === 'counterStrike') {
+        st.counter = { mult: event.value, turnsLeft: event.turns ?? 0 };
       } else if (event.status === 'enrage') {
         if (!enemyEnraged) {
           enemyEnraged = true;
@@ -343,6 +398,7 @@ export function simulateBattle(
     if (result.cleanseTeam) {
       st.heroDot = null;
       st.healBlock = null;
+      st.atkDebuff = null;
     }
     // 威吓：敌人普攻推迟
     if (result.enemyAttackDelay && result.enemyAttackDelay > 0) {
@@ -361,7 +417,7 @@ export function simulateBattle(
           const extraGroups = req.count / model.matchCount;
           dmgToEnemy += extraGroups * orbGroupDamage(
             pet.atk, req.to as Element, enemy, effEnemyDef(), model, (st.dmgBuff?.mult ?? 1) * teamDamageMult, enemy.dmgReduction?.reduction ?? enemyReduction,
-            { critRate: pet.critRate, critDamage: pet.critDamage },
+            { critRate: pet.critRate, critDamage: pet.critDamage }, comboBonus,
           );
         }
       }
@@ -371,13 +427,28 @@ export function simulateBattle(
   /** 返回本回合对英雄的原始伤害（0 = 未攻击） */
   function enemyAct(): number {
     if (enemy.hp <= 0) return 0;
+
+    // 转阶段：口径必须与 battleEnemyTurn 一致（优先于眩晕与蓄力，且消耗整个回合），
+    // 否则 Boss 变身后的攻击与技能变化不进 TTK 预算，配平就是盲的。
+    const phase = pendingBossPhase(enemy);
+    if (phase) {
+      enterBossPhase(enemy, phase);
+      enemy.charging = null;
+      if (!phase.onEnterSkillId) return 0;
+      const skill = skillForEnemy(phase.onEnterSkillId);
+      const result = runSkill(skill, { kind: 'enemy', atk: enemy.atk, element: enemy.def.element }, runtimeContext());
+      if (!result) return 0;
+      applySkillResult(result);
+      return result.damageEvents.find((e) => e.target === 'hero')?.amount ?? 0;
+    }
+
     // 眩晕：跳过行动（蓄力中的敌人不受眩晕影响）
     if (enemyStun > 0 && !enemy.charging) return 0;
 
     if (enemy.charging) {
       const charging = enemy.charging;
       enemy.charging = null;
-      enemy.attackCountdown = enemy.def.attackInterval;
+      enemy.attackCountdown = enemy.attackInterval;
       const skill = skillForEnemy(charging.skillId);
       const result = runChargedAttack(
         skill,
@@ -389,7 +460,7 @@ export function simulateBattle(
       return result.damageEvents[0]?.amount ?? 0;
     }
 
-    const skillIds = enemy.def.skillIds ?? [];
+    const skillIds = enemy.skillIds;
     for (let i = 0; i < skillIds.length; i++) {
       if (enemy.skillCds[i] > 0) enemy.skillCds[i]--;
     }
@@ -408,14 +479,14 @@ export function simulateBattle(
         if (result.statusEvents.some((e) => e.status === 'charge')) return 0;
         enemy.attackCountdown--;
         if (enemy.attackCountdown > 0) return 0;
-        enemy.attackCountdown = enemy.def.attackInterval;
+        enemy.attackCountdown = enemy.attackInterval;
         return enemy.atk;
       }
     }
 
     enemy.attackCountdown--;
     if (enemy.attackCountdown > 0) return 0;
-    enemy.attackCountdown = enemy.def.attackInterval;
+    enemy.attackCountdown = enemy.attackInterval;
     return enemy.atk;
   }
 

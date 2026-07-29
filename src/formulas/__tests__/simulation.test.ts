@@ -200,9 +200,52 @@ function teamAtBudget(ch: number) {
   return buildTeam(TEAMS.burst, b.enterLevel, b.enterStar);
 }
 
-const ALL_CHAPTERS = Object.keys(CHAPTER_POWER).map(Number).sort((a, b) => a - b);
+/**
+ * 已有关卡数据的章节（不是 CHAPTER_POWER 的键）。
+ *
+ * 锚点表可以领先于关卡数据（扩章时先补锚点再铺关），所以战斗类契约必须按 STAGES 遍历；
+ * 「锚点覆盖所有已存在章节」这条不变量由下方 describe 单独断言。
+ */
+const ALL_CHAPTERS = [...new Set(STAGES.map((s) => s.chapter))].sort((a, b) => a - b);
 
-describe('功率预算：达标队伍可通关本章（1~8 章全量）', () => {
+describe('功率预算锚点：覆盖与外推', () => {
+  it('每个有关卡的章节都必须有 CHAPTER_POWER 锚点', () => {
+    for (const ch of ALL_CHAPTERS) {
+      expect(CHAPTER_POWER[ch], `第 ${ch} 章缺锚点：扩章必须同步补 CHAPTER_POWER`).toBeDefined();
+    }
+  });
+
+  it('锚点等级与星级随章节单调不减，且不越当期星级上限', () => {
+    const chapters = Object.keys(CHAPTER_POWER).map(Number).sort((a, b) => a - b);
+    const STAR_MAX_LEVEL: Record<number, number> = { 1: 50, 2: 60, 3: 70, 4: 85, 5: 99 };
+    for (let i = 0; i < chapters.length; i++) {
+      const cur = CHAPTER_POWER[chapters[i]];
+      expect(cur.clearLevel, `第 ${cur.chapter} 章 clear 应 ≥ enter`).toBeGreaterThanOrEqual(cur.enterLevel);
+      expect(cur.clearLevel, `第 ${cur.chapter} 章 clear 越 ${cur.enterStar}★ 上限`)
+        .toBeLessThanOrEqual(STAR_MAX_LEVEL[cur.enterStar]);
+      if (i === 0) continue;
+      const prev = CHAPTER_POWER[chapters[i - 1]];
+      expect(cur.enterLevel, `第 ${cur.chapter} 章 enterLevel`).toBeGreaterThanOrEqual(prev.enterLevel);
+      expect(cur.enterStar, `第 ${cur.chapter} 章 enterStar`).toBeGreaterThanOrEqual(prev.enterStar);
+    }
+  });
+
+  it('超出末章锚点时线性外推，不得钳在末章（否则契约测试会静默失效）', () => {
+    const chapters = Object.keys(CHAPTER_POWER).map(Number).sort((a, b) => a - b);
+    const last = CHAPTER_POWER[chapters[chapters.length - 1]];
+    const beyond = getChapterBudget(last.chapter + 3);
+    expect(beyond.enterLevel, '超界锚点应继续上升').toBeGreaterThan(last.enterLevel);
+    expect(beyond.enterLevel).toBeLessThanOrEqual(99);
+  });
+
+  it('小数章（通天塔 / 秘境缩放）在相邻锚点间插值', () => {
+    const mid = getChapterBudget(4.5);
+    expect(mid.enterLevel).toBeGreaterThanOrEqual(CHAPTER_POWER[4].enterLevel);
+    expect(mid.enterLevel).toBeLessThanOrEqual(CHAPTER_POWER[5].enterLevel);
+  });
+});
+
+describe('功率预算：达标队伍可通关本章（全量已有章节）', () => {
   for (const ch of ALL_CHAPTERS) {
     it(`第 ${ch} 章：进章预算队（L${CHAPTER_BUDGET[ch].enterLevel}/${CHAPTER_BUDGET[ch].enterStar}★）中手可通关全部关卡`, () => {
       const team = teamAtBudget(ch);
@@ -255,17 +298,27 @@ describe('预算护栏：Boss 波次平滑（消灭 HP 断崖）', () => {
     }
   });
 
-  it('每章 Boss 总量 ≈ 前一关总量 × 目标倍率（±预算容差）', () => {
+  it('每章 Boss 总量 ≈ 本章铺垫关总量均值 × 目标倍率（±预算容差）', () => {
+    const g = BUDGET_GUARDRAIL;
+    for (const boss of bosses) {
+      const fillers = STAGES.filter((s) => s.chapter === boss.chapter && !s.isBoss);
+      const meanFiller = fillers.reduce((sum, f) => sum + stageTotalHp(f.id), 0) / fillers.length;
+      const total = stageTotalHp(boss.id);
+      const target = meanFiller * g.bossTotalTargetRatio;
+      const msg = `${boss.id} 总量 ${total} vs 目标 ${Math.round(target)}（铺垫均值 ${Math.round(meanFiller)}）`;
+      expect(total, msg).toBeGreaterThanOrEqual(target * (1 - g.budgetTolerance));
+      expect(total, msg).toBeLessThanOrEqual(target * (1 + g.budgetTolerance));
+    }
+  });
+
+  it('每章 Boss 总量相对前一关落在宽区间内（防「前一关过软/过硬」的临门断崖）', () => {
     const g = BUDGET_GUARDRAIL;
     for (const boss of bosses) {
       const prev = STAGES.find((s) => s.chapter === boss.chapter && s.index === boss.index - 1)!;
-      const total = stageTotalHp(boss.id);
-      const prevTotal = stageTotalHp(prev.id);
-      const target = prevTotal * g.bossTotalTargetRatio;
-      expect(total, `${boss.id} 总量 ${total} vs 目标 ${Math.round(target)}`)
-        .toBeGreaterThanOrEqual(target * (1 - g.budgetTolerance));
-      expect(total, `${boss.id} 总量 ${total} vs 目标 ${Math.round(target)}`)
-        .toBeLessThanOrEqual(target * (1 + g.budgetTolerance));
+      const ratio = stageTotalHp(boss.id) / stageTotalHp(prev.id);
+      const msg = `${boss.id} / ${prev.id} = ${ratio.toFixed(2)}`;
+      expect(ratio, msg).toBeGreaterThanOrEqual(g.bossTotalMinRatio);
+      expect(ratio, msg).toBeLessThanOrEqual(g.bossTotalMaxRatio);
     }
   });
 
@@ -276,7 +329,7 @@ describe('预算护栏：Boss 波次平滑（消灭 HP 断崖）', () => {
   });
 });
 
-describe('预算护栏：跨章单调性（1~8 章）', () => {
+describe('预算护栏：跨章单调性（全量已有章节）', () => {
   it('章 Boss 总 HP 随章节严格递增', () => {
     const totals = ALL_CHAPTERS.map((ch) => {
       const boss = STAGES.find((s) => s.chapter === ch && s.isBoss)!;
@@ -354,6 +407,21 @@ describe('v0.4 首通路径：Boss 有真实压力，碾压不复存在', () => 
       const r = simulateBattle(firstRunTeam(ch), boss.id, COMBO_MODELS.mid);
       expect(r.win, boss.id).toBe(true);
       expect(r.turnsUsed, `${boss.id} 应有真实战斗时长`).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it('Boss 单次最重一击 ≤ 锚点队血池 75%（禁止「抛硬币」式秒杀）', () => {
+    // 这条契约来自两次实打实的翻车：
+    // - 第 7 章前置怪 thunderlord（baseAtk 365 离群）配 2.3 倍蓄力打出 5646 / 6699 血；
+    // - 第 8 章终章 Boss 分阶段后，1.2 倍攻击加成把蓄力斩推到 10729 / 9773 血。
+    // 两次都表现为「低手与中手在同一回合被同一击带走」——胜负与操作水平完全脱钩，
+    // 而这类问题在总量护栏与 TTK 带里都测不出来，必须单独盯单次伤害峰值。
+    for (const ch of [4, 5, 6, 7, 8]) {
+      const boss = STAGES.find((s) => s.chapter === ch && s.isBoss)!;
+      const r = simulateBattle(firstRunTeam(ch), boss.id, COMBO_MODELS.mid);
+      const pct = r.maxEnemyHit / r.heroMaxHp;
+      expect(pct, `${boss.id} 最重一击 ${r.maxEnemyHit} / 血池 ${r.heroMaxHp}`)
+        .toBeLessThanOrEqual(0.75);
     }
   });
 

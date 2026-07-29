@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  RARITY_PROFILES, RARITIES, getRarity, rarityProbabilities, type Rarity,
+  RARITY_PROFILES, RARITIES, getRarity, rarityProbabilities, standardGachaRates, type Rarity,
 } from '../rarity';
 import { PETS } from '../pets';
 
@@ -33,6 +33,22 @@ describe('稀有度抽象', () => {
 
   it('getRarity 越界回退到最低档', () => {
     expect(getRarity(99 as Rarity).tier).toBe(1);
+  });
+
+  it('标准池四档绝对概率之和为 1 且逐档递减', () => {
+    const rates = standardGachaRates();
+    const sum = [...rates.values()].reduce((a, b) => a + b, 0);
+    expect(sum).toBeCloseTo(1, 10);
+    for (let i = 1; i < RARITIES.length; i++) {
+      expect(rates.get(RARITIES[i])!).toBeLessThan(rates.get(RARITIES[i - 1])!);
+    }
+  });
+
+  it('gachaRate 与 gachaWeight 同形（公示与池内归一不打架）', () => {
+    const totalW = RARITIES.reduce((s, t) => s + getRarity(t).gachaWeight, 0);
+    for (const t of RARITIES) {
+      expect(getRarity(t).gachaWeight / totalW).toBeCloseTo(getRarity(t).gachaRate, 10);
+    }
   });
 });
 

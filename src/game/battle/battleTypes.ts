@@ -47,10 +47,18 @@ export interface EnemyUnit {
   hp: number;
   atk: number;
   def_: number;
+  /** 出场攻击：Boss 阶段 atkMult 的基准，不随阶段改变 */
+  baseAtk: number;
   /** 距离下次攻击的剩余回合 */
   attackCountdown: number;
-  /** 各技能剩余冷却（与 def.skillIds 一一对应） */
+  /** 当前攻击间隔（Boss 阶段可覆写 def.attackInterval） */
+  attackInterval: number;
+  /** 当前技能表（Boss 阶段可追加，故不直接读 def.skillIds） */
+  skillIds: string[];
+  /** 各技能剩余冷却（与 skillIds 一一对应） */
   skillCds: number[];
+  /** 已进入的 Boss 阶段数：0 = 原始形态 */
+  phaseIndex: number;
   /** 蓄力中（下个敌人回合打出 atk × mult 重击） */
   charging: { mult: number; skillId: string; releaseVfx: SkillVfxId } | null;
   /** 减伤状态：受到伤害 ×(1-reduction) */
@@ -72,7 +80,13 @@ export interface EnemyActResult {
     | 'timeSqueeze'
     | 'healBlock'
     | 'enrage'
-    | 'skillSeal';
+    | 'skillSeal'
+    | 'atkDebuff'
+    | 'resolve'
+    | 'elementAbsorb'
+    | 'counterStrike'
+    /** Boss 跨血线转阶段（本回合只做变身，可携带切入技） */
+    | 'phaseShift';
   damage: number;
   absorbed: number;
   heroDead: boolean;
@@ -90,6 +104,10 @@ export interface EnemyActResult {
   turns?: number;
   /** 敌人因眩晕跳过了本回合（表现层播「眩晕中」） */
   stunnedSkip?: boolean;
+  /** phaseShift：新阶段标签（表现层播转阶段横幅） */
+  phaseLabel?: string;
+  /** elementAbsorb：被吸收属性的中文名（表现层提示玩家换色） */
+  absorbElementName?: string;
   /** 回合结束 DoT 结算明细（owner = 承伤方，表现层播 tick 反馈） */
   dotTicks?: { owner: 'team' | 'enemy'; amount: number }[];
 }
@@ -120,6 +138,8 @@ export interface BattleResult {
   exp: number;
   /** 掉落碎片（升星材料） */
   shards: { petId: string; count: number }[];
+  /** 掉落通用碎片（精英档起产出） */
+  universal: number;
   turnsUsed: number;
   noDamage: boolean;
   /** 本场击败的章 Boss 高级怪直掉灵宠 id（胜利时解锁拥有） */

@@ -16,7 +16,15 @@ export type BossChallengeKind =
   | 'selfHeal'
   | 'chargeHit'
   | 'noHeart'
-  | 'banElement';
+  | 'banElement'
+  // ── 第 9~16 章：每章仍只首教 1 种 ──
+  | 'phaseShift'
+  | 'elementAbsorb'
+  | 'counterStrike'
+  | 'attackDown'
+  | 'lockedColumn'
+  | 'resolveTank'
+  | 'finalTrial';
 
 export const BOSS_CHALLENGE_LABEL: Readonly<Record<BossChallengeKind, string>> = {
   multiWave: '多波耐力',
@@ -28,6 +36,13 @@ export const BOSS_CHALLENGE_LABEL: Readonly<Record<BossChallengeKind, string>> =
   chargeHit: '蓄力重击',
   noHeart: '禁心',
   banElement: '封属性',
+  phaseShift: '形态转换',
+  elementAbsorb: '属性吸收',
+  counterStrike: '反击态',
+  attackDown: '削攻',
+  lockedColumn: '锁列',
+  resolveTank: '免控坚壁',
+  finalTrial: '终局试炼',
 };
 
 export function bossChallengeLabel(kind: BossChallengeKind): string {
@@ -123,6 +138,56 @@ export function recipeForChallenge(kind: BossChallengeKind): ChallengeRecipe {
         hintText: hint.text,
       };
     }
+    case 'phaseShift':
+      return {
+        encounters: [mob('enemy_crystal_warden_earth')],
+        mechanics: ['enemy_phase'],
+        hintTags: ['形态转换'],
+        hintText: '幽晶魔像半血会转形态：留爆发应对新形态',
+      };
+    case 'elementAbsorb':
+      return {
+        encounters: [mob('enemy_devour_serpent_water')],
+        mechanics: ['enemy_absorb'],
+        hintTags: ['属性吸收'],
+        hintText: '寒蛟会吸收克制它的属性：备好第二种输出色',
+      };
+    case 'counterStrike':
+      return {
+        encounters: [mob('enemy_thorn_scorpion_metal')],
+        mechanics: ['enemy_counter'],
+        hintTags: ['反击态'],
+        hintText: '毒蝎反击态下出手越多反伤越重：少而重地打',
+      };
+    case 'attackDown':
+      // 枯翼魔蝠单只太软（血量只有傀儡的一半），双波才够得上后期铺垫关的量级
+      return {
+        encounters: [mob('enemy_wither_bat_fire'), mob('enemy_wither_bat_fire')],
+        mechanics: ['enemy_atk_down'],
+        hintTags: ['削攻', '双波'],
+        hintText: '魔蝠会削弱我方伤害：带净化技解除',
+      };
+    case 'lockedColumn':
+      return {
+        encounters: [mob('enemy_bind_slime_wood'), mob('enemy_bind_slime_wood')],
+        mechanics: ['orb_locked_col'],
+        hintTags: ['锁列', '双波'],
+        hintText: '开局有一整列被锁：先从两侧消除拆封',
+      };
+    case 'resolveTank':
+      return {
+        encounters: [mob('enemy_golem_bulwark_earth')],
+        mechanics: ['enemy_resolve_guard'],
+        hintTags: ['免控坚壁'],
+        hintText: '磐岩傀儡凝意期间免疫控制：靠破防与爆发硬拆',
+      };
+    case 'finalTrial':
+      return {
+        encounters: [mob('enemy_crystal_warden_earth'), mob('enemy_devour_serpent_water')],
+        mechanics: ['enemy_final_trial'],
+        hintTags: ['终局试炼'],
+        hintText: '终局试炼：转形态与属性吸收同场，克制/爆发/续航全要到位',
+      };
   }
 }
 
@@ -202,6 +267,55 @@ export function bossChallengeConfig(
         hintText: `${hint.text}；Boss 会封印技能且低血狂暴，推荐高爆发速杀，击败天外魔君高级形态收录其重力技`,
       };
     }
+    case 'phaseShift':
+      return {
+        prepMob: 'enemy_crystal_warden_earth',
+        mechanics: ['enemy_phase'],
+        hintTags: ['BOSS', '形态转换', '收录'],
+        hintText: 'Boss 跨血线会转形态并换招：血条分段处留一手爆发',
+      };
+    case 'elementAbsorb':
+      return {
+        prepMob: 'enemy_devour_serpent_water',
+        mechanics: ['enemy_absorb'],
+        hintTags: ['BOSS', '属性吸收', '收录'],
+        hintText: 'Boss 会吸收克制它的属性：带第二种输出色轮换',
+      };
+    case 'counterStrike':
+      return {
+        prepMob: 'enemy_thorn_scorpion_metal',
+        mechanics: ['enemy_counter'],
+        hintTags: ['BOSS', '反击态', '收录'],
+        hintText: 'Boss 反击态下出手越多反伤越重：少而重地打',
+      };
+    case 'attackDown':
+      return {
+        prepMob: 'enemy_wither_bat_fire',
+        mechanics: ['enemy_atk_down'],
+        hintTags: ['BOSS', '削攻', '收录'],
+        hintText: 'Boss 会削弱我方伤害：带净化技解除后再爆发',
+      };
+    case 'lockedColumn':
+      return {
+        prepMob: 'enemy_bind_slime_wood',
+        mechanics: ['orb_locked_col'],
+        hintTags: ['BOSS', '锁列', '收录'],
+        hintText: '开局锁一整列：先拆封再铺 Combo',
+      };
+    case 'resolveTank':
+      return {
+        prepMob: 'enemy_golem_bulwark_earth',
+        mechanics: ['enemy_resolve_guard'],
+        hintTags: ['BOSS', '免控坚壁', '收录'],
+        hintText: 'Boss 凝意期间免疫控制：靠破防与爆发硬拆',
+      };
+    case 'finalTrial':
+      return {
+        prepMob: 'enemy_crystal_warden_earth',
+        mechanics: ['enemy_final_trial', 'orb_locked_col'],
+        hintTags: ['BOSS', '终局试炼', '锁列', '收录'],
+        hintText: '终局试炼：转形态 + 锁列同场，克制/爆发/续航全要到位',
+      };
   }
 }
 
@@ -232,6 +346,20 @@ export function stageMatchesChallenge(
       return mech.has('rule_no_heal');
     case 'banElement':
       return [...mech].some((m) => m.startsWith('rule_ban_'));
+    case 'phaseShift':
+      return mobIds.some((id) => id === 'enemy_crystal_warden_earth');
+    case 'elementAbsorb':
+      return mobIds.some((id) => id === 'enemy_devour_serpent_water');
+    case 'counterStrike':
+      return mobIds.some((id) => id === 'enemy_thorn_scorpion_metal');
+    case 'attackDown':
+      return mobIds.some((id) => id === 'enemy_wither_bat_fire');
+    case 'lockedColumn':
+      return mech.has('orb_locked_col');
+    case 'resolveTank':
+      return mobIds.some((id) => id === 'enemy_golem_bulwark_earth');
+    case 'finalTrial':
+      return mech.has('enemy_final_trial');
     default:
       return false;
   }
@@ -246,4 +374,12 @@ export const CHAPTER_BOSS_CHALLENGE: Readonly<Record<number, BossChallengeKind>>
   6: 'chargeHit',
   7: 'noHeart',
   8: 'banElement',
+  9: 'highAttack',
+  10: 'phaseShift',
+  11: 'elementAbsorb',
+  12: 'counterStrike',
+  13: 'attackDown',
+  14: 'resolveTank',
+  15: 'lockedColumn',
+  16: 'finalTrial',
 };

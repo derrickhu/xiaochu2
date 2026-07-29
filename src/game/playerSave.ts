@@ -9,6 +9,7 @@ import { STAGES, STAGE_STAR_MIGRATION } from '@/balance/stages';
 import { migrateCreatureId } from '@/balance/creatureIdMigration';
 import { getStarProfile } from '@/balance/growth';
 import { ECONOMY } from '@/balance/economy';
+import { emptyStaminaState, type StaminaState } from './staminaService';
 
 import {
   DEV_LEGACY_SAVE_KEYS,
@@ -17,7 +18,7 @@ import {
 } from '@/config/CloudConfig';
 
 export { SAVE_KEY, LEGACY_SAVE_KEY } from '@/config/CloudConfig';
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 /** 单只灵宠的养成进度 */
 export interface OwnedPet {
@@ -38,6 +39,12 @@ export interface DailyState {
   questClaimed: string[];
   /** 每日首胜翻倍已发放的日期；与 date 分开存，避免重置漏判导致重复发放 */
   firstWinDate: string;
+  /**
+   * 广告位 id → 今日已看次数（日限见 balance/monetization.ts 的 AD_PLACEMENTS）。
+   * 8 个广告位共用这一份计数，而不是各自加一个 `xxxAd: {date, used}` 字段 ——
+   * 后者每加一个位就得配一套判日切代码，日限逻辑必然逐渐漂移。
+   */
+  adUsage: Record<string, number>;
 }
 
 /** 七日循环签到 */
@@ -77,6 +84,10 @@ export interface SaveData {
   tickets: number;
   /** 抽卡硬保底计数（连续未出 SSR+ 抽数） */
   gachaSinceHigh: number;
+  /** UR 天井计数（连续未出 UR 抽数，与 gachaSinceHigh 独立），v7 起 */
+  gachaSinceUr: number;
+  /** 通用碎片：可折算成任意宠的本体碎片（折算率见 ECONOMY.universal），v7 起 */
+  universalShards: number;
   /** 升级经验池（关卡掉落，跨宠共享，升级时按需消耗） */
   exp: number;
   /** stageId → 最佳星数（1~3） */
@@ -99,6 +110,8 @@ export interface SaveData {
   checkin: CheckinState;
   /** 通天塔，v6 起 */
   tower: TowerState;
+  /** 体力（惰性恢复，见 game/staminaService.ts），v7 起 */
+  stamina: StaminaState;
 }
 
 /** 招募结果 */
@@ -125,6 +138,7 @@ export function emptyDailyState(date = ''): DailyState {
     questProgress: {},
     questClaimed: [],
     firstWinDate: '',
+    adUsage: {},
   };
 }
 
@@ -152,6 +166,8 @@ export function initialData(): SaveData {
     lingyu: ECONOMY.gacha.starterLingyu,
     tickets: 0,
     gachaSinceHigh: 0,
+    gachaSinceUr: 0,
+    universalShards: 0,
     exp: 0,
     stars: {},
     team: [...DEFAULT_TEAM],
@@ -164,12 +180,14 @@ export function initialData(): SaveData {
     daily: emptyDailyState(),
     checkin: emptyCheckinState(),
     tower: emptyTowerState(),
+    stamina: emptyStaminaState(),
   };
 }
 
 /**
  * 解析存档，缺字段回退默认；v3 起迁移灵宠 ID，v5 起 Boss 关统一到第 8 关，
- * v6 起补齐 daily/checkin/tower（老档直接吃缺省空态，等价于「今天还没开始玩」）。
+ * v6 起补齐 daily/checkin/tower（老档直接吃缺省空态，等价于「今天还没开始玩」），
+ * v7 起补齐 gachaSinceUr / universalShards / stamina（缺失即从 0 与满瓶起算）。
  */
 export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown }): SaveData {
   const migrated = migratePetIdsInPartialSave(parsed);
@@ -182,6 +200,12 @@ export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown
     lingyu: typeof migrated.lingyu === 'number' ? migrated.lingyu : ECONOMY.gacha.starterLingyu,
     tickets: typeof migrated.tickets === 'number' ? migrated.tickets : 0,
     gachaSinceHigh: typeof migrated.gachaSinceHigh === 'number' ? migrated.gachaSinceHigh : 0,
+    gachaSinceUr: typeof migrated.gachaSinceUr === 'number'
+      ? Math.max(0, Math.floor(migrated.gachaSinceUr))
+      : 0,
+    universalShards: typeof migrated.universalShards === 'number'
+      ? Math.max(0, Math.floor(migrated.universalShards))
+      : 0,
     exp: typeof migrated.exp === 'number' ? migrated.exp : 0,
     stars: migrateStageStars(
       migrated.stars && typeof migrated.stars === 'object' ? migrated.stars : {},
@@ -202,7 +226,22 @@ export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown
     daily: sanitizeDaily(migrated.daily),
     checkin: sanitizeCheckin(migrated.checkin),
     tower: sanitizeTower(migrated.tower),
+    stamina: sanitizeStamina(migrated.stamina),
   };
+}
+
+/** 老档无体力字段 → 按满瓶开局（未上线，不需要向下兼容惩罚） */
+function sanitizeStamina(raw: unknown): StaminaState {
+  const out = emptyStaminaState();
+  if (!raw || typeof raw !== 'object') return out;
+  const s = raw as Partial<StaminaState>;
+  if (typeof s.value === 'number' && Number.isFinite(s.value)) {
+    out.value = Math.max(0, Math.floor(s.value));
+  }
+  if (typeof s.lastRegenMs === 'number' && Number.isFinite(s.lastRegenMs) && s.lastRegenMs > 0) {
+    out.lastRegenMs = Math.floor(s.lastRegenMs);
+  }
+  return out;
 }
 
 function sanitizeDaily(raw: unknown): DailyState {
@@ -220,6 +259,12 @@ function sanitizeDaily(raw: unknown): DailyState {
   }
   if (Array.isArray(d.questClaimed)) {
     out.questClaimed = [...new Set(d.questClaimed.filter((id): id is string => typeof id === 'string'))];
+  }
+  if (d.adUsage && typeof d.adUsage === 'object') {
+    for (const [id, v] of Object.entries(d.adUsage as Record<string, unknown>)) {
+      const n = typeof v === 'number' ? Math.floor(v) : 0;
+      if (n > 0) out.adUsage[id] = n;
+    }
   }
   return out;
 }

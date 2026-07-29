@@ -17,6 +17,7 @@ import {
 import {
   skillMasteryRank, nextMasteryMilestone, type SkillMasteryMilestone,
 } from '@/balance/skillGrowth';
+import { resolveLeaderSkill, type ResolvedLeaderSkill } from '@/balance/leaderSkill';
 import type { PetProgress } from '@/balance/progression/requirements';
 import { skillForPet } from './battle/SkillEngine';
 
@@ -36,6 +37,8 @@ export interface ResolvedPetAbilities {
   passiveLines: readonly PassiveDisplayLine[];
   /** 完整被动 bundle（战斗聚合/高级消费方用） */
   bundle: PassiveEffectBundle;
+  /** 队长技（仅在该宠位于编队首位时生效，与养成进度无关） */
+  leader: ResolvedLeaderSkill;
 }
 
 /** 单一出口：宠物定义 + 养成进度 → 能力快照 */
@@ -51,6 +54,7 @@ export function resolvePetAbilities(pet: PetDef, progress: PetProgress): Resolve
     },
     passiveLines: bundle.displayLines,
     bundle,
+    leader: resolveLeaderSkill(pet.role, pet.rarity),
   };
 }
 

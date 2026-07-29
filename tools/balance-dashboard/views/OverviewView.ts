@@ -59,7 +59,7 @@ export function renderOverview(container: HTMLElement): void {
   ).join('');
 
   container.innerHTML = `
-    <section class="panel">${panelTitle('总览', '64 关 · 8 收录 · Boss 挑战 archetype')}
+    <section class="panel">${panelTitle('总览', `${stats.stages} 关 · ${stats.captures} 收录 · Boss 挑战 archetype`)}
       ${cards}
     </section>
     <section class="panel">
@@ -77,8 +77,8 @@ export function renderOverview(container: HTMLElement): void {
       </table></div>
     </section>
     <section class="panel">
-      <h2>章节预算 vs 模拟（仅 1～3 章有 CHAPTER_BUDGET）</h2>
-      <p class="sub">4～8 章无预算锚点，勿硬套红绿灯</p>
+      <h2>章节预算 vs 模拟（CHAPTER_POWER 全 16 章锚点）</h2>
+      <p class="sub">锚点队 = 该章 enterLevel/enterStar 的默认队；红灯表示达标队打不过本章 Boss</p>
       <table class="data"><thead><tr><th>章</th><th>进入期望</th><th>通关期望</th><th>Boss关</th><th>中手模拟</th></tr></thead>
       <tbody>${budgetRows}</tbody></table>
     </section>

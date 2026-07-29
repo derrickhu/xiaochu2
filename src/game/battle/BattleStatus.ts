@@ -19,12 +19,16 @@ export type StatusKind =
   | 'timeSqueeze'       // team(debuff)：转珠时限 -value 秒
   | 'healBlock'         // team(debuff)：心珠回复 ×value（如 0.5）
   | 'skillSeal'         // team(debuff)：value = 被封印宠物 index
-  | 'enrage';           // enemy：狂暴中（value = atkMult，无 turns = 永久）
+  | 'atkDebuff'        // team(debuff)：我方伤害 ×value（如 0.6）
+  | 'enrage'            // enemy：狂暴中（value = atkMult，无 turns = 永久）
+  | 'resolve'           // enemy：凝意中，免疫眩晕与威吓
+  | 'elementAbsorb'     // enemy：吸收 element 属性，该色消珠伤害 ×value
+  | 'counterStrike';    // enemy：反击态，我方每次出手反弹 敌攻×value
 export type StatusStackPolicy = 'replace' | 'max' | 'add' | 'ignoreIfPresent';
 
 /** 我方可被净化技清除的 debuff */
 export const TEAM_DEBUFF_KINDS: readonly StatusKind[] = [
-  'dot', 'timeSqueeze', 'healBlock', 'skillSeal',
+  'dot', 'timeSqueeze', 'healBlock', 'skillSeal', 'atkDebuff',
 ];
 
 /** 回合结束时 dot 造成的伤害（owner = 承伤方） */
@@ -144,6 +148,27 @@ export class BattleStatusStore {
   /** 敌人狂暴攻击乘区（无则 1） */
   enrageAtkMult(): number {
     return this.get('enemy', 'enrage')?.value ?? 1;
+  }
+
+  /** 我方伤害削弱乘区（敌方削攻 debuff，无则 1） */
+  teamAtkDebuffMult(): number {
+    return this.get('team', 'atkDebuff')?.value ?? 1;
+  }
+
+  /** 敌人是否凝意中（免疫眩晕与威吓） */
+  isResolute(): boolean {
+    return !!this.get('enemy', 'resolve');
+  }
+
+  /** 被吸收属性的伤害乘区（无则 1） */
+  elementAbsorbMult(element: Element): number {
+    const s = this.get('enemy', 'elementAbsorb');
+    return s && s.element === element ? s.value : 1;
+  }
+
+  /** 敌人反击乘区（我方每次出手反弹 敌攻×该值；无则 0） */
+  counterStrikeMult(): number {
+    return this.get('enemy', 'counterStrike')?.value ?? 0;
   }
 
   /** 净化：清除我方全部 debuff，返回被清除的状态（用于演出） */

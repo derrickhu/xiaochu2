@@ -11,10 +11,13 @@
 import { PETS, type PetDef } from '@/balance/pets';
 import { RARITIES, getRarity, type Rarity } from '@/balance/rarity';
 import { ECONOMY } from '@/balance/economy';
+import { CURRENT_BANNER, upWeightOf, type GachaBanner } from '@/balance/gachaBanner';
 
 export interface GachaState {
   /** 连续未出 SSR+ 的抽数（硬保底计数，跨抽持久化） */
   sinceHigh: number;
+  /** 连续未出 UR 的抽数（UR 天井计数，与 sinceHigh 相互独立） */
+  sinceUr: number;
 }
 
 export interface PullOutcome {
@@ -24,10 +27,20 @@ export interface PullOutcome {
   duplicate: boolean;
   /** duplicate 时获得的碎片数（非重复为 0） */
   shards: number;
-  /** 是否触发硬保底（UI 提示用） */
+  /** duplicate 高稀有额外产出的通用碎片（落库时由调用方填充） */
+  universal?: number;
+  /** 是否触发 SSR+ 硬保底（UI 提示用） */
   pity: boolean;
+  /** 是否触发 UR 天井（UI 提示用） */
+  urPity?: boolean;
+  /** 是否为当期 UP 宠（UI 加角标用） */
+  featured?: boolean;
   /** 高稀有护航包（NEW SSR/UR 出货附赠，落库时由调用方填充） */
   escort?: { shards: number; exp: number };
+}
+
+export function emptyGachaState(): GachaState {
+  return { sinceHigh: 0, sinceUr: 0 };
 }
 
 /** 档内选宠权重回调：返回该宠相对权重（≥0），缺省等权 1 */
@@ -110,7 +123,27 @@ export function poolGachaRates(pool: readonly PetDef[]): Map<Rarity, number> {
 }
 
 /**
- * 单抽：按概率 + 硬保底出货。会就地更新 state.sinceHigh。
+ * 档内选宠权重：把当期 UP 池的「档内份额」翻译成 PetWeightFn。
+ * 权重需要知道同档共有几只、其中几只 UP，所以按池预计算档位名单。
+ */
+export function bannerWeightFn(
+  pool: readonly PetDef[],
+  banner: GachaBanner = CURRENT_BANNER,
+): PetWeightFn {
+  const tierIds = new Map<Rarity, string[]>();
+  for (const p of pool) {
+    const list = tierIds.get(p.rarity);
+    if (list) list.push(p.id);
+    else tierIds.set(p.rarity, [p.id]);
+  }
+  return (pet) => upWeightOf(pet.id, tierIds.get(pet.rarity) ?? [pet.id], banner);
+}
+
+/**
+ * 单抽：按概率 + 保底出货。会就地更新 state.sinceHigh / state.sinceUr。
+ *
+ * 两条保底计数相互独立：SSR 出货只清 sinceHigh，UR 出货同时清两条。
+ * 判定顺序为「UR 天井 > SSR 硬保底 > 十连地板」，取三者中最高的下限。
  * @param minRarity 本抽强制最低稀有（十连保底用，缺省 1）
  */
 export function pullOne(
@@ -123,20 +156,31 @@ export function pullOne(
 ): PullOutcome {
   const g = ECONOMY.gacha;
   const effPool = pool.length > 0 ? pool : DEFAULT_POOL;
+  const sinceUr = state.sinceUr ?? 0;
+  const urPityHit = sinceUr + 1 >= g.pityUR;
   const pityHit = state.sinceHigh + 1 >= g.pitySSR;
-  const rawFloor: Rarity = pityHit ? 3 : minRarity;
+  const rawFloor: Rarity = urPityHit ? 4 : pityHit ? 3 : minRarity;
   const floor = effectiveMinRarity(effPool, rawFloor);
   const rarity = rollRarityForPool(rng, effPool, floor);
 
   if (rarity >= 3) state.sinceHigh = 0;
   else state.sinceHigh += 1;
+  if (rarity >= 4) state.sinceUr = 0;
+  else state.sinceUr = sinceUr + 1;
 
   const pet = pickPetOfRarity(rng, rarity, effPool, weightOf);
   // 展示与碎片结算一律以「实际出货宠」的稀有度为准（与卡面/图鉴一致）
   const actualRarity = pet.rarity;
   const duplicate = isOwned(pet.id);
   const shards = duplicate ? (g.duplicateShards[actualRarity] ?? 0) : 0;
-  return { petId: pet.id, rarity: actualRarity, duplicate, shards, pity: pityHit };
+  return {
+    petId: pet.id,
+    rarity: actualRarity,
+    duplicate,
+    shards,
+    pity: pityHit,
+    urPity: urPityHit,
+  };
 }
 
 /**

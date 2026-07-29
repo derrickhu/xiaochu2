@@ -7,7 +7,7 @@ import { TweenManager, Ease } from '@/core/TweenManager';
 import { EventBus } from '@/core/EventBus';
 import { DesktopShortcutService } from '@/core/DesktopShortcutService';
 import { Platform } from '@/core/PlatformService';
-import { COLORS, FONT_SIZE, makeButton, makePanel, makeText } from '@/ui';
+import { COLORS, FONT_SIZE, makeButton, makeCloseButton, makePanel, makeText } from '@/ui';
 
 export class DesktopShortcutPanel extends PIXI.Container {
   private _dim!: PIXI.Graphics;
@@ -102,15 +102,8 @@ export class DesktopShortcutPanel extends PIXI.Container {
     this._actionSlot.position.set(0, panelH / 2 - 62);
     this._content.addChild(this._actionSlot);
 
-    const closeBtn = makeText('✕', {
-      size: FONT_SIZE.lg,
-      fill: COLORS.textSub,
-      anchor: 0.5,
-    });
+    const closeBtn = makeCloseButton({ onTap: () => this.close() });
     closeBtn.position.set(panelW / 2 - 28, -panelH / 2 + 28);
-    closeBtn.eventMode = 'static';
-    closeBtn.cursor = 'pointer';
-    closeBtn.on('pointertap', () => this.close());
     this._content.addChild(closeBtn);
   }
 

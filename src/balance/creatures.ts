@@ -9,88 +9,32 @@
  * 获取闭环：开局 R 直给 + 章 Boss 直掉 SR/SSR + 灵玉召唤（含 UR）。
  *
  * pets.ts 仅作为本表「宠物面视图」，enemies.ts 的 MobDef 是不可收服的廉价杂怪，二者不混用。
+ *
+ * ## 100 宠金字塔的分工
+ * - 本文件 = 手写核心 30 只（pet_001~pet_030）：含全部章节 Boss 的怪物面，rank / atkScale
+ *   都按 powerBudget 护栏逐关校准过，改动前务必看清每条上方的注释。
+ * - `creatureRoster.ts` = 量产 70 只（pet_031~pet_100）：补足「五行各 20，R6/SR8/SSR4/UR2」的差额。
+ * - 两表在文件末尾拼成 CREATURES，公共面（CREATURE_MAP / CREATURE_IDS / getCreature）不变。
+ *
+ * ## SSR / UR 的 skillTraits 不在表里手填
+ * 由 `signatureSkillTraits()` 在组装时统一补齐（SSR 克属性 +15%，UR +22% 且招牌技 CD -1），
+ * 保证 30 只高稀有宠口径一致。要调档位强度改 `creatureTypes.ts` 那一处。
  */
-import type { Element } from './combat';
 import { PET_SKILL_IDS, ENEMY_SKILL_IDS } from './skills';
-import type { PetRole, SkillTraitDef, StatBlock, GrowthBlock } from './petRoles';
-import type { Rarity } from './rarity';
+import {
+  monsterPair,
+  signatureSkillTraits,
+  type CreatureDef,
+  type CreatureMonsterTier,
+} from './creatureTypes';
+import { ROSTER_CREATURES } from './creatureRoster';
 
-/** 怪物单形态战斗模板（数值口径同 enemies.ts 的 MobDef，供 enemyStats 缩放） */
-export interface CreatureMonsterTier {
-  /** 该形态独立命名（缺省用生物名 + 形态后缀） */
-  name?: string;
-  baseHp: number;
-  baseAtk: number;
-  baseDef: number;
-  attackInterval: number;
-  /** 敌人技能引用（balance/skills.ts owner:'enemy'），无 = 纯普攻 */
-  skillIds?: readonly string[];
-}
-
-export interface CreatureDef {
-  id: string;
-  name: string;
-  element: Element;
-  /** 天生稀有度（引用键，行为见 balance/rarity.ts）；与养成 star 正交 */
-  rarity: Rarity;
-  role: PetRole;
-  statProfile?: Partial<StatBlock>;
-  growthProfile?: Partial<GrowthBlock>;
-  /** 宠物主动技引用（消珠驱动），效果在 balance/skills.ts */
-  skillId: string;
-  /** 专属技能修饰 / 元素克制（非 PassiveEffect 管线） */
-  skillTraits?: readonly SkillTraitDef[];
-  /**
-   * 被动由 role + 稀有度阶梯统一派生（见 passives.ts 的 ROLE_PASSIVE_LADDER），
-   * 此处不再承载专属被动；新增/调整被动一律改阶梯表，保证单调与超集成立。
-   */
-  /** 怪物面：初级怪 / 高级怪 两形态 */
-  monster: {
-    tier1: CreatureMonsterTier;
-    tier2: CreatureMonsterTier;
-  };
-}
-
-/**
- * 怪物两形态数值生成器：按 power rank 平滑铺出初级/高级基值（第 1 章基准，
- * 关卡按章节成长 × difficulty 再放大，见 formulas/growth.ts enemyStats）。
- */
-function monsterPair(
-  rank: number,
-  opts: {
-    t1Skills?: readonly string[];
-    t2Skills?: readonly string[];
-    ai1?: number;
-    ai2?: number;
-    /** 攻击基值倍率（章 Boss 波用）：HP 预算收敛后由攻压承担养成门槛 */
-    atkScale?: number;
-  } = {},
-): { tier1: CreatureMonsterTier; tier2: CreatureMonsterTier } {
-  const atkScale = opts.atkScale ?? 1;
-  const t1Hp = Math.round(600 + rank * 70);
-  const t1Atk = Math.round((118 + rank * 7) * atkScale);
-  const t1Def = Math.round(8 + rank * 2);
-  return {
-    tier1: {
-      baseHp: t1Hp,
-      baseAtk: t1Atk,
-      baseDef: t1Def,
-      attackInterval: opts.ai1 ?? 1,
-      skillIds: opts.t1Skills,
-    },
-    tier2: {
-      baseHp: Math.round(t1Hp * 1.75),
-      baseAtk: Math.round(t1Atk * 1.28),
-      baseDef: Math.round(t1Def * 1.6) + 12,
-      attackInterval: opts.ai2 ?? 2,
-      skillIds: opts.t2Skills,
-    },
-  };
-}
+export type { CreatureDef, CreatureMonsterTier };
 
 const E = ENEMY_SKILL_IDS;
 
-export const CREATURES: readonly CreatureDef[] = [
+/** 手写核心 30 只（章节 Boss 怪物面的真源） */
+const CORE_CREATURES: readonly CreatureDef[] = [
   // ══════════════════════════════════════════════════════════════
   // 新 10 只（xiaochu2 原生，四形态齐备）：pet_001–010 为初始/进阶
   // ══════════════════════════════════════════════════════════════
@@ -175,7 +119,9 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(17, { t2Skills: [E.bladeCharge, E.golemGuard] }),
   },
   {
-    id: 'pet_014', name: '玄影天鹏', element: 'metal', rarity: 4, role: 'support',
+    // v0.5 降档 UR→SSR：金系原有 3 只 UR（002/013/014），与「五行各 2 只 UR」的金字塔冲突。
+    // 净化型辅助放在 SSR 更合适——UR 名额留给 002/013 两只直伤核心。
+    id: 'pet_014', name: '玄影天鹏', element: 'metal', rarity: 3, role: 'support',
     skillId: PET_SKILL_IDS.shadowPurify,
     monster: monsterPair(14, { t2Skills: [E.sealOrbs, E.bladeCharge, E.pandaGuard] }),
   },
@@ -186,11 +132,28 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(10, { t2Skills: [E.serpentHeal] }),
   },
   {
-    // 怪物面 = 第 8 章 Boss：首教「技能封印 + 狂暴」+ 封木规则
+    // 怪物面 = 第 8 章 Boss：首教「技能封印 + 分阶段」+ 封木规则
     // atkScale 1.5：第 8 章是 3★→4★ 升星门槛章，终章 Boss 攻压须拦住停留 3★ 的欠养成队
+    //
+    // 高级形态用 phases 取代 enrage：enrage 只能改攻击、靠 CD 轮询、一场一次，
+    // 表现上就是一次飘字；终章需要的是「打法要变了」的结构性节点，故改为两段血线，
+    // 每次转阶段消耗 Boss 一个回合（玩家的呼吸窗口），换来攻击与技能表的阶跃。
+    // 初级形态保留 enrage，作为低配预告。
     id: 'pet_016', name: '昆仑玉蛟', element: 'wood', rarity: 3, role: 'attacker',
     skillId: PET_SKILL_IDS.woodVolley,
-    monster: monsterPair(16, { atkScale: 1.5, t1Skills: [E.enrage], t2Skills: [E.skillSeal, E.enrage, E.lionCharge] }),
+    monster: monsterPair(16, {
+      atkScale: 1.5,
+      t1Skills: [E.enrage],
+      // 高级形态不配 lionCharge：本体已有 atkScale 1.5，蓄力斩 2.3 倍打出的
+      // 8942 伤害已是锚点队血池的 91%，再叠任何阶段攻击加成就变成必死一击
+      // （实测一阶 1.2 倍即把蓄力推到 10729 > 9773，低手中手同样暴毙）。
+      // 终章的身份是「封印」，压力交给封技 + 封珠 + 末段攻击阶跃，不做抛硬币的秒杀。
+      t2Skills: [E.skillSeal],
+      t2Phases: [
+        { hpThreshold: 0.6, label: '怒鳞', addSkillIds: [E.sealOrbs] },
+        { hpThreshold: 0.25, label: '逆鳞', atkMult: 1.5 },
+      ],
+    }),
   },
   {
     // 怪物面 = 第 1 章 Boss 波 2/3：rank 按 powerBudget 护栏（总量 ≈ 前关 3.5 倍）校准
@@ -225,7 +188,9 @@ export const CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(15, { t2Skills: [E.bladeCharge, E.serpentHeal] }),
   },
   {
-    id: 'pet_023', name: '虚空魔眼', element: 'water', rarity: 4, role: 'attacker',
+    // v0.5 降档 UR→SSR：水系原有 3 只 UR（006/022/023），同样收敛到 2 只。
+    // 006 玄冰龙皇 / 022 归墟玄鲸为直伤核心，属性增伤型的魔眼降到 SSR。
+    id: 'pet_023', name: '虚空魔眼', element: 'water', rarity: 3, role: 'attacker',
     skillId: PET_SKILL_IDS.voidResonance,
     monster: monsterPair(19, { t2Skills: [E.golemGuard, E.bladeCharge] }),
   },
@@ -273,6 +238,18 @@ export const CREATURES: readonly CreatureDef[] = [
     skillId: PET_SKILL_IDS.riftShield,
     monster: monsterPair(17, { t2Skills: [E.healBlock, E.golemGuard, E.bladeCharge] }),
   },
+];
+
+/** 统一补齐 SSR/UR 专属修饰：核心表里不逐只手填，保证与量产名录同口径 */
+function withSignatureTraits(c: CreatureDef): CreatureDef {
+  if (c.rarity < 3 || c.skillTraits) return c;
+  return { ...c, skillTraits: signatureSkillTraits(c.element, c.rarity, c.skillId) };
+}
+
+/** 全量 100 只：手写核心 30 + 量产 70 */
+export const CREATURES: readonly CreatureDef[] = [
+  ...CORE_CREATURES.map(withSignatureTraits),
+  ...ROSTER_CREATURES,
 ];
 
 export const CREATURE_MAP: ReadonlyMap<string, CreatureDef> = new Map(

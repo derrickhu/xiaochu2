@@ -9,7 +9,10 @@ export interface SimCritProfile {
   critDamage: number;
 }
 
-/** 单组属性珠期望伤害（含克制/防御/增伤/敌减伤/期望暴击） */
+/**
+ * 单组属性珠期望伤害（含克制/防御/增伤/敌减伤/期望暴击）
+ * @param comboBonus 队长技「合鸣令」每连额外倍率（镜像 battleTurnResolution）
+ */
 export function orbGroupDamage(
   atk: number,
   el: Element,
@@ -19,6 +22,7 @@ export function orbGroupDamage(
   buffMult: number,
   enemyReduction: number,
   crit: SimCritProfile = { critRate: 0, critDamage: 0 },
+  comboBonus = 0,
 ): number {
   const raw = calcDamage({
     atk,
@@ -28,6 +32,7 @@ export function orbGroupDamage(
     defenderElement: enemy.def.element,
     defenderDef,
     buffMult,
+    comboBonus,
   });
   return raw * expectedCritFactor(crit.critRate, crit.critDamage) * (1 - enemyReduction);
 }

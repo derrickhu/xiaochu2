@@ -37,6 +37,7 @@ import { BattleController, type PetAttack, type TurnResolution } from '@/game/ba
 import type { EnemyActResult } from '@/game/battle/battleTypes';
 import { PlayerData } from '@/game/PlayerData';
 import type { BattleContext } from '@/game/battleContext';
+import { consumeStaminaFor } from '@/game/staminaGate';
 import { TOWER } from '@/balance/tower';
 import { delay } from './battle/battleWidgets';
 import { computeBattleLayout, type BattleLayout } from './battle/BattleLayout';
@@ -132,7 +133,8 @@ export class BattleScene implements Scene {
     this._maxCombo = 0;
     this._ctrl = new BattleController(stageId, PlayerData.team, Math.random,
       (id) => ({ level: PlayerData.petLevel(id), star: PlayerData.petStar(id) }));
-    // 秘境次数在真正开打时才扣：编队页返回不该白吃一次
+    // 体力与秘境次数都在真正开打时才扣：编队页返回不该白吃
+    consumeStaminaFor(this._ctrl.stage, this._context);
     if (this._context?.kind === 'realm') {
       PlayerData.consumeRealmRun();
     }
@@ -146,6 +148,9 @@ export class BattleScene implements Scene {
       }
     }
     this._board = new BoardModel();
+    if (this._ctrl.sealColumnCount > 0) {
+      this._board.sealColumns(this._ctrl.sealColumnCount);
+    }
     if (this._ctrl.sealOrbCount > 0) {
       this._board.sealRandom(this._ctrl.sealOrbCount);
     }
@@ -164,8 +169,12 @@ export class BattleScene implements Scene {
 
   private async _enter(token: number): Promise<void> {
     const stageId = this._ctrl.stage.id;
-    await ensureAssets(battlePreloadImages(stageId, PlayerData.team));
-    await ensurePetAvatars(battlePetAvatarEntries(stageId, PlayerData.team));
+    // 贴图 + SFX 并行：瘦包后音效在 CDN，进场前 resolve 建池，避免转珠/攻击无声
+    await Promise.all([
+      ensureAssets(battlePreloadImages(stageId, PlayerData.team)),
+      ensurePetAvatars(battlePetAvatarEntries(stageId, PlayerData.team)),
+      SfxManager.warmup().catch((e) => console.warn('[Battle] sfx warmup', e)),
+    ]);
     // pkg-fx 特效贴图懒加载：不阻塞进场；失败/加载中时演出自动降级为纯白粒子
     void ensureAssets([
       UI_FX_IMAGES.starburst,
@@ -529,6 +538,26 @@ export class BattleScene implements Scene {
       waveAdvanced = true;
     }
 
+    // 反击态：我方出手完毕后统一反弹（击杀或换波后不再反击）
+    if (!waveAdvanced && appliedAttacks.length > 0) {
+      const counter = this._ctrl.applyCounterStrike(appliedAttacks.length);
+      if (counter) {
+        this._fx.spawnFloat(
+          `反击！${appliedAttacks.length} 次出手`,
+          this._layout.enemyCenterX, this._layout.enemyCenterY - 40, 0xff8a65, 1.15,
+        );
+        await this._presentEnemyHeroDamage(
+          { action: 'attack', healed: 0, ...counter },
+          true,
+        );
+        if (isStale()) return waveAdvanced;
+        if (counter.heroDead) {
+          await this._presentDefeatAfterHit();
+          return waveAdvanced;
+        }
+      }
+    }
+
     if (appliedDamage > 0 && res.attacks.length > 0 && !waveAdvanced) {
       if (UI.anim.turnTotalLeadIn > 0) {
         await delay(UI.anim.turnTotalLeadIn);
@@ -749,6 +778,47 @@ export class BattleScene implements Scene {
       case 'skillSeal': {
         const petName = this._ctrl.team[result.sealedPetIndex ?? 0]?.def.name ?? '';
         await this._hud.playEnemyDebuff(this._fx, result, `${petName} 技能被封印 ×${result.turns ?? 0}`);
+        break;
+      }
+      case 'atkDebuff': {
+        const pct = Math.round((1 - (result.value ?? 1)) * 100);
+        await this._hud.playEnemyDebuff(this._fx, result, `伤害削弱 ${pct}% ×${result.turns ?? 0}`);
+        break;
+      }
+      case 'elementAbsorb':
+        await this._hud.playEnemyDebuff(
+          this._fx, result,
+          `吸收${result.absorbElementName ?? ''}属性！×${result.turns ?? 0}`,
+        );
+        break;
+      case 'counterStrike':
+        await this._hud.playEnemyDebuff(this._fx, result, `进入反击态！×${result.turns ?? 0}`);
+        break;
+      case 'resolve':
+        await this._hud.playEnemyDebuff(this._fx, result, `凝意！免疫控制 ×${result.turns ?? 0}`);
+        if (isStale()) return;
+        // 凝意不占普攻，同回合可能追打一次
+        if (result.damage > 0 || result.absorbed > 0) {
+          await this._presentEnemyHeroDamage(result, true);
+          if (isStale()) return;
+          if (result.heroDead) {
+            await this._presentDefeatAfterHit();
+            return;
+          }
+        }
+        break;
+      case 'phaseShift': {
+        await this._hud.playEnemyPhaseShift(this._fx, result.phaseLabel ?? '形态变化');
+        if (isStale()) return;
+        // 切入技若带直伤，转阶段演出后接一次受击表现
+        if (result.damage > 0 || result.absorbed > 0) {
+          await this._presentEnemyHeroDamage(result, true);
+          if (isStale()) return;
+          if (result.heroDead) {
+            await this._presentDefeatAfterHit();
+            return;
+          }
+        }
         break;
       }
       default:

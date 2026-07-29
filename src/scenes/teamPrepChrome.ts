@@ -8,6 +8,7 @@ import {
   teamAtk,
   teamEffectAggregate,
   teamElements,
+  teamLeaderSkill,
   teamMaxHp,
   teamRcv,
   type TeamMember,
@@ -79,8 +80,18 @@ export function buildTeamPrepSummary(
   });
   powerText.position.set(16, 0);
   left.addChild(powerText);
-  left.position.set(-width / 2 + 8, 0);
+  left.position.set(-width / 2 + 8, -11);
   root.addChild(left);
+
+  // 队长技：战前必须能看到，否则「点槽位换队长」这个操作没有反馈落点
+  const leader = teamLeaderSkill(members);
+  if (leader) {
+    const leaderText = makeText(leader.text, {
+      size: FONT_SIZE.xxs, fill: COLORS.accentDeep, anchor: [0, 0.5],
+    });
+    leaderText.position.set(-width / 2 + 8, 15);
+    root.addChild(leaderText);
+  }
 
   const right = new PIXI.Container();
   const coverLabel = makeText('五行覆盖:', {
@@ -102,7 +113,7 @@ export function buildTeamPrepSummary(
   });
   count.position.set(x + 4, 0);
   right.addChild(count);
-  right.position.set(width / 2 - (x + 4 + count.width) - 8, 0);
+  right.position.set(width / 2 - (x + 4 + count.width) - 8, -11);
   root.addChild(right);
 
   return root;

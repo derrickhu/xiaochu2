@@ -18,24 +18,29 @@ export const CURRENCY_VALUE_STYLE = {
   bold: true,
 } as const;
 
-export type CurrencyKind = 'coin' | 'exp' | 'lingyu';
+export type CurrencyKind = 'coin' | 'exp' | 'lingyu' | 'stamina';
 
 const CURRENCY_ICON: Readonly<Record<CurrencyKind, string>> = {
   coin: UI_IMAGES.iconCoin,
   exp: UI_IMAGES.iconExp,
   lingyu: UI_IMAGES.iconLingyu,
+  stamina: UI_IMAGES.iconStamina,
 };
 
-/** 单个货币：图标 + 数值 */
+/**
+ * 单个货币：图标 + 数值。
+ * @param text 覆盖数值文案（体力要显示 `当前/上限`，不是单个数）
+ */
 export function makeCurrencyLabel(
   kind: CurrencyKind,
   amount: number,
   iconSize: number = CURRENCY_ICON_SIZE,
+  text?: string,
 ): IconLabelHandle {
   return makeIconLabel({
     iconPath: CURRENCY_ICON[kind],
     iconSize,
-    text: `${amount}`,
+    text: text ?? `${amount}`,
     ...CURRENCY_VALUE_STYLE,
   });
 }

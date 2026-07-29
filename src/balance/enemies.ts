@@ -22,6 +22,33 @@ function creatureEnemyRoot(creatureId: string): string {
   return `${pkg}/images/enemy`;
 }
 
+/** 杂怪立绘路径（供强化形态复用基础怪的图，与 Assets.enemyImage 同口径） */
+function enemyImageOf(mobId: string): string {
+  return `${SUBPACKAGE_ROOT.enemy}/images/enemy/${mobId}.png`;
+}
+
+/**
+ * Boss 阶段：血线跨过 hpThreshold 时切入，一次切换消耗敌人一个回合（做「转阶段」演出）。
+ *
+ * 与 enrage 的区别：enrage 是挂在 skillIds 上、靠 CD 轮询的一次性技能，只能改攻击；
+ * 阶段是独立于技能循环的状态机，能同时改攻击、攻击间隔与技能表，且可多段。
+ * 两者可共存（enrage 仍作为「低血狂暴」技保留给非阶段 Boss）。
+ */
+export interface EnemyPhaseDef {
+  /** 触发血线：hp / maxHp ≤ 此值时进入（按数组顺序递减，如 0.7 → 0.35） */
+  hpThreshold: number;
+  /** UI 阶段标签（血条分段与转阶段横幅都用它） */
+  label: string;
+  /** 攻击倍率，基准是出场攻击（不与前一阶段叠乘，避免多段爆炸） */
+  atkMult?: number;
+  /** 攻击间隔覆写（变频：拉长蓄力节奏或转为高频压制） */
+  attackInterval?: number;
+  /** 进入该阶段后追加进技能表的技能（CD 从 0 起算，可立即释放） */
+  addSkillIds?: readonly string[];
+  /** 转阶段当回合无视 CD 直接释放的「切入技」 */
+  onEnterSkillId?: string;
+}
+
 export interface EnemyDef {
   id: string;
   name: string;
@@ -44,6 +71,8 @@ export interface EnemyDef {
   creatureId?: string;
   /** 怪物形态（仅生物怪物面有） */
   tier?: 'tier1' | 'tier2';
+  /** Boss 多阶段（血线递减顺序）；缺省 = 单阶段普通敌人 */
+  phases?: readonly EnemyPhaseDef[];
 }
 
 /** 杂怪 = EnemyDef 的语义别名（不可收服、单图、低数值） */
@@ -89,9 +118,109 @@ export const MOBS: readonly MobDef[] = [
     skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.lionCharge],
   },
   {
+    // 仅用于第 7 章（noHeart）Boss 首波。baseAtk 从 365 降到 285：365 是三只魔将里的
+    // 离群值（另两只 195 / 265），配上 lionCharge 2.3 倍后在第 7 章打出 5646 伤害，
+    // 而该章 rule_no_heal 让我方零回复、锚点首通队仅 6699 血 —— 低手中手同在第 6 回合
+    // 被同一击带走，胜负与操作脱钩。降到 285 后蓄力约为血线六成，留出扛一击的空间。
     id: 'enemy_thunderlord_boss_wood', name: '风雷天尊', element: 'wood', displayTier: 'miniBoss',
-    baseHp: 1300, baseAtk: 365, baseDef: 45, attackInterval: 2,
+    baseHp: 1300, baseAtk: 285, baseDef: 45, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal, ENEMY_SKILL_IDS.lionCharge],
+  },
+
+  // ── 后期章节（9~16）机制载体（6）──
+  // 每只承载一种新挑战，供 recipeForChallenge 的铺垫关首教。
+  // 立绘复用同族基础怪（image 覆盖）：新怪立绘属美术批产范围，未到位前
+  // 借「同一种怪的强化形态」这一通行约定，靠名字与 displayTier 区分身份，
+  // 而不是先上一批占位空图。
+  {
+    id: 'enemy_golem_bulwark_earth', name: '磐岩傀儡', element: 'earth', displayTier: 'elite',
+    baseHp: 1600, baseAtk: 165, baseDef: 75, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.golemGuardHeavy, ENEMY_SKILL_IDS.resolve],
+    image: enemyImageOf('enemy_golem_earth'),
+  },
+  {
+    id: 'enemy_thorn_scorpion_metal', name: '荆棘毒蝎', element: 'metal', displayTier: 'elite',
+    baseHp: 1300, baseAtk: 195, baseDef: 55, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.counterStrike, ENEMY_SKILL_IDS.golemGuard],
+    image: enemyImageOf('enemy_scorpion_metal'),
+  },
+  {
+    id: 'enemy_devour_serpent_water', name: '吞灵寒蛟', element: 'water', displayTier: 'elite',
+    baseHp: 1250, baseAtk: 205, baseDef: 25, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.elementAbsorb, ENEMY_SKILL_IDS.serpentHealHeavy],
+    image: enemyImageOf('enemy_serpent_water'),
+  },
+  {
+    id: 'enemy_wither_bat_fire', name: '枯翼魔蝠', element: 'fire', displayTier: 'elite',
+    baseHp: 900, baseAtk: 205, baseDef: 10, attackInterval: 1,
+    skillIds: [ENEMY_SKILL_IDS.atkDebuffHeavy, ENEMY_SKILL_IDS.poisonTeamHeavy],
+    image: enemyImageOf('enemy_bat_fire'),
+  },
+  {
+    id: 'enemy_bind_slime_wood', name: '缚灵藤泥', element: 'wood', displayTier: 'elite',
+    baseHp: 1000, baseAtk: 165, baseDef: 15, attackInterval: 1,
+    skillIds: [ENEMY_SKILL_IDS.sealOrbsHeavy, ENEMY_SKILL_IDS.timeSqueezeHeavy],
+    image: enemyImageOf('enemy_slime_wood'),
+  },
+  {
+    // 唯一带阶段的杂怪：作 phaseShift 的铺垫教学，让玩家在 Boss 前先见一次转形态。
+    // 灭世一击放在二阶段 addSkillIds 而非初始技能表：重击被血线门控，
+    // 不会在开场就打出「抛硬币」式秒杀（第 7/8 章调参教训）。
+    id: 'enemy_crystal_warden_earth', name: '幽晶魔像', element: 'earth', displayTier: 'miniBoss',
+    baseHp: 1400, baseAtk: 230, baseDef: 60, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.golemGuard],
+    image: enemyImageOf('enemy_crystal_boss_earth'),
+    phases: [
+      { hpThreshold: 0.5, label: '晶壳剥落', addSkillIds: [ENEMY_SKILL_IDS.chargeHeavy] },
+    ],
+  },
+
+  // ── 补齐五行配比（5）──
+  // 金 / 火此前各只 1 只，锐金洞天与赤焰熔窟三波打的是同一只怪 —— 秘境的卖点是
+  // 「为当日属性组克制队」，三波同怪会把它压成同一场战斗打三遍。
+  // 每属性补到「杂兵 + 精英 + 守关」三档齐备，秘境三波与塔的属性轮换才有货可用。
+  // 立绘沿用同族基础怪（同 image 覆盖约定），新怪立绘并入美术批产。
+  {
+    id: 'enemy_scorpion_swarm_metal', name: '铁鳞蝎兵', element: 'metal', displayTier: 'mob',
+    baseHp: 700, baseAtk: 175, baseDef: 30, attackInterval: 1,
+    image: enemyImageOf('enemy_scorpion_metal'),
+  },
+  {
+    id: 'enemy_scorpion_king_metal', name: '金甲蝎王', element: 'metal', displayTier: 'miniBoss',
+    baseHp: 1280, baseAtk: 230, baseDef: 70, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.counterStrike],
+    image: enemyImageOf('enemy_scorpion_metal'),
+  },
+  {
+    id: 'enemy_bat_swarm_fire', name: '炽炎蝠群', element: 'fire', displayTier: 'elite',
+    baseHp: 820, baseAtk: 205, baseDef: 10, attackInterval: 1,
+    skillIds: [ENEMY_SKILL_IDS.poisonTeam],
+    image: enemyImageOf('enemy_bat_fire'),
+  },
+  {
+    id: 'enemy_bat_king_fire', name: '焰狱蝠王', element: 'fire', displayTier: 'miniBoss',
+    baseHp: 1150, baseAtk: 255, baseDef: 20, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.lionCharge, ENEMY_SKILL_IDS.atkDebuff],
+    image: enemyImageOf('enemy_bat_fire'),
+  },
+  {
+    id: 'enemy_serpent_king_water', name: '寒渊蛟王', element: 'water', displayTier: 'miniBoss',
+    baseHp: 1300, baseAtk: 240, baseDef: 30, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.serpentHeal, ENEMY_SKILL_IDS.timeSqueeze],
+    image: enemyImageOf('enemy_serpent_water'),
+  },
+  // 木与土补一只「轻档」：这两系原有的中间档挂的是后期梯度技（封珠加重 / 坚韧不死），
+  // 秘境初阶从第 1 章就开，拿后期技当第二波会把新号直接劝退。
+  {
+    id: 'enemy_vine_slime_wood', name: '藤蔓妖泥', element: 'wood', displayTier: 'elite',
+    baseHp: 980, baseAtk: 170, baseDef: 18, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.poisonTeam],
+    image: enemyImageOf('enemy_slime_wood'),
+  },
+  {
+    id: 'enemy_pebble_earth', name: '碎砾小傀', element: 'earth', displayTier: 'mob',
+    baseHp: 780, baseAtk: 145, baseDef: 40, attackInterval: 1,
+    image: enemyImageOf('enemy_golem_earth'),
   },
 ];
 
@@ -133,6 +262,7 @@ export function creatureMonsterDef(creatureId: string, tier: 'tier1' | 'tier2'):
     baseDef: t.baseDef,
     attackInterval: t.attackInterval,
     skillIds: t.skillIds,
+    phases: t.phases,
     displayTier: inferCreatureDisplayTier(tier),
     image,
     creatureId,

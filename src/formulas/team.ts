@@ -20,7 +20,10 @@ export interface TeamMember {
 type StatKey = keyof StatBlock;
 
 export type { TeamEffectBundle };
-export { teamEffectAggregate, teamStatMultiplier, selfStatMultiplier, petSelfCombatProfile } from './passiveCombat';
+export {
+  teamEffectAggregate, teamStatMultiplier, selfStatMultiplier, petSelfCombatProfile,
+  teamLeaderSkill, leaderComboBonus,
+} from './passiveCombat';
 
 export function petAtkInTeam(members: readonly TeamMember[], target: TeamMember): number {
   return Math.floor(petAtk(target.def, target.level, target.star) * teamStatMultiplier(members, target, 'atk'));

@@ -13,6 +13,8 @@ export interface ResolvePlayerTurnOptions {
   noHeartHeal: boolean;
   passiveRegenPerTurn: number;
   teamDamageMult: number;
+  /** 队长技「合鸣令」每连额外倍率（无辅助队长时为 0） */
+  leaderComboBonus: number;
   /** 全队治疗强化（治疗招牌属性），放大心珠回复；默认 0 */
   teamHealBonus: number;
   /** 必暴击 buff（guaranteedCrit 状态）：本回合全部出手强制暴击 */
@@ -21,6 +23,8 @@ export interface ResolvePlayerTurnOptions {
   heartHealMult: number;
   /** 单属性增伤乘区（elementDamageBuff 状态，无则 1） */
   elementBuffMult: (element: Element) => number;
+  /** 敌方属性吸收乘区（被吸那一色的伤害折扣，无则 1） */
+  elementAbsorbMult: (element: Element) => number;
   rng: () => number;
   elementTraitDamageMult: (pet: TeamPet, defender: Element) => number;
   counterRelation: (attacker: Element, defender: Element) => 1 | 0 | -1;
@@ -28,7 +32,7 @@ export interface ResolvePlayerTurnOptions {
 
 export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnResolution {
   const combo = opts.groups.length;
-  const comboMul = comboMultiplier(combo);
+  const comboMul = comboMultiplier(combo, opts.leaderComboBonus);
   const attacks: TurnResolution['attacks'] = [];
   let healOrbs = 0;
 
@@ -54,10 +58,16 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
       isCrit,
       critDamage: pet.critDamage,
       buffMult: opts.teamDamageMult * opts.elementBuffMult(element),
+      comboBonus: opts.leaderComboBonus,
     }) * opts.elementTraitDamageMult(pet, opts.enemy.def.element);
+    // 属性吸收与减伤同层（都是敌方抗性），在增伤乘区之后结算
     const damage = Math.max(
       1,
-      Math.floor(raw * (1 - (opts.enemy.dmgReduction?.reduction ?? 0))),
+      Math.floor(
+        raw
+        * (1 - (opts.enemy.dmgReduction?.reduction ?? 0))
+        * opts.elementAbsorbMult(element),
+      ),
     );
     attacks.push({
       petIndex,

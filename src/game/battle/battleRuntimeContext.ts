@@ -14,6 +14,10 @@ export function makeSkillRuntimeContext(params: {
   teamHealBonus: number;
   /** 敌人是否已狂暴（enrage 每场一次） */
   enemyEnraged?: boolean;
+  /** 敌人是否凝意中（免疫眩晕与威吓） */
+  enemyResolute?: boolean;
+  /** 我方伤害削弱乘区（敌方削攻 debuff） */
+  teamAtkDebuffMult?: number;
   /** 随机源（敌方技能封印选目标） */
   rng?: () => number;
 }): SkillRuntimeContext {
@@ -29,10 +33,13 @@ export function makeSkillRuntimeContext(params: {
     heroMaxHp: params.heroMaxHp,
     teamRcvTotal: params.teamRcvTotal,
     teamAtkTotal: params.team.reduce((sum, pet) => sum + pet.atk, 0),
-    teamDamageBuffMult: params.teamDamageBuffMult * params.teamDamageMult,
+    teamDamageBuffMult: params.teamDamageBuffMult
+      * params.teamDamageMult
+      * (params.teamAtkDebuffMult ?? 1),
     enemyDamageReduction: params.enemy.dmgReduction?.reduction ?? 0,
     teamHealBonus: params.teamHealBonus,
     enemyEnraged: params.enemyEnraged ?? false,
+    enemyResolute: params.enemyResolute ?? false,
     teamSize: params.team.length,
     rng: params.rng,
   };

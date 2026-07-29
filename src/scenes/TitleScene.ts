@@ -25,7 +25,7 @@ import { bindPointerTap } from '@/utils/bindPointerTap';
 import { buildTitleScreenWorld } from './chapterMapView';
 import { attachChapterMapEditor } from './chapterMapEditor';
 import { ensurePetAvatars, titleHomePetAvatarEntries } from '@/config/assetPreload';
-import { UI_IMAGES } from '@/config/Assets';
+import { chapterRegionBg, UI_IMAGES } from '@/config/Assets';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
 
@@ -68,9 +68,17 @@ export class TitleScene implements Scene {
     if (SceneManager.current?.name !== 'title') return;
     this._rebuild();
   };
+  /** GM 跳关后切到目标章并重建地图 */
+  private _onFocusChapter = (chapter: unknown): void => {
+    if (typeof chapter !== 'number' || !Number.isFinite(chapter)) return;
+    if (!CHAPTERS.includes(chapter)) return;
+    this._chapter = chapter;
+    if (SceneManager.current?.name === 'title') this._rebuild();
+  };
 
   onEnter(data?: unknown): void {
     EventBus.on('gm:mapEditToggle', this._onMapEditToggle);
+    EventBus.on('gm:focusChapter', this._onFocusChapter);
     EventBus.on('home:refresh', this._onHomeRefresh);
     const enter = data as TitleEnterData | undefined;
     this._minimalStrip = enter?.minimalStrip;
@@ -81,8 +89,20 @@ export class TitleScene implements Scene {
     this._chapter = enter?.chapter ?? this._latestUnlockedChapter();
     if (SceneManager.current?.name !== 'title') return;
     this._rebuild();
+    // 区域背景在 pkg-scene（走 CDN），拉到后重建一次；第 1 区在主包内，preload 直接命中
+    void this._ensureRegionBg();
     void ensurePetAvatars(titleHomePetAvatarEntries(this._chapter));
     void Game.warmScenePresent();
+  }
+
+  /** 拉取当前章所属区域的地图背景；命中新图后重建，未出图则保持首屏图不动 */
+  private async _ensureRegionBg(): Promise<void> {
+    const path = chapterRegionBg(this._chapter);
+    if (TextureCache.get(path)) return;
+    await TextureCache.preload([path]);
+    if (SceneManager.current?.name !== 'title') return;
+    if (!TextureCache.get(path)) return;
+    this._rebuild();
   }
 
   private _rebuild(): void {
@@ -105,6 +125,7 @@ export class TitleScene implements Scene {
 
   onExit(): void {
     EventBus.off('gm:mapEditToggle', this._onMapEditToggle);
+    EventBus.off('gm:focusChapter', this._onFocusChapter);
     EventBus.off('home:refresh', this._onHomeRefresh);
     this._editorTeardown?.();
     this._editorTeardown = null;
@@ -229,21 +250,32 @@ export class TitleScene implements Scene {
     profile.addChild(name);
     this.container.addChild(profile);
 
+    const stamina = makeCurrencyLabel(
+      'stamina', PlayerData.stamina, undefined,
+      `${PlayerData.stamina}/${PlayerData.staminaMax}`,
+    );
+    // 体力是消耗最快的资源，点一下直达回体面板（也是主要 IAA 位）
+    stamina.eventMode = 'static';
+    stamina.cursor = 'pointer';
+    bindPointerTap(stamina, () => EventBus.emit('stamina:open', 0));
     const lingyu = makeCurrencyLabel('lingyu', PlayerData.lingyu);
     const coins = makeCurrencyLabel('coin', PlayerData.coins);
     const gap = 14;
     // 真正左对齐：跟在头像昵称右侧，不再右贴胶囊（真机右贴必叠「收起」）
     const afterNameX = padX + avSize / 2 + 12 + name.width + 20;
     const rightLimit = Game.contentRightX(GMManager.isEnabled ? 72 : 28);
-    const totalW = lingyu.width + gap + coins.width;
+    const items = [stamina, lingyu, coins];
+    const totalW = items.reduce((s, it) => s + it.width, 0) + gap * (items.length - 1);
     // 若昵称过长挤到右限，整体再左收，优先保证不进胶囊
     let rowX = afterNameX;
     if (rowX + totalW > rightLimit) {
       rowX = Math.max(padX + avSize + 8, rightLimit - totalW);
     }
-    lingyu.position.set(rowX, centerY);
-    coins.position.set(rowX + lingyu.width + gap, centerY);
-    this.container.addChild(lingyu, coins);
+    for (const item of items) {
+      item.position.set(rowX, centerY);
+      this.container.addChild(item);
+      rowX += item.width + gap;
+    }
   }
 
   private _buildChapterNav(w: number, y: number): void {

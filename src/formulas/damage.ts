@@ -5,8 +5,13 @@
  */
 import { COMBAT, ELEMENT_COUNTERS, type Element } from '@/balance/combat';
 
-/** Combo 总倍率（递减分段，1 Combo = ×1.0） */
-export function comboMultiplier(combo: number): number {
+/**
+ * Combo 总倍率（递减分段，1 Combo = ×1.0）。
+ *
+ * @param bonusPerCombo 辅助队长技「合鸣令」的每连额外倍率；叠在分段表之上，
+ * 因此它的收益随连击数线性放大 —— 这正是要把辅助队长和「又一条固定增伤」区分开。
+ */
+export function comboMultiplier(combo: number, bonusPerCombo = 0): number {
   if (combo <= 1) return 1.0;
   let mult = 1.0;
   for (const tier of COMBAT.comboTiers) {
@@ -14,7 +19,8 @@ export function comboMultiplier(combo: number): number {
     const upper = Math.min(combo, tier.to);
     mult += (upper - tier.from + 1) * tier.perCombo;
   }
-  return Math.round(mult * 100) / 100;
+  mult += (combo - 1) * Math.max(0, bonusPerCombo);
+  return Math.round(mult * 10000) / 10000;
 }
 
 /** 消除数倍率：3 连 ×1.0，4 连 ×1.5，5+ 连 ×2.0 */
@@ -53,13 +59,15 @@ export interface DamageInput {
   critDamage?: number;
   /** 增伤 buff 乘区（技能 dmgBoost 等，默认 1.0） */
   buffMult?: number;
+  /** 队长技「合鸣令」每连额外倍率（默认 0） */
+  comboBonus?: number;
 }
 
 /** 最终伤害（向下取整，至少 1 点） */
 export function calcDamage(input: DamageInput): number {
   let dmg = input.atk
     * matchCountMultiplier(input.matchCount)
-    * comboMultiplier(input.combo)
+    * comboMultiplier(input.combo, input.comboBonus)
     * elementMultiplier(input.attackerElement, input.defenderElement)
     * (input.buffMult ?? 1.0);
 

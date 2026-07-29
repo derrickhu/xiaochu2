@@ -57,6 +57,14 @@ function describeEffect(e: SkillEffectDef): string {
       return `狂暴 HP<${pct(e.threshold)}时攻击×${e.atkMult}`;
     case 'skillSeal':
       return `技能封印 ${e.turns}回合`;
+    case 'atkDebuff':
+      return `削攻 我方伤害×${e.mult} ${e.turns}回合`;
+    case 'resolve':
+      return `凝意 免疫眩晕/威吓 ${e.turns}回合`;
+    case 'elementAbsorb':
+      return `吸收${e.element ? ELEMENT_NAME[e.element] : '克制色'} 伤害×${e.mult} ${e.turns}回合`;
+    case 'counterAttack':
+      return `反击 每次出手反弹 敌攻×${e.multiplier} ${e.turns}回合`;
   }
 }
 

@@ -136,9 +136,30 @@ export function makeActionButton(opts: ActionButtonOpts): ActionButtonHandle {
     }
     subtitle.style.fill = style.subtitle;
     const hasSub = !!subtitle.text;
-    title.position.set(0, hasSub ? -16 : 0);
-    subtitle.position.set(0, 20);
     subtitle.visible = hasSub;
+    /**
+     * 双行按实测高度居中，并预留底板金边/椭圆上下留白。
+     * 旧硬编码 y=-16/20 在 height≤72 时会把副标题顶出绿底下沿。
+     */
+    const edgePad = Math.max(10, Math.round(height * 0.14));
+    if (!hasSub) {
+      title.position.set(0, 0);
+    } else {
+      const gap = 2;
+      const blockH = title.height + gap + subtitle.height;
+      const maxBlock = height - edgePad * 2;
+      if (blockH > maxBlock && subtitle.height > 0) {
+        // 副标题略缩，优先保住标题可读
+        const scale = Math.max(0.72, (maxBlock - title.height - gap) / subtitle.height);
+        subtitle.scale.set(scale);
+      } else {
+        subtitle.scale.set(1);
+      }
+      const usedH = title.height + gap + subtitle.height;
+      const top = -usedH / 2;
+      title.position.set(0, top + title.height / 2);
+      subtitle.position.set(0, top + title.height + gap + subtitle.height / 2);
+    }
   };
 
   btn.setEnabled = (v: boolean): void => {

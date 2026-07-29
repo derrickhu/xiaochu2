@@ -6,6 +6,7 @@
  */
 import type { EncounterRef } from './enemies';
 import { ELEMENTS } from './combat';
+import { ECONOMY } from './economy';
 import type { RewardBundle } from './rewards';
 import { registerExtraStage, type StageDef } from './stages';
 
@@ -39,9 +40,18 @@ export const TOWER = {
   dropTableId: 'dt_trial_normal',
 } as const;
 
-export const TOWER_MILESTONE_REWARD: RewardBundle = { lingyu: 60, shards: 12 };
+export const TOWER_MILESTONE_REWARD: RewardBundle = {
+  lingyu: 60,
+  shards: 12,
+  universal: ECONOMY.universal.towerMilestone,
+};
 
-/** 塔内循环用的杂兵池，按属性轮换保证玩家不能只带一种属性 */
+/**
+ * 塔内循环用的杂兵池，按属性轮换保证玩家不能只带一种属性。
+ *
+ * 取法是「按层号前移一位」，因此池长决定循环周期：6 条时每 6 层就回到同一对，
+ * 扩到 10 条后要 10 层才重复，属性轮换也跟着变长。
+ */
 const TOWER_MOBS: readonly string[] = [
   'enemy_slime_wood',
   'enemy_bat_fire',
@@ -49,12 +59,20 @@ const TOWER_MOBS: readonly string[] = [
   'enemy_serpent_water',
   'enemy_scorpion_metal',
   'enemy_toad_water',
+  'enemy_scorpion_swarm_metal',
+  'enemy_bat_swarm_fire',
+  'enemy_vine_slime_wood',
+  'enemy_pebble_earth',
 ];
 
 const TOWER_GUARDS: readonly string[] = [
   'enemy_bamboo_tyrant_wood',
   'enemy_crystal_boss_earth',
   'enemy_thunderlord_boss_wood',
+  'enemy_scorpion_king_metal',
+  'enemy_bat_king_fire',
+  'enemy_serpent_king_water',
+  'enemy_crystal_warden_earth',
 ];
 
 export function isMilestoneFloor(floor: number): boolean {

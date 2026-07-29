@@ -14,10 +14,16 @@ import {
   type PetDef,
 } from '@/balance/pets';
 import { STAGE_MAP, formatStageShortLabel, type StageDef } from '@/balance/stages';
+import { resolveLeaderSkill } from '@/balance/leaderSkill';
+import {
+  ELITE_MODE, eliteStageOf, hasEliteVariant, isEliteUnlocked,
+} from '@/balance/eliteMode';
 import type { TeamMember } from '@/formulas/team';
 import { BACKGROUND_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import type { BattleContext } from '@/game/battleContext';
+import { checkStaminaFor } from '@/game/staminaGate';
+import { stageStaminaCost } from '@/game/staminaService';
 import type { BattleEnterData } from './BattleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
@@ -64,6 +70,9 @@ export class TeamScene implements Scene {
   private _slotW = 108;
   private _slotH = 108;
   private _prepStage?: StageDef;
+  /** 关卡入口传入的原关（精英开关会把 _prepStage 切到变体，原关要留一份） */
+  private _baseStage?: StageDef;
+  private _eliteOn = false;
   private _context?: BattleContext;
   private _backScene = 'title';
   private _listContent: PIXI.Container | null = null;
@@ -77,7 +86,9 @@ export class TeamScene implements Scene {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
     const enter = data as TeamEnterData | undefined;
-    this._prepStage = enter?.stageId ? STAGE_MAP.get(enter.stageId) : undefined;
+    this._baseStage = enter?.stageId ? STAGE_MAP.get(enter.stageId) : undefined;
+    this._eliteOn = false;
+    this._prepStage = this._baseStage;
     this._context = enter?.context;
     this._backScene = enter?.backScene ?? 'title';
     // 自由编队入口已拆除：无关卡上下文时退回来源页
@@ -110,6 +121,8 @@ export class TeamScene implements Scene {
     this._listChecks.clear();
     this._listItems.clear();
     this._prepStage = undefined;
+    this._baseStage = undefined;
+    this._eliteOn = false;
     this._context = undefined;
     this._backScene = 'title';
     this._prevAgg = null;
@@ -175,7 +188,9 @@ export class TeamScene implements Scene {
     const intel = buildTeamEnemyIntelCard({ stage, width: panelW });
     intel.root.position.set((w - panelW) / 2, y);
     this.container.addChild(intel.root);
-    y += intel.height + 14;
+    y += intel.height + 10;
+
+    y = this._buildEliteToggle(w, y);
 
     const teamTitle = makeSectionTitle('我的队伍', panelW);
     teamTitle.position.set(w / 2, y + 12);
@@ -187,7 +202,8 @@ export class TeamScene implements Scene {
     const slotH = 176;
     const trayPadX = 12;
     const trayPadTop = 10;
-    const summaryH = 36;
+    // 两行：战力 + 五行覆盖 / 队长技
+    const summaryH = 58;
     const trayH = trayPadTop + slotH + summaryH + 8;
     const tray = makePanel({
       width: panelW, height: trayH, radius: 16,
@@ -259,8 +275,14 @@ export class TeamScene implements Scene {
     bindPointerTap(footShield, () => { /* absorb */ });
     this.container.addChild(footShield);
 
+    const staminaCost = this._prepStage
+      ? stageStaminaCost(this._prepStage, this._context)
+      : 0;
     const startBtn = makeActionButton({
       title: '开始战斗',
+      subtitle: staminaCost > 0
+        ? `体力 ${staminaCost} · 当前 ${PlayerData.stamina}/${PlayerData.staminaMax}`
+        : undefined,
       width: Math.min(620, w - 56),
       height: bottomBtnH,
       variant: 'success',
@@ -268,6 +290,64 @@ export class TeamScene implements Scene {
     });
     startBtn.position.set(w / 2, h - bottomPad - bottomBtnH / 2);
     this.container.addChild(startBtn);
+  }
+
+  /**
+   * 精英模式开关（3 星通关后出现）。
+   *
+   * 开关做在编队页而不是章节地图上：玩家在这里本来就要看敌情卡与体力单价，
+   * 难度切换的后果（敌人变强、体力 9、掉通用碎片）当场就能读到；
+   * 做在地图上则是「盲选难度」，还要再加一层弹窗。
+   */
+  private _buildEliteToggle(w: number, y: number): number {
+    const base = this._baseStage;
+    if (!base || this._context) return y;
+    if (!hasEliteVariant(base)) return y;
+
+    const unlocked = isEliteUnlocked(base, (id) => PlayerData.starsOf(id));
+    const chip = new PIXI.Container();
+    const label = this._eliteOn
+      ? `精英模式 · 已开启 ×${ELITE_MODE.difficultyMult}`
+      : unlocked
+        ? `精英模式 ×${ELITE_MODE.difficultyMult} · 掉通用碎片`
+        : `精英模式 · 需 ${ELITE_MODE.unlockStars} 星通关解锁`;
+    const text = makeText(label, {
+      size: FONT_SIZE.xxs,
+      fill: this._eliteOn ? COLORS.white : (unlocked ? COLORS.accentDeep : COLORS.textSub),
+      bold: true,
+      anchor: 0.5,
+    });
+    const chipW = Math.ceil(text.width) + 32;
+    const chipH = 34;
+    const bg = new PIXI.Graphics();
+    bg.beginFill(this._eliteOn ? COLORS.accentDeep : 0xfff8ec, unlocked ? 0.96 : 0.7);
+    bg.lineStyle(2, this._eliteOn ? COLORS.accentDeep : 0xe0c896, 1);
+    bg.drawRoundedRect(-chipW / 2, -chipH / 2, chipW, chipH, chipH / 2);
+    bg.endFill();
+    chip.addChild(bg, text);
+    chip.position.set(w / 2, y + chipH / 2);
+    chip.hitArea = new PIXI.Rectangle(-chipW / 2, -chipH / 2, chipW, chipH);
+    chip.eventMode = 'static';
+    chip.cursor = 'pointer';
+    chip.interactiveChildren = false;
+    bindPointerTap(chip, () => this._toggleElite(unlocked));
+    this.container.addChild(chip);
+    return y + chipH + 6;
+  }
+
+  private _toggleElite(unlocked: boolean): void {
+    const base = this._baseStage;
+    if (!base) return;
+    if (!unlocked) {
+      Platform.showToast(`${ELITE_MODE.unlockStars} 星通关本关后解锁精英模式`);
+      return;
+    }
+    const next = this._eliteOn ? base : eliteStageOf(base);
+    if (!next) return;
+    this._eliteOn = !this._eliteOn;
+    this._prepStage = next;
+    Platform.vibrateShort('light');
+    this._build({ animate: false });
   }
 
   private _buildFreeLayout(w: number): void {
@@ -287,7 +367,7 @@ export class TeamScene implements Scene {
 
     const panelTop = this._slotY + slotSize + 16;
     const panelW = 690;
-    const panelH = 166;
+    const panelH = 182;
     const panelCenterY = panelTop + panelH / 2;
     const listStartY = panelTop + panelH + 16;
 
@@ -321,6 +401,7 @@ export class TeamScene implements Scene {
       Platform.showToast('至少上阵 1 只灵宠');
       return;
     }
+    if (!checkStaminaFor(this._prepStage, this._context)) return;
     Platform.vibrateShort('medium');
     SceneManager.switchTo('battle', {
       stageId: this._prepStage.id,
@@ -345,6 +426,27 @@ export class TeamScene implements Scene {
       return;
     }
     Platform.vibrateShort('light');
+    this._refreshTeamUi();
+    if (Platform.isMinigame) Game.syncFrameToScreen();
+  }
+
+  /**
+   * 槽位点击：非首位 → 设为队长；首位 → 复述当前队长技。
+   *
+   * 之前槽位点击是「下阵」，但下方列表勾选已经能下阵，两处同义手势里更该留给
+   * 唯一没有入口的操作 —— 换队长。
+   */
+  private _onSlotTap(petId: string, index: number): void {
+    const pet = PET_MAP.get(petId);
+    if (!pet) return;
+    const skill = resolveLeaderSkill(pet.role, pet.rarity);
+    if (index === 0) {
+      Platform.showToast(`队长 ${pet.name} · ${skill.text}`);
+      return;
+    }
+    if (!PlayerData.setLeader(petId)) return;
+    Platform.vibrateShort('light');
+    Platform.showToast(`${pet.name} 已任队长 · ${skill.text}`, 'success');
     this._refreshTeamUi();
     if (Platform.isMinigame) Game.syncFrameToScreen();
   }
@@ -382,11 +484,13 @@ export class TeamScene implements Scene {
           addTeamPetAvatar(slot, pet, 0, 0, slotW);
           attachRarityBadge(slot, pet.rarity, -slotW / 2, -slotH / 2, slotW, { variant: 'codex' });
         }
+        if (i === 0) addLeaderBadge(slot, slotH);
         slot.hitArea = new PIXI.Rectangle(-slotW / 2, -slotH / 2, slotW, slotH);
         slot.interactiveChildren = false;
         slot.eventMode = 'static';
         slot.cursor = 'pointer';
-        bindPointerTap(slot, () => this._togglePet(pet.id));
+        // 槽位点击 = 换队长（下阵走下方列表的勾选，不与之抢同一个手势）
+        bindPointerTap(slot, () => this._onSlotTap(pet.id, i));
         if (this._prevTeam[i] !== petId) fadeIn(slot, { duration: 0.24 });
       } else {
         const empty = new PIXI.Graphics();
@@ -434,6 +538,23 @@ export class TeamScene implements Scene {
     this._prevTeam = [...team];
     this._prevChecked = new Set(team);
   }
+}
+
+/** 首位槽的「队长」角标：不加角标玩家无从知道首位有额外收益 */
+function addLeaderBadge(slot: PIXI.Container, slotH: number): void {
+  const badgeW = 56;
+  const badgeH = 24;
+  const badge = new PIXI.Container();
+  badge.position.set(0, slotH / 2 - badgeH / 2 - 2);
+  const bg = new PIXI.Graphics();
+  bg.beginFill(COLORS.accentDeep, 0.94);
+  bg.drawRoundedRect(-badgeW / 2, -badgeH / 2, badgeW, badgeH, badgeH / 2);
+  bg.endFill();
+  badge.addChild(bg);
+  badge.addChild(makeText('队长', {
+    size: FONT_SIZE.xxs, fill: COLORS.white, bold: true, anchor: 0.5,
+  }));
+  slot.addChild(badge);
 }
 
 function drawDashedRoundedRect(

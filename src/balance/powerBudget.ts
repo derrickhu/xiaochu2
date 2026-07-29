@@ -41,7 +41,7 @@ export const POWER_CURVE = {
 } as const;
 
 /**
- * ── 章节战力锚点（1~8 章，唯一真源）──
+ * ── 章节战力锚点（1~16 章，唯一真源）──
  *
  * 定义「进入第 N 章时期望的主队养成水平」与「通关该章后期望水平」。
  * 敌人曲线、经验产出与升星节奏都围绕这条预算曲线校准：
@@ -54,7 +54,10 @@ export const POWER_CURVE = {
  * v0.4 重校准：旧锚点（8 章 L82/5★）与首通经验产出（8 章约 L44）脱节 13 倍，
  * 契约测试拿锚点队验关却拦不住真实玩家碾压。新锚点 = 首通产出均分等级 + 少量重复刷关余量，
  * 保证「按正常节奏推进 ≈ 达标」，欠一章锚点则 Boss 卡关。
- * 星级锚点对应现实碎片可达性（Boss 掉落 + 护航包 + 商店，5★/300 碎片是长线目标不进锚点）。
+ *
+ * v0.5 扩容到 16 章：9~13 章沿用 +5 级/章 的平滑段（星级停在 4★），
+ * 14 章设第二道升星门槛（4★→5★）后回到 +6 级/章，16 章通关锚点 L92 留 7 级余量给长线。
+ * 升星门槛章仅 8（3★→4★）与 14（4★→5★）两处，其余章靠等级与操作推进。
  */
 export interface ChapterPowerAnchor {
   chapter: number;
@@ -75,15 +78,150 @@ export const CHAPTER_POWER: Readonly<Record<number, ChapterPowerAnchor>> = {
   6: { chapter: 6, enterLevel: 34, enterStar: 3, clearLevel: 39 },
   7: { chapter: 7, enterLevel: 39, enterStar: 3, clearLevel: 44 },
   8: { chapter: 8, enterLevel: 44, enterStar: 4, clearLevel: 48 },
+  9: { chapter: 9, enterLevel: 48, enterStar: 4, clearLevel: 53 },
+  10: { chapter: 10, enterLevel: 53, enterStar: 4, clearLevel: 58 },
+  11: { chapter: 11, enterLevel: 58, enterStar: 4, clearLevel: 63 },
+  12: { chapter: 12, enterLevel: 63, enterStar: 4, clearLevel: 68 },
+  13: { chapter: 13, enterLevel: 68, enterStar: 4, clearLevel: 73 },
+  14: { chapter: 14, enterLevel: 73, enterStar: 5, clearLevel: 79 },
+  15: { chapter: 15, enterLevel: 79, enterStar: 5, clearLevel: 85 },
+  16: { chapter: 16, enterLevel: 85, enterStar: 5, clearLevel: 92 },
 };
 
-/** 取章节战力锚点：低越界回退第 1 章，高越界取最后一章（长线运营向上外推用） */
-export function getChapterPower(chapter: number): ChapterPowerAnchor {
-  if (CHAPTER_POWER[chapter]) return CHAPTER_POWER[chapter];
-  const keys = Object.keys(CHAPTER_POWER).map(Number);
-  const max = Math.max(...keys);
-  return chapter > max ? CHAPTER_POWER[max] : CHAPTER_POWER[1];
+const ANCHOR_CHAPTERS: readonly number[] = Object.keys(CHAPTER_POWER)
+  .map(Number)
+  .sort((a, b) => a - b);
+
+/** 锚点等级不越 5★ 上限（growth.ts STAR_PROFILES[5].maxLevel） */
+const ANCHOR_LEVEL_CAP = 99;
+const ANCHOR_STAR_CAP = 5;
+
+/**
+ * 在两个锚点间线性求值；t > 1 时即为向上外推。
+ * 等级四舍五入并夹到 [1, 99]，星级夹到 [1, 5]。
+ */
+function lerpAnchor(
+  a: ChapterPowerAnchor,
+  b: ChapterPowerAnchor,
+  chapter: number,
+): ChapterPowerAnchor {
+  const t = (chapter - a.chapter) / (b.chapter - a.chapter);
+  const level = (from: number, to: number): number =>
+    Math.min(ANCHOR_LEVEL_CAP, Math.max(1, Math.round(from + (to - from) * t)));
+  return {
+    chapter,
+    enterLevel: level(a.enterLevel, b.enterLevel),
+    enterStar: Math.min(
+      ANCHOR_STAR_CAP,
+      Math.max(1, Math.round(a.enterStar + (b.enterStar - a.enterStar) * t)),
+    ),
+    clearLevel: level(a.clearLevel, b.clearLevel),
+  };
 }
+
+/**
+ * 取章节战力锚点。
+ *
+ * - 命中锚点：直接返回；
+ * - 低于首章：回退第 1 章；
+ * - 小数章（通天塔 towerChapter / 秘境 scaleChapter 会传 8.5 这类值）：相邻锚点间插值；
+ * - 超出末章：按末两章斜率**线性外推**。
+ *
+ * 注意：这里禁止退化成「钳在末章锚点」。钳住会让模拟器认为「末章达标队能过任意后续章节」，
+ * 契约测试随之静默失效（v0.4 的实际教训），扩章时必先在 CHAPTER_POWER 补锚点。
+ */
+export function getChapterPower(chapter: number): ChapterPowerAnchor {
+  const exact = CHAPTER_POWER[chapter];
+  if (exact) return exact;
+
+  const first = ANCHOR_CHAPTERS[0];
+  const last = ANCHOR_CHAPTERS[ANCHOR_CHAPTERS.length - 1];
+  if (chapter <= first) return CHAPTER_POWER[first];
+
+  if (chapter > last) {
+    const prev = CHAPTER_POWER[ANCHOR_CHAPTERS[ANCHOR_CHAPTERS.length - 2]];
+    return lerpAnchor(prev, CHAPTER_POWER[last], chapter);
+  }
+
+  const hiIdx = ANCHOR_CHAPTERS.findIndex((c) => c > chapter);
+  const hi = ANCHOR_CHAPTERS[hiIdx];
+  const lo = ANCHOR_CHAPTERS[hiIdx - 1];
+  return lerpAnchor(CHAPTER_POWER[lo], CHAPTER_POWER[hi], chapter);
+}
+
+/**
+ * ── 每日产出目标（经济侧的预算锚点，契约测试断言口径）──
+ *
+ * 在此之前经济是「算得出但没人校准」：`coin.stageBase × chapterGrowth` 能算出任意一关的产出，
+ * 但全项目没有一处声明「第 N 章玩家一天应该拿到多少」，于是产出偏高还是偏低无从判断。
+ *
+ * 口径（与 economy.test.ts 的估算一致，改这里必须同步改那边）：
+ * 一名达标玩家一天的体力预算 = 满瓶 ×2 次登录 + 广告回体 ×3，按普通关单价折算场次，
+ * 场次分布取 8 成普通 + 2 成精英，并按 `coin.repeatClearPct` 记为重复通关（稳态刷关，不吃首通）。
+ *
+ * 曲线形状是刻意的：**日产主要靠场次成长，不靠单关暴涨**。
+ * 灵宠币出口是按稀有度定价的固定档（招募封顶 5000 / 碎片包 300~2400 / 通用包 1800），
+ * 不随章节膨胀，所以币产复利压到 1.12（见 economy.ts coin.chapterGrowth 注释）；
+ * 经验则必须追敌人强度，仍走 economyChapterGrowth(1.22)，故 exp 曲线陡得多。
+ *
+ * 调经济的顺序：先改这里的目标，再让 coin/exp 的 stageBase 与 chapterGrowth 跟随。
+ */
+export interface DailyTargetAnchor {
+  chapter: number;
+  /** 一天期望灵宠币产出 */
+  coins: number;
+  /** 一天期望经验产出（全队合计，非单宠） */
+  exp: number;
+  /** 一天期望通用碎片产出（精英关掉落 + 日常全清） */
+  universal: number;
+}
+
+/** 每日产出目标的锚点章（其余章线性插值，见 getDailyTarget） */
+export const DAILY_TARGET: Readonly<Record<number, DailyTargetAnchor>> = {
+  1: { chapter: 1, coins: 650, exp: 24_000, universal: 50 },
+  4: { chapter: 4, coins: 950, exp: 45_000, universal: 54 },
+  8: { chapter: 8, coins: 1560, exp: 106_000, universal: 56 },
+  12: { chapter: 12, coins: 2560, exp: 242_000, universal: 58 },
+  16: { chapter: 16, coins: 4200, exp: 560_000, universal: 62 },
+};
+
+const DAILY_TARGET_CHAPTERS: readonly number[] = Object.keys(DAILY_TARGET)
+  .map(Number)
+  .sort((a, b) => a - b);
+
+/**
+ * 每日产出目标：锚点间线性插值，超出末章按末两锚点斜率外推。
+ * 与 getChapterPower 同口径，禁止钳在末章（钳住则扩章后校验静默失效）。
+ */
+export function getDailyTarget(chapter: number): DailyTargetAnchor {
+  const exact = DAILY_TARGET[chapter];
+  if (exact) return exact;
+  const first = DAILY_TARGET_CHAPTERS[0];
+  const last = DAILY_TARGET_CHAPTERS[DAILY_TARGET_CHAPTERS.length - 1];
+  if (chapter <= first) return DAILY_TARGET[first];
+  const [lo, hi] = chapter > last
+    ? [DAILY_TARGET_CHAPTERS[DAILY_TARGET_CHAPTERS.length - 2], last]
+    : [
+      DAILY_TARGET_CHAPTERS[DAILY_TARGET_CHAPTERS.findIndex((c) => c > chapter) - 1],
+      DAILY_TARGET_CHAPTERS[DAILY_TARGET_CHAPTERS.findIndex((c) => c > chapter)],
+    ];
+  const a = DAILY_TARGET[lo];
+  const b = DAILY_TARGET[hi];
+  const t = (chapter - a.chapter) / (b.chapter - a.chapter);
+  const at = (from: number, to: number): number => Math.round(from + (to - from) * t);
+  return {
+    chapter,
+    coins: at(a.coins, b.coins),
+    exp: at(a.exp, b.exp),
+    universal: at(a.universal, b.universal),
+  };
+}
+
+/**
+ * 日产目标校验容差：锚点是刻意取的整数，插值章还会有折算误差，
+ * 但 ±15% 已经足够卡住「改了 stageBase 或 chapterGrowth 忘了同步目标」这类漂移。
+ */
+export const DAILY_TARGET_TOLERANCE = 0.15;
 
 /**
  * ── 关卡 TTK 目标（中手模型口径：COMBO_MODELS.mid，达标队伍）──
@@ -143,14 +281,19 @@ export function waveSplit(waveCount: number): readonly number[] {
  * ── 平滑性护栏（契约测试断言口径）──
  *
  * - Boss 首波 ≤ 前一关最大单波 × bossFirstWaveMaxRatio（消灭 1-5 首波 7 倍断崖）
- * - Boss 三波总量在前一关总量的 [bossTotalMinRatio, bossTotalMaxRatio] 倍之间
- * - 关卡实际敌方总 HP 允许偏离预算 ±budgetTolerance
+ * - Boss 三波总量 = **本章铺垫关总量均值** × bossTotalTargetRatio ± budgetTolerance
+ * - Boss 三波总量对**前一关**总量另有 [bossTotalMinRatio, bossTotalMaxRatio] 的宽区间兜底
+ *
+ * 为什么主契约用「本章均值」而不是「前一关」：铺垫关的波数由挑战 archetype 决定
+ * （boardSeal / boardRock / selfHeal 是单波，multiWave / noHeart 是双波），前一关总量
+ * 因此在 5418~19475 间随配方跳动，拿它当分母等于在量噪声——v0.4.2 实测同一批数值下
+ * 前关口径的比值散布 2.73~4.35，均值口径只散布 3.58~4.54。
  */
 export const BUDGET_GUARDRAIL = {
   bossFirstWaveMaxRatio: 2.5,
   bossTotalMinRatio: 2.0,
   bossTotalMaxRatio: 4.2,
-  /** Boss 总量目标 = 前关总量 × 该倍数；实际值允许 ±budgetTolerance */
-  bossTotalTargetRatio: 3.5,
+  /** Boss 总量目标 = 本章铺垫关总量均值 × 该倍数；实际值允许 ±budgetTolerance */
+  bossTotalTargetRatio: 4.0,
   budgetTolerance: 0.15,
 } as const;

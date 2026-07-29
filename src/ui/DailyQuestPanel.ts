@@ -18,14 +18,17 @@ import {
 import { formatReward, type RewardBundle } from '@/balance/rewards';
 import { PlayerData } from '@/game/PlayerData';
 import { grantReward } from '@/game/rewardGrant';
+import { adUsesLeft, watchAd } from '@/game/adGate';
+import { AD_REWARD_MULT } from '@/balance/monetization';
 import {
   canClaimAllClear, hasClaimableQuest, isQuestDone, todayQuests,
 } from '@/game/dailyQuestTracker';
 import { analytics } from '@/analytics';
 import { UI_IMAGES } from '@/config/Assets';
+import { ensureAssets } from '@/config/Subpackages';
 import {
   COLORS, FONT_SIZE, FONT_FAMILY_DISPLAY,
-  makeActionButton, makePanel, makeText, makeModalTitlePlaque, pulse,
+  makeActionButton, makeCloseButton, makePanel, makeText, makeModalTitlePlaque, pulse,
 } from '@/ui';
 import {
   playClaimBurst, playRewardFly, rewardFlyIcons,
@@ -36,6 +39,9 @@ const PANEL_H = 800;
 const ROW_H = 96;
 const ROW_GAP = 8;
 const INNER_W = PANEL_W - 56;
+
+/** 翻倍已用哨兵：与任务 id 同存 questClaimed，跨日随日循环一起清 */
+const questDoubleMark = (questId: string): string => `${questId}#x2`;
 
 const QUEST_ICON: Readonly<Record<QuestTrigger, string>> = {
   stageClear: UI_IMAGES.navHome,
@@ -83,14 +89,23 @@ export class DailyQuestPanel extends PIXI.Container {
     this._refresh();
     this.alpha = 0;
     TweenManager.to({ target: this, props: { alpha: 1 }, duration: 0.2, ease: Ease.easeOutQuad });
-    void TextureCache.preload([
+    void this._hydrateAssets();
+  }
+
+  private async _hydrateAssets(): Promise<void> {
+    const paths = [
       UI_IMAGES.iconLingyu, UI_IMAGES.iconCoin, UI_IMAGES.iconExp,
-      UI_IMAGES.iconShard, UI_IMAGES.iconTicket,
+      UI_IMAGES.iconShard, UI_IMAGES.iconTicket, UI_IMAGES.iconStamina,
       UI_IMAGES.btnPlateSuccess, UI_IMAGES.btnPlateCream, UI_IMAGES.modalTitlePlaque,
       UI_IMAGES.navHome, UI_IMAGES.navRealm, UI_IMAGES.navPet,
       UI_IMAGES.iconRecruit, UI_IMAGES.railTower, UI_IMAGES.iconStatAtk,
-      UI_IMAGES.railDaily,
-    ]);
+      UI_IMAGES.railDaily, UI_IMAGES.questChest,
+    ];
+    await ensureAssets(paths).catch((e) => {
+      console.warn('[DailyQuest] 资源预热失败', e);
+    });
+    if (!this._isOpen) return;
+    this._refresh();
   }
 
   close(): void {
@@ -139,13 +154,8 @@ export class DailyQuestPanel extends PIXI.Container {
     sub.position.set(0, -PANEL_H / 2 + 92);
     this._content.addChild(sub);
 
-    const closeBtn = makeText('✕', {
-      size: FONT_SIZE.lg, fill: COLORS.textSub, anchor: 0.5,
-    });
+    const closeBtn = makeCloseButton({ onTap: () => this.close() });
     closeBtn.position.set(PANEL_W / 2 - 36, -PANEL_H / 2 + 36);
-    closeBtn.eventMode = 'static';
-    closeBtn.cursor = 'pointer';
-    closeBtn.on('pointertap', () => this.close());
     this._content.addChild(closeBtn);
 
     this._body = new PIXI.Container();
@@ -291,7 +301,9 @@ export class DailyQuestPanel extends PIXI.Container {
 
     // 右：CTA
     if (claimed) {
-      row.addChild(this._makeClaimedStamp(INNER_W / 2 - 78, 0));
+      const dbl = this._makeDoubleChip(quest.id, quest.reward);
+      row.addChild(dbl ?? this._makeClaimedStamp(INNER_W / 2 - 78, 0));
+      if (dbl) dbl.position.set(INNER_W / 2 - 78, 0);
     } else if (claimable) {
       const btn = makeActionButton({
         title: '领取',
@@ -354,13 +366,16 @@ export class DailyQuestPanel extends PIXI.Container {
     title.position.set(0, -h / 2 + 28);
     content.addChild(title);
 
-    // 灵玉 + 灵宠币：图标在上、文案在下，整体居中落在框内
+    // 各资源：图标在上、文案在下，整体居中落在框内
     const r = QUEST_ALL_CLEAR_REWARD;
     const slots: Array<{ path: string; label: string }> = [];
     if (r.lingyu) slots.push({ path: UI_IMAGES.iconLingyu, label: `灵玉 ×${r.lingyu}` });
     if (r.coins) slots.push({ path: UI_IMAGES.iconCoin, label: `灵宠币 ×${r.coins}` });
+    if (r.universal) slots.push({ path: UI_IMAGES.iconShard, label: `通用碎片 ×${r.universal}` });
+    if (r.stamina) slots.push({ path: UI_IMAGES.iconStamina, label: `体力 ×${r.stamina}` });
 
-    const gap = 180;
+    // 槽位从 2 涨到 4，间距同步收窄，否则会挤出横幅
+    const gap = slots.length >= 4 ? 132 : 180;
     const startX = -((slots.length - 1) * gap) / 2;
     const iconY = 6;
     const labelY = 42;
@@ -377,7 +392,9 @@ export class DailyQuestPanel extends PIXI.Container {
     });
 
     if (claimed) {
-      banner.addChild(this._makeClaimedStamp(0, 8));
+      const dbl = this._makeDoubleChip(QUEST_ALL_CLEAR_ID, QUEST_ALL_CLEAR_REWARD);
+      banner.addChild(dbl ?? this._makeClaimedStamp(0, 8));
+      if (dbl) dbl.position.set(INNER_W / 2 - 78, 8);
     } else if (claimable) {
       banner.eventMode = 'static';
       banner.cursor = 'pointer';
@@ -386,6 +403,43 @@ export class DailyQuestPanel extends PIXI.Container {
     }
 
     return banner;
+  }
+
+  /**
+   * 已领取的任务位换成翻倍广告位（IAA，日 3 次）。
+   * 「哪条已翻过」用 `${questId}#x2` 哨兵写进 questClaimed —— 该账本本来就按日重置，
+   * 不必为翻倍再加一份存档字段；广告日限只管总次数，管不了同一条任务被翻两次。
+   */
+  private _makeDoubleChip(questId: string, reward: RewardBundle): PIXI.Container | null {
+    if (adUsesLeft('quest_double') <= 0) return null;
+    if (PlayerData.isQuestClaimed(questDoubleMark(questId))) return null;
+    return makeActionButton({
+      title: `广告 ×${AD_REWARD_MULT}`,
+      width: 128,
+      height: 52,
+      variant: 'success',
+      enabled: !this._busy,
+      fontSize: FONT_SIZE.sm,
+      onTap: () => void this._doubleQuest(questId, reward),
+    });
+  }
+
+  private async _doubleQuest(questId: string, reward: RewardBundle): Promise<void> {
+    if (this._busy) return;
+    this._busy = true;
+    try {
+      if (PlayerData.isQuestClaimed(questDoubleMark(questId))) return;
+      if (!await watchAd('quest_double', { quest: questId })) return;
+      if (!PlayerData.markQuestClaimed(questDoubleMark(questId))) return;
+      grantReward(reward);
+      await this._playClaimFx(reward);
+      Platform.showToast(`奖励翻倍 · ${formatReward(reward)}`, 'success');
+      if (!this._isOpen) return;
+      this._refresh();
+      EventBus.emit('home:refresh');
+    } finally {
+      this._busy = false;
+    }
   }
 
   private _makeClaimedStamp(x: number, y: number): PIXI.Container {

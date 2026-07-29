@@ -2,8 +2,10 @@
  * 国风音效管理 — 移植自 xiao_chu/js/runtime/music.js
  *
  * 转珠交互、消除连击、战斗伤害等 SFX；BGM 仍由 BgmManager 负责。
+ * 瘦包后音频在 CDN：播放前必须 resolveOrDownload，不可直接用逻辑路径。
  */
 import { AUDIO } from '@/config/Audio';
+import { CdnAssetService } from '@/core/CdnAssetService';
 import { COMBO_MILESTONES, getComboTier } from '@/scenes/battle/ComboDisplay';
 import { Platform } from './PlatformService';
 
@@ -21,11 +23,18 @@ export const COMBO_PITCH_SCALE = [
 
 const SCALE = COMBO_PITCH_SCALE;
 
+const SFX_PATHS = Object.values(AUDIO).filter(
+  (p) => p !== AUDIO.mainBgm && p !== AUDIO.bossBgm,
+);
+
 type SfxPool = { idx: number; items: WechatMinigame.InnerAudioContext[] };
 
 class SfxManagerClass {
   enabled = true;
   private _sfxPool: Record<string, SfxPool> = {};
+  /** 逻辑路径 → 可播路径（USER_DATA 缓存或包内） */
+  private _resolvedSrc: Record<string, string> = {};
+  private _resolving = new Map<string, Promise<string>>();
   private readonly _poolSize = 4;
   private readonly _comboPoolSize = 8;
   private _swapPlaying = false;
@@ -37,6 +46,21 @@ class SfxManagerClass {
   toggle(): boolean {
     this.enabled = !this.enabled;
     return this.enabled;
+  }
+
+  /**
+   * 预下载并建池。CDN 预热后调用，避免进战后首击无声。
+   */
+  async warmup(paths: readonly string[] = SFX_PATHS): Promise<void> {
+    if (!Platform.isMinigame) return;
+    await Promise.all(paths.map(async (p) => {
+      try {
+        await this._ensureResolved(p);
+        this._ensurePool(p);
+      } catch (e) {
+        console.warn('[SfxManager] warmup fail:', p, e);
+      }
+    }));
   }
 
   /**
@@ -246,37 +270,92 @@ class SfxManagerClass {
     return requested ?? this._poolSize;
   }
 
-  private _getPooled(src: string, poolSize?: number): WechatMinigame.InnerAudioContext | null {
+  private _ensureResolved(logical: string): Promise<string> {
+    const hit = this._resolvedSrc[logical];
+    if (hit) return Promise.resolve(hit);
+
+    const sync = CdnAssetService.resolveAsset(logical);
+    if (sync) {
+      this._resolvedSrc[logical] = sync;
+      this._applySrcToPool(logical, sync);
+      return Promise.resolve(sync);
+    }
+
+    if (!CdnAssetService.isCdnPath(logical)) {
+      this._resolvedSrc[logical] = logical;
+      return Promise.resolve(logical);
+    }
+
+    const inflight = this._resolving.get(logical);
+    if (inflight) return inflight;
+
+    const p = CdnAssetService.resolveOrDownload(logical)
+      .then((src) => {
+        this._resolvedSrc[logical] = src;
+        this._applySrcToPool(logical, src);
+        this._resolving.delete(logical);
+        return src;
+      })
+      .catch((e) => {
+        this._resolving.delete(logical);
+        throw e;
+      });
+    this._resolving.set(logical, p);
+    return p;
+  }
+
+  private _applySrcToPool(logical: string, src: string): void {
+    const pool = this._sfxPool[logical];
+    if (!pool) return;
+    for (const a of pool.items) {
+      try { a.src = src; } catch (_) { /* ignore */ }
+    }
+  }
+
+  private _ensurePool(src: string, poolSize?: number): SfxPool | null {
     if (!Platform.isMinigame) return null;
     const size = this._poolSizeFor(src, poolSize);
     if (!this._sfxPool[src]) {
       this._sfxPool[src] = { idx: 0, items: [] };
+      const resolved = this._resolvedSrc[src];
       for (let i = 0; i < size; i++) {
         const a = Platform.createInnerAudioContext();
         if (!a) continue;
-        a.src = src;
+        if (resolved) a.src = resolved;
         this._sfxPool[src].items.push(a);
       }
     }
-    const pool = this._sfxPool[src];
-    if (pool.items.length === 0) return null;
+    return this._sfxPool[src];
+  }
+
+  private _getPooled(src: string, poolSize?: number): WechatMinigame.InnerAudioContext | null {
+    if (!this._resolvedSrc[src]) return null;
+    const pool = this._ensurePool(src, poolSize);
+    if (!pool || pool.items.length === 0) return null;
     const a = pool.items[pool.idx % pool.items.length];
     pool.idx++;
     return a;
   }
 
   private _play(src: string, volume?: number): void {
-    const a = this._getPooled(src);
-    if (!a) return;
-    if (volume !== undefined) a.volume = volume;
-    this._applyRate(a, 1.0);
-    try { a.stop(); } catch (_) {}
-    try { a.seek(0); } catch (_) {}
-    a.play();
+    this._playEx(src, volume ?? 1, 1.0);
   }
 
   /** 支持 playbackRate 变调（xiao_chu _playSfxEx + BGM 双保险） */
   private _playEx(src: string, volume: number, playbackRate: number, poolSize?: number): void {
+    if (!this._resolvedSrc[src]) {
+      const sync = CdnAssetService.resolveAsset(src);
+      if (sync) {
+        this._resolvedSrc[src] = sync;
+      } else {
+        // 尚未下载：触发 CDN，本次跳过（warmup 后应已就绪）
+        void this._ensureResolved(src).catch((e) => {
+          console.warn('[SfxManager] resolve fail:', src, e);
+        });
+        return;
+      }
+    }
+
     const a = this._getPooled(src, poolSize);
     if (!a) return;
     a.volume = volume;

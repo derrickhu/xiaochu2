@@ -470,6 +470,68 @@ export function makeEnemySkillSeal(p: {
   };
 }
 
+/** 敌人削攻：turns 回合内我方全部伤害打折（可被净化技解除） */
+export function makeEnemyAtkDebuff(p: {
+  id: string; name: string; mult: number; turns: number; cd: number;
+}): SkillDef {
+  return {
+    id: p.id, name: p.name, category: 'enemyDebuff', cd: p.cd,
+    owner: 'enemy', trigger: 'enemyCooldown', target: 'team', vfx: 'enemyAtkDebuff',
+    tags: ['削攻'],
+    desc: `${p.turns} 回合内我方全部伤害降至 ${pct(p.mult)}`,
+    effects: [{ kind: 'atkDebuff', mult: p.mult, turns: p.turns }],
+    basePower: (1 - p.mult) * p.turns * 10,
+  };
+}
+
+/** 敌人凝意：turns 回合内免疫眩晕与威吓（破控制链，逼玩家改用伤害解） */
+export function makeEnemyResolve(p: {
+  id: string; name: string; turns: number; cd: number;
+}): SkillDef {
+  return {
+    id: p.id, name: p.name, category: 'enemyGuard', cd: p.cd,
+    owner: 'enemy', trigger: 'enemyCooldown', target: 'self', vfx: 'enemyResolve',
+    tags: ['免控'],
+    desc: `凝意 ${p.turns} 回合，期间免疫眩晕与威吓`,
+    effects: [{ kind: 'resolve', turns: p.turns }],
+    basePower: p.turns * 8,
+  };
+}
+
+/**
+ * 敌人属性吸收：被吸那一色的消珠伤害几乎归零，逼玩家中途换输出色。
+ * 不指定 element 时运行期自动取「克制敌人自身」的属性——玩家打 Boss 必然带克制队，
+ * 吸这色才真正制造换队压力，而不是吸一个没人用的颜色白送一回合。
+ */
+export function makeEnemyElementAbsorb(p: {
+  id: string; name: string; mult: number; turns: number; cd: number;
+  element?: Element;
+}): SkillDef {
+  const who = p.element ? `${ELEMENT_NAME[p.element]}属性` : '克制自身的属性';
+  return {
+    id: p.id, name: p.name, category: 'enemyGuard', cd: p.cd,
+    owner: 'enemy', trigger: 'enemyCooldown', target: 'self', vfx: 'enemyElementAbsorb',
+    tags: ['属性吸收'],
+    desc: `${p.turns} 回合内吸收${who}，该色消珠伤害降至 ${pct(p.mult)}`,
+    effects: [{ kind: 'elementAbsorb', mult: p.mult, turns: p.turns, element: p.element }],
+    basePower: (1 - p.mult) * p.turns * 10,
+  };
+}
+
+/** 敌人反击态：我方每次消珠出手都会被反弹，逼「少而重」的精准输出而非无脑铺 Combo */
+export function makeEnemyCounter(p: {
+  id: string; name: string; multiplier: number; turns: number; cd: number;
+}): SkillDef {
+  return {
+    id: p.id, name: p.name, category: 'enemyGuard', cd: p.cd,
+    owner: 'enemy', trigger: 'enemyCooldown', target: 'self', vfx: 'enemyCounter',
+    tags: ['反击'],
+    desc: `${p.turns} 回合内进入反击态，我方每次出手反弹其攻击 ${pct(p.multiplier)} 的伤害`,
+    effects: [{ kind: 'counterAttack', multiplier: p.multiplier, turns: p.turns }],
+    basePower: p.multiplier * p.turns * 10,
+  };
+}
+
 /** 敌人减伤 */
 export function makeEnemyGuard(p: {
   id: string; name: string; reduction: number; turns: number; cd: number;

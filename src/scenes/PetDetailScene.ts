@@ -1137,6 +1137,27 @@ export class PetDetailScene implements Scene {
       y += pRowH + rowGap;
     }
 
+    // —— 队长技：只在这只宠排编队首位时生效，与养成进度无关，故单列一行 ——
+    const leader = abilities.leader;
+    const lIcon = makeSkillIcon({
+      size: iconSz,
+      fallbackFill: COLORS.accentDeep,
+      fallbackGlyph: '长',
+    });
+    const lTag = this._makeTag('队长', COLORS.accentDeep, 0xfff6e2);
+    const lBody = makeText(`${leader.text}（置于编队首位生效）`, {
+      size: FONT_SIZE.sm, fill: COLORS.accentDeep, anchor: [0, 0],
+      wordWrapWidth: Math.max(60, textW - lTag.width - 12),
+    });
+    lBody.updateText(true);
+    const lRowH = Math.max(iconSz, lTag.height, lBody.height);
+    const lMidY = y + lRowH / 2;
+    lIcon.position.set(x + iconSz / 2, lMidY);
+    lTag.position.set(textX, lMidY - lTag.height / 2);
+    lBody.position.set(textX + lTag.width + 10, lMidY - lBody.height / 2);
+    parent.addChild(lIcon, lTag, lBody);
+    y += lRowH + rowGap;
+
     return y;
   }
 
@@ -1181,9 +1202,11 @@ export class PetDetailScene implements Scene {
     const btnW = Math.floor((w - marginX * 2 - gap) / 2);
 
     const starCost = PlayerData.starUpCost(petId);
-    const canStar = PlayerData.canStarUp(petId);
+    const plan = PlayerData.starUpPlan(petId);
+    const canStar = plan !== null && plan.affordable;
     const shards = PlayerData.petShards(petId);
-    const starSub = starCost === null ? '已满星' : `碎片 ${shards}/${starCost}`;
+    let starSub = starCost === null ? '已满星' : `碎片 ${shards}/${starCost}`;
+    if (plan && plan.shortfall > 0) starSub += ` · 通用补 ${plan.universalCost}`;
     const starBtn = makeActionButton({
       width: btnW, height: btnH,
       title: starCost === null ? '已满星' : '升星',
@@ -1229,7 +1252,7 @@ export class PetDetailScene implements Scene {
   private _onStarUp(): void {
     const before = this._currentStats();
     const beforeProgress = this._currentProgress();
-    if (!PlayerData.starUp(this._petId)) {
+    if (!PlayerData.starUp(this._petId, true)) {
       Platform.showToast(PlayerData.starUpCost(this._petId) === null ? '已满星' : '碎片不足');
       return;
     }

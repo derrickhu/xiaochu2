@@ -37,7 +37,11 @@ export interface RealmDef {
   name: string;
   /** 一句话战术提示 */
   hint: string;
-  /** 三波敌人（杂兵 → 杂兵 → 守关） */
+  /**
+   * 三波敌人（杂兵 → 精英 → 守关）。
+   * 三波必须是三只不同的怪：同怪三连会把「组克制队」这个卖点压成同一场打三遍，
+   * 由 secretRealm.test.ts 的契约兜住。
+   */
   waveMobs: readonly [string, string, string];
 }
 
@@ -69,27 +73,27 @@ export const REALMS: readonly RealmDef[] = [
   {
     id: 'realm_metal', element: 'metal', name: '锐金洞天',
     hint: '敌人属金，火克金 —— 带火系灵宠上阵',
-    waveMobs: ['enemy_scorpion_metal', 'enemy_scorpion_metal', 'enemy_scorpion_metal'],
+    waveMobs: ['enemy_scorpion_swarm_metal', 'enemy_scorpion_metal', 'enemy_scorpion_king_metal'],
   },
   {
     id: 'realm_wood', element: 'wood', name: '青木灵境',
     hint: '敌人属木，金克木 —— 带金系灵宠上阵',
-    waveMobs: ['enemy_slime_wood', 'enemy_bamboo_tyrant_wood', 'enemy_thunderlord_boss_wood'],
+    waveMobs: ['enemy_slime_wood', 'enemy_vine_slime_wood', 'enemy_thunderlord_boss_wood'],
   },
   {
     id: 'realm_water', element: 'water', name: '玄水寒渊',
     hint: '敌人属水，土克水 —— 带土系灵宠上阵',
-    waveMobs: ['enemy_serpent_water', 'enemy_toad_water', 'enemy_serpent_water'],
+    waveMobs: ['enemy_serpent_water', 'enemy_toad_water', 'enemy_serpent_king_water'],
   },
   {
     id: 'realm_fire', element: 'fire', name: '赤焰熔窟',
     hint: '敌人属火，水克火 —— 带水系灵宠上阵',
-    waveMobs: ['enemy_bat_fire', 'enemy_bat_fire', 'enemy_bat_fire'],
+    waveMobs: ['enemy_bat_fire', 'enemy_bat_swarm_fire', 'enemy_bat_king_fire'],
   },
   {
     id: 'realm_earth', element: 'earth', name: '厚土玄坛',
     hint: '敌人属土，木克土 —— 带木系灵宠上阵',
-    waveMobs: ['enemy_golem_earth', 'enemy_golem_earth', 'enemy_crystal_boss_earth'],
+    waveMobs: ['enemy_pebble_earth', 'enemy_golem_earth', 'enemy_crystal_boss_earth'],
   },
 ];
 
