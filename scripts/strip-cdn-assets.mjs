@@ -94,6 +94,10 @@ function main() {
   console.log(`删除: ${removedCount} 文件 / ${fmtMb(removedBytes)}`);
   console.log(`瘦包后约: ${fmtMb(afterTotal)}（微信上传应接近此值）`);
   if (!DRY_RUN) {
+    // 给 cdn:upload 护栏用：有此标记则禁止再上传（避免残缺本地污染清单）
+    const marker = path.join(MINIGAME, '.cdn_stripped');
+    fs.writeFileSync(marker, `${new Date().toISOString()}\nremoved=${removedCount}\n`, 'utf-8');
+    console.log('已写入 minigame/.cdn_stripped');
     console.log('上传完成后请执行: npm run cdn:restore');
   }
 }

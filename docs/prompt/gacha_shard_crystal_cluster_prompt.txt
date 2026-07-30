@@ -1,0 +1,6 @@
+ART STYLE: xiaochu2 Q-chibi guofeng UI prop.
+Floating cluster of jade + amber spirit crystals for gacha duplicate "shard conversion" hero.
+One large central jade crystal with subtle white spiral sigil, smaller shards around, soft mint/gold glow.
+Solid white background for cutout. NO TEXT, no UI, no pet.
+Reference: docs/prototypes/gacha_shard_result_ui_v1.png crystal cluster.
+Runtime: minigame/subpackages/pkg-scene/images/ui/fx/gacha_shard_crystal_cluster.png

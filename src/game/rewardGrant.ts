@@ -1,8 +1,11 @@
 /**
- * 奖励包发放（签到 / 日常任务 / 秘境 / 通天塔共用）
+ * 奖励包发放（签到 / 日常任务 / 秘境 / 通天塔 / 结算广告翻倍共用）
  *
  * 所有副系统只声明 RewardBundle，落账口径统一在这里，避免各系统各写一遍
  * 「碎片给谁、属性不匹配怎么兜底」。
+ *
+ * 战斗结算另有「已落账具体数额」包（ConcreteReward）：碎片已指向 petId，
+ * 展示 / 广告翻倍 / 再发一次都必须读同一份，禁止各自手写字段列表。
  */
 import { PET_MAP } from '@/balance/pets';
 import type { RewardBundle } from '@/balance/rewards';
@@ -16,6 +19,68 @@ export interface GrantedReward {
   shards: { petId: string; count: number }[];
   universal: number;
   stamina: number;
+}
+
+/**
+ * 已确定落账目标的奖励包（战斗结算实发）。
+ * 与 RewardBundle 的差别：shards 已是具体 petId，不再随机挑宠。
+ */
+export interface ConcreteReward {
+  coins: number;
+  exp: number;
+  lingyu: number;
+  universal: number;
+  shards: { petId: string; count: number }[];
+}
+
+export function emptyConcreteReward(): ConcreteReward {
+  return { coins: 0, exp: 0, lingyu: 0, universal: 0, shards: [] };
+}
+
+export function concreteRewardHasValue(r: ConcreteReward): boolean {
+  return r.coins > 0 || r.exp > 0 || r.lingyu > 0 || r.universal > 0 || r.shards.some((s) => s.count > 0);
+}
+
+/** 按倍率放大具体奖励包（结算广告翻倍用；mult=1 原样返回） */
+export function scaleConcreteReward(r: ConcreteReward, mult: number): ConcreteReward {
+  if (mult === 1) return { ...r, shards: r.shards.map((s) => ({ ...s })) };
+  const scale = (v: number) => Math.floor(v * mult);
+  return {
+    coins: scale(r.coins),
+    exp: scale(r.exp),
+    lingyu: scale(r.lingyu),
+    universal: scale(r.universal),
+    shards: r.shards
+      .map((s) => ({ petId: s.petId, count: scale(s.count) }))
+      .filter((s) => s.count > 0),
+  };
+}
+
+/** 发放 ConcreteReward（已知 petId，不再随机） */
+export function grantConcreteReward(r: ConcreteReward): void {
+  if (r.coins > 0) PlayerData.addCoins(r.coins);
+  if (r.exp > 0) PlayerData.addExp(r.exp);
+  if (r.lingyu > 0) PlayerData.addLingyu(r.lingyu);
+  if (r.universal > 0) PlayerData.addUniversalShards(r.universal);
+  for (const s of r.shards) {
+    if (s.count > 0) PlayerData.addShards(s.petId, s.count);
+  }
+}
+
+/** 按钮副标题：前两项明细，其余「等」收口 */
+export function formatConcreteRewardBrief(r: ConcreteReward, maxParts = 2): string {
+  const parts: string[] = [];
+  if (r.coins > 0) parts.push(`灵宠币 +${r.coins}`);
+  if (r.exp > 0) parts.push(`经验 +${r.exp}`);
+  if (r.lingyu > 0) parts.push(`灵玉 +${r.lingyu}`);
+  if (r.universal > 0) parts.push(`通用碎片 +${r.universal}`);
+  if (r.shards.length > 0) {
+    const shardSum = r.shards.reduce((n, s) => n + s.count, 0);
+    if (shardSum > 0) parts.push(`碎片 +${shardSum}`);
+  }
+  if (parts.length === 0) return '';
+  if (parts.length <= maxParts) return parts.join(' · ');
+  return `${parts.slice(0, maxParts).join(' · ')} 等`;
 }
 
 /** 按倍率放大奖励包（每日首胜翻倍等） */

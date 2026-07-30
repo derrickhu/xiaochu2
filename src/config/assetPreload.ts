@@ -17,6 +17,7 @@ import {
   UI_FX_IMAGES,
   UI_IMAGES,
   UI_SHOP_IMAGES,
+  UI_CODEX_IMAGES,
   UI_SCENE_IMAGES,
   UI_PANEL_IMAGES,
   UI_BATTLE_IMAGES,
@@ -47,8 +48,13 @@ export const PET_POOL_SHELL_IMAGES: readonly string[] = [
 ];
 
 export const CODEX_SHELL_IMAGES: readonly string[] = [
-  ...PET_POOL_SHELL_IMAGES,
+  BACKGROUND_IMAGES.codex,
+  ...PET_POOL_SHELL_IMAGES.filter((p) => p !== BACKGROUND_IMAGES.petPool),
   ...Object.values(RARITY_PET_CARD_IMAGES),
+  ...Object.values(UI_CODEX_IMAGES),
+  UI_IMAGES.iconExp,
+  UI_IMAGES.iconCoin,
+  UI_IMAGES.iconLingyu,
   UI_BATTLE_IMAGES.petStar,
 ];
 
@@ -66,25 +72,49 @@ export const GACHA_SHELL_IMAGES: readonly string[] = [
   BACKGROUND_IMAGES.gachaEgg,
   UI_IMAGES.titlePlaque,
   UI_IMAGES.textBanner,
+  UI_IMAGES.modalTitlePlaque,
   UI_IMAGES.btnPlateGold,
   UI_IMAGES.btnPlateCream,
+  UI_IMAGES.btnPlateSuccess,
   UI_IMAGES.progressFrame,
   UI_IMAGES.iconLingyu,
+  UI_IMAGES.iconStatHp,
+  UI_IMAGES.iconStatAtk,
+  UI_IMAGES.iconStatRcv,
   UI_IMAGES.rarityBadgeSheet,
+  UI_IMAGES.gachaResultCard,
+  UI_IMAGES.gachaResultNameBand,
+  UI_IMAGES.gachaResultComparePanel,
+  UI_IMAGES.gachaResultNewBadge,
+  UI_IMAGES.gachaShardCrystal,
+  UI_IMAGES.gachaShardAvatarFrame,
   ...Object.values(RARITY_BADGE_IMAGES),
   UI_FX_IMAGES.lightPillar,
   UI_FX_IMAGES.summonCircle,
   UI_FX_IMAGES.starburst,
   UI_FX_IMAGES.auraRing,
   UI_FX_IMAGES.particleSpark,
+  UI_FX_IMAGES.gachaRays,
+  UI_FX_IMAGES.gachaPetal,
 ];
 
+/**
+ * 商店首屏壳层（仅当前双列页实际用到的贴图）。
+ * 勿再 Object.values 全量：只预热壳层实际用到的键；废弃匾/行板已迁 game_assets/bak_shop_unused_*。
+ */
 export const SHOP_SHELL_IMAGES: readonly string[] = [
   BACKGROUND_IMAGES.shop,
-  UI_IMAGES.titlePlaque,
   UI_IMAGES.rarityBadgeSheet,
   ...Object.values(RARITY_BADGE_IMAGES),
-  ...Object.values(UI_SHOP_IMAGES),
+  UI_SHOP_IMAGES.coinPill,
+  UI_SHOP_IMAGES.buyPanel,
+  UI_SHOP_IMAGES.cardPanel,
+  UI_SHOP_IMAGES.tabOn,
+  UI_SHOP_IMAGES.tabOff,
+  UI_SHOP_IMAGES.tabIconShard,
+  UI_SHOP_IMAGES.tabIconHonor,
+  UI_SHOP_IMAGES.tabIconRealm,
+  UI_SHOP_IMAGES.tabIconLingyu,
   UI_FX_IMAGES.particleSpark,
 ];
 

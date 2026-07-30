@@ -35,8 +35,6 @@ export interface PullOutcome {
   urPity?: boolean;
   /** 是否为当期 UP 宠（UI 加角标用） */
   featured?: boolean;
-  /** 高稀有护航包（NEW SSR/UR 出货附赠，落库时由调用方填充） */
-  escort?: { shards: number; exp: number };
 }
 
 export function emptyGachaState(): GachaState {

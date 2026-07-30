@@ -113,12 +113,12 @@ export class TeamScene implements Scene {
     await ensureAssets(teamPreloadImages(this._prepStage?.id)).catch((e) => {
       console.warn('[Team] 壳层资源加载失败', e);
     });
+    await ensurePetAvatars(teamPetAvatarEntries()).catch((e) => {
+      console.warn('[Team] 头像预热失败', e);
+    });
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'team') return;
     this._build({ animate: false });
-    void ensurePetAvatars(teamPetAvatarEntries()).catch((e) => {
-      console.warn('[Team] 头像预热失败', e);
-    });
   }
 
   onExit(): void {

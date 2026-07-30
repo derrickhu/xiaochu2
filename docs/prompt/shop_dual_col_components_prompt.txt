@@ -1,0 +1,16 @@
+UI asset sheet for xiaochu2 shard shop, matching shop_dual_col_no_banner_v1.png style.
+Warm cream parchment + soft gold borders, oriental xianxia game UI.
+NO TEXT, no labels, no letters, no numbers, no Chinese characters anywhere.
+
+Layout: 2 columns x 3 rows equal cells, clear gaps, transparent or pure white background outside assets.
+
+Row1 Col1: VERTICAL shop item CARD panel only — tall portrait card (~3:4), cream parchment fill, thin gold ornate corner filigree, rounded corners, empty center for content, transparent outside card.
+Row1 Col2: same CARD panel variant (identical style) for 9-slice reuse.
+
+Row2 Col1: LEFT SIDEBAR TAB SELECTED — vertical tallish plaque/scroll handle, light cream highlight, soft gold rim, empty icon area in upper half, empty label band lower half. Transparent outside.
+Row2 Col2: LEFT SIDEBAR TAB IDLE — darker aged parchment, muted gold rim, same shape as selected but unselected look. Transparent outside.
+
+Row3 Col1: SIDEBAR RAIL background strip — tall narrow vertical parchment panel with soft gold edge, empty, for stacking tabs. Transparent outside.
+Row3 Col2: GOLD BUY CAPSULE button plate (horizontal pill) cream-gold metallic, empty center — match existing shop buy style.
+
+Strict: NO TEXT. Flat game UI asset quality, crisp edges, ready for rembg.

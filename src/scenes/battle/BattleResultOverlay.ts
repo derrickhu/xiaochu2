@@ -23,11 +23,18 @@ import type { BattleController } from '@/game/battle/BattleController';
 import { formatStarTurnHint } from '@/formulas/stars';
 import { getRarity } from '@/balance/rarity';
 import {
-  COLORS, FONT_FAMILY_DISPLAY, FONT_SIZE,
+  COLORS, FONT_SIZE,
   makeActionButton, makePanel, makeText, makeStarRow,
 } from '@/ui';
 import type { ActionButtonHandle } from '@/ui/ActionButton';
 import { adUsesLeft, adUsesLeftText, watchAd } from '@/game/adGate';
+import {
+  type ConcreteReward,
+  concreteRewardHasValue,
+  formatConcreteRewardBrief,
+  grantConcreteReward,
+  scaleConcreteReward,
+} from '@/game/rewardGrant';
 import { AD_REWARD_MULT } from '@/balance/monetization';
 import type { BattleEnterData } from '../BattleScene';
 import type { TeamEnterData } from '../TeamScene';
@@ -47,6 +54,15 @@ const GOLD = 0xd4b87a;
 const GOLD_SOFT = 0xe0c896;
 const TITLE_BROWN = 0x5c3d24;
 const REWARD_GREEN = 0x3d9a5c;
+/** 结算奖励格：翻倍后可驱动数额/持有数刷新 */
+interface RewardSlotHandle {
+  amountText: PIXI.Text;
+  holdText?: PIXI.Text;
+  base: number;
+  /** 默认 `+N`；碎片格用 `×N` */
+  formatAmount?: (n: number) => string;
+}
+
 export interface BattleResultOptions {
   /** 战斗开始时刻，用于经分 duration_ms */
   battleStartedAt?: number;
@@ -115,16 +131,24 @@ export class BattleResultOverlay {
       : raw;
     if (firstWin) extraLines.push(`每日首胜 · 奖励 ×${DAILY_FIRST_WIN_MULT}`);
 
-    let milestoneLingyu = 0;
     const newlyUnlocked: string[] = [];
-    // 实发币额：重复通关会打折，翻倍广告必须按「实发」翻，否则重刷旧关能靠广告套出全额
-    let coinsGranted = result.coins;
+    /**
+     * 本场实发包：展示 / 广告翻倍 / 再发一次只认这一份。
+     * 禁止在按钮、奖励区各自再手写一份字段列表（之前漏翻灵玉就是这么漏的）。
+     */
+    const granted: ConcreteReward = {
+      coins: result.coins,
+      exp: result.exp,
+      lingyu: 0,
+      universal: result.universal,
+      shards: [],
+    };
 
     if (context) {
       // 副玩法自带产出口径：不写主线星数、不发首通灵玉、不触发 Boss 直掉
-      PlayerData.addExp(result.exp);
-      PlayerData.addCoins(result.coins);
-      PlayerData.addUniversalShards(result.universal);
+      PlayerData.addExp(granted.exp);
+      PlayerData.addCoins(granted.coins);
+      PlayerData.addUniversalShards(granted.universal);
       const skillCds: Record<string, number> = {};
       for (const pet of ctrl.team) {
         if (pet.skillCdLeft > 0) skillCds[pet.def.id] = pet.skillCdLeft;
@@ -135,11 +159,15 @@ export class BattleResultOverlay {
       }));
     } else {
       const repeat = PlayerData.isRepeatClear(ctrl.stage.id);
-      if (repeat) coinsGranted = Math.floor(result.coins * ECONOMY.coin.repeatClearPct);
-      milestoneLingyu = PlayerData.recordClear(ctrl.stage.id, result.stars, result.coins);
-      PlayerData.addExp(result.exp);
+      // 实发币额：重复通关会打折，翻倍广告必须按「实发」翻
+      if (repeat) {
+        granted.coins = Math.floor(result.coins * ECONOMY.coin.repeatClearPct);
+      }
+      granted.lingyu = PlayerData.recordClear(ctrl.stage.id, result.stars, result.coins);
+      PlayerData.addExp(granted.exp);
       for (const s of result.shards) PlayerData.addShards(s.petId, s.count);
-      PlayerData.addUniversalShards(result.universal);
+      granted.shards = result.shards.map((s) => ({ ...s }));
+      PlayerData.addUniversalShards(granted.universal);
       for (const pid of result.bossDropPets) {
         if (PlayerData.unlockPet(pid)) newlyUnlocked.push(pid);
       }
@@ -160,7 +188,7 @@ export class BattleResultOverlay {
 
     const progressHintText = context
       ? null
-      : battleProgressHint(ctrl.stage.id, milestoneLingyu > 0);
+      : battleProgressHint(ctrl.stage.id, granted.lingyu > 0);
     const nextStage = context
       ? undefined
       : STAGES.find(
@@ -179,7 +207,7 @@ export class BattleResultOverlay {
 
     const title = makeText('战斗胜利！', {
       size: 44, fill: TITLE_BROWN, bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     title.position.set(0, y + 26);
     content.addChild(title);
@@ -202,7 +230,8 @@ export class BattleResultOverlay {
     y = this._addTurnBlock(content, y, result.turnsUsed, ctrl.stage.starTurnLimit);
     y += 14;
 
-    const rewardBox = this._buildRewardBox(result, milestoneLingyu);
+    // 奖励区与广告翻倍共用 granted，改字段只改这一处
+    const rewardBox = this._buildRewardBox(granted);
     rewardBox.position.set(0, y + rewardBox.boxH / 2);
     content.addChild(rewardBox);
     y += rewardBox.boxH + 14;
@@ -237,7 +266,11 @@ export class BattleResultOverlay {
     const btns: PIXI.Container[] = this._buildVictoryButtons(ctrl, context, btnW, btnH, nextStage);
     // 翻倍位放在导航钮之上：一旦玩家点了「下一关」，本场奖励就再也翻不了了
     const doubleBtn = this._buildDoubleRewardButton(
-      ctrl.stage.id, coinsGranted, result.exp, btnW, btnH,
+      ctrl.stage.id,
+      granted,
+      btnW,
+      btnH,
+      (bonus) => rewardBox.applyAdDouble(bonus),
     );
     if (doubleBtn) btns.unshift(doubleBtn);
     for (const b of btns) {
@@ -280,23 +313,22 @@ export class BattleResultOverlay {
   }
 
   /**
-   * 结算奖励翻倍（IAA）：看完广告补发一份等额币与经验。
+   * 结算奖励翻倍（IAA）：对「本场实发包」再发一份等额（×2 的差额）。
    *
-   * 只补差额而不重算一遍产出，是为了让翻倍额与页面上已展示的奖励严格对齐 ——
-   * 重新走一遍 finish() 会把首通灵玉、Boss 直掉、星数里程碑一起再发一次。
-   * 次数用尽或本场无产出（塔续爬等）时不出这个位，避免出现点不动的按钮。
+   * 不重跑 finish()/recordClear：会把 Boss 直掉、星数状态再算一遍。
+   * 补发 / 文案 / 数额动画都吃同一份 scaleConcreteReward(granted)，禁止再拆字段。
    */
   private _buildDoubleRewardButton(
     stageId: string,
-    coins: number,
-    exp: number,
+    granted: ConcreteReward,
     btnW: number,
     btnH: number,
+    onDoubled: (bonus: ConcreteReward) => void,
   ): ActionButtonHandle | null {
     if (adUsesLeft('victory_double') <= 0) return null;
-    const bonusCoins = Math.floor(coins * (AD_REWARD_MULT - 1));
-    const bonusExp = Math.floor(exp * (AD_REWARD_MULT - 1));
-    if (bonusCoins <= 0 && bonusExp <= 0) return null;
+    const bonus = scaleConcreteReward(granted, AD_REWARD_MULT - 1);
+    if (!concreteRewardHasValue(bonus)) return null;
+    const subLine = formatConcreteRewardBrief(bonus);
 
     let claimed = false;
     const btn = makeActionButton({
@@ -311,11 +343,16 @@ export class BattleResultOverlay {
           if (claimed) return;
           if (!await watchAd('victory_double', { stageId })) return;
           claimed = true;
-          if (bonusCoins > 0) PlayerData.addCoins(bonusCoins);
-          if (bonusExp > 0) PlayerData.addExp(bonusExp);
+          grantConcreteReward(bonus);
           btn.setEnabled(false);
-          btn.setLabels(`奖励已翻倍 ×${AD_REWARD_MULT}`, `灵宠币 +${bonusCoins} · 经验 +${bonusExp}`);
-          Platform.showToast(`奖励翻倍：灵宠币 +${bonusCoins}`, 'success');
+          btn.setLabels(`奖励已翻倍 ×${AD_REWARD_MULT}`, subLine);
+          // 抖音激励关闭后宿主常自带「奖励领取成功」原生 toast，和数额滚动叠在一起会挡特效。
+          // 先清掉，再错开一拍播数字（约对齐 toast 默认停留），玩家先看到按钮态再看数额涨。
+          Platform.hideToast();
+          setTimeout(() => {
+            Platform.hideToast();
+            onDoubled(bonus);
+          }, 1200);
         })();
       },
     });
@@ -429,7 +466,7 @@ export class BattleResultOverlay {
 
     const title = makeText('战斗失败', {
       size: 44, fill: TITLE_BROWN, bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     title.position.set(0, y + 26);
     content.addChild(title);
@@ -455,7 +492,7 @@ export class BattleResultOverlay {
     }));
     const tip = makeText('提示：消除克制属性珠子伤害更高', {
       size: FONT_SIZE.xs, fill: TITLE_BROWN, bold: true, anchor: [0, 0.5],
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     tip.position.set(20, 0);
     tipRow.addChild(tip);
@@ -576,7 +613,7 @@ export class BattleResultOverlay {
     // 先排文字，再按字宽拉开两侧金线，避免「回合数」与菱形/横线重叠
     const turn = makeText(`回合数 ${turns}`, {
       size: FONT_SIZE.md, fill: TITLE_BROWN, bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     try { turn.updateText(true); } catch { /* noop */ }
     const turnY = y + 16;
@@ -607,7 +644,7 @@ export class BattleResultOverlay {
 
     const hint = makeText(`（${formatStarTurnHint(starTurnLimit)}）`, {
       size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     hint.position.set(0, turnY + 30);
     parent.addChild(hint);
@@ -615,54 +652,74 @@ export class BattleResultOverlay {
   }
 
   private _buildRewardBox(
-    result: ReturnType<BattleController['finish']>,
-    milestoneLingyu: number,
-  ): PIXI.Container & { boxH: number } {
-    const box = new PIXI.Container() as PIXI.Container & { boxH: number };
+    granted: ConcreteReward,
+  ): PIXI.Container & {
+    boxH: number;
+    applyAdDouble: (bonus: ConcreteReward) => void;
+  } {
+    const box = new PIXI.Container() as PIXI.Container & {
+      boxH: number;
+      applyAdDouble: (bonus: ConcreteReward) => void;
+    };
     const innerW = PANEL_W - 64;
+    type ItemKey = 'coins' | 'exp' | 'shard' | 'universal' | 'lingyu';
     const items: {
+      key: ItemKey;
+      base: number;
       iconPath: string;
       name: string;
       amount: string;
       amountFill: number;
       holdHint?: string;
+      formatAmount?: (n: number) => string;
     }[] = [
       {
+        key: 'coins',
+        base: granted.coins,
         iconPath: UI_IMAGES.iconCoin,
         name: '灵宠币',
-        amount: `+${result.coins}`,
+        amount: `+${granted.coins}`,
         amountFill: 0xe8872a,
         holdHint: `持有 ${PlayerData.coins}`,
       },
       {
+        key: 'exp',
+        base: granted.exp,
         iconPath: UI_IMAGES.iconExp,
         name: '经验',
-        amount: `+${result.exp}`,
+        amount: `+${granted.exp}`,
         amountFill: REWARD_GREEN,
       },
     ];
-    for (const shard of result.shards.slice(0, 1)) {
+    for (const shard of granted.shards.slice(0, 1)) {
       items.push({
+        key: 'shard',
+        base: shard.count,
         iconPath: petAvatarPath(shard.petId, 1),
         name: '灵宠碎片',
         amount: `×${shard.count}`,
         amountFill: 0x7a5cff,
+        formatAmount: (n) => `×${n}`,
       });
     }
-    if (result.universal > 0 && items.length < 3) {
+    if (granted.universal > 0 && items.length < 3) {
       items.push({
+        key: 'universal',
+        base: granted.universal,
         iconPath: UI_IMAGES.iconShard,
         name: '通用碎片',
-        amount: `+${result.universal}`,
+        amount: `+${granted.universal}`,
         amountFill: 0x7a5cff,
         holdHint: `持有 ${PlayerData.universalShards}`,
       });
     }
-    if (milestoneLingyu > 0 && items.length < 3) {
+    if (granted.lingyu > 0 && items.length < 3) {
       items.push({
+        key: 'lingyu',
+        base: granted.lingyu,
         iconPath: UI_IMAGES.iconLingyu,
         name: '灵玉',
-        amount: `+${milestoneLingyu}`,
+        amount: `+${granted.lingyu}`,
         amountFill: COLORS.textTitle,
       });
     }
@@ -685,7 +742,7 @@ export class BattleResultOverlay {
 
     const head = makeText('◆  获得奖励  ◆', {
       size: FONT_SIZE.sm, fill: TITLE_BROWN, bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     head.position.set(0, -boxH / 2 + pad + headH / 2);
     box.addChild(head);
@@ -693,15 +750,115 @@ export class BattleResultOverlay {
     const rowY = -boxH / 2 + pad + headH + cardH / 2;
     const totalW = items.length * cardW + (items.length - 1) * gap;
     let x0 = -totalW / 2 + cardW / 2;
+    const slots: Partial<Record<ItemKey, RewardSlotHandle>> = {};
     items.forEach((it) => {
       const card = this._rewardCard(
         it.iconPath, it.name, it.amount, it.amountFill, cardW, cardH, it.holdHint,
       );
       card.position.set(x0, rowY);
       box.addChild(card);
+      slots[it.key] = {
+        amountText: card.amountText,
+        holdText: card.holdText,
+        base: it.base,
+        formatAmount: it.formatAmount,
+      };
       x0 += cardW + gap;
     });
+
+    box.applyAdDouble = (bonus) => {
+      // 与「奖励 ×2」文案对齐：面板上出现的项都滚到翻倍后总额
+      if (bonus.coins > 0 && slots.coins) {
+        this._animateRewardDouble(
+          slots.coins, slots.coins.base + bonus.coins, () => `持有 ${PlayerData.coins}`,
+        );
+      }
+      if (bonus.exp > 0 && slots.exp) {
+        this._animateRewardDouble(slots.exp, slots.exp.base + bonus.exp);
+      }
+      if (bonus.lingyu > 0 && slots.lingyu) {
+        this._animateRewardDouble(slots.lingyu, slots.lingyu.base + bonus.lingyu);
+      }
+      if (bonus.universal > 0 && slots.universal) {
+        this._animateRewardDouble(
+          slots.universal,
+          slots.universal.base + bonus.universal,
+          () => `持有 ${PlayerData.universalShards}`,
+        );
+      }
+      const shardBonus = bonus.shards.reduce((n, s) => n + s.count, 0);
+      if (shardBonus > 0 && slots.shard) {
+        this._animateRewardDouble(slots.shard, slots.shard.base + shardBonus);
+      }
+      // 区标题改成「已 ×2」并弹一下，和数额滚动一起确认「奖励区真的变了」
+      if (!head.destroyed) {
+        head.text = `◆  奖励已 ×${AD_REWARD_MULT}  ◆`;
+        head.style.fill = REWARD_GREEN;
+        TweenManager.cancelTarget(head.scale);
+        head.scale.set(1);
+        TweenManager.to({
+          target: head.scale, props: { x: 1.08, y: 1.08 },
+          duration: 0.18, ease: Ease.easeOutBack,
+          onComplete: () => {
+            if (head.destroyed) return;
+            TweenManager.to({
+              target: head.scale, props: { x: 1, y: 1 },
+              duration: 0.22, ease: Ease.easeInOutQuad,
+            });
+          },
+        });
+      }
+    };
     return box;
+  }
+
+  /**
+   * 翻倍后数额从基础值滚到总额，并弹一下 scale，让变化一眼可见。
+   */
+  private _animateRewardDouble(
+    slot: RewardSlotHandle,
+    finalAmount: number,
+    holdHint?: () => string,
+  ): void {
+    if (finalAmount <= slot.base) return;
+    const format = slot.formatAmount ?? ((n: number) => `+${n}`);
+    const from = slot.base;
+    const proxy = { v: from };
+    TweenManager.cancelTarget(proxy);
+    TweenManager.cancelTarget(slot.amountText.scale);
+    TweenManager.to({
+      target: proxy,
+      props: { v: finalAmount },
+      duration: 0.55,
+      ease: Ease.easeOutCubic,
+      onUpdate: () => {
+        if (slot.amountText.destroyed) return;
+        slot.amountText.text = format(Math.round(proxy.v));
+      },
+      onComplete: () => {
+        if (slot.amountText.destroyed) return;
+        slot.amountText.text = format(finalAmount);
+        if (holdHint && slot.holdText && !slot.holdText.destroyed) {
+          slot.holdText.text = holdHint();
+        }
+      },
+    });
+    slot.amountText.scale.set(1);
+    TweenManager.to({
+      target: slot.amountText.scale,
+      props: { x: 1.35, y: 1.35 },
+      duration: 0.2,
+      ease: Ease.easeOutBack,
+      onComplete: () => {
+        if (slot.amountText.destroyed) return;
+        TweenManager.to({
+          target: slot.amountText.scale,
+          props: { x: 1, y: 1 },
+          duration: 0.25,
+          ease: Ease.easeInOutQuad,
+        });
+      },
+    });
   }
 
   /**
@@ -715,8 +872,11 @@ export class BattleResultOverlay {
     w: number,
     h: number,
     holdHint?: string,
-  ): PIXI.Container {
-    const card = new PIXI.Container();
+  ): PIXI.Container & { amountText: PIXI.Text; holdText?: PIXI.Text } {
+    const card = new PIXI.Container() as PIXI.Container & {
+      amountText: PIXI.Text;
+      holdText?: PIXI.Text;
+    };
     card.addChild(makePanel({
       width: w, height: h, radius: 12,
       bg: 0xeadabc, bgAlpha: 0.55,
@@ -742,7 +902,7 @@ export class BattleResultOverlay {
     const textX = iconX + iconSize / 2 + 8;
     const nameT = makeText(name, {
       size: FONT_SIZE.xs, fill: TITLE_BROWN, bold: true, anchor: [0, 0.5],
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
       wordWrapWidth: w / 2 - 4,
     });
     nameT.position.set(textX, contentTop - 16);
@@ -750,10 +910,11 @@ export class BattleResultOverlay {
 
     const amt = makeText(amount, {
       size: FONT_SIZE.md, fill: amountFill, bold: true, anchor: [0, 0.5],
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     amt.position.set(textX, contentTop + 14);
     card.addChild(amt);
+    card.amountText = amt;
 
     if (holdHint) {
       // 持有数含阿拉伯数字：勿用宋体展示字（真机小字号下 96 易糊成 %）
@@ -773,6 +934,7 @@ export class BattleResultOverlay {
       pill.addChild(t);
       pill.position.set(0, h / 2 - pad - ph / 2);
       card.addChild(pill);
+      card.holdText = t;
     }
     return card;
   }
@@ -804,7 +966,7 @@ export class BattleResultOverlay {
 
     const head = makeText('卡关了？试试提升战力', {
       size: FONT_SIZE.sm, fill: TITLE_BROWN, bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     head.position.set(0, -boxH / 2 + 24);
     box.addChild(head);
@@ -845,7 +1007,7 @@ export class BattleResultOverlay {
 
       const lab = makeText(en.label, {
         size: FONT_SIZE.xs, fill: TITLE_BROWN, bold: true, anchor: 0.5,
-        fontFamily: FONT_FAMILY_DISPLAY,
+        role: 'title',
       });
       try { lab.updateText(true); } catch { /* noop */ }
       const pillW = Math.max(64, Math.ceil(lab.width) + 22);
@@ -890,7 +1052,7 @@ export class BattleResultOverlay {
     }));
     tag.addChild(makeText('广告', {
       size: 13, fill: 0xffffff, bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     }));
     tag.position.set(-w / 2 + 48, -h / 2 + 18);
     btn.addChild(tag);

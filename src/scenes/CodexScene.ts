@@ -1,7 +1,8 @@
 /**
- * 灵宠场景（原图鉴入口）：已拥有灵宠列表 + 点击进入养成详情
+ * 灵宠图鉴页 —— 严格对齐 game_assets/.../prototypes/ui/codex_panel_proto_v3_ring_entry.png
  *
- * 卡片布局对齐 xiao_chu petPoolView：3 列竖卡、cardW×1.35；背景与编队页共用 scene_pet_pool。
+ * 壳层优先贴图（祥云顶栏 / 奖励圆环 / 领钮 / 筛选 Tab / 奖励弹层），
+ * 禁止用 Graphics 硬画顶栏与进度环。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -10,34 +11,39 @@ import { TextureCache } from '@/core/TextureCache';
 import { CODEX_SHELL_IMAGES, codexPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI } from '@/balance/ui';
+import { ECONOMY } from '@/balance/economy';
 import { PETS, PET_MAP, PET_ROLE_NAME, type PetDef } from '@/balance/pets';
-import { STAGES } from '@/balance/stages';
-import { CHAPTER_NAME } from '@/balance/stages';
+import { STAGES, CHAPTER_NAME } from '@/balance/stages';
 import {
-  BACKGROUND_IMAGES, UI_IMAGES, petCardPortraitImage,
+  BACKGROUND_IMAGES, UI_IMAGES, UI_CODEX_IMAGES, petCardPortraitImage,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS, FONT_SIZE,
   makeBackButton, makeButton, makeCoverBackground, makeIconLabel, makePanel, makeText,
-  makePageTitlePlaque, staggerIn,
+  makeCloseButton, staggerIn,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
 import { bindPointerTap } from '@/utils/bindPointerTap';
+import { pressFeedback } from '@/ui/motion';
 import { Platform } from '@/core/PlatformService';
 import type { PetDetailEnterData } from './PetDetailScene';
 import { buildLockedCodexCard, buildOwnedCodexCard } from './codexCards';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 
-/** xiao_chu 设计缩放：S = logicWidth / 375 */
 function designScale(w: number): number {
   return w / 375;
 }
 
-/** 图鉴两态：已拥有 / 未获得 */
 type CodexState = 'owned' | 'locked';
+type CodexFilter = 'all' | 'owned' | 'locked';
 
-/** 章 Boss 直掉入口：其 tier2 bossDrop 遭遇所在关卡（取首个） */
+const FILTER_TABS: readonly { id: CodexFilter; label: string }[] = [
+  { id: 'all', label: '全部' },
+  { id: 'owned', label: '已有' },
+  { id: 'locked', label: '未获' },
+];
+
 const BOSS_DROP_STAGE: ReadonlyMap<string, { name: string; chapter: number }> = (() => {
   const m = new Map<string, { name: string; chapter: number }>();
   for (const s of STAGES) {
@@ -50,38 +56,41 @@ const BOSS_DROP_STAGE: ReadonlyMap<string, { name: string; chapter: number }> = 
   return m;
 })();
 
-/** xiao_chu petPoolView 网格规格 */
 function petPoolGrid(w: number) {
   const S = designScale(w);
   const cols = 3;
   const cardGap = 8 * S;
   const cardW = (w - 24 * S - cardGap * (cols - 1)) / cols;
-  const cardH = cardW * 1.35;
+  const cardH = cardW * 1.28;
   const marginX = 12 * S;
   return { S, cols, cardGap, cardW, cardH, marginX };
+}
+
+function codexTex(path: string): PIXI.Texture | null {
+  const t = TextureCache.get(path);
+  return t?.valid ? t : null;
 }
 
 export class CodexScene implements Scene {
   readonly name = 'codex';
   readonly container = new PIXI.Container();
 
-  // ── 列表纵向拖拽滚动状态 ──
   private _content: PIXI.Container | null = null;
   private _listMask: PIXI.Graphics | null = null;
   private _scroll = new ScrollListController();
   private readonly _enterSeq = new SceneEnterSeq();
+  private _filter: CodexFilter = 'all';
+  private _listTop = 280;
+  private _rewardOverlay: PIXI.Container | null = null;
 
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
-    const codexLingyu = PlayerData.claimCodexMilestones();
-    if (codexLingyu > 0) {
-      Platform.showToast(`图鉴里程碑达成 · 灵玉 +${codexLingyu}`);
-    }
+    // 不再进页静默发奖；待领显示「领」钮，点领或弹层领取
+    this._filter = 'all';
     const token = this._enterSeq.next();
-    // 点击立刻出壳 + 列表（头像异步补），禁止 await 壳图/全量头像
     this._buildShell();
-    this._buildPetList(Game.safeTop + 118, { animate: true });
+    this._buildPetList({ animate: true });
     void Game.warmScenePresent();
     void this._hydrateShell(token);
   }
@@ -90,13 +99,13 @@ export class CodexScene implements Scene {
     await ensureAssets(CODEX_SHELL_IMAGES).catch((e) => {
       console.warn('[Codex] 壳层资源加载失败', e);
     });
+    await ensurePetAvatars(codexPetAvatarEntries()).catch((e) => {
+      console.warn('[Codex] 头像预热失败', e);
+    });
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'codex') return;
     this._buildShell();
-    this._buildPetList(Game.safeTop + 118, { animate: false });
-    void ensurePetAvatars(codexPetAvatarEntries()).catch((e) => {
-      console.warn('[Codex] 头像预热失败', e);
-    });
+    this._buildPetList({ animate: false });
   }
 
   onExit(): void {
@@ -104,118 +113,294 @@ export class CodexScene implements Scene {
     this._scroll.detach();
     this._content = null;
     this._listMask = null;
+    this._rewardOverlay = null;
     this.container.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
     });
+  }
+
+  private _rebuild(): void {
+    this._buildShell();
+    this._buildPetList({ animate: false });
   }
 
   private _buildShell(): void {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     this._scroll.detach();
-    // 先清引用再 destroy，避免 hydrate 二次重建时对已销毁 mask/content 再 destroy
     this._listMask = null;
     this._content = null;
+    this._rewardOverlay = null;
     this.container.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
     });
 
-    this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
+    this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.codex, w, h));
 
+    // 祥云从屏顶 y=0 满铺向上区域（对齐原型顶栏云雾，勿从 safeTop 起留缝）
+    const canopyTex = codexTex(UI_CODEX_IMAGES.headerCanopy);
+    const canopyTop = 0;
+    const canopyH = canopyTex
+      ? Math.max(240, Math.min(320, w * (canopyTex.height / canopyTex.width) * 1.05))
+      : 260;
+    if (canopyTex) {
+      const canopy = new PIXI.Sprite(canopyTex);
+      canopy.width = w + 40;
+      canopy.height = canopyH;
+      canopy.position.set(-20, canopyTop);
+      this.container.addChild(canopy);
+    }
+
+    // 顶栏同一水平中线：返回 → 灵宠标题贴图 → 币/灵玉（避抖音胶囊）
+    const headerY = Game.safeHeaderCenterY;
     const back = makeBackButton({
       onTap: () => SceneManager.switchTo('title'),
     });
-    back.position.set(80, Game.safeHeaderCenterY);
+    back.position.set(64, headerY);
     this.container.addChild(back);
 
-    this._buildTitlePlaque(w, Game.safeHeaderCenterY);
-
-    const expRow = makeIconLabel({
-      iconPath: UI_IMAGES.iconExp, iconSize: 32,
-      text: `经验池 ${PlayerData.exp} · 灵宠币 ${PlayerData.coins}`,
-      size: FONT_SIZE.xs, fill: COLORS.textSub,
-    });
-    expRow.position.set(w / 2 - expRow.width / 2, Game.safeTop + 8);
-    this.container.addChild(expRow);
-
-    const countText = makeText(
-      `已拥有 ${PlayerData.ownedPets.length} / 共 ${PETS.length} 只 · 点击查看`,
-      { size: FONT_SIZE.xs, fill: COLORS.accent, bold: true, anchor: 0.5 },
-    );
-    countText.position.set(w / 2, Game.safeTop + 44);
-    this.container.addChild(countText);
-
-    this._buildMilestoneBar(w, Game.safeTop + 74);
-  }
-
-  /** 图鉴里程碑进度条：拥有进度与灵玉奖励均在图鉴页结算 */
-  private _buildMilestoneBar(w: number, y: number): void {
-    const { inCycle, next, every, lingyu } = PlayerData.codexMilestoneProgress;
-    const barW = Math.min(420, w * 0.7);
-    const barH = 14;
-    const x = (w - barW) / 2;
-    const ratio = inCycle / every;
-
-    const g = new PIXI.Graphics();
-    g.beginFill(0x1a1126, 0.75);
-    g.drawRoundedRect(x, y, barW, barH, barH / 2);
-    g.endFill();
-    if (ratio > 0.001) {
-      g.beginFill(0xffd76a);
-      g.drawRoundedRect(x, y, Math.max(barW * ratio, barH), barH, barH / 2);
-      g.endFill();
+    const titleX = 64 + 48;
+    const titleTex = codexTex(UI_CODEX_IMAGES.titleLingchong);
+    let titleRight = titleX + 96;
+    if (titleTex) {
+      const title = new PIXI.Sprite(titleTex);
+      title.anchor.set(0, 0.5);
+      const titleH = 48;
+      title.height = titleH;
+      title.width = titleTex.width * (titleH / titleTex.height);
+      title.position.set(titleX, headerY);
+      this.container.addChild(title);
+      titleRight = titleX + title.width + 14;
+    } else {
+      const title = makeText('灵宠', {
+        size: 48,
+        fill: 0x2b2118,
+        bold: true,
+        anchor: [0, 0.5],
+        role: 'title',
+      });
+      title.position.set(titleX, headerY);
+      this.container.addChild(title);
+      titleRight = titleX + title.width + 14;
     }
-    this.container.addChild(g);
 
-    const label = makeText(
-      `图鉴里程碑 ${inCycle}/${every} · 集满 ${next} 只奖励灵玉 ×${lingyu}`,
-      { size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: 0.5 },
-    );
-    label.position.set(w / 2, y + barH + 14);
-    this.container.addChild(label);
+    this._buildResourcePills(titleRight, headerY);
+
+    const ringSize = Math.round(126 * (w / 750));
+    const ringCenterY = Math.max(headerY + 88, canopyH * 0.56);
+    this._buildRewardRing(w / 2, ringCenterY, ringSize);
+
+    // 轨放在圆环下沿之外，略下移避免贴环
+    const tabY = ringCenterY + ringSize * 0.52 + 28;
+    this._buildFilterTabs(w, tabY);
+
+    this._listTop = tabY + 48;
   }
 
-  private _buildTitlePlaque(w: number, centerY: number): void {
-    const plaque = makePageTitlePlaque({ text: '灵宠', screenWidth: w });
-    plaque.position.set(w / 2, centerY);
-    this.container.addChild(plaque);
+  /** 灵宠币、灵玉横排；IconLabel 原点即视觉中线，与标题同 Y */
+  private _buildResourcePills(x: number, centerY: number): void {
+    const gap = 16;
+    const iconSize = 34;
+    const coin = makeIconLabel({
+      iconPath: UI_IMAGES.iconCoin, iconSize,
+      text: `${PlayerData.coins}`,
+      size: FONT_SIZE.sm, fill: 0x2b2118, bold: true, gap: 6,
+    });
+    const lingyu = makeIconLabel({
+      iconPath: UI_IMAGES.iconLingyu, iconSize,
+      text: `${PlayerData.lingyu}`,
+      size: FONT_SIZE.sm, fill: 0x2b2118, bold: true, gap: 6,
+    });
+    const holder = new PIXI.Container();
+    coin.position.set(0, 0);
+    lingyu.position.set(coin.width + gap, 0);
+    holder.addChild(coin, lingyu);
+    const maxRight = Game.contentRightX(8);
+    const rowW = coin.width + gap + lingyu.width;
+    let left = x;
+    if (left + rowW > maxRight) left = Math.max(8, maxRight - rowW);
+    holder.position.set(left, centerY);
+    this.container.addChild(holder);
   }
 
-  private _buildPetList(startY: number, opts?: { animate?: boolean }): void {
+  /** 圆环贴图 + 居中进度文案；待领时显示「领」贴图钮 */
+  private _buildRewardRing(cx: number, cy: number, ringSize: number): void {
+    const progress = PlayerData.codexMilestoneProgress;
+    const owned = PlayerData.ownedPets.length;
+    const total = PETS.length;
+    const pending = progress.pendingLingyu > 0;
+
+    const ringTex = codexTex(UI_CODEX_IMAGES.rewardRing);
+    const ringRoot = new PIXI.Container();
+    ringRoot.position.set(cx, cy);
+    this.container.addChild(ringRoot);
+
+    if (ringTex) {
+      const ring = new PIXI.Sprite(ringTex);
+      ring.anchor.set(0.5);
+      ring.width = ringSize;
+      ring.height = ringSize * (ringTex.height / ringTex.width);
+      ringRoot.addChild(ring);
+    }
+
+    const count = makeText(`${owned}/${total}`, {
+      size: 24, fill: COLORS.textMain, bold: true, anchor: 0.5,
+      role: 'title',
+      strokeColor: 0xfff8ec,
+      strokeWidth: 3,
+    });
+    count.position.set(0, -8);
+    ringRoot.addChild(count);
+
+    const label = makeText('奖励', {
+      size: 18, fill: COLORS.accentDeep, bold: true, anchor: 0.5,
+    });
+    label.position.set(0, 18);
+    ringRoot.addChild(label);
+
+    ringRoot.eventMode = 'static';
+    ringRoot.cursor = 'pointer';
+    ringRoot.hitArea = new PIXI.Circle(0, 0, ringSize * 0.55);
+    pressFeedback(ringRoot);
+    bindPointerTap(ringRoot, () => this._openRewardPanel());
+
+    if (pending) {
+      const claimTex = codexTex(UI_CODEX_IMAGES.claimBtn);
+      const claim = new PIXI.Container();
+      if (claimTex) {
+        const spr = new PIXI.Sprite(claimTex);
+        spr.anchor.set(0.5);
+        spr.width = 44;
+        spr.height = 44;
+        claim.addChild(spr);
+      } else {
+        const fallback = makeText('领', {
+          size: 18, fill: COLORS.textMain, bold: true, anchor: 0.5,
+        });
+        claim.addChild(fallback);
+      }
+      claim.position.set(ringSize * 0.42, -ringSize * 0.38);
+      claim.eventMode = 'static';
+      claim.cursor = 'pointer';
+      claim.hitArea = new PIXI.Circle(0, 0, 28);
+      pressFeedback(claim);
+      bindPointerTap(claim, () => this._claimRewards());
+      ringRoot.addChild(claim);
+    }
+  }
+
+  /**
+   * 连排底板 + 选中段贴图：左对齐；宽度略收、高度略增
+   */
+  private _buildFilterTabs(w: number, y: number): void {
+    const S = designScale(w);
+    const railW = Math.min(340, w - 80);
+    const railH = 42;
+    const railX = 12 * S; // 与三列卡左边距对齐
+    const rail = new PIXI.Container();
+    rail.position.set(railX, y - railH / 2);
+
+    const railTex = codexTex(UI_CODEX_IMAGES.filterRail);
+    if (railTex) {
+      const spr = new PIXI.Sprite(railTex);
+      spr.width = railW;
+      spr.height = railH;
+      rail.addChild(spr);
+    } else {
+      rail.addChild(makePanel({
+        width: railW, height: railH, radius: railH / 2, centered: false,
+        bg: 0xeef4f0, border: 0xc4b49a, borderWidth: 2,
+      }));
+    }
+
+    const segW = railW / FILTER_TABS.length;
+    const selTex = codexTex(UI_CODEX_IMAGES.filterSelected);
+    const selPadX = 6;
+    const selPadY = 4;
+    const selW = segW - selPadX * 2;
+    const selH = railH - selPadY * 2;
+
+    FILTER_TABS.forEach((tab, i) => {
+      const selected = tab.id === this._filter;
+      const cx = segW * i + segW / 2;
+
+      if (selected) {
+        if (selTex) {
+          const sel = new PIXI.Sprite(selTex);
+          sel.width = selW;
+          sel.height = selH;
+          sel.position.set(segW * i + selPadX, selPadY);
+          rail.addChild(sel);
+        } else {
+          const g = new PIXI.Graphics();
+          g.beginFill(0x2a9b8f, 1);
+          g.drawRoundedRect(segW * i + selPadX, selPadY, selW, selH, selH / 2);
+          g.endFill();
+          rail.addChild(g);
+        }
+      }
+
+      const label = makeText(tab.label, {
+        size: FONT_SIZE.sm,
+        fill: selected ? 0xffffff : 0x2b2118,
+        bold: true,
+        anchor: 0.5,
+      });
+      label.position.set(cx, railH / 2);
+      rail.addChild(label);
+
+      const hit = new PIXI.Container();
+      hit.hitArea = new PIXI.Rectangle(segW * i, 0, segW, railH);
+      hit.eventMode = 'static';
+      hit.cursor = 'pointer';
+      bindPointerTap(hit, () => {
+        if (this._filter === tab.id) return;
+        this._filter = tab.id;
+        this._rebuild();
+      });
+      rail.addChild(hit);
+    });
+
+    this.container.addChild(rail);
+  }
+
+  private _buildPetList(opts?: { animate?: boolean }): void {
     const animate = opts?.animate !== false;
     this._scroll.detach();
-    if (this._listMask && !this._listMask.destroyed) {
-      this._listMask.destroy();
-    }
+    if (this._listMask && !this._listMask.destroyed) this._listMask.destroy();
     this._listMask = null;
-    if (this._content && !this._content.destroyed) {
-      this._content.destroy({ children: true });
-    }
+    if (this._content && !this._content.destroyed) this._content.destroy({ children: true });
     this._content = null;
+
     const w = Game.logicWidth;
     const h = Game.logicHeight;
+    const startY = this._listTop;
     const { S, cols, cardGap, cardW, cardH, marginX } = petPoolGrid(w);
 
-    // 两态分组：已拥有 → 未获得（按 PETS 顺序稳定）
     const stateOf = (p: PetDef): CodexState =>
       PlayerData.isOwned(p.id) ? 'owned' : 'locked';
-    const ordered = [
-      ...PETS.filter((p) => stateOf(p) === 'owned'),
-      ...PETS.filter((p) => stateOf(p) === 'locked'),
-    ];
+
+    let pool = [...PETS];
+    if (this._filter === 'owned') pool = pool.filter((p) => stateOf(p) === 'owned');
+    else if (this._filter === 'locked') pool = pool.filter((p) => stateOf(p) === 'locked');
+    else {
+      pool = [
+        ...PETS.filter((p) => stateOf(p) === 'owned'),
+        ...PETS.filter((p) => stateOf(p) === 'locked'),
+      ];
+    }
 
     const content = new PIXI.Container();
     content.position.set(0, startY);
     this._content = content;
     this.container.addChild(content);
 
-    // 招募只解锁顺序里的下一只，故仅该卡显示价格条
     const recruitId = PlayerData.nextRecruit();
     const recruitCost = PlayerData.nextRecruitPrice();
-
     const items: PIXI.Container[] = [];
     let maxBottom = 0;
-    ordered.forEach((pet, i) => {
+
+    pool.forEach((pet, i) => {
       const state = stateOf(pet);
       const col = i % cols;
       const row = Math.floor(i / cols);
@@ -229,10 +414,12 @@ export class CodexScene implements Scene {
       if (state === 'owned') {
         buildOwnedCodexCard(item, pet, cardW, cardH, S, cardBgTex);
       } else {
-        buildLockedCodexCard(item, pet, cardW, cardH, S, cardBgTex,
+        buildLockedCodexCard(
+          item, pet, cardW, cardH, S, cardBgTex,
           pet.id === recruitId
             ? { price: recruitCost, affordable: PlayerData.coins >= recruitCost }
-            : undefined);
+            : undefined,
+        );
       }
 
       item.eventMode = 'static';
@@ -246,14 +433,22 @@ export class CodexScene implements Scene {
       items.push(item);
     });
 
+    if (pool.length === 0) {
+      const empty = makeText('暂无灵宠', {
+        size: FONT_SIZE.sm, fill: COLORS.textSub, bold: true, anchor: 0.5,
+      });
+      empty.position.set(w / 2, 80);
+      content.addChild(empty);
+      maxBottom = 120;
+    }
+
     if (animate) {
       staggerIn(items, { stepDelay: 0.022, offsetY: 14, duration: 0.28 });
     }
 
-    // 视口与滚动范围
     const viewportH = h - startY - 16;
     const contentH = maxBottom + cardGap;
-    const scrollMin = Math.min(startY, startY - (contentH - viewportH));
+    const scrollMin = Math.min(startY, startY - Math.max(0, contentH - viewportH));
 
     if (contentH > viewportH) {
       const mask = new PIXI.Graphics();
@@ -263,8 +458,6 @@ export class CodexScene implements Scene {
       this.container.addChild(mask);
       this._listMask = mask;
       content.mask = mask;
-
-      // 列表区统一 canvas touch 滚动（不依赖 Pixi pointerdown，避免子元素抢事件）
       this._scroll.attach({
         content: () => this._content,
         viewportTop: startY,
@@ -273,12 +466,159 @@ export class CodexScene implements Scene {
         listTop: startY,
         moveThreshold: 2,
       });
-    } else {
-      this._scroll.detach();
     }
   }
 
-  /** 列表点击：已拥有直达养成；未拥有用 toast 引导 */
+  private _claimRewards(): void {
+    const granted = PlayerData.claimCodexMilestones();
+    if (granted <= 0) {
+      Platform.showToast('暂无可领奖励');
+      this._openRewardPanel();
+      return;
+    }
+    Platform.showToast(`收集奖励 · 灵玉 +${granted}`, 'success');
+    this._rebuild();
+  }
+
+  /** 收集奖励详情弹层（贴图底板） */
+  private _openRewardPanel(): void {
+    if (this._rewardOverlay && !this._rewardOverlay.destroyed) {
+      this._rewardOverlay.destroy({ children: true });
+      this._rewardOverlay = null;
+    }
+    const w = Game.logicWidth;
+    const h = Game.logicHeight;
+    const overlay = new PIXI.Container();
+    overlay.eventMode = 'static';
+    overlay.hitArea = new PIXI.Rectangle(0, 0, w, h);
+    this._rewardOverlay = overlay;
+
+    const dimHit = new PIXI.Container();
+    dimHit.hitArea = new PIXI.Rectangle(0, 0, w, h);
+    dimHit.eventMode = 'static';
+    const dim = new PIXI.Graphics();
+    dim.beginFill(0x000000, 0.55);
+    dim.drawRect(0, 0, w, h);
+    dim.endFill();
+    dimHit.addChild(dim);
+    bindPointerTap(dimHit, () => this._closeRewardPanel());
+    overlay.addChild(dimHit);
+
+    const panelW = Math.min(560, w * 0.86);
+    const panelH = Math.min(780, h * 0.72);
+    const panelX = (w - panelW) / 2;
+    const panelY = (h - panelH) / 2;
+    const panelHost = new PIXI.Container();
+    panelHost.position.set(panelX, panelY);
+    panelHost.eventMode = 'static';
+    panelHost.hitArea = new PIXI.Rectangle(0, 0, panelW, panelH);
+    bindPointerTap(panelHost, () => { /* 吞点击，避免点面板关闭 */ });
+    overlay.addChild(panelHost);
+
+    const panelTex = codexTex(UI_CODEX_IMAGES.rewardPanel);
+    if (panelTex) {
+      const panel = new PIXI.Sprite(panelTex);
+      panel.width = panelW;
+      panel.height = panelH;
+      panelHost.addChild(panel);
+    } else {
+      panelHost.addChild(makePanel({
+        width: panelW, height: panelH, radius: 22, centered: false,
+        bg: COLORS.panelBg, border: COLORS.panelBorder,
+      }));
+    }
+
+    const title = makeText('收集奖励', {
+      size: FONT_SIZE.lg, fill: COLORS.textMain, bold: true, anchor: 0.5,
+      role: 'title',
+    });
+    title.position.set(panelW / 2, 48);
+    panelHost.addChild(title);
+
+    const every = ECONOMY.milestone.codexEvery;
+    const owned = PlayerData.ownedPets.length;
+    const prog = PlayerData.codexMilestoneProgress;
+    const nowFloor = Math.floor(owned / every);
+    const pendingTiers = prog.lingyu > 0 ? Math.round(prog.pendingLingyu / prog.lingyu) : 0;
+    const claimedFloor = Math.max(0, nowFloor - pendingTiers);
+    // 初始 5 只不计档：列表从 10 只起（跳过第 1 档）
+    const firstTier = 2;
+    const lastTier = Math.min(Math.max(firstTier + 5, Math.ceil(PETS.length / every)), firstTier + 7);
+    // 三列同一行中线：条件 | 奖励 | 状态钮（Button 以中心定位，须预留描边内边距）
+    const padX = 56; // 贴图金框内侧留白，左右对称
+    const btnW = 120;
+    const colNeedX = padX;
+    const colRewardX = Math.round(panelW * 0.38);
+    const colBtnX = panelW - padX - btnW / 2;
+    const rowH = 64;
+    let rowCenterY = 108;
+    for (let i = firstTier; i <= lastTier; i++) {
+      const need = i * every;
+      const reached = owned >= need;
+      const claimed = i <= claimedFloor;
+      const claimable = reached && !claimed;
+
+      const row = new PIXI.Container();
+      row.position.set(0, rowCenterY);
+
+      const needLabel = makeText(`集齐 ${need} 只`, {
+        size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+      });
+      needLabel.position.set(colNeedX, 0);
+      row.addChild(needLabel);
+
+      const reward = makeIconLabel({
+        iconPath: UI_IMAGES.iconLingyu, iconSize: 28,
+        text: `×${prog.lingyu}`,
+        size: FONT_SIZE.sm, fill: COLORS.accentDeep, bold: true, gap: 4,
+      });
+      // IconLabel 子节点锚在 y=0 中线，勿再减 height/2
+      reward.position.set(colRewardX, 0);
+      row.addChild(reward);
+
+      const stateLabel = claimed ? '已领取' : (claimable ? '待领取' : '未达成');
+      const btn = makeButton({
+        label: stateLabel,
+        width: btnW,
+        height: 44,
+        variant: claimable ? 'primary' : 'ghost',
+        enabled: claimable,
+        onTap: () => {
+          if (!claimable) return;
+          this._closeRewardPanel();
+          this._claimRewards();
+        },
+      });
+      btn.position.set(colBtnX, 0);
+      row.addChild(btn);
+
+      panelHost.addChild(row);
+      rowCenterY += rowH;
+    }
+
+    const tip = makeText('初始阵容不计 · 每再集齐 5 只可领 · 点条目领取', {
+      size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: 0.5,
+    });
+    tip.position.set(panelW / 2, panelH - 56);
+    panelHost.addChild(tip);
+
+    const close = makeCloseButton({
+      onTap: () => this._closeRewardPanel(),
+      size: 48,
+    });
+    close.position.set(w / 2, panelY + panelH + 36);
+    overlay.addChild(close);
+
+    this.container.addChild(overlay);
+  }
+
+  private _closeRewardPanel(): void {
+    if (this._rewardOverlay && !this._rewardOverlay.destroyed) {
+      this._rewardOverlay.destroy({ children: true });
+    }
+    this._rewardOverlay = null;
+  }
+
   private _onPetTap(pet: PetDef, state: CodexState): void {
     if (state === 'owned') {
       SceneManager.switchTo('petDetail', { petId: pet.id } satisfies PetDetailEnterData);
@@ -299,7 +639,6 @@ export class CodexScene implements Scene {
     Platform.showToast('未获得 · 可通过召唤获取（UR 仅召唤）');
   }
 
-  /** 灵宠币招募二次确认：扣币不可逆，不做直点直扣 */
   private _showRecruitConfirm(pet: PetDef): void {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
@@ -392,8 +731,6 @@ export class CodexScene implements Scene {
         ? `重复招募 · ${name}碎片 +${result.shards ?? 0}`
         : `招募成功 · ${name} 已加入`,
     );
-    this._buildShell();
-    this._buildPetList(Game.safeTop + 118, { animate: false });
+    this._rebuild();
   }
-
 }

@@ -20,7 +20,7 @@ import { analytics } from '@/analytics';
 import { UI_IMAGES } from '@/config/Assets';
 import { ensureAssets } from '@/config/Subpackages';
 import {
-  COLORS, FONT_SIZE, FONT_FAMILY_DISPLAY,
+  COLORS, FONT_SIZE,
   makeActionButton, makeCloseButton, makePanel, makeText, makeModalTitlePlaque, pulse,
 } from '@/ui';
 import {
@@ -253,7 +253,7 @@ export class CheckinPanel extends PIXI.Container {
       size: FONT_SIZE.md,
       fill: titleFill,
       bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
       strokeColor: claimed ? undefined : 0xfff6d8,
       strokeWidth: claimed ? 0 : 4,
     });

@@ -7,8 +7,8 @@
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
 import { UI_IMAGES } from '@/config/Assets';
-import { COLORS, FONT_FAMILY_DISPLAY, FONT_SIZE, RADIUS } from './theme';
-import { makeText } from './text';
+import { COLORS, FONT_SIZE, RADIUS } from './theme';
+import { makeBodyText, makeTitleText } from './text';
 import { pressFeedback } from './motion';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
@@ -23,6 +23,10 @@ export interface ActionButtonOpts {
   enabled?: boolean;
   /** 覆盖标题字号；默认 FONT_SIZE.lg */
   fontSize?: number;
+  /** 覆盖标题字体（默认书法展示体） */
+  fontFamily?: string;
+  /** 标题是否加粗；书法体默认 false */
+  titleBold?: boolean;
   onTap: () => void;
 }
 
@@ -85,26 +89,23 @@ export function makeActionButton(opts: ActionButtonOpts): ActionButtonHandle {
   const { width, height, variant = 'success', onTap } = opts;
   const btn = new PIXI.Container() as ActionButtonHandle;
   const plateHost = new PIXI.Container();
-  // cream / gold / success 结算钮：衬线体对齐 victory/defeat UI
-  const displayFont = variant === 'cream' || variant === 'gold' || variant === 'success'
-    ? FONT_FAMILY_DISPLAY
-    : undefined;
-  const title = makeText(opts.title, {
+  // 主文书法、副文文楷；variant 描边保证绿/金钮可读
+  const title = makeTitleText(opts.title, {
     size: opts.fontSize ?? FONT_SIZE.lg,
-    bold: true,
+    bold: opts.titleBold ?? false,
     anchor: 0.5,
-    fontFamily: displayFont,
+    ...(opts.fontFamily ? { fontFamily: opts.fontFamily } : {}),
     ...(variant === 'success'
       ? { strokeColor: 0x2f6a28, strokeWidth: 4 }
       : variant === 'gold'
         ? { strokeColor: 0xa85a18, strokeWidth: 4 }
         : {}),
   });
-  const subtitle = makeText(opts.subtitle ?? '', {
+  const subtitle = makeBodyText(opts.subtitle ?? '', {
     size: FONT_SIZE.sm,
-    bold: true,
+    bold: false,
     anchor: 0.5,
-    fontFamily: displayFont,
+    ...(opts.fontFamily ? { fontFamily: opts.fontFamily } : {}),
   });
   btn.addChild(plateHost, title, subtitle);
 

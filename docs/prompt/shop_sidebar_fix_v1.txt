@@ -1,0 +1,14 @@
+Redesign this mobile game SHOP screen (portrait 9:16). Keep the same Chinese xianxia aesthetic, dual-column product cards, top coin pill, and back button from the reference.
+
+PROBLEM TO FIX: The left category rail is an ugly short dark wood strip that stops mid-screen with empty space below. Do NOT keep a floating incomplete bar.
+
+SOLUTION A — Full-height soft rail:
+- Left sidebar is a FULL-HEIGHT cream parchment rail from just below the header all the way to the bottom safe area (touch the bottom cloud area gracefully).
+- Rail is warm cream/ivory with soft gold edge (NOT dark brown wood).
+- Four category tabs stacked near the TOP of the rail: 碎片 (selected, cream highlight), 荣誉, 秘境, 灵玉 — icon + Chinese label each.
+- Below the last tab, the rail continues as empty elegant parchment texture (cloud motif optional) so the column feels finished and grounded, not cut off.
+- Right side: same 2-column shard shop cards (通用碎片 + pets), parchment cards, gold buy buttons.
+- Background: bamboo pavilion + purple-white bottom clouds like reference.
+- Soft, premium, balanced composition. No purple UI chrome. No dark mode.
+
+Readable Chinese labels on tabs and cards. High-fidelity mobile UI mockup inside phone frame optional.

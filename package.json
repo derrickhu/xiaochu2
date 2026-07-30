@@ -10,6 +10,7 @@
     "cdn:upload:dry": "node scripts/upload_cdn.js --dry-run",
     "cdn:strip": "node scripts/strip-cdn-assets.mjs",
     "cdn:restore": "node scripts/restore-cdn-assets.mjs",
+    "cdn:check": "node scripts/upload_cdn.js --dry-run",
     "build:wechat": "npm run build && npm run cdn:upload && npm run cdn:strip",
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
@@ -20,7 +21,8 @@
     "balance:dashboard:start": "./tools/balance-dashboard/start.sh start",
     "balance:dashboard:stop": "./tools/balance-dashboard/start.sh stop",
     "balance:dashboard:status": "./tools/balance-dashboard/start.sh status",
-    "balance:dashboard:install": "./tools/balance-dashboard/start.sh install"
+    "balance:dashboard:install": "./tools/balance-dashboard/start.sh install",
+    "cdn:repair-manifest": "node scripts/repair_cdn_manifest.mjs"
   },
   "dependencies": {
     "@gp/analytics-sdk": "file:../game-analysis/packages/analytics-sdk",

@@ -64,5 +64,8 @@ if ((organize.status || 0) !== 0) {
   process.exit(organize.status || 1);
 }
 
+const stripMarker = path.join(PROJECT_ROOT, 'minigame', '.cdn_stripped');
+try { fs.unlinkSync(stripMarker); } catch { /* ignore */ }
+
 console.log('已恢复:', [...cdnPaths, ...MAIN_OVERFLOW_SOURCES].join(', '));
 console.log('提示: 上传微信包请用 npm run build:wechat（会再次 strip）');

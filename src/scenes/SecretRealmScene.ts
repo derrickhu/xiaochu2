@@ -21,7 +21,7 @@ import { PlayerData } from '@/game/PlayerData';
 import { adUsesLeft, watchAd } from '@/game/adGate';
 import type { BattleContext } from '@/game/battleContext';
 import {
-  COLORS, FONT_SIZE, FONT_FAMILY_DISPLAY, BOTTOM_NAV_RESERVE,
+  COLORS, FONT_SIZE, BOTTOM_NAV_RESERVE,
   buildBottomNav, makeBackButton, makeCoverBackground,
   makeSceneTitlePlaque, makeText, pressFeedback,
   makeWarmGoldCtaButton, WARM_GOLD_CTA_SIZE,
@@ -236,7 +236,7 @@ export class SecretRealmScene implements Scene {
       size: FONT_SIZE.xs,
       fill: selected ? color : (open ? COLORS.textTitle : COLORS.textDisabled),
       bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     under.position.set(0, r + 18);
     root.addChild(under);
@@ -286,7 +286,7 @@ export class SecretRealmScene implements Scene {
       size: FONT_SIZE.xl + 2,
       fill: ORB_COLOR[realm.element],
       bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
       strokeColor: 0xfff8ec,
       strokeWidth: 5,
     });
@@ -376,7 +376,7 @@ export class SecretRealmScene implements Scene {
       fill: 0x5c3d24,
       bold: true,
       anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     try { elLabel.updateText(true); } catch { /* noop */ }
     // 底尖约 6% 高 → 玉心略上；中文字面又常偏上 → 再略下压对齐
@@ -428,7 +428,7 @@ export class SecretRealmScene implements Scene {
     const pad = 12;
     const title = makeText('挑战奖励', {
       size: FONT_SIZE.sm, fill: 0x6b4423, bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     title.position.set(panelW / 2, pad + 16);
     panel.addChild(title);
@@ -622,7 +622,7 @@ export class SecretRealmScene implements Scene {
         size: FONT_SIZE.sm,
         fill: selected ? 0x6b3e12 : (unlocked ? 0x2f6a5a : COLORS.textDisabled),
         bold: true, anchor: 0.5,
-        fontFamily: FONT_FAMILY_DISPLAY,
+        role: 'title',
       }));
 
       pill.eventMode = unlocked ? 'static' : 'none';

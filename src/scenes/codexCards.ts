@@ -1,15 +1,16 @@
+/**
+ * 图鉴竖卡：对齐 codex_panel_proto_v3_ring_entry
+ * 已拥有：立绘 + 稀有度 + 属性珠 + 名 + 星
+ * 未获得：剪影 + 未获得 + 空星（招募下一只保留价格条）
+ */
 import * as PIXI from 'pixi.js';
 import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import type { PetDef } from '@/balance/pets';
-import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS,
-  makeLevelLabel,
   makePanel,
-  makePetStatsLine,
   attachRarityBadge,
-  makeRoleBadge,
   makeStarRow,
   makeText,
   makeElementOrb,
@@ -32,20 +33,45 @@ function addCodexAvatar(
   if (opts?.alpha != null) avatar.alpha = opts.alpha;
   item.addChild(avatar);
   bindPetAvatarSprite(avatar, petId, star, (tex) => {
-    // 固定槽位：用宽高铺满，避免异步到货后 scale 与 width 双写冲突
     avatar.texture = tex;
     avatar.width = avatarSize;
     avatar.height = avatarSize;
   });
 }
 
-/** 招募态：仅招募顺序里的下一只可直接买断，其余未拥有宠只显示获取提示 */
 export interface CodexRecruitInfo {
   price: number;
   affordable: boolean;
 }
 
-/** 未拥有卡：稀有度底板 + 剪影 + 获取提示。 */
+function addCardShell(
+  item: PIXI.Container,
+  cardW: number,
+  cardH: number,
+  S: number,
+  cardBgTex: PIXI.Texture | null,
+  locked: boolean,
+): void {
+  if (cardBgTex) {
+    const bg = new PIXI.Sprite(cardBgTex);
+    bg.width = cardW;
+    bg.height = cardH;
+    if (locked) {
+      bg.tint = 0xb0b0b0;
+      bg.alpha = 0.92;
+    }
+    item.addChild(bg);
+  } else {
+    item.addChild(makePanel({
+      width: cardW, height: cardH, radius: 8 * S, centered: false,
+      bg: locked ? COLORS.panelBgAlt : COLORS.panelBg,
+      bgAlpha: locked ? 0.9 : 1,
+      border: COLORS.panelBorderSoft,
+    }));
+  }
+}
+
+/** 未拥有卡 */
 export function buildLockedCodexCard(
   item: PIXI.Container,
   pet: PetDef,
@@ -55,30 +81,17 @@ export function buildLockedCodexCard(
   cardBgTex: PIXI.Texture | null = null,
   recruit?: CodexRecruitInfo,
 ): void {
-  if (cardBgTex) {
-    const bg = new PIXI.Sprite(cardBgTex);
-    bg.width = cardW;
-    bg.height = cardH;
-    bg.tint = 0xb0b0b0;
-    bg.alpha = 0.92;
-    item.addChild(bg);
-  } else {
-    item.addChild(makePanel({
-      width: cardW, height: cardH, radius: 8 * S, centered: false,
-      bg: COLORS.panelBgAlt, bgAlpha: 0.9,
-      border: COLORS.panelBorderSoft,
-    }));
-  }
+  addCardShell(item, cardW, cardH, S, cardBgTex, true);
 
   const orb = makeElementOrb(pet.element, 18 * S);
   orb.anchor.set(0);
-  orb.alpha = 0.4;
-  orb.position.set(10 * S, 10 * S);
+  orb.alpha = 0.45;
+  orb.position.set(cardW - 28 * S, 10 * S);
   item.addChild(orb);
 
-  const avatarSize = cardW * 0.62;
+  const avatarSize = cardW * 0.68;
   const avatarLeft = (cardW - avatarSize) / 2;
-  const avatarTop = 8 * S;
+  const avatarTop = 14 * S;
 
   addCodexAvatar(item, pet.id, 1, avatarLeft, avatarTop, avatarSize, {
     tint: 0x111317,
@@ -86,17 +99,16 @@ export function buildLockedCodexCard(
   });
   attachRarityBadge(item, pet.rarity, 0, 0, avatarSize, { variant: 'codex' });
 
-  const lock = makeText(recruit ? pet.name : '未获得', {
-    size: Math.round(11 * S), fill: recruit ? COLORS.textMain : COLORS.textSub,
-    bold: true, anchor: 0.5,
-  });
-  lock.position.set(cardW / 2, 8 * S + avatarSize + 14 * S);
-  item.addChild(lock);
-
   if (recruit) {
+    const name = makeText(pet.name, {
+      size: Math.round(12 * S), fill: COLORS.textMain, bold: true, anchor: 0.5,
+    });
+    name.position.set(cardW / 2, avatarTop + avatarSize + 16 * S);
+    item.addChild(name);
+
     const barW = cardW - 12 * S;
-    const barH = 20 * S;
-    const barY = cardH - barH - 6 * S;
+    const barH = 22 * S;
+    const barY = cardH - barH - 8 * S;
     const bar = makePanel({
       width: barW, height: barH, radius: barH / 2, centered: false,
       bg: recruit.affordable ? COLORS.btnRecruitBg : COLORS.panelBgAlt,
@@ -104,9 +116,8 @@ export function buildLockedCodexCard(
     });
     bar.position.set(6 * S, barY);
     item.addChild(bar);
-
     const label = makeText(`招募 ${recruit.price}`, {
-      size: Math.round(10 * S),
+      size: Math.round(11 * S),
       fill: recruit.affordable ? COLORS.btnText : COLORS.textDisabled,
       bold: true, anchor: 0.5,
     });
@@ -115,14 +126,18 @@ export function buildLockedCodexCard(
     return;
   }
 
-  const tip = makeText('？？？', {
-    size: Math.round(11 * S), fill: COLORS.textDisabled, bold: true, anchor: 0.5,
+  const lock = makeText('未获得', {
+    size: Math.round(13 * S), fill: COLORS.textSub, bold: true, anchor: 0.5,
   });
-  tip.position.set(cardW / 2, cardH - 16 * S);
-  item.addChild(tip);
+  lock.position.set(cardW / 2, avatarTop + avatarSize + 16 * S);
+  item.addChild(lock);
+
+  const stars = makeStarRow({ star: 0, scale: S, variant: 'card', anchor: 'center', style: 'sprite' });
+  stars.position.set(cardW / 2, cardH - 18 * S);
+  item.addChild(stars);
 }
 
-/** 已拥有单卡布局，对齐 xiao_chu _drawPetCard。 */
+/** 已拥有卡：立绘为主，去掉攻血复/等级/定位以贴合原型 */
 export function buildOwnedCodexCard(
   item: PIXI.Container,
   pet: PetDef,
@@ -131,65 +146,31 @@ export function buildOwnedCodexCard(
   S: number,
   cardBgTex: PIXI.Texture | null,
 ): void {
-  const petId = pet.id;
-  const lv = PlayerData.petLevel(petId);
-  const star = PlayerData.petStar(petId);
-
-  if (cardBgTex) {
-    const bg = new PIXI.Sprite(cardBgTex);
-    bg.width = cardW;
-    bg.height = cardH;
-    item.addChild(bg);
-  } else {
-    item.addChild(makePanel({
-      width: cardW, height: cardH, radius: 8 * S, centered: false,
-      bg: COLORS.panelBg, border: COLORS.panelBorderSoft,
-    }));
-  }
+  const star = PlayerData.petStar(pet.id);
+  addCardShell(item, cardW, cardH, S, cardBgTex, false);
 
   const orb = makeElementOrb(pet.element, 18 * S);
   orb.anchor.set(0);
-  orb.position.set(10 * S, 10 * S);
+  orb.position.set(cardW - 28 * S, 10 * S);
   item.addChild(orb);
 
-  const avatarSize = cardW * 0.62;
+  const avatarSize = cardW * 0.68;
   const avatarLeft = (cardW - avatarSize) / 2;
-  const avatarTop = 8 * S;
+  const avatarTop = 14 * S;
 
   addCodexAvatar(item, pet.id, star, avatarLeft, avatarTop, avatarSize);
   attachRarityBadge(item, pet.rarity, 0, 0, avatarSize, { variant: 'codex' });
 
-  const displayName = pet.name.length > 4 ? `${pet.name.slice(0, 4)}…` : pet.name;
-  const nameY = 8 * S + avatarSize + 6 * S;
+  const displayName = pet.name.length > 5 ? `${pet.name.slice(0, 5)}…` : pet.name;
+  const nameY = avatarTop + avatarSize + 14 * S;
   const nameText = makeText(displayName, {
-    size: Math.round(10 * S), fill: COLORS.cardNameText, bold: true, anchor: 0.5,
+    size: Math.round(13 * S), fill: COLORS.cardNameText, bold: true, anchor: 0.5,
     strokeColor: COLORS.cardNameStroke, strokeWidth: Math.max(2, Math.round(2 * S)),
   });
   nameText.position.set(cardW / 2, nameY);
   item.addChild(nameText);
 
-  const starY = nameY + 14 * S;
   const stars = makeStarRow({ star, scale: S, variant: 'card', anchor: 'center', style: 'sprite' });
-  stars.position.set(cardW / 2, starY);
+  stars.position.set(cardW / 2, cardH - 18 * S);
   item.addChild(stars);
-
-  const lvY = starY + 12 * S;
-  const lvLine = makeLevelLabel({ level: lv, scale: S, variant: 'card' });
-  lvLine.position.set(cardW / 2 - lvLine.width / 2, lvY);
-  item.addChild(lvLine);
-
-  const statsY = lvY + 12 * S;
-  const statsLine = makePetStatsLine({
-    atk: petAtk(pet, lv, star),
-    hp: petHp(pet, lv, star),
-    rcv: petRcv(pet, lv, star),
-    scale: S,
-    variant: 'card',
-  });
-  statsLine.position.set(cardW / 2 - statsLine.width / 2, statsY);
-  item.addChild(statsLine);
-
-  const roleBadge = makeRoleBadge({ role: pet.role, scale: S, maxWidth: cardW - 10 * S });
-  roleBadge.position.set((cardW - roleBadge.width) / 2, cardH - 21 * S);
-  item.addChild(roleBadge);
 }

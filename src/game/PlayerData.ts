@@ -408,7 +408,10 @@ class PlayerDataClass {
     return this.ownedPets.length;
   }
 
-  /** 图鉴里程碑进度（CodexScene 进度条用；自上次领取后累计） */
+  /**
+   * 图鉴里程碑进度（CodexScene 用）。
+   * 初始阵容 DEFAULT_TEAM 已预置进 codexRewarded，开局 5 只不可领，下一档从 10 起。
+   */
   get codexMilestoneProgress(): {
     count: number;
     inCycle: number;
@@ -417,11 +420,12 @@ class PlayerDataClass {
     lingyu: number;
     pendingLingyu: number;
   } {
+    this._ensureCodexBaseline();
     const every = ECONOMY.milestone.codexEvery;
     const total = this.ownedPets.length;
     const claimedFloor = Math.floor(this._data.codexRewarded / every);
     const nowFloor = Math.floor(total / every);
-    const pendingTiers = nowFloor - claimedFloor;
+    const pendingTiers = Math.max(0, nowFloor - claimedFloor);
     const inCycle = total - claimedFloor * every;
     return {
       count: total,
@@ -433,20 +437,29 @@ class PlayerDataClass {
     };
   }
 
+  /** 初始阵容不计入可领档：存档基准至少记到 DEFAULT_TEAM.length */
+  private _ensureCodexBaseline(): void {
+    const baseline = DEFAULT_TEAM.length;
+    if (this._data.codexRewarded >= baseline) return;
+    if (this.ownedPets.length < baseline) return;
+    this._data.codexRewarded = baseline;
+  }
+
   /**
    * 领取图鉴里程碑：每拥有 codexEvery 只发一次灵玉（仅在图鉴页调用）。
    * @returns 本次发放的灵玉总额（无新里程碑为 0）
    */
   claimCodexMilestones(): number {
+    this._ensureCodexBaseline();
     const every = ECONOMY.milestone.codexEvery;
     const total = this.ownedPets.length;
     const claimedFloor = Math.floor(this._data.codexRewarded / every);
     const nowFloor = Math.floor(total / every);
-    this._data.codexRewarded = total;
     if (nowFloor <= claimedFloor) {
       this._save();
       return 0;
     }
+    this._data.codexRewarded = total;
     const lingyu = (nowFloor - claimedFloor) * ECONOMY.milestone.codexLingyu;
     addLingyuToSave(this._data, lingyu);
     this._save();

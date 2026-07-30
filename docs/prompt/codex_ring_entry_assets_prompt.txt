@@ -1,0 +1,7 @@
+图鉴页 UI 壳层贴图（对齐 game_assets/xiaochu2/assets/prototypes/ui/codex_panel_proto_v3_ring_entry.png）
+- header canopy: 奶油色祥云顶栏壳体，无字
+- reward ring: 金云纹圆环进度框，中心留空
+- claim btn: 金色圆钮含「领」字
+- tab on/off: 筛选胶囊底（无字，字用运行时叠）
+- reward panel: 收集奖励弹层羊皮纸底板
+风格：Q版修仙，青绿+奶油金，透明底交付

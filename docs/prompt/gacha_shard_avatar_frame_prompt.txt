@@ -1,0 +1,5 @@
+ART STYLE: xiaochu2 Q-chibi guofeng UI prop.
+Ornate circular antique-gold avatar frame ring with cloud/scroll flourishes at cardinal points.
+Hollow transparent center for pet portrait. Solid white background for cutout. NO TEXT, no pet.
+Reference: docs/prototypes/gacha_shard_result_ui_v1.png circular pet badge.
+Runtime: minigame/subpackages/pkg-scene/images/ui/frame/gacha_shard_avatar_frame.png

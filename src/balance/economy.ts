@@ -111,28 +111,19 @@ export const ECONOMY = {
     duplicateUniversal: { 3: 8, 4: 25 } as Readonly<Record<number, number>>,
     /** 新号初始灵玉（0 = 不赠送，靠首通里程碑 / 侧边栏 / 图鉴等途径获取） */
     starterLingyu: 0,
-    /**
-     * 高稀有护航包：NEW SSR/UR 出货附赠本体碎片 + 通用经验，
-     * 保证「抽到强宠 → 立刻升 2★/拉等级 → 上阵可感知提升」的闭环。
-     * 碎片数恰好覆盖 1★→2★ 升星成本（starUpShards[2] = 20）。
-     */
-    escort: {
-      3: { shards: 20, exp: 300 },
-      // v0.4：UR 经验包 800→700，守住「≤ 2× 第 2 章进章预算(L10) 累计经验」契约
-      4: { shards: 40, exp: 700 },
-    } as Readonly<Record<number, { shards: number; exp: number }>>,
   },
 
   /**
    * ── 通用碎片（万能碎片）──
    *
    * 解的是「UR 想升满星要 13 只重复」的死结：本体碎片只能靠抽到同一只，
-   * 深池下这是数学上不可达的目标。通用碎片可折算成任意宠的本体碎片，
-   * 对 UR 按 exchangeRate 打折以免高档升星被通用货币直接买穿。
+   * 深池下这是数学上不可达的目标。通用碎片可折算成任意宠的本体碎片。
+   * 折算按稀有度阶梯加税（R/SR=1、SSR=2、UR=3），避免高档升星被通用买穿；
+   * R/SR 本体好出、商店定向也便宜，通常不靠通用，故与 SR 同档即可。
    */
   universal: {
-    /** 折算率：目标宠稀有度 → 换 1 点本体碎片需要的通用碎片数 */
-    exchangeRate: { 1: 1, 2: 1, 3: 1, 4: 2 } as Readonly<Record<number, number>>,
+    /** 折算率：目标宠稀有度 → 换 1 点本体碎片需要的通用碎片数（阶梯加税） */
+    exchangeRate: { 1: 1, 2: 1, 3: 2, 4: 3 } as Readonly<Record<number, number>>,
     /**
      * 精英档及以上关卡的通用碎片基数，实际值 = 本数 × stageTypes.shardMult。
      * 精英 1.6 → 4 / Boss 2.2 → 5 / 秘境 2.0 → 5；普通关（shardMult 1.0）不产。
@@ -172,8 +163,6 @@ export const ECONOMY = {
     packSize: 10,
     /** 每包灵宠币基础价（按稀有度，越稀有越贵；四档制，不留 LR 死键） */
     shardPackCost: { 1: 300, 2: 600, 3: 1200, 4: 2400 } as Readonly<Record<number, number>>,
-    /** 推荐属性展示的宠数量上限 */
-    recommendCount: 3,
     /** 通用碎片兑换：每包灵宠币价（通用碎片可换任意宠，故单价高于定向包） */
     universalPackCost: 1800,
     universalPackSize: 20,

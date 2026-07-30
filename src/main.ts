@@ -18,6 +18,7 @@ import { MAIN_PRELOAD_IMAGES } from '@/config/Assets';
 import { ensureAudioSubpackage, loadSubpackagesForPaths } from '@/config/Subpackages';
 import { warmupCommonSubpackages } from '@/config/SubpackageWarmup';
 import { warmupCdnAssets } from '@/config/CdnWarmup';
+import { warmupCustomFonts } from '@/core/FontService';
 import { TitleScene } from '@/scenes/TitleScene';
 import { BattleScene } from '@/scenes/BattleScene';
 import { TeamScene } from '@/scenes/TeamScene';
@@ -75,6 +76,9 @@ async function main(): Promise<void> {
   const loadingOverlay = new LoadingScreenOverlay();
   Game.stage.addChild(loadingOverlay);
 
+  // 自定义字体与 Loading 图并行预热，进主场景前 await，避免首屏落系统体
+  const fontsReady = warmupCustomFonts();
+
   // 先出 Loading 底图/标题，避免云同步等待时黑屏
   await TextureCache.preload([...LOADING_SPLASH_IMAGES]);
   loadingOverlay.applySplashTexture();
@@ -123,6 +127,7 @@ async function main(): Promise<void> {
     const ratio = total > 0 ? loaded / total : 1;
     loadingOverlay.setProgress(0.28 + ratio * 0.67);
   });
+  await fontsReady;
   loadingOverlay.setProgress(0.97);
 
   SceneManager.register(new TitleScene());

@@ -194,7 +194,21 @@ class GMManagerClass {
       },
     });
 
-    // ── 养成调试：经验 / 碎片 / 快速升星（测觉醒头像等）──
+    // ── 养成调试：灵玉 / 经验 / 碎片 / 快速升星（测觉醒头像等）──
+    this._commands.push({
+      id: 'lingyu_plus_1k',
+      group: '养成',
+      name: '灵玉 +1000',
+      desc: '测单抽 / 十连召唤',
+      execute: () => this._addLingyu(1_000),
+    });
+    this._commands.push({
+      id: 'lingyu_plus_10k',
+      group: '养成',
+      name: '灵玉 +1万',
+      desc: '大量召唤压测',
+      execute: () => this._addLingyu(10_000),
+    });
     this._commands.push({
       id: 'exp_plus_10k',
       group: '养成',
@@ -288,6 +302,14 @@ class GMManagerClass {
         return `已重置：${left}`;
       },
     });
+  }
+
+  private _addLingyu(amount: number): string {
+    PlayerData.load();
+    PlayerData.addLingyu(amount);
+    EventBus.emit('home:refresh');
+    Platform.showToast(`灵玉 +${amount}`, 'success');
+    return `灵玉 = ${PlayerData.lingyu}`;
   }
 
   private _addShardsToOwned(amount: number): string {

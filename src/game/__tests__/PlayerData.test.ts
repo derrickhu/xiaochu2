@@ -154,6 +154,15 @@ describe('里程碑与货币', () => {
     expect(PlayerData.spendCoins(PlayerData.coins + 1)).toBe(false);
   });
 
+  it('图鉴里程碑：初始阵容不可领，下一档从 10 只起', () => {
+    expect(PlayerData.ownedPets.length).toBeGreaterThanOrEqual(DEFAULT_TEAM.length);
+    expect(PlayerData.codexMilestoneProgress.pendingLingyu).toBe(0);
+    expect(PlayerData.claimCodexMilestones()).toBe(0);
+    expect(PlayerData.codexMilestoneProgress.next).toBe(
+      DEFAULT_TEAM.length + ECONOMY.milestone.codexEvery,
+    );
+  });
+
   it('图鉴里程碑：每拥有满 codexEvery 只发一次灵玉，且不重复发', () => {
     const every = ECONOMY.milestone.codexEvery;
     PlayerData.claimCodexMilestones();

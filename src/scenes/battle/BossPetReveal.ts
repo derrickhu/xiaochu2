@@ -19,7 +19,7 @@ import {
 } from '@/config/Assets';
 import { ensureAssets } from '@/config/Subpackages';
 import {
-  FONT_FAMILY_DISPLAY, FONT_SIZE,
+  FONT_SIZE,
   attachPetFrameOrb, makeActionButton, makeText, makeRarityBadge, popIn, pulse,
 } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
@@ -143,7 +143,7 @@ export async function playBossPetReveal(opts: BossPetRevealOpts): Promise<void> 
   // 眉标
   const eyebrow = makeText('章末试炼 · 收服成功', {
     size: FONT_SIZE.sm, fill: 0xfff3d0, bold: true, anchor: 0.5,
-    fontFamily: FONT_FAMILY_DISPLAY,
+    role: 'title',
     strokeColor: 0x3a2a10, strokeWidth: 4,
   });
   eyebrow.position.set(w / 2, h * 0.11);
@@ -182,7 +182,7 @@ export async function playBossPetReveal(opts: BossPetRevealOpts): Promise<void> 
 
   const name = makeText(pet?.name ?? petId, {
     size: 48, fill: 0xfff8e8, bold: true, anchor: 0.5,
-    fontFamily: FONT_FAMILY_DISPLAY,
+    role: 'title',
     strokeColor: color, strokeWidth: 6,
   });
   name.position.set(w / 2, h * 0.62);

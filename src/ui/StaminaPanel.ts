@@ -17,7 +17,7 @@ import { watchAd } from '@/game/adGate';
 import { UI_IMAGES } from '@/config/Assets';
 import { ensureAssets } from '@/config/Subpackages';
 import {
-  COLORS, FONT_FAMILY_DISPLAY, FONT_SIZE,
+  COLORS, FONT_SIZE,
   makeActionButton, makeCloseButton, makePanel, makeText,
   makeModalTitlePlaque, makeProgressBar,
 } from '@/ui';
@@ -148,7 +148,7 @@ export class StaminaPanel extends PIXI.Container {
 
     const stock = makeText(`${cur}`, {
       size: 44, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     stock.position.set(-40, heroY - 12);
     this._body.addChild(stock);

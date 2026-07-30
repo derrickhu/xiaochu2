@@ -5,8 +5,8 @@
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
 import { UI_IMAGES } from '@/config/Assets';
-import { COLORS, FONT_FAMILY_DISPLAY, FONT_SIZE } from './theme';
-import { makeText } from './text';
+import { COLORS, FONT_SIZE } from './theme';
+import { makeTitleText } from './text';
 import { pressFeedback } from './motion';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
@@ -70,12 +70,10 @@ export function makeWarmGoldCtaButton(opts: WarmGoldCtaButtonOpts): PIXI.Contain
     }).catch(() => null);
   }
 
-  const title = makeText(opts.title, {
+  const title = makeTitleText(opts.title, {
     size: opts.fontSize ?? FONT_SIZE.md,
     fill: enabled ? (opts.fill ?? TEXT_FILL) : COLORS.textDisabled,
-    bold: true,
     anchor: 0.5,
-    fontFamily: FONT_FAMILY_DISPLAY,
   });
   try { title.updateText(true); } catch { /* noop */ }
   const maxTextW = width * 0.68;

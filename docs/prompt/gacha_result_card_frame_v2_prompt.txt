@@ -1,0 +1,23 @@
+Mobile game UI FRAME asset only (transparent PNG). Vertical summon-result pet card frame, aspect ~2:3 (portrait).
+
+CRITICAL — fix the broken reference:
+- The reference frame is DAMAGED on the LEFT and TOP (thin/missing left rail, broken top bar).
+- Produce a CLEAN COMPLETE version of the SAME design language.
+- LEFT and RIGHT borders MUST be perfectly symmetric mirror twins: same thickness, same double-line bevel, same cloud flourishes.
+- TOP bar MUST be continuous and closed from left corner to right corner (no gaps).
+- All four corners complete with matching 祥云 (auspicious cloud) scrollwork.
+- Outer silhouette fully closed; no broken strokes, no smudges, no gray ghost pixels outside the gold.
+
+Design (match the good RIGHT side of the reference):
+- Ornate antique polished gold filigree, metallic 3D bevel, warm highlights.
+- Large upper portrait WINDOW completely EMPTY and fully TRANSPARENT (see checkerboard through it).
+- Smaller lower name WINDOW also EMPTY and fully TRANSPARENT.
+- Horizontal gold divider between windows with centered diamond gem + symmetric cloud swirls.
+- Bottom bar with centered diamond gem.
+- Chinese cultivation casual gacha UI, premium, not neon, not purple, not flat Material.
+
+HARD RULES:
+- NO TEXT, no letters, no Chinese characters, no NEW badge, no rarity, no watermark, no labels.
+- NO solid cream/white card fill — gold frame rails and ornaments ONLY on transparent background.
+- Clean alpha edges, crisp gold, production-ready HUD asset.
+- Centered on canvas with transparent outside margin.

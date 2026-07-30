@@ -19,12 +19,13 @@ import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { resolvePetAbilities, diffAbilityUnlocks, type PetProgress } from '@/game/petAbilities';
 import { EventBus } from '@/core/EventBus';
 import {
-  ENEMY_PORTRAIT_FRAME, BACKGROUND_IMAGES, UI_FX_IMAGES, petShowcaseImage,
+  ENEMY_PORTRAIT_FRAME, BACKGROUND_IMAGES, UI_FX_IMAGES, petShowcaseLoadPaths,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import { reportQuest } from '@/game/dailyQuestTracker';
 import {
   COLORS, FONT_SIZE, RADIUS,
+  bindLazySprite,
   makeButton, makeCoverBackground, makePanel, makeText, makeProgressBar, makeTopBar,
   makeStarRow, SceneFx, fadeIn, countUp, pulse, makeSkillIcon, makeStatIcon,
   makeActionButton, makeElementOrb,
@@ -34,6 +35,7 @@ import { ScrollListController } from '@/ui/ScrollList';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { clientEventToDesign } from '@/utils/clientEventToDesign';
+import { containsDesignPoint } from '@/utils/hitTestDesign';
 import { getTouchCanvas } from '@/utils/touchCanvas';
 
 export interface PetDetailEnterData {
@@ -80,6 +82,7 @@ export class PetDetailScene implements Scene {
   private _starRow: PIXI.Container | null = null;
   private _statRows: Partial<Record<StatKey, StatRow>> = {};
   private _avatarCenter = new PIXI.Point();
+  private _unbindShowcase: (() => void) | null = null;
   private _statPotential: Record<StatKey, number> = { atk: 1, hp: 1, rcv: 1 };
   private readonly _enterSeq = new SceneEnterSeq();
 
@@ -92,6 +95,8 @@ export class PetDetailScene implements Scene {
   private _buildLive = true;
   /** 切宠落位重建时跳过立绘淡入，避免无缝滑入后再闪一下 */
   private _skipAvatarFade = false;
+  /** 左右切宠箭头（横滑手势按下落在此上时不抢） */
+  private _heroArrows: PIXI.Container[] = [];
   private _swipeDragging = false;
   private _swipeMoved = false;
   private _swipeAxis: 'none' | 'h' | 'v' = 'none';
@@ -179,11 +184,14 @@ export class PetDetailScene implements Scene {
     }
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'petDetail') return;
-    this._buildSafe();
+    // 首帧已出完整 UI：立绘/底图靠 bindLazySprite、makeCoverBackground 异步补齐。
+    // 勿再整页 _build（真机缓存命中时会整页闪一下）。
   }
 
   onExit(): void {
     this._enterSeq.cancel();
+    this._unbindShowcase?.();
+    this._unbindShowcase = null;
     this._incomingGen++;
     this._detachPageSwipe();
     this._scroll.detach();
@@ -213,6 +221,7 @@ export class PetDetailScene implements Scene {
     this._sheetMask = null;
     this._sheet = null;
     this._heroBand = null;
+    this._heroArrows = [];
     this._slideLayer = null;
     this._incomingLayer = null;
     this._incomingPetId = '';
@@ -580,6 +589,7 @@ export class PetDetailScene implements Scene {
       next.position.set(w - marginX - 4, midY);
       if (!this._buildLive) next.eventMode = 'none';
       this._uiRoot().addChild(next);
+      if (this._buildLive) this._heroArrows = [prev, next];
 
       const idx = Math.max(0, ids.indexOf(petId));
       const dotsY = portraitBottom + 16;
@@ -623,6 +633,10 @@ export class PetDetailScene implements Scene {
     this._rawSwipeDown = (e: unknown) => {
       if (this._switching) return;
       const p = clientEventToDesign(e);
+      // 点在左右箭头上：交给 canvasTapRouter，勿进入横滑状态
+      if (this._heroArrows.some((a) => a.parent && containsDesignPoint(a, p.x, p.y))) {
+        return;
+      }
       this._swipeDragging = true;
       this._swipeMoved = false;
       this._swipeAxis = 'none';
@@ -685,7 +699,10 @@ export class PetDetailScene implements Scene {
       this._swipeDelta = 0;
 
       if (!moved || Math.abs(dx) < threshold) {
-        this._snapTrackHome(true);
+        // 纯点击（含点左右箭头）：禁止 clearIncoming。
+        // 真机 tap 经 canvasTapRouter defer 后触发 _commitIncoming，
+        // 若此处立刻 snap→clear，会 ++_incomingGen 把切宠掐死（表现为箭头无反应）。
+        if (moved) this._snapTrackHome(true);
         return;
       }
       this._commitIncoming(delta);
@@ -824,33 +841,42 @@ export class PetDetailScene implements Scene {
     art.mask = mask;
     holder.addChild(art);
 
-    const path = petShowcaseImage(pet.id, star);
-    const applyTex = (tex: PIXI.Texture) => {
-      if (holder.destroyed || !tex.width || !tex.height) return;
-      spr.texture = tex;
-      // Q 版透明底偏「矮胖」：纯 contain 会上下空一大块像小方块。
-      // 用 cover 铺满窗高，左右略裁由 mask 吃掉（源图本身也常左右贴边）。
-      const s = Math.max(iw / tex.width, ih / tex.height) * 0.98;
-      spr.scale.set(s);
-      spr.y = 0;
-    };
-    const cached = TextureCache.get(path);
-    if (cached) applyTex(cached);
-    else void TextureCache.load(path).then(applyTex).catch(() => {});
+    this._unbindShowcase?.();
+    const unbinds: Array<() => void> = [];
+    const showcasePaths = petShowcaseLoadPaths(pet.id, star);
+    const showcaseCached = showcasePaths.some((p) => TextureCache.has(p));
+    unbinds.push(bindLazySprite(spr, {
+      path: showcasePaths,
+      ensure: true,
+      onApplied: (tex) => {
+        // Q 版透明底偏「矮胖」：纯 contain 会上下空一大块像小方块。
+        // 用 cover 铺满窗高，左右略裁由 mask 吃掉（源图本身也常左右贴边）。
+        const s = Math.max(iw / tex.width, ih / tex.height) * 0.98;
+        spr.scale.set(s);
+        spr.y = 0;
+      },
+    }));
 
-    const frameTex = TextureCache.get(ENEMY_PORTRAIT_FRAME);
-    if (frameTex) {
-      const frame = new PIXI.Sprite(frameTex);
-      frame.anchor.set(0.5);
-      frame.width = frameW;
-      frame.height = frameH;
-      holder.addChild(frame);
-    } else {
-      const g = new PIXI.Graphics();
-      g.lineStyle(3, 0xc9a063, 1);
-      g.drawRoundedRect(-frameW / 2, -frameH / 2, frameW, frameH, 18);
-      holder.addChild(g);
-    }
+    // 金框：有缓存立刻画；否则先描边占位，到货后替换（勿等 hydrate 整页重建）
+    const frameFallback = new PIXI.Graphics();
+    frameFallback.lineStyle(3, 0xc9a063, 1);
+    frameFallback.drawRoundedRect(-frameW / 2, -frameH / 2, frameW, frameH, 18);
+    holder.addChild(frameFallback);
+    const frame = new PIXI.Sprite(PIXI.Texture.EMPTY);
+    frame.anchor.set(0.5);
+    holder.addChild(frame);
+    unbinds.push(bindLazySprite(frame, {
+      path: ENEMY_PORTRAIT_FRAME,
+      ensure: true,
+      onApplied: () => {
+        frame.width = frameW;
+        frame.height = frameH;
+        frameFallback.visible = false;
+      },
+    }));
+    this._unbindShowcase = () => {
+      for (const u of unbinds) u();
+    };
 
     const orbSize = Math.floor(frameW * 0.22);
     const orb = makeElementOrb(pet.element, orbSize);
@@ -860,7 +886,10 @@ export class PetDetailScene implements Scene {
     parent.addChild(holder);
     if (this._buildLive) {
       this._avatar = holder;
-      if (!this._skipAvatarFade) fadeIn(holder, { duration: 0.18 });
+      // 立绘已在缓存：禁止再 fadeIn（否则已有图也会先透明再淡入，像闪一下）
+      if (!this._skipAvatarFade && !showcaseCached) {
+        fadeIn(holder, { duration: 0.18 });
+      }
       this._skipAvatarFade = false;
     }
   }

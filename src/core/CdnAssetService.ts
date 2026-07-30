@@ -103,7 +103,7 @@ class CdnAssetServiceClass {
     const ok = await this.download(logicalPath);
     if (ok && this._isCacheValid(logicalPath)) return this._getCachePath(logicalPath);
 
-    // 瘦包后本地已无文件：禁止回落逻辑路径（createImage 必失败，且会污染失败重试）
+    // 分包可能在 CDN 下载期间才 load 完：包内存在性不做「永久 false」缓存，这里再探一次
     if (this._packageFileExists(logicalPath)) return logicalPath;
     throw new Error(`[CDN] 下载失败且包内无文件: ${logicalPath}`);
   }
@@ -122,44 +122,73 @@ class CdnAssetServiceClass {
       return false;
     }
 
-    // 无 query：部分端上对带 ?_t= 的 downloadFile 校验更严；缓存靠客户端时间戳文件名即可
     const url = this._getCdnUrl('manifest.json');
     try {
       /**
-       * 小游戏优先 downloadFile 拉 manifest（与 xiao_chu 一致）。
-       * 抖音上 request / downloadFile 是两套白名单；即便 request 已配同一域名，
-       * 真机会话有时仍缓存旧名单导致 request 报 not valid domain。
-       * 资源图本身也走 downloadFile，清单同源最稳。
+       * manifest 易被边缘 CDN 缓存：优先带时间戳的 request 拉最新版，
+       * 再与 downloadFile（无 query，兼容抖音白名单）取 version 更高者。
        */
-      let text = '';
-      let via = 'downloadFile';
+      type Cand = { text: string; via: string; version: number; count: number };
+      const parseCand = (text: string, via: string): Cand | null => {
+        try {
+          const parsed = JSON.parse(text) as CdnManifest;
+          const count = Object.keys(parsed.files || {}).length;
+          return {
+            text,
+            via,
+            version: Number(parsed.version || 0),
+            count,
+          };
+        } catch {
+          return null;
+        }
+      };
+
+      const cands: Cand[] = [];
       try {
-        text = await this._downloadText(url);
-      } catch (dlErr) {
-        const dlMsg = String((dlErr as Error)?.message || dlErr);
-        console.warn('[CDN] downloadFile 拉 manifest 失败，回退 request:', dlMsg);
-        via = 'request';
-        text = await this._requestText(`${url}?_t=${Date.now()}`);
+        const t = await this._requestText(`${url}?_t=${Date.now()}`);
+        const c = parseCand(t, 'request');
+        if (c) cands.push(c);
+      } catch (reqErr) {
+        console.warn('[CDN] request 拉 manifest 失败:', String((reqErr as Error)?.message || reqErr));
       }
-      if (!text) {
+      try {
+        const t = await this._downloadText(url);
+        const c = parseCand(t, 'downloadFile');
+        if (c) cands.push(c);
+      } catch (dlErr) {
+        console.warn('[CDN] downloadFile 拉 manifest 失败:', String((dlErr as Error)?.message || dlErr));
+      }
+
+      // 本地缓存也参与比较，避免边缘返回更旧版本时倒退
+      try {
+        const cached = String(fs.readFileSync(this._getCachePath('manifest.json'), 'utf-8') || '');
+        const c = parseCand(cached, 'local-cache');
+        if (c) cands.push(c);
+      } catch { /* ignore */ }
+
+      if (cands.length === 0) {
         this._loadCachedManifest();
         return false;
       }
-
-      const parsed = JSON.parse(text) as CdnManifest;
-      const count = Object.keys(parsed.files || {}).length;
+      cands.sort((a, b) => b.version - a.version || b.count - a.count);
+      const best = cands[0];
+      const parsed = JSON.parse(best.text) as CdnManifest;
       this._manifest = parsed;
       this._manifestReady = true;
-      this._manifestAuthoritative = count > 0;
+      this._manifestAuthoritative = best.count > 0;
       this._ensureCacheDir(this._getCachePath('manifest.json'));
       try {
-        fs.writeFileSync(this._getCachePath('manifest.json'), text, 'utf-8');
+        fs.writeFileSync(this._getCachePath('manifest.json'), best.text, 'utf-8');
       } catch (_) { /* ignore */ }
-      console.log(`[CDN] manifest 就绪 via=${via}, files=${count}`);
-      if (count === 0) {
+      console.log(
+        `[CDN] manifest 就绪 via=${best.via}, v${best.version}, files=${best.count}`
+        + (cands.length > 1 ? ` (candidates=${cands.map((c) => `${c.via}:v${c.version}`).join(',')})` : ''),
+      );
+      if (best.count === 0) {
         console.warn('[CDN] 云端 manifest 文件列表为空，下载不做「名单外跳过」');
       }
-      return count > 0;
+      return best.count > 0;
     } catch (e) {
       console.warn('[CDN] manifest 拉取失败，使用本地缓存:', e);
       this._loadCachedManifest();
@@ -196,7 +225,12 @@ class CdnAssetServiceClass {
     const logicalPath = this._normalize(path);
     if (!this.isCdnPath(logicalPath)) return true;
     if (this._isCacheValid(logicalPath)) return true;
-    if (this._knownMissing(logicalPath)) return false;
+    // 权威 manifest 缺条目：多半是真机残留旧清单（strip 事故后常见）。
+    // 强刷一次；仍缺也不再硬跳过，改为直拉（404 由 retry 消化），避免立绘永久空白。
+    if (this._knownMissing(logicalPath)) {
+      console.warn(`[CDN] manifest 缺条目，强刷后直拉: ${logicalPath}`);
+      await this.fetchManifest().catch(() => false);
+    }
 
     const inflight = this._downloadQueue.get(logicalPath);
     if (inflight) return inflight;
@@ -378,9 +412,20 @@ class CdnAssetServiceClass {
     return this._localFileExists(this._getCachePath(logicalPath));
   }
 
-  /** 开发期：包内仍带 CDN 目录文件时优先用本地，避免无谓下载 */
+  /**
+   * 包内是否仍有该文件（开发未 strip / 分包刚 load 完）。
+   * 注意：loadSubpackage 与 CDN 下载并行，「不存在」不能永久缓存，否则分包到位后仍误判。
+   */
   private _packageFileExists(logicalPath: string): boolean {
-    return this._localFileExists(logicalPath);
+    const fs = this._getFs();
+    if (!fs) return false;
+    try {
+      fs.accessSync(logicalPath);
+      this._localExistsCache.set(logicalPath, true);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private _localFileExists(path: string): boolean {

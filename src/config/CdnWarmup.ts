@@ -3,6 +3,7 @@
  */
 import { AUDIO } from '@/config/Audio';
 import { petAvatarLoadPaths } from '@/config/Assets';
+import { SHOP_SHELL_IMAGES } from '@/config/assetPreload';
 import { CdnAssetService } from '@/core/CdnAssetService';
 import { Platform } from '@/core/PlatformService';
 import { SfxManager } from '@/core/SfxManager';
@@ -10,7 +11,7 @@ import { PlayerData } from '@/game/PlayerData';
 
 let started = false;
 
-/** 启动后 fire-and-forget：拉 manifest + 预热灵宠头像 / 全量音频 */
+/** 启动后 fire-and-forget：拉 manifest + 商店壳 / 灵宠头像 / 全量音频 */
 export function warmupCdnAssets(): void {
   if (started || !Platform.isMinigame || !CdnAssetService.enabled) return;
   started = true;
@@ -27,9 +28,9 @@ export function warmupCdnAssets(): void {
       return [...petAvatarLoadPaths(id, star)];
     });
 
-    // 瘦包后 pkg-audio 已空：BGM + 战斗 SFX 都要从 CDN 拉，再交给 SfxManager 建池
+    // 商店壳优先：进页才下会空壳半晌；瘦包后 pkg-audio 也要从 CDN 拉
     const audioPaths = Object.values(AUDIO);
-    void CdnAssetService.preloadPaths([...petPaths, ...audioPaths])
+    void CdnAssetService.preloadPaths([...SHOP_SHELL_IMAGES, ...petPaths, ...audioPaths])
       .then(() => SfxManager.warmup())
       .catch((e) => {
         console.warn('[CDN] 资源预热失败', e);

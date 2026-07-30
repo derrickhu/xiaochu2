@@ -112,7 +112,10 @@ export async function ensureAssets(paths: readonly string[]): Promise<void> {
     CdnAssetService.preloadPaths(paths).catch((e) => {
       console.warn('[ensureAssets] CDN 预热失败', e);
     }),
-    loadSubpackagesForPaths(paths),
+    // 分包失败不得拖死后续纹理解码（真机 CDN 立绘仍可走 download）
+    loadSubpackagesForPaths(paths).catch((e) => {
+      console.warn('[ensureAssets] 分包加载失败', e);
+    }),
   ]);
   await TextureCache.preload(paths);
 }

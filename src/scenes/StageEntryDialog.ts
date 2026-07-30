@@ -20,7 +20,7 @@ import { PlayerData } from '@/game/PlayerData';
 import { stageStaminaCost } from '@/game/staminaService';
 import { UI_IMAGES } from '@/config/Assets';
 import {
-  COLORS, FONT_SIZE, FONT_FAMILY_DISPLAY,
+  COLORS, FONT_SIZE,
   makeActionButton, makeCloseButton, makePanel, makeText,
   makeModalTitlePlaque, makeStarRow, makeElementOrb,
 } from '@/ui';
@@ -322,7 +322,7 @@ function buildDifficultyPills(opts: {
       fill: titleFill,
       bold: true,
       anchor: [0.5, 0],
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
       ...(selected
         ? { strokeColor: GREEN_EDGE, strokeWidth: 3 }
         : locked
@@ -417,7 +417,7 @@ function buildStarStaminaBoxes(
   root.addChild(stamLab);
   const stamVal = makeText(`${stamina}`, {
     size: 36, fill: COLORS.textMain, bold: true, anchor: 0.5,
-    fontFamily: FONT_FAMILY_DISPLAY,
+    role: 'title',
   });
   stamVal.position.set(rightX, 50);
   root.addChild(stamVal);

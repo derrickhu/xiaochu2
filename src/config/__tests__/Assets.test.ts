@@ -50,6 +50,16 @@ describe('技能图标覆盖', () => {
       .filter((id) => !resolveSkillIconId(id).startsWith('pet_'));
     expect(missing).toEqual([]);
   });
+
+  it('量产矩阵技与招牌技都能落到 pet_* 图标 id', () => {
+    const missing = SKILLS
+      .filter((s) => s.owner === 'pet')
+      .map((s) => s.id)
+      .filter((id) => !resolveSkillIconId(id).startsWith('pet_'));
+    expect(missing).toEqual([]);
+    expect(resolveSkillIconId('pet_metal_nuke_r')).toBe('pet_metal_slash');
+    expect(resolveSkillIconId('pet_sig_metal_ruin')).toBe('pet_metal_slash');
+  });
 });
 
 describe('章节地图区域背景', () => {

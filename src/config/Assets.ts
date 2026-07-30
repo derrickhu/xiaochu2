@@ -104,6 +104,14 @@ export function petShowcaseImage(petId: string, star = 1): string {
   return creatureMonsterImage(petId, star >= PET_AWAKEN_STAR ? 'tier2' : 'tier1');
 }
 
+/** 秀场加载候选：觉醒图缺失时回退初级（真机 CDN 常见） */
+export function petShowcaseLoadPaths(petId: string, star = 1): readonly string[] {
+  const primary = petShowcaseImage(petId, star);
+  if (star < PET_AWAKEN_STAR) return [primary];
+  const fallback = creatureMonsterImage(petId, 'tier1');
+  return primary === fallback ? [primary] : [primary, fallback];
+}
+
 /** 章节路径地图 UI（主包） */
 export const MAP_UI_IMAGES = {
   nodesSheet: `${IMG}/ui/map/nodes_sheet.png`,
@@ -118,6 +126,8 @@ export const BACKGROUND_IMAGES = {
   chapterMap: `${IMG}/bg/title_screen.jpg`,
   petDetail: `${PKG.scene}/images/bg/scene_pet_detail.jpg`,
   petPool: `${PKG.scene}/images/bg/scene_pet_pool.jpg`,
+  /** 灵宠图鉴：青绿祥云满屏底（对齐 codex_panel_proto_v3_ring_entry） */
+  codex: `${PKG.scene}/images/bg/scene_codex_cloud.jpg`,
   /** 灵宠召唤：砸金蛋主视觉背景（9:16） */
   gachaEgg: `${PKG.scene}/images/bg/scene_gacha_egg.jpg`,
   /** 碎片商店专用背景（9:16 商铺内景） */
@@ -261,6 +271,18 @@ export const UI_IMAGES = {
   progressFrame: `${IMG}/ui/bar/progress_frame.png`,
   /** R/SR/SSR/UR 角标雪碧图（pkg-scene，优先读单张 rarity_*.png） */
   rarityBadgeSheet: `${PKG.scene}/images/ui/badge/rarity_sheet.png`,
+  /** 召唤结果：描金卡框（pkg-scene） */
+  gachaResultCard: `${PKG.scene}/images/ui/frame/gacha_result_card.png`,
+  /** 召唤结果：卡名金匾 */
+  gachaResultNameBand: `${PKG.scene}/images/ui/frame/gacha_result_name_band.png`,
+  /** 召唤结果：对比信息面板框 */
+  gachaResultComparePanel: `${PKG.scene}/images/ui/frame/gacha_result_compare_panel.png`,
+  /** 召唤结果：NEW 玉石胶囊底 */
+  gachaResultNewBadge: `${PKG.scene}/images/ui/badge/gacha_result_new.png`,
+  /** 碎片转化：碎晶主视觉（pkg-scene） */
+  gachaShardCrystal: `${PKG.scene}/images/ui/fx/gacha_shard_crystal_cluster.png`,
+  /** 碎片转化：专属圆形头像框 */
+  gachaShardAvatarFrame: `${PKG.scene}/images/ui/frame/gacha_shard_avatar_frame.png`,
 } as const;
 
 /** 战斗 HUD 专用贴图（pkg-battle，对齐 battle_ui_mockup；进战斗按需加载） */
@@ -286,13 +308,36 @@ export const UI_BATTLE_IMAGES = {
   orbSeal: `${PKG.battle}/images/ui/battle/battle_orb_seal.png`,
 } as const;
 
-/** 碎片商店专用 UI 贴图（pkg-shop） */
+/**
+ * 碎片商店专用 UI 贴图（pkg-shop，随包；非 CDN）
+ * 原型：game_assets/xiaochu2/assets/prototypes/ui/shop_dual_col_no_banner_v1.png
+ */
 export const UI_SHOP_IMAGES = {
-  titlePlaque: `${PKG.shop}/images/ui/shop/shop_title_plaque.png`,
   coinPill: `${PKG.shop}/images/ui/shop/shop_coin_pill.png`,
-  rowPanel: `${PKG.shop}/images/ui/shop/shop_row_panel.png`,
   buyPanel: `${PKG.shop}/images/ui/shop/shop_buy_panel.png`,
-  sectionBar: `${PKG.shop}/images/ui/shop/shop_section_bar.png`,
+  /** 双列商品卡底板 */
+  cardPanel: `${PKG.shop}/images/ui/shop/shop_card_panel.png`,
+  /** 左栏 Tab 选中 / 未选 */
+  tabOn: `${PKG.shop}/images/ui/shop/shop_tab_on.png`,
+  tabOff: `${PKG.shop}/images/ui/shop/shop_tab_off.png`,
+  tabIconShard: `${PKG.shop}/images/ui/shop/shop_tab_icon_shard.png`,
+  tabIconHonor: `${PKG.shop}/images/ui/shop/shop_tab_icon_honor.png`,
+  tabIconRealm: `${PKG.shop}/images/ui/shop/shop_tab_icon_realm.png`,
+  tabIconLingyu: `${PKG.shop}/images/ui/shop/shop_tab_icon_lingyu.png`,
+} as const;
+
+/**
+ * 灵宠图鉴壳层贴图（pkg-scene / CDN）
+ * 原型：game_assets/xiaochu2/assets/prototypes/ui/codex_panel_proto_v3_ring_entry.png
+ */
+export const UI_CODEX_IMAGES = {
+  headerCanopy: `${PKG.scene}/images/ui/codex/codex_header_canopy.png`,
+  rewardRing: `${PKG.scene}/images/ui/codex/codex_reward_ring.png`,
+  claimBtn: `${PKG.scene}/images/ui/codex/codex_claim_btn.png`,
+  filterRail: `${PKG.scene}/images/ui/codex/codex_filter_rail.png`,
+  filterSelected: `${PKG.scene}/images/ui/codex/codex_filter_selected.png`,
+  titleLingchong: `${PKG.scene}/images/ui/codex/codex_title_lingchong.png`,
+  rewardPanel: `${PKG.scene}/images/ui/codex/codex_reward_panel.png`,
 } as const;
 
 /** 稀有度角标单张（pkg-scene） */
@@ -368,10 +413,105 @@ const SKILL_ICON_ALIASES: Readonly<Record<string, string>> = {
   enemy_resolve: 'pet_earth_shield',
   enemy_element_absorb: 'pet_shadow_purify',
   enemy_counter_strike: 'pet_metal_multi_hit',
+  // 招牌技（SSR/UR）尚未独立出图 → 借机制接近的手写宠技图
+  pet_sig_metal_ruin: 'pet_metal_slash',
+  pet_sig_metal_bastion: 'pet_frost_guard',
+  pet_sig_wood_lance: 'pet_wood_volley',
+  pet_sig_wood_bloom: 'pet_wood_big_heal',
+  pet_sig_wood_aegis: 'pet_earth_shield',
+  pet_sig_wood_worldtree: 'pet_chaos_haste',
+  pet_sig_water_maelstrom: 'pet_skyfall_gravity',
+  pet_sig_water_bulwark: 'pet_water_shield',
+  pet_sig_fire_warhymn: 'pet_fire_boost',
+  pet_sig_fire_emberflow: 'pet_chaos_haste',
+  pet_sig_fire_magmaward: 'pet_rift_shield',
+  pet_sig_earth_quake: 'pet_metal_def_break',
+  pet_sig_earth_genesis: 'pet_void_resonance',
 };
 
+/**
+ * 量产矩阵技 id = pet_{element}_{blueprint}_{r|sr}，尚未按 id 出图时
+ * 按「蓝图 × 属性」落到已有手写宠技图标（同目录 pet_*.png）。
+ */
+const MATRIX_BLUEPRINT_ICONS: Readonly<Record<string, Readonly<Partial<Record<Element, string>> & { _: string }>>> = {
+  nuke: {
+    _: 'pet_star_cross',
+    metal: 'pet_metal_slash',
+    wood: 'pet_wood_volley',
+    water: 'pet_water_pierce',
+    fire: 'pet_fire_burst',
+    earth: 'pet_star_cross',
+  },
+  multi_hit: {
+    _: 'pet_metal_multi_hit',
+    metal: 'pet_metal_multi_hit',
+    wood: 'pet_wood_multi_hit',
+    water: 'pet_water_multi_hit',
+    fire: 'pet_fire_burst',
+    earth: 'pet_metal_multi_hit',
+  },
+  dot: {
+    _: 'pet_fire_dot',
+    fire: 'pet_fire_dot',
+    metal: 'pet_fire_dot',
+    wood: 'pet_fire_dot',
+    water: 'pet_fire_dot',
+    earth: 'pet_fire_dot',
+  },
+  team_nuke: {
+    _: 'pet_star_cross',
+    metal: 'pet_metal_slash',
+    wood: 'pet_wood_volley',
+    water: 'pet_water_pierce',
+    fire: 'pet_fire_burst',
+    earth: 'pet_star_cross',
+  },
+  heal: {
+    _: 'pet_wood_heal',
+    wood: 'pet_wood_heal',
+    earth: 'pet_earth_heal',
+    metal: 'pet_wood_heal',
+    water: 'pet_wood_heal',
+    fire: 'pet_earth_heal',
+  },
+  shield: {
+    _: 'pet_earth_shield',
+    earth: 'pet_earth_shield',
+    water: 'pet_water_shield',
+    metal: 'pet_frost_guard',
+    wood: 'pet_earth_shield',
+    fire: 'pet_rift_shield',
+  },
+  convert: {
+    _: 'pet_earth_convert_row',
+    metal: 'pet_transmute_metal',
+    wood: 'pet_earth_heart_convert',
+    water: 'pet_earth_heart_convert',
+    fire: 'pet_earth_convert_row',
+    earth: 'pet_earth_convert_row',
+  },
+  defense_break: { _: 'pet_metal_def_break', metal: 'pet_metal_def_break', earth: 'pet_metal_def_break' },
+  stun: { _: 'pet_water_stun', water: 'pet_water_stun', metal: 'pet_water_stun' },
+  delay_attack: { _: 'pet_abyss_delay' },
+  gravity: { _: 'pet_skyfall_gravity' },
+  damage_buff: { _: 'pet_fire_boost', fire: 'pet_fire_boost', wood: 'pet_fire_boost', earth: 'pet_fire_boost' },
+  element_buff: { _: 'pet_void_resonance' },
+  extra_time: { _: 'pet_earth_time', earth: 'pet_earth_time' },
+};
+
+const MATRIX_SKILL_RE = /^pet_(metal|wood|water|fire|earth)_(.+?)_(r|sr)$/;
+
 export function resolveSkillIconId(skillId: string): string {
-  return SKILL_ICON_ALIASES[skillId] ?? skillId;
+  const aliased = SKILL_ICON_ALIASES[skillId];
+  if (aliased) return aliased;
+  const m = MATRIX_SKILL_RE.exec(skillId);
+  if (m) {
+    const element = m[1] as Element;
+    const blueprint = m[2];
+    const table = MATRIX_BLUEPRINT_ICONS[blueprint];
+    if (table) return table[element] ?? table._;
+  }
+  return skillId;
 }
 
 /** 被动图标（与主动技同目录，id 形如 passive_ruiyan） */
@@ -389,6 +529,10 @@ export const UI_FX_IMAGES = {
   starburst: `${PKG.fx}/images/ui/fx/fx_starburst.png`,
   auraRing: `${PKG.fx}/images/ui/fx/fx_aura_ring.png`,
   particleSpark: `${PKG.fx}/images/ui/fx/p_spark.png`,
+  /** 召唤结果：卡后金色放射光（ADD；落 pkg-scene 以免撑爆 pkg-fx） */
+  gachaRays: `${PKG.scene}/images/ui/fx/fx_gacha_rays.png`,
+  /** 召唤结果：飘落花瓣粒子 */
+  gachaPetal: `${PKG.scene}/images/ui/fx/fx_gacha_petal.png`,
   /** 属性普攻刃 / 命中（对齐水刃样例节奏） */
   metalBlade: `${PKG.fx}/images/ui/fx/fx_metal_blade.png`,
   metalImpact: `${PKG.fx}/images/ui/fx/fx_metal_impact.png`,

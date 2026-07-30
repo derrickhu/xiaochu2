@@ -9,15 +9,29 @@
  * 阶段七：配合 xiao_chu「明亮国风水墨」美术，文字主色由原暗底亮字翻转为浅底深墨。
  */
 
-/** 统一字体族（修复跨端默认字体不一致） */
+/**
+ * 系统无衬线（GM / Loading 等工具面；业务 UI 请用 makeTitleText / makeBodyText）。
+ */
 export const FONT_FAMILY = '"PingFang SC", "Heiti SC", "Microsoft YaHei", sans-serif';
 
 /**
- * 结算/匾额展示用衬线体（对齐 victory UI：深棕略书法感）
- * 微信小游戏/iOS 优先 Songti SC；Android 回退 Noto Serif / 系统衬线。
+ * 书法展示体未就绪时的衬线回退（微信小游戏/iOS 优先 Songti SC）。
+ * 业务侧请用 makeText({ role: 'title' }) / makeTitleText，勿直接当主字体。
  */
 export const FONT_FAMILY_DISPLAY =
   '"Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif';
+
+/**
+ * 书法展示体（马善政毛笔楷书，OFL 可商用子集）。
+ * 须先 warmupCustomFonts()；业务侧用 resolveCalligraphyFontFamily() / role:'title'。
+ */
+export const FONT_FAMILY_CALLIGRAPHY = 'MaShanZheng';
+
+/**
+ * 正文楷体（霞鹜文楷，OFL 可商用子集）。
+ * 须先 warmupCustomFonts()；业务侧用 resolveBodyFontFamily() / role:'body'（makeText 默认）。
+ */
+export const FONT_FAMILY_BODY = 'LXGWWenKai';
 
 /**
  * 语义化颜色 token。命名按「用途」而非颜色本身。

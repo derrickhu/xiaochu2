@@ -1,0 +1,30 @@
+ART STYLE (xiaochu2 brand):
+Q-version cute-chibi xianxia guofeng mobile UI.
+Soft cel-shade, crisp edges, chubby proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + antique gold (#e8a33d) + jade green buttons (#6aa84f).
+FORBIDDEN: photoreal, dark fantasy, purple AI defaults, flat Material white cards, giant egg stealing focus.
+
+SCREEN: 召唤结果（单抽出货）9:16 full UI prototype.
+Reference mock: docs/prompt/gacha_summon_result_ui_v2.png
+
+COMPOSITION:
+1) TOP: jade back + centered cream plaque「召唤结果」
+2) CENTER HERO: large ornate gold-filigree result CARD (NOT the golden egg).
+   - Soft gold radial rays + mint sparkles behind card
+   - Green R ribbon seal top-left
+   - Pet portrait large (~fill card window)
+   - Gold name band + mint「NEW」pill on bottom edge
+   - Background egg at most faint silhouette ≤20% opacity; prefer none
+3) BOTTOM compare panel (compact cream + gold border):
+   - NEW R · 名字 + 定位 tag
+   - 对比上阵 · 目标名
+   - 攻 / 生命 / 回复 三列 + 差值色
+   - 技能 · 战力 一行
+   - 一键替换 / 一键上阵 宽绿钮
+4) FOOTER: 再抽 单抽（cream）+ 确定（jade）
+
+GOALS vs current live UI:
+- Card feels premium & celebratory (filigree + rays), not plain beige box
+- Clear hierarchy: reveal card > compare > CTAs
+- Less text density in compare strip
+- Egg/magic circle must not compete with reward card

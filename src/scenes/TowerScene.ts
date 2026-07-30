@@ -24,7 +24,7 @@ import { grantReward } from '@/game/rewardGrant';
 import { watchAd } from '@/game/adGate';
 import type { BattleContext } from '@/game/battleContext';
 import {
-  COLORS, FONT_SIZE, FONT_FAMILY_DISPLAY, BOTTOM_NAV_RESERVE,
+  COLORS, FONT_SIZE, BOTTOM_NAV_RESERVE,
   buildBottomNav, makeBackButton, makeCoverBackground,
   makePanel, makeSceneTitlePlaque, makeText,
   makeWarmGoldCtaButton, WARM_GOLD_CTA_SIZE, pressFeedback,
@@ -191,7 +191,7 @@ export class TowerScene implements Scene {
       : `第 ${tower.runFloor} 层`;
     const floorText = makeText(floorTitle, {
       size: 36, fill: 0x5c4033, bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     floorText.position.set(cx, cy);
     card.addChild(floorText);
@@ -329,7 +329,7 @@ export class TowerScene implements Scene {
 
     const title = makeText('里程碑', {
       size: FONT_SIZE.sm, fill: 0x5c4033, bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     title.position.set(panelW / 2, 22);
     panel.addChild(title);
@@ -426,7 +426,7 @@ export class TowerScene implements Scene {
         fill: state === 'claimable' ? 0x5c3d24 : 0x8a8680,
         bold: true,
         anchor: 0.5,
-        fontFamily: FONT_FAMILY_DISPLAY,
+        role: 'title',
       });
       try { floorText.updateText(true); } catch { /* noop */ }
       if (floorText.width > r * 1.55) floorText.scale.set((r * 1.55) / floorText.width);

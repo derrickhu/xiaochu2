@@ -1,0 +1,15 @@
+Redesign this mobile game SHOP screen (portrait 9:16). Keep the same Chinese xianxia aesthetic, dual-column product cards, top coin pill, and back button from the reference.
+
+PROBLEM TO FIX: The left category UI is an ugly long dark strip that does not reach the bottom. Do NOT draw any tall empty sidebar rail.
+
+SOLUTION B — Compact tab stack (no long bar):
+- Remove the tall vertical rail entirely.
+- On the left, only a SHORT stack of 4 compact parchment tab chips (only as tall as needed for the 4 items), aligned to the top of the product grid.
+- Tabs: 碎片 (selected cream/gold), 荣誉, 秘境, 灵玉 — icon above or beside Chinese label.
+- Lots of open background below the tab stack (bamboo / clouds visible) — intentional breathing room, not a cut-off bar.
+- Right side: 2-column shard shop cards filling more width (since no thick rail), parchment frames, gold buy buttons with coin prices.
+- Header: back + coin pill + hint 「灵宠币兑换定向碎片」.
+- Background: bamboo pavilion + purple-white bottom clouds like reference.
+- Soft cream/gold UI, no dark wood strip, no purple chrome, no dark mode.
+
+Readable Chinese labels. High-fidelity mobile UI mockup.

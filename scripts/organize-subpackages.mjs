@@ -143,10 +143,13 @@ function migrateOverflowFromMain() {
     [path.join(ROOT, 'images/ui/fx'), path.join(ROOT, 'subpackages/pkg-fx/images/ui/fx')],
     // 战斗 HUD 贴图约 3MB，必须出主包（微信主包 ≤4MB）
     [path.join(ROOT, 'images/ui/battle'), path.join(ROOT, 'subpackages/pkg-battle/images/ui/battle')],
-    // 签到 / 秘境 / 通天塔大图 → pkg-scene（再经 CDN strip，避免主包与单分包超限）
+    // 签到 / 秘境 / 通天塔 / 图鉴壳 → pkg-scene（再经 CDN strip，避免主包与单分包超限）
     [path.join(ROOT, 'images/ui/checkin'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/checkin')],
     [path.join(ROOT, 'images/ui/realm'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/realm')],
     [path.join(ROOT, 'images/ui/tower'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/tower')],
+    [path.join(ROOT, 'images/ui/codex'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/codex')],
+    // 自定义字体随包（非 CDN）：勿进主包，否则主包易超 4MB
+    [path.join(ROOT, 'fonts'), path.join(ROOT, 'subpackages/pkg-shop/fonts')],
   ];
   for (const [srcDir, destDir] of moves) {
     if (!fs.existsSync(srcDir)) continue;

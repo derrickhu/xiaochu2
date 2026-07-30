@@ -1,0 +1,8 @@
+Copyright 2018 The MaShanZheng Project Authors (https://github.com/googlefonts/mashanzheng)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: https://scripts.sil.org/OFL
+
+Font: Ma Shan Zheng (马善政毛笔楷书)
+Source: https://fonts.google.com/specimen/Ma+Shan+Zheng
+Usage in this project: display titles / pet names (subset embedded).

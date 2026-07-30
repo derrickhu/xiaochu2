@@ -24,7 +24,7 @@ export function addLingyu(data: SaveData, amount: number): boolean {
   return true;
 }
 
-/** 单抽：扣灵玉，结算保底/重复转碎片/护航包。element 可选，限定五行子池 */
+/** 单抽：扣灵玉，结算保底/重复转碎片。element 可选，限定五行子池 */
 export function pullGachaSingle(
   data: SaveData,
   rng: () => number = Math.random,
@@ -113,7 +113,6 @@ function applyPull(data: SaveData, outcome: PullOutcome): void {
     applyUniversalBonus(data, outcome);
   } else {
     unlockPetInSave(data, outcome.petId);
-    applyEscortPack(data, outcome);
   }
 }
 
@@ -123,14 +122,4 @@ function applyUniversalBonus(data: SaveData, outcome: PullOutcome): void {
   if (gain <= 0) return;
   data.universalShards += gain;
   outcome.universal = gain;
-}
-
-/** NEW SSR/UR 护航包：附赠本体碎片 + 通用经验，并回写到 outcome 供 UI 展示 */
-function applyEscortPack(data: SaveData, outcome: PullOutcome): void {
-  const escort = ECONOMY.gacha.escort[outcome.rarity];
-  if (!escort) return;
-  const owned = data.ownedPets[outcome.petId];
-  if (owned) owned.shards += escort.shards;
-  data.exp += escort.exp;
-  outcome.escort = { shards: escort.shards, exp: escort.exp };
 }

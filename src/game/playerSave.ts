@@ -217,9 +217,14 @@ export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown
     recruitedCount: typeof migrated.recruitedCount === 'number'
       ? migrated.recruitedCount
       : countNonInitial(owned),
-    codexRewarded: typeof migrated.codexRewarded === 'number'
-      ? migrated.codexRewarded
-      : ownedCount,
+    // 初始阵容不计入可领：老档若基准偏低，抬到至少 DEFAULT_TEAM.length
+    codexRewarded: (() => {
+      const raw = typeof migrated.codexRewarded === 'number'
+        ? migrated.codexRewarded
+        : ownedCount;
+      const baseline = DEFAULT_TEAM.length;
+      return ownedCount >= baseline ? Math.max(raw, baseline) : raw;
+    })(),
     sidebarRewardDate: typeof migrated.sidebarRewardDate === 'string'
       ? migrated.sidebarRewardDate
       : '',

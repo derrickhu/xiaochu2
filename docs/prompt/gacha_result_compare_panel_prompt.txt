@@ -1,0 +1,7 @@
+Mobile game UI asset ONLY: wide horizontal cream compare/info panel frame.
+Landscape ~2:1 ratio. Warm parchment cream fill (#fdf3df), soft antique-gold ornate
+border with subtle corner cloud flourishes matching xiaochu2 guofeng chrome.
+Slightly translucent feel, soft inner margin, empty center (NO TEXT, no icons,
+no stats, no buttons, no Chinese, no watermark). Rounded corners.
+Style: premium Q-version cultivation casual UI, not purple, not Material flat white.
+Transparent outside the panel silhouette.

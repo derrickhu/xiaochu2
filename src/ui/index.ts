@@ -3,6 +3,8 @@
  * 场景一律从 '@/ui' 引入 theme token 与组件，禁止在场景内裸写颜色/字号或自绘控件。
  */
 export * from './theme';
+export * from './calligraphyFont';
+export * from './bindLazySprite';
 export * from './text';
 export * from './motion';
 export * from './SceneFx';

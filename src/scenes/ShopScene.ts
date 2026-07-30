@@ -1,7 +1,8 @@
 /**
- * 商店场景：灵宠币定向兑换碎片，作为随机抽卡的「卡关突破」兜底。
+ * 商店场景：灵宠币定向兑换碎片
  *
- * 布局对齐 docs/shop_ui_mockup.png（750 设计宽）。
+ * 对齐 game_assets/.../prototypes/ui/shop_bg_interior_compact_v1.png / shop_sidebar_compact_v1.png：
+ * 短 Tab 栈（无通栏长轨）+ 右区双列商品卡；洞府货架氛围底。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -11,11 +12,8 @@ import { TextureCache } from '@/core/TextureCache';
 import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import { shopPreloadImages, shopPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
-import { UI, ELEMENT_NAME } from '@/balance/ui';
+import { UI } from '@/balance/ui';
 import { PETS, type PetDef } from '@/balance/pets';
-import { type Element } from '@/balance/combat';
-import { counterElementOf } from '@/balance/combat';
-import { CHAPTERS, stagesOfChapter } from '@/balance/stages';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
 import {
@@ -23,7 +21,7 @@ import {
 } from '@/config/Assets';
 import {
   COLORS, FONT_SIZE,
-  makeBackButton, makeButton, makeCoverBackground, makePanel, makeText,
+  makeBackButton, makeCoverBackground, makeText,
   attachRarityBadge, makeIconLabel, makeElementOrb,
   SceneFx, staggerIn, pulse,
 } from '@/ui';
@@ -31,82 +29,65 @@ import { bindPointerTap } from '@/utils/bindPointerTap';
 import { pressFeedback } from '@/ui/motion';
 import { ScrollListController } from '@/ui/ScrollList';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
+import { ShopInfoPopup } from '@/scenes/shop/ShopInfoPopup';
 
-/** 对齐 shop_ui_mockup.png（750 设计宽） */
+/** 对齐短 Tab 栈 + 双列卡（750 设计宽） */
 const SHOP_UI = {
-  rowH: 130,
-  rowGap: 12,
-  padX: 20,
-  innerPad: 6,
-  buyPanelH: 60,
-  buyPadX: 22,
-  buyPadY: 10,
-  buyLineGap: 8,
-  buyMinW: 148,
-  buyPad: 8,
-  nameSize: 26,
-  subSize: 18,
-  infoLineGap: 22,
-  elIconSize: 22,
-  buyFontTop: 16,
-  buyFontPrice: 16,
-  buyCoinIcon: 20,
+  sidebarW: 112,
+  sidebarInset: 8,
+  /** 单层 Tab 芯片（无通栏长轨） */
+  tabH: 96,
+  tabGap: 12,
+  tabIcon: 38,
+  contentPadX: 12,
+  gridCols: 2,
+  cardGapX: 14,
+  cardGapY: 14,
+  cardH: 268,
+  portraitSize: 112,
+  nameSize: 22,
+  subSize: 16,
+  buyH: 46,
+  buyMinW: 118,
+  buyFont: 18,
+  buyCoinIcon: 22,
   coinIconSize: 32,
   coinBarMinW: 156,
   coinBarPadX: 32,
   coinBarH: 48,
-  /** 灵宠币胶囊端帽 = 高度一半（semicircle 圆角） */
   coinCapW: 24,
-  /** 顶栏灵宠币胶囊、行内购买按钮整体左移 */
-  coinBarOffsetX: -14,
-  buyOffsetX: -28,
-  titleW: 400,
-  titleY: 56,
-  titleCoinGap: 24,
-  headerListGap: 14,
-  listTop: 0, // 由标题实际高度动态推算
-  /** 列表底部留白，保证最后一行可滚到视口内 */
-  listBottomPad: 24,
-  sectionBarH: 34,
-  /** 行面板 9-slice 边距（对齐 shop_row_panel.png 1032×200） */
-  rowSlice: { left: 96, top: 48, right: 96, bottom: 48 },
-  /** 购买按钮 9-slice（202×60 透明底贴图） */
+  headerHintGap: 6,
+  headerListGap: 10,
+  listBottomPad: 28,
   buySlice: { left: 40, top: 4, right: 40, bottom: 4 },
+  cardSlice: { left: 48, top: 48, right: 48, bottom: 48 },
 } as const;
 
-/** 标题匾按宽度等比缩放后的显示高度（保证横向完整、不裁切） */
-function shopTitleDisplayH(tex: PIXI.Texture | null): number {
-  if (!tex) return 88;
-  return tex.height * (SHOP_UI.titleW / tex.width);
+type ShopTabId = 'shard' | 'honor' | 'realm' | 'lingyu';
+
+interface ShopTabDef {
+  id: ShopTabId;
+  label: string;
+  iconPath: string;
+  enabled: boolean;
 }
 
-/** 顶栏布局：标题匾 + 灵宠币间距（基于标题真实高度，避免重叠） */
-function shopHeaderLayout(tex: PIXI.Texture | null): {
-  titleCenterY: number;
-  coinCenterY: number;
-  listTop: number;
-} {
-  const titleH = shopTitleDisplayH(tex);
-  const titleCenterY = Game.safeHeaderCenterY;
-  const titleBottom = titleCenterY + titleH / 2;
-  const coinCenterY = titleBottom + SHOP_UI.titleCoinGap + SHOP_UI.coinBarH / 2;
-  const listTop = coinCenterY + SHOP_UI.coinBarH / 2 + SHOP_UI.headerListGap;
-  return { titleCenterY, coinCenterY, listTop };
-}
-
-/** 灵宠币胶囊九宫格：贴图已归一化到 48px 高，左右圆角端帽固定 24px */
-function shopCoinSlice(): { left: number; top: number; right: number; bottom: number } {
-  const cap = SHOP_UI.coinCapW;
-  return { left: cap, top: 0, right: cap, bottom: 0 };
-}
+const SHOP_TABS: readonly ShopTabDef[] = [
+  { id: 'shard', label: '碎片', iconPath: UI_SHOP_IMAGES.tabIconShard, enabled: true },
+  { id: 'honor', label: '荣誉', iconPath: UI_SHOP_IMAGES.tabIconHonor, enabled: false },
+  { id: 'realm', label: '秘境', iconPath: UI_SHOP_IMAGES.tabIconRealm, enabled: false },
+  { id: 'lingyu', label: '灵玉', iconPath: UI_SHOP_IMAGES.tabIconLingyu, enabled: false },
+];
 
 interface ShopBuyHandle extends PIXI.Container {
   setEnabled(enabled: boolean): void;
 }
 
-interface ShopRowRef {
-  pet: PetDef;
+interface ShopCardRef {
+  kind: 'pet' | 'universal';
+  petId?: string;
   cost: number;
+  packSize: number;
   sub: PIXI.Text;
   buy: ShopBuyHandle;
   centerX: number;
@@ -118,127 +99,102 @@ function shopTexture(path: string): PIXI.Texture | null {
   return tex?.valid ? tex : null;
 }
 
-function addStretchBg(
-  parent: PIXI.Container,
-  texPath: string,
-  w: number,
-  h: number,
-  fallback: () => PIXI.Graphics,
-): void {
-  const tex = shopTexture(texPath);
-  if (tex) {
-    const sp = new PIXI.Sprite(tex);
-    sp.width = w;
-    sp.height = h;
-    sp.anchor.set(0.5);
-    parent.addChild(sp);
-    return;
-  }
-  parent.addChild(fallback());
+/** 顶栏无标题匾：币胶囊对齐安全区，列表更靠上 */
+function shopHeaderLayout(): {
+  coinCenterY: number;
+  hintCenterY: number;
+  listTop: number;
+} {
+  const coinCenterY = Game.safeHeaderCenterY;
+  const hintCenterY = coinCenterY + SHOP_UI.coinBarH / 2 + SHOP_UI.headerHintGap + 11;
+  const listTop = hintCenterY + 12 + SHOP_UI.headerListGap;
+  return { coinCenterY, hintCenterY, listTop };
 }
 
+function shopCoinSlice(): { left: number; top: number; right: number; bottom: number } {
+  const cap = SHOP_UI.coinCapW;
+  return { left: cap, top: 0, right: cap, bottom: 0 };
+}
+
+/** 九宫格贴图底板；贴图未就绪时不手绘面板，只留空容器 */
 function addNineSliceBg(
   parent: PIXI.Container,
   texPath: string,
   w: number,
   h: number,
   slice: { left: number; top: number; right: number; bottom: number },
-  fallback: () => PIXI.Graphics,
-): void {
+): boolean {
   const tex = shopTexture(texPath);
-  if (tex) {
-    const plane = new PIXI.NineSlicePlane(tex, slice.left, slice.top, slice.right, slice.bottom);
-    plane.width = w;
-    plane.height = h;
-    plane.position.set(-w / 2, -h / 2);
-    parent.addChild(plane);
-    return;
-  }
-  parent.addChild(fallback());
+  if (!tex) return false;
+  const plane = new PIXI.NineSlicePlane(tex, slice.left, slice.top, slice.right, slice.bottom);
+  plane.width = w;
+  plane.height = h;
+  plane.position.set(-w / 2, -h / 2);
+  parent.addChild(plane);
+  return true;
 }
 
-/** 将容器 pivot 设到内容几何中心，便于在父级 x=0 处水平居中 */
+/** 整图缩放铺满（侧栏轨道 / Tab 底板） */
+function addScaledSprite(
+  parent: PIXI.Container,
+  texPath: string,
+  w: number,
+  h: number,
+): boolean {
+  const tex = shopTexture(texPath);
+  if (!tex) return false;
+  const sp = new PIXI.Sprite(tex);
+  sp.anchor.set(0.5);
+  sp.width = w;
+  sp.height = h;
+  parent.addChild(sp);
+  return true;
+}
+
 function centerPivot(cont: PIXI.Container): { w: number; h: number } {
   const b = cont.getLocalBounds();
   cont.pivot.set(b.x + b.width / 2, b.y + b.height / 2);
   return { w: b.width, h: b.height };
 }
 
-function shopBuyButtonSize(packSize: number, cost: number): { w: number; h: number } {
-  const { buyFontTop, buyFontPrice, buyCoinIcon, buyPadX, buyLineGap, buyPanelH, buyMinW } = SHOP_UI;
-  const line1 = makeText(`碎片×${packSize}`, {
-    size: buyFontTop, fill: COLORS.textMain, bold: true, anchor: 0.5,
-  });
-  const priceText = makeText(`${cost} 币`, {
-    size: buyFontPrice, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-  });
-  const contentW = Math.max(line1.width, buyCoinIcon + 5 + priceText.width);
-  const contentH = line1.height + buyLineGap + Math.max(buyCoinIcon, priceText.height);
-  line1.destroy();
-  priceText.destroy();
-  return {
-    w: Math.max(buyMinW, Math.ceil(contentW + buyPadX * 2)),
-    h: buyPanelH,
-  };
-}
-
-function makeShopBuyButton(
-  packSize: number,
+function makeCardBuyButton(
   cost: number,
   enabled: boolean,
   onTap: () => void,
   blockTap?: () => boolean,
 ): ShopBuyHandle {
-  const { buyFontTop, buyFontPrice, buyCoinIcon, buyLineGap, buyPadX } = SHOP_UI;
-  const { w: buyW, h: buyH } = shopBuyButtonSize(packSize, cost);
+  const { buyH, buyMinW, buyFont, buyCoinIcon } = SHOP_UI;
   const btn = new PIXI.Container() as ShopBuyHandle;
-
-  const line1 = makeText(`碎片×${packSize}`, {
-    size: buyFontTop, fill: COLORS.textMain, bold: true, anchor: 0.5,
-  });
   const priceRow = makeIconLabel({
     iconPath: UI_IMAGES.iconCoin,
     iconSize: buyCoinIcon,
-    text: `${cost} 币`,
-    size: buyFontPrice,
+    text: `${cost}`,
+    size: buyFont,
     fill: COLORS.textMain,
     bold: true,
-    gap: 5,
+    gap: 6,
   });
   const priceSize = centerPivot(priceRow);
+  const buyW = Math.max(buyMinW, Math.ceil(priceSize.w + 28));
 
-  const contentH = line1.height + buyLineGap + priceSize.h;
-  const blockTop = -contentH / 2;
-  line1.position.set(0, blockTop + line1.height / 2);
-  priceRow.position.set(0, blockTop + line1.height + buyLineGap + priceSize.h / 2);
-
-  addNineSliceBg(btn, UI_SHOP_IMAGES.buyPanel, buyW, buyH, SHOP_UI.buySlice, () => {
-    const g = new PIXI.Graphics();
-    g.beginFill(0xf5c842, 1);
-    g.lineStyle(2, 0xc8960a, 1);
-    g.drawRoundedRect(-buyW / 2, -buyH / 2, buyW, buyH, buyH / 2);
-    g.endFill();
-    return g;
-  });
-  btn.addChild(line1, priceRow);
+  addNineSliceBg(btn, UI_SHOP_IMAGES.buyPanel, buyW, buyH, SHOP_UI.buySlice);
+  btn.addChild(priceRow);
+  priceRow.position.set(0, 0);
 
   let active = enabled;
   const redraw = (): void => {
     const fill = active ? COLORS.textMain : COLORS.textDisabled;
-    line1.style.fill = fill;
     priceRow.children.forEach((ch) => {
       if (ch instanceof PIXI.Text) ch.style.fill = fill;
     });
     btn.alpha = active ? 1 : 0.55;
   };
-
   btn.setEnabled = (v: boolean): void => {
     active = v;
     btn.eventMode = v ? 'static' : 'none';
     btn.cursor = v ? 'pointer' : 'default';
     redraw();
   };
-
   bindPointerTap(btn, onTap, { guard: () => active, blockTap });
   btn.hitArea = new PIXI.Rectangle(-buyW / 2, -buyH / 2, buyW, buyH);
   btn.interactiveChildren = false;
@@ -248,7 +204,6 @@ function makeShopBuyButton(
   return btn;
 }
 
-/** 透明底宠物立绘；有缓存立刻画，否则占位并 CDN 到货后补上（不挡首屏） */
 function addShopPetPortrait(
   parent: PIXI.Container,
   petId: string,
@@ -257,67 +212,16 @@ function addShopPetPortrait(
   size: number,
 ): { left: number; right: number; top: number } {
   const top = y - size / 2;
-  const left = x;
-  const right = x + size;
+  const left = x - size / 2;
+  const right = x + size / 2;
   const spr = new PIXI.Sprite(PIXI.Texture.EMPTY);
   spr.anchor.set(0.5);
-  spr.position.set(x + size / 2, y);
+  spr.position.set(x, y);
   parent.addChild(spr);
   bindPetAvatarSprite(spr, petId, 1, (tex) => {
     spr.scale.set(size / Math.max(tex.width, tex.height));
   });
   return { left, right, top };
-}
-
-function buildCenteredInfoBlock(
-  parent: PIXI.Container,
-  pet: PetDef,
-  centerX: number,
-  maxW: number,
-  subText: string,
-): PIXI.Text {
-  const { nameSize, subSize, elIconSize, infoLineGap } = SHOP_UI;
-  const info = new PIXI.Container();
-  info.position.set(centerX, 0);
-  parent.addChild(info);
-
-  const nameRow = new PIXI.Container();
-  let nx = 0;
-  const elIcon = makeElementOrb(pet.element, elIconSize);
-  elIcon.anchor.set(0, 0.5);
-  elIcon.position.set(0, 0);
-  nameRow.addChild(elIcon);
-  nx = elIconSize + 6;
-
-  let displayName = pet.name;
-  const name = makeText(displayName, {
-    size: nameSize, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-  });
-  while (name.width + nx > maxW && displayName.length > 2) {
-    displayName = `${displayName.slice(0, -1)}…`;
-    name.text = displayName;
-  }
-  name.position.set(nx, 0);
-  nameRow.addChild(name);
-
-  let subDisplay = subText;
-  const sub = makeText(subDisplay, {
-    size: subSize, fill: COLORS.accentDeep, anchor: 0.5,
-  });
-  while (sub.width > maxW && subDisplay.length > 6) {
-    subDisplay = `${subDisplay.slice(0, -2)}…`;
-    sub.text = subDisplay;
-  }
-
-  info.addChild(nameRow, sub);
-  const nameW = Math.min(nameRow.width, maxW);
-  const nameH = nameRow.height;
-  const subH = sub.height;
-  const totalH = nameH + infoLineGap + subH;
-  const blockTop = -totalH / 2;
-  nameRow.position.set(-nameW / 2, blockTop + nameH / 2);
-  sub.position.set(0, blockTop + nameH + infoLineGap + subH / 2);
-  return sub;
 }
 
 export class ShopScene implements Scene {
@@ -329,13 +233,14 @@ export class ShopScene implements Scene {
   private _listMask: PIXI.Graphics | null = null;
   private _coinsHolder = new PIXI.Container();
   private _fx: SceneFx | null = null;
-  private _rows = new Map<string, ShopRowRef>();
+  private _cards = new Map<string, ShopCardRef>();
+  private _tabId: ShopTabId = 'shard';
   private readonly _enterSeq = new SceneEnterSeq();
+  private _infoPopup: ShopInfoPopup | null = null;
 
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
-    // 同步出壳，与 Title 一致；资源后台 hydrate，避免首点黑屏
     const token = this._enterSeq.next();
     this._fx = new SceneFx();
     this._build({ animate: true });
@@ -343,10 +248,13 @@ export class ShopScene implements Scene {
     void this._hydrateShell(token);
   }
 
-  /** 壳层贴图与头像后台补齐；壳图到位后静默重建一次换真贴图 */
   private async _hydrateShell(token: number): Promise<void> {
     await ensureAssets(shopPreloadImages()).catch((e) => {
       console.warn('[Shop] 壳层资源加载失败', e);
+    });
+    // 头像先预热再重建，减少真机 CDN 空窗；bindPetAvatarSprite 仍会监听补刷
+    await ensurePetAvatars(shopPetAvatarEntries()).catch((e) => {
+      console.warn('[Shop] 头像预热失败', e);
     });
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'shop') return;
@@ -354,10 +262,6 @@ export class ShopScene implements Scene {
     this._fx?.destroy();
     this._fx = new SceneFx();
     this._build({ animate: false });
-
-    void ensurePetAvatars(shopPetAvatarEntries()).catch((e) => {
-      console.warn('[Shop] 头像预热失败', e);
-    });
   }
 
   onExit(): void {
@@ -365,9 +269,15 @@ export class ShopScene implements Scene {
     this._scroll.detach();
     this._content = null;
     this._listMask = null;
-    this._rows.clear();
+    this._cards.clear();
     this._fx?.destroy();
     this._fx = null;
+    if (this._infoPopup) {
+      this._infoPopup.closeImmediate();
+      this._infoPopup.parent?.removeChild(this._infoPopup);
+      if (!this._infoPopup.destroyed) this._infoPopup.destroy({ children: true });
+      this._infoPopup = null;
+    }
     this.container.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
     });
@@ -377,36 +287,25 @@ export class ShopScene implements Scene {
     this._fx?.update(dt);
   }
 
-  private _focusChapter(): number {
-    let latest = CHAPTERS[0];
-    for (const ch of CHAPTERS) {
-      if (PlayerData.isChapterUnlocked(ch)) latest = ch;
-    }
-    return latest;
-  }
-
-  private _chapterDominantElement(chapter: number): Element {
-    const tally: Partial<Record<Element, number>> = {};
-    for (const s of stagesOfChapter(chapter)) {
-      tally[s.element] = (tally[s.element] ?? 0) + 1;
-    }
-    let best: Element = 'wood';
-    let bestN = -1;
-    for (const [el, n] of Object.entries(tally) as [Element, number][]) {
-      if (n > bestN) { best = el; bestN = n; }
-    }
-    return best;
-  }
-
   private _shopPets(): PetDef[] {
     const ids = new Set(PlayerData.shopPoolIds());
-    return PETS.filter((p) => ids.has(p.id));
-  }
-
-  private _sortShopPets(pets: PetDef[]): PetDef[] {
-    return [...pets].sort(
+    return PETS.filter((p) => ids.has(p.id)).sort(
       (a, b) => (b.rarity - a.rarity) || a.name.localeCompare(b.name, 'zh-CN'),
     );
+  }
+
+  private _contentGeometry(): {
+    contentLeft: number;
+    contentW: number;
+    cardW: number;
+  } {
+    const w = Game.logicWidth;
+    const contentLeft = SHOP_UI.sidebarW + SHOP_UI.contentPadX;
+    const contentW = w - contentLeft - SHOP_UI.contentPadX;
+    const cardW = Math.floor(
+      (contentW - SHOP_UI.cardGapX * (SHOP_UI.gridCols - 1)) / SHOP_UI.gridCols,
+    );
+    return { contentLeft, contentW, cardW };
   }
 
   private _build(opts?: { animate?: boolean }): void {
@@ -414,9 +313,14 @@ export class ShopScene implements Scene {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     this._scroll.detach();
-    this._rows.clear();
+    this._cards.clear();
     this._listMask = null;
     this._content = null;
+    // 重建时先摘下浮层，避免被 removeChildren 销毁
+    if (this._infoPopup?.parent) {
+      this._infoPopup.parent.removeChild(this._infoPopup);
+      this._infoPopup.closeImmediate();
+    }
     this.container.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
     });
@@ -426,79 +330,387 @@ export class ShopScene implements Scene {
     const back = makeBackButton({
       onTap: () => SceneManager.switchTo('title'),
     });
-    back.position.set(80, Game.safeHeaderCenterY);
+    back.position.set(56, Game.safeHeaderCenterY);
     this.container.addChild(back);
 
-    const titleTex = shopTexture(UI_SHOP_IMAGES.titlePlaque) ?? shopTexture(UI_IMAGES.titlePlaque);
-    const header = shopHeaderLayout(titleTex);
-    this._buildTitlePlaque(w, header.titleCenterY, titleTex);
-
+    const header = shopHeaderLayout();
     this._coinsHolder = new PIXI.Container();
     this.container.addChild(this._coinsHolder);
     this._refreshCoins(header.coinCenterY);
 
-    const chapter = this._focusChapter();
-    const dominant = this._chapterDominantElement(chapter);
-    const recommendEl = counterElementOf(dominant);
-    const shopPool = this._sortShopPets(this._shopPets());
-    const recommended = this._sortShopPets(
-      shopPool.filter((p) => p.element === recommendEl),
-    ).slice(0, ECONOMY.shop.recommendCount);
-    const recommendedIds = new Set(recommended.map((p) => p.id));
-    const allOwned = shopPool.filter((p) => !recommendedIds.has(p.id));
+    const geo = this._contentGeometry();
+    const hint = makeText('◆  灵宠币兑换定向碎片  ◆', {
+      size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5,
+    });
+    hint.position.set(geo.contentLeft + geo.contentW / 2, header.hintCenterY);
+    this.container.addChild(hint);
 
-    const startY = header.listTop;
+    this._buildSidebar(header.listTop);
+
     const content = new PIXI.Container();
-    content.position.set(0, startY);
+    content.position.set(0, header.listTop);
     this._content = content;
     this.container.addChild(content);
 
     const animTargets: PIXI.Container[] = [];
-    let y = this._universalSection(content, animTargets, 0);
-    y += 8;
-    if (recommended.length > 0) {
-      y = this._section(
-        content, animTargets,
-        `推荐：克制第${chapter}章·${ELEMENT_NAME[recommendEl]}灵宠`,
-        recommended, startY, y,
-      );
-      y += 8;
-    }
-    if (allOwned.length > 0) {
-      y = this._section(content, animTargets, '全部灵宠', allOwned, startY, y);
-    } else if (shopPool.length === 0) {
-      const empty = makeText('暂无可兑换碎片\n获得灵宠后即可在此购买碎片', {
-        size: FONT_SIZE.sm, fill: COLORS.textSub, anchor: 0.5, align: 'center',
+    let contentH = 40;
+    if (this._tabId === 'shard') {
+      contentH = this._buildShardGrid(content, animTargets, header.listTop);
+    } else {
+      const empty = makeText('该商店即将开放', {
+        size: FONT_SIZE.sm, fill: COLORS.textSub, bold: true, anchor: 0.5,
       });
-      empty.position.set(w / 2, (h - startY - 24) / 2);
+      empty.position.set(geo.contentLeft + geo.contentW / 2, 120);
       content.addChild(empty);
     }
 
-    // 商店从左栏进入，无底栏，底部只留安全边距
-    const viewportH = h - startY - 24;
-    const contentH = y + SHOP_UI.listBottomPad;
-    const scrollMin = Math.min(startY, startY - Math.max(0, contentH - viewportH));
+    const viewportH = h - header.listTop - 24;
+    const scrollMin = Math.min(
+      header.listTop,
+      header.listTop - Math.max(0, contentH + SHOP_UI.listBottomPad - viewportH),
+    );
 
     this._listMask = new PIXI.Graphics();
     this._listMask.beginFill(COLORS.white);
-    this._listMask.drawRect(0, startY, w, viewportH);
+    this._listMask.drawRect(geo.contentLeft, header.listTop, geo.contentW, viewportH);
     this._listMask.endFill();
     this.container.addChild(this._listMask);
     content.mask = this._listMask;
 
     this._scroll.attach({
       content: () => this._content,
-      viewportTop: startY,
+      viewportTop: header.listTop,
       viewportH,
       scrollMin,
-      listTop: startY,
+      listTop: header.listTop,
       moveThreshold: 6,
     });
 
     if (animate) {
-      staggerIn(animTargets, { stepDelay: 0.04, offsetY: 16, duration: 0.3 });
+      staggerIn(animTargets, { stepDelay: 0.03, offsetY: 14, duration: 0.28 });
     }
     if (this._fx) this._fx.build(this.container, w, h);
+
+    if (!this._infoPopup || this._infoPopup.destroyed) {
+      this._infoPopup = new ShopInfoPopup();
+    }
+    this.container.addChild(this._infoPopup);
+  }
+
+  /** 卡片上半区（不含购买钮）点击 → 说明浮层 */
+  private _attachCardInfoTap(
+    card: PIXI.Container,
+    cardW: number,
+    onInfo: () => void,
+  ): void {
+    const zone = new PIXI.Container();
+    const buyReserve = 20 + SHOP_UI.buyH + 8;
+    const zoneH = SHOP_UI.cardH - buyReserve;
+    zone.hitArea = new PIXI.Rectangle(
+      -cardW / 2,
+      -SHOP_UI.cardH / 2,
+      cardW,
+      zoneH,
+    );
+    zone.eventMode = 'static';
+    zone.cursor = 'pointer';
+    bindPointerTap(zone, onInfo, { blockTap: () => this._scroll.moved });
+    card.addChild(zone);
+  }
+
+  /** 短 Tab 栈：仅 4 枚芯片，无通栏长轨（避免半截悬空） */
+  private _buildSidebar(listTop: number): void {
+    const stack = new PIXI.Container();
+    stack.position.set(0, listTop);
+    this.container.addChild(stack);
+
+    let y = 4;
+    for (const tab of SHOP_TABS) {
+      const selected = tab.id === this._tabId;
+      const tabNode = this._makeTab(tab, selected);
+      tabNode.position.set(SHOP_UI.sidebarW / 2, y + SHOP_UI.tabH / 2);
+      stack.addChild(tabNode);
+      y += SHOP_UI.tabH + SHOP_UI.tabGap;
+    }
+  }
+
+  private _makeTab(tab: ShopTabDef, selected: boolean): PIXI.Container {
+    const node = new PIXI.Container();
+    const tw = SHOP_UI.sidebarW - 20;
+    const th = SHOP_UI.tabH;
+    addScaledSprite(
+      node,
+      selected ? UI_SHOP_IMAGES.tabOn : UI_SHOP_IMAGES.tabOff,
+      tw,
+      th,
+    );
+
+    const iconTex = shopTexture(tab.iconPath);
+    if (iconTex) {
+      const icon = new PIXI.Sprite(iconTex);
+      icon.anchor.set(0.5);
+      const s = SHOP_UI.tabIcon / Math.max(iconTex.width, iconTex.height);
+      icon.scale.set(s);
+      // 单层底板：图标居中偏上，文案贴底，不再给「底栏」留空
+      icon.position.set(0, -12);
+      icon.alpha = tab.enabled ? 1 : 0.45;
+      node.addChild(icon);
+    }
+
+    const label = makeText(tab.label, {
+      size: FONT_SIZE.xs,
+      fill: selected ? COLORS.textMain : (tab.enabled ? COLORS.textSub : COLORS.textDisabled),
+      bold: true,
+      anchor: 0.5,
+      role: 'title',
+    });
+    label.position.set(0, 28);
+    label.alpha = tab.enabled ? 1 : 0.55;
+    node.addChild(label);
+
+    bindPointerTap(node, () => {
+      if (!tab.enabled) {
+        Platform.showToast(`${tab.label}商店即将开放`);
+        return;
+      }
+      if (tab.id === this._tabId) return;
+      this._tabId = tab.id;
+      this._build({ animate: false });
+    });
+    node.hitArea = new PIXI.Rectangle(-tw / 2, -th / 2, tw, th);
+    node.eventMode = 'static';
+    node.cursor = 'pointer';
+    pressFeedback(node);
+    return node;
+  }
+
+  /** 双列平铺：通用碎片 + 全部灵宠，无分段推荐 */
+  private _buildShardGrid(
+    content: PIXI.Container,
+    animTargets: PIXI.Container[],
+    absListTop: number,
+  ): number {
+    const geo = this._contentGeometry();
+    const shopPool = this._shopPets();
+
+    type GridItem =
+      | { kind: 'universal' }
+      | { kind: 'pet'; pet: PetDef };
+
+    const items: GridItem[] = [
+      { kind: 'universal' },
+      ...shopPool.map((pet) => ({ kind: 'pet' as const, pet })),
+    ];
+
+    let y = 0;
+    let col = 0;
+    for (const item of items) {
+      const cardX = geo.contentLeft + col * (geo.cardW + SHOP_UI.cardGapX) + geo.cardW / 2;
+      const cardY = y + SHOP_UI.cardH / 2;
+      const card = item.kind === 'universal'
+        ? this._buildUniversalCard(geo.cardW, absListTop + cardY, cardX)
+        : this._buildPetCard(item.pet, geo.cardW, absListTop + cardY, cardX);
+      card.position.set(cardX, cardY);
+      content.addChild(card);
+      animTargets.push(card);
+
+      col += 1;
+      if (col >= SHOP_UI.gridCols) {
+        col = 0;
+        y += SHOP_UI.cardH + SHOP_UI.cardGapY;
+      }
+    }
+    if (col !== 0) y += SHOP_UI.cardH + SHOP_UI.cardGapY;
+
+    if (shopPool.length === 0) {
+      const empty = makeText('暂无可兑换碎片\n获得灵宠后即可在此购买', {
+        size: FONT_SIZE.sm, fill: COLORS.textSub, anchor: 0.5, align: 'center',
+      });
+      empty.position.set(geo.contentLeft + geo.contentW / 2, y + 80);
+      content.addChild(empty);
+      y += 160;
+    }
+    return y;
+  }
+
+  private _cardShell(cardW: number): PIXI.Container {
+    const card = new PIXI.Container();
+    addNineSliceBg(card, UI_SHOP_IMAGES.cardPanel, cardW, SHOP_UI.cardH, SHOP_UI.cardSlice)
+      || addScaledSprite(card, UI_SHOP_IMAGES.cardPanel, cardW, SHOP_UI.cardH);
+    return card;
+  }
+
+  private _buildUniversalCard(
+    cardW: number,
+    absCenterY: number,
+    absCenterX: number,
+  ): PIXI.Container {
+    const packSize = ECONOMY.shop.universalPackSize;
+    const cost = ECONOMY.shop.universalPackCost;
+    const card = this._cardShell(cardW);
+    const top = -SHOP_UI.cardH / 2;
+    const portraitY = top + 18 + SHOP_UI.portraitSize / 2;
+
+    // 与宠卡立绘一致：锚点居中；勿用 makeIconLabel（空文本会把视觉中心偏右）
+    const iconSize = SHOP_UI.portraitSize * 0.85;
+    const iconTex = shopTexture(UI_IMAGES.iconShard);
+    if (iconTex) {
+      const icon = new PIXI.Sprite(iconTex);
+      icon.anchor.set(0.5);
+      icon.scale.set(iconSize / Math.max(iconTex.width, iconTex.height));
+      icon.position.set(0, portraitY);
+      card.addChild(icon);
+    }
+
+    const name = makeText('通用碎片', {
+      size: SHOP_UI.nameSize, fill: COLORS.textMain, bold: true, anchor: 0.5,
+      role: 'title',
+    });
+    name.position.set(0, top + 18 + SHOP_UI.portraitSize + 24);
+    card.addChild(name);
+
+    const sub = makeText(this._universalSubText(), {
+      size: SHOP_UI.subSize, fill: COLORS.textSub, bold: true, anchor: 0.5,
+    });
+    sub.position.set(0, name.y + 24);
+    card.addChild(sub);
+
+    const buy = makeCardBuyButton(
+      cost,
+      PlayerData.coins >= cost,
+      () => this._onBuyUniversal(packSize, cost),
+      () => this._scroll.moved,
+    );
+    buy.position.set(0, SHOP_UI.cardH / 2 - 20 - SHOP_UI.buyH / 2);
+    card.addChild(buy);
+
+    this._attachCardInfoTap(card, cardW, () => this._infoPopup?.openUniversal());
+
+    this._cards.set('universal', {
+      kind: 'universal', cost, packSize, sub, buy,
+      centerX: absCenterX, centerY: absCenterY,
+    });
+    return card;
+  }
+
+  private _buildPetCard(
+    pet: PetDef,
+    cardW: number,
+    absCenterY: number,
+    absCenterX: number,
+  ): PIXI.Container {
+    const cost = ECONOMY.shop.shardPackCost[pet.rarity] ?? 600;
+    const packSize = ECONOMY.shop.packSize;
+    const card = this._cardShell(cardW);
+    const top = -SHOP_UI.cardH / 2;
+    const portraitY = top + 18 + SHOP_UI.portraitSize / 2;
+
+    const bounds = addShopPetPortrait(card, pet.id, 0, portraitY, SHOP_UI.portraitSize);
+    attachRarityBadge(card, pet.rarity, bounds.left, bounds.top, SHOP_UI.portraitSize);
+
+    const nameRow = new PIXI.Container();
+    const orb = makeElementOrb(pet.element, 18);
+    orb.anchor.set(0, 0.5);
+    orb.position.set(0, 0);
+    nameRow.addChild(orb);
+    let displayName = pet.name;
+    const name = makeText(displayName, {
+      size: SHOP_UI.nameSize, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+      role: 'title',
+    });
+    const maxNameW = cardW - 36;
+    while (name.width + 24 > maxNameW && displayName.length > 2) {
+      displayName = `${displayName.slice(0, -1)}…`;
+      name.text = displayName;
+    }
+    name.position.set(22, 0);
+    nameRow.addChild(name);
+    const nb = nameRow.getLocalBounds();
+    nameRow.pivot.set(nb.x + nb.width / 2, nb.y + nb.height / 2);
+    nameRow.position.set(0, top + 18 + SHOP_UI.portraitSize + 24);
+    card.addChild(nameRow);
+
+    const sub = makeText(this._petSubText(pet), {
+      size: SHOP_UI.subSize, fill: COLORS.textSub, bold: true, anchor: 0.5,
+    });
+    sub.position.set(0, nameRow.y + 24);
+    card.addChild(sub);
+
+    const buy = makeCardBuyButton(
+      cost,
+      PlayerData.coins >= cost,
+      () => this._onBuyPet(pet.id),
+      () => this._scroll.moved,
+    );
+    buy.position.set(0, SHOP_UI.cardH / 2 - 20 - SHOP_UI.buyH / 2);
+    card.addChild(buy);
+
+    this._attachCardInfoTap(card, cardW, () => this._infoPopup?.openPet(pet));
+
+    this._cards.set(pet.id, {
+      kind: 'pet', petId: pet.id, cost, packSize, sub, buy,
+      centerX: absCenterX, centerY: absCenterY,
+    });
+    return card;
+  }
+
+  private _universalSubText(): string {
+    return `碎片 ${PlayerData.universalShards}`;
+  }
+
+  private _petSubText(pet: PetDef): string {
+    return `碎片 ${PlayerData.petShards(pet.id)}`;
+  }
+
+  private _refreshAllBuyEnabled(): void {
+    for (const c of this._cards.values()) {
+      c.buy.setEnabled(PlayerData.coins >= c.cost);
+    }
+  }
+
+  private _onBuyUniversal(packSize: number, cost: number): void {
+    if (!PlayerData.spendCoins(cost)) {
+      Platform.showToast('灵宠币不足');
+      return;
+    }
+    PlayerData.addUniversalShards(packSize);
+    Platform.vibrateShort('light');
+    Platform.showToast(`通用碎片 +${packSize}`, 'success');
+    const ref = this._cards.get('universal');
+    if (ref) ref.sub.text = this._universalSubText();
+    this._refreshCoins();
+    this._refreshAllBuyEnabled();
+    this._playBuyFx('universal');
+  }
+
+  private _onBuyPet(petId: string): void {
+    const ref = this._cards.get(petId);
+    if (!ref || !ref.petId) return;
+    if (!PlayerData.spendCoins(ref.cost)) {
+      Platform.showToast('灵宠币不足');
+      return;
+    }
+    const pet = PETS.find((p) => p.id === petId);
+    PlayerData.addShards(petId, ref.packSize);
+    Platform.vibrateShort('light');
+    Platform.showToast(`${pet?.name ?? '灵宠'} +${ref.packSize} 碎片`);
+    if (pet) ref.sub.text = this._petSubText(pet);
+    this._refreshCoins();
+    this._refreshAllBuyEnabled();
+    this._playBuyFx(petId);
+  }
+
+  private _playBuyFx(key: string): void {
+    const ref = this._cards.get(key);
+    if (!ref) return;
+    if (this._coinsHolder.children[0]) pulse(this._coinsHolder.children[0] as PIXI.Container);
+    this._fx?.flash(COLORS.accent, 0.14, 0.3);
+    this._fx?.burst({
+      x: ref.centerX, y: ref.centerY, color: COLORS.accent,
+      count: 14, speed: 320, life: 0.6, gravity: 260, size: 22, endScale: 0.1,
+      texture: TextureCache.get(UI_FX_IMAGES.particleSpark) ?? undefined,
+      blendMode: PIXI.BLEND_MODES.ADD,
+    });
   }
 
   private _refreshCoins(coinCenterY?: number): void {
@@ -517,231 +729,16 @@ export class ShopScene implements Scene {
     });
 
     const pillW = Math.max(coinBarMinW, Math.ceil(coins.width + coinBarPadX * 2));
-    addNineSliceBg(holder, UI_SHOP_IMAGES.coinPill, pillW, coinBarH, shopCoinSlice(), () => {
-      const g = new PIXI.Graphics();
-      g.beginFill(0xffffff, 0.96);
-      g.lineStyle(2, COLORS.panelBorder, 1);
-      g.drawRoundedRect(-pillW / 2, -coinBarH / 2, pillW, coinBarH, coinBarH / 2);
-      g.endFill();
-      return g;
-    });
-
+    addNineSliceBg(holder, UI_SHOP_IMAGES.coinPill, pillW, coinBarH, shopCoinSlice());
     holder.addChild(coins);
     const coinBounds = coins.getLocalBounds();
     coins.pivot.set(coinBounds.x + coinBounds.width / 2, coinBounds.y + coinBounds.height / 2);
     coins.position.set(0, 0);
 
-    const titleTex = shopTexture(UI_SHOP_IMAGES.titlePlaque) ?? shopTexture(UI_IMAGES.titlePlaque);
-    const centerY = coinCenterY ?? shopHeaderLayout(titleTex).coinCenterY;
-    holder.position.set(Game.logicWidth / 2 + SHOP_UI.coinBarOffsetX, centerY);
+    const header = shopHeaderLayout();
+    const centerY = coinCenterY ?? header.coinCenterY;
+    const geo = this._contentGeometry();
+    holder.position.set(geo.contentLeft + geo.contentW / 2, centerY);
     this._coinsHolder.addChild(holder);
-  }
-
-  private _buildTitlePlaque(w: number, centerY: number, tex?: PIXI.Texture | null): void {
-    const plaqueTex = tex
-      ?? shopTexture(UI_SHOP_IMAGES.titlePlaque)
-      ?? shopTexture(UI_IMAGES.titlePlaque);
-    if (plaqueTex) {
-      const plaque = new PIXI.Sprite(plaqueTex);
-      plaque.anchor.set(0.5);
-      plaque.scale.set(SHOP_UI.titleW / plaqueTex.width);
-      plaque.position.set(w / 2, centerY);
-      this.container.addChild(plaque);
-    }
-  }
-
-  /**
-   * 通用碎片兑换：灵宠币的主要后期出口。
-   *
-   * 定向包只能推「已拥有的那只」，而深池下真正卡人的是 UR 升满星要 13 只重复。
-   * 通用碎片单价高于定向包（同样 10 点碎片贵 50%），换来的是可指向任意宠。
-   */
-  private _universalSection(
-    content: PIXI.Container, animTargets: PIXI.Container[], contentY: number,
-  ): number {
-    const w = Game.logicWidth;
-    const { packSize, cost } = {
-      packSize: ECONOMY.shop.universalPackSize,
-      cost: ECONOMY.shop.universalPackCost,
-    };
-    const y = this._sectionHeading(content, animTargets, '通用碎片 · 可换任意灵宠', contentY);
-
-    const rowW = w - SHOP_UI.padX * 2;
-    const row = new PIXI.Container();
-    row.position.set(w / 2, y + SHOP_UI.rowH / 2);
-    addNineSliceBg(row, UI_SHOP_IMAGES.rowPanel, rowW, SHOP_UI.rowH, SHOP_UI.rowSlice, () => {
-      const g = new PIXI.Graphics();
-      g.beginFill(0xfff6e2, 0.96);
-      g.lineStyle(2, COLORS.panelBorder, 1);
-      g.drawRoundedRect(-rowW / 2, -SHOP_UI.rowH / 2, rowW, SHOP_UI.rowH, 16);
-      g.endFill();
-      return g;
-    });
-
-    const { w: buyW } = shopBuyButtonSize(packSize, cost);
-    const buyCenterX = rowW / 2 - SHOP_UI.buyPad - buyW / 2 + SHOP_UI.coinBarOffsetX;
-
-    const icon = makeIconLabel({
-      iconPath: UI_IMAGES.iconShard,
-      iconSize: 56,
-      text: '',
-      size: SHOP_UI.nameSize,
-    });
-    icon.position.set(-rowW / 2 + 46, 0);
-    row.addChild(icon);
-
-    const name = makeText('通用碎片', {
-      size: SHOP_UI.nameSize, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-    });
-    name.position.set(-rowW / 2 + 92, -14);
-    row.addChild(name);
-
-    const sub = makeText(`持有 ${PlayerData.universalShards} · 升星可替代任意灵宠碎片`, {
-      size: SHOP_UI.subSize, fill: COLORS.textSub, anchor: [0, 0.5],
-    });
-    sub.position.set(-rowW / 2 + 92, 16);
-    row.addChild(sub);
-
-    const buy = makeShopBuyButton(
-      packSize, cost, PlayerData.coins >= cost,
-      () => {
-        if (!PlayerData.spendCoins(cost)) {
-          Platform.showToast('灵宠币不足');
-          return;
-        }
-        PlayerData.addUniversalShards(packSize);
-        Platform.vibrateShort('light');
-        Platform.showToast(`通用碎片 +${packSize}`, 'success');
-        sub.text = `持有 ${PlayerData.universalShards} · 升星可替代任意灵宠碎片`;
-        this._refreshCoins();
-        buy.setEnabled(PlayerData.coins >= cost);
-        for (const r of this._rows.values()) r.buy.setEnabled(PlayerData.coins >= r.cost);
-      },
-      () => this._scroll.moved,
-    );
-    buy.position.set(buyCenterX, 0);
-    row.addChild(buy);
-
-    content.addChild(row);
-    animTargets.push(row);
-    return y + SHOP_UI.rowH + SHOP_UI.rowGap;
-  }
-
-  /** 分段标题条（宠物列表与通用碎片行共用） */
-  private _sectionHeading(
-    content: PIXI.Container, animTargets: PIXI.Container[],
-    heading: string, contentY: number,
-  ): number {
-    const w = Game.logicWidth;
-    const barW = w - SHOP_UI.padX * 2;
-    const headY = contentY + 18;
-    const barTex = shopTexture(UI_SHOP_IMAGES.sectionBar);
-    if (barTex) {
-      const bar = new PIXI.Sprite(barTex);
-      bar.width = barW;
-      bar.height = SHOP_UI.sectionBarH;
-      bar.anchor.set(0.5, 0.5);
-      bar.position.set(w / 2, headY);
-      content.addChild(bar);
-    }
-    const head = makeText(heading, {
-      size: FONT_SIZE.xxs, fill: COLORS.accentDeep, bold: true, anchor: 0.5,
-    });
-    head.position.set(w / 2, headY);
-    content.addChild(head);
-    animTargets.push(head);
-    return headY + 28;
-  }
-
-  private _section(
-    content: PIXI.Container, animTargets: PIXI.Container[],
-    heading: string, pets: PetDef[], absStartY: number, contentY: number,
-  ): number {
-    let y = this._sectionHeading(content, animTargets, heading, contentY);
-    for (const pet of pets) {
-      const row = this._buildRow(pet, y, absStartY);
-      content.addChild(row);
-      animTargets.push(row);
-      y += SHOP_UI.rowH + SHOP_UI.rowGap;
-    }
-    return y;
-  }
-
-  private _buildRow(pet: PetDef, contentY: number, absStartY: number): PIXI.Container {
-    const w = Game.logicWidth;
-    const { rowH, innerPad, buyPad } = SHOP_UI;
-    const rowW = w - SHOP_UI.padX * 2;
-    const cost = ECONOMY.shop.shardPackCost[pet.rarity] ?? 600;
-    const packSize = ECONOMY.shop.packSize;
-    const { w: buyW } = shopBuyButtonSize(packSize, cost);
-
-    const row = new PIXI.Container();
-    row.position.set(w / 2, contentY + rowH / 2);
-
-    addNineSliceBg(row, UI_SHOP_IMAGES.rowPanel, rowW, rowH, SHOP_UI.rowSlice, () => {
-      const g = new PIXI.Graphics();
-      g.beginFill(COLORS.panelBg, 0.98);
-      g.lineStyle(2.5, COLORS.panelBorder, 1);
-      g.drawRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 14);
-      g.endFill();
-      return g;
-    });
-
-    const avatarSize = rowH - innerPad * 2;
-    const avatarX = -rowW / 2 + innerPad;
-    const avatarBounds = addShopPetPortrait(row, pet.id, avatarX, 0, avatarSize);
-    attachRarityBadge(row, pet.rarity, avatarBounds.left, avatarBounds.top, avatarSize);
-
-    const buyCenterX = rowW / 2 - buyPad - buyW / 2 + SHOP_UI.buyOffsetX;
-    const infoCenterX = (avatarBounds.right + (buyCenterX - buyW / 2)) / 2;
-    const infoMaxW = (buyCenterX - buyW / 2) - avatarBounds.right - 20;
-    const sub = buildCenteredInfoBlock(
-      row, pet, infoCenterX, Math.max(80, infoMaxW), this._rowSubText(pet),
-    );
-
-    const buy = makeShopBuyButton(
-      packSize, cost, PlayerData.coins >= cost,
-      () => this._onBuy(pet.id),
-      () => this._scroll.moved,
-    );
-    buy.position.set(buyCenterX, 0);
-    row.addChild(buy);
-
-    this._rows.set(pet.id, {
-      pet, cost, sub, buy,
-      centerX: w / 2, centerY: absStartY + contentY + rowH / 2,
-    });
-    return row;
-  }
-
-  private _rowSubText(pet: PetDef): string {
-    const owned = PlayerData.isOwned(pet.id);
-    const suffix = owned ? '' : '·未拥有';
-    return `当前碎片 ${PlayerData.petShards(pet.id)}${suffix}`;
-  }
-
-  private _onBuy(petId: string): void {
-    const ref = this._rows.get(petId);
-    if (!ref) return;
-    if (!PlayerData.spendCoins(ref.cost)) {
-      Platform.showToast('灵宠币不足');
-      return;
-    }
-    PlayerData.addShards(petId, ECONOMY.shop.packSize);
-    Platform.vibrateShort('light');
-    Platform.showToast(`${ref.pet.name} +${ECONOMY.shop.packSize} 碎片`);
-
-    this._refreshCoins();
-    if (this._coinsHolder.children[0]) pulse(this._coinsHolder.children[0] as PIXI.Container);
-    ref.sub.text = this._rowSubText(ref.pet);
-    for (const r of this._rows.values()) r.buy.setEnabled(PlayerData.coins >= r.cost);
-
-    this._fx?.flash(COLORS.accent, 0.14, 0.3);
-    this._fx?.burst({
-      x: ref.centerX, y: ref.centerY, color: COLORS.accent,
-      count: 14, speed: 320, life: 0.6, gravity: 260, size: 22, endScale: 0.1,
-      texture: TextureCache.get(UI_FX_IMAGES.particleSpark) ?? undefined,
-      blendMode: PIXI.BLEND_MODES.ADD,
-    });
   }
 }

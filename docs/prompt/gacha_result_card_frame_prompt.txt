@@ -1,0 +1,9 @@
+Mobile game UI asset only: vertical summon-result pet card frame.
+Portrait card about 3:4 ratio, centered on square canvas with transparent outside.
+Warm parchment cream card body (#fff8ec), ornate antique-gold filigree double border,
+decorative corner flourishes, soft inner gold line, subtle warm shadow under card.
+Center portrait window is empty cream (no character, no pet, no icon) for later overlay.
+Bottom band slightly deeper tan for name plate area, still empty — NO TEXT, no labels,
+no NEW badge, no rarity letters, no Chinese characters, no watermark.
+Style: premium Chinese cultivation casual gacha UI, polished but not neon, not purple,
+not flat modern white Material card. Clean silhouette, ready for game HUD.

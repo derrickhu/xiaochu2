@@ -6,7 +6,6 @@
  * 立绘区尺寸不随贴图变化——怪物图须统一 Q 版规格（见 docs/prompt/enemy_portrait_q_spec）。
  */
 import * as PIXI from 'pixi.js';
-import { TextureCache } from '@/core/TextureCache';
 import { enemyImage } from '@/config/Assets';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
 import { resolveEncounter, type EnemyDef } from '@/balance/enemies';
@@ -18,7 +17,7 @@ import { ELEMENT_NAME } from '@/balance/ui';
 import type { SkillDef } from '@/balance/skills';
 import {
   COLORS, FONT_SIZE,
-  makeElementOrb, makePanel, makeSkillIcon, makeStatIcon, makeText,
+  bindLazySprite, makeElementOrb, makePanel, makeSkillIcon, makeStatIcon, makeText,
 } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
@@ -96,8 +95,11 @@ export function buildTeamEnemyIntelCard(opts: {
   const infoContentW = infoInnerW - INFO_PAD * 2;
 
   let selected = 0;
+  let unbindPortrait: (() => void) | null = null;
 
   const paintPortrait = (def: EnemyDef): void => {
+    unbindPortrait?.();
+    unbindPortrait = null;
     portraitHost.removeChildren().forEach((c) => c.destroy({ children: true }));
 
     const iw = PORTRAIT_W - FRAME_INSET * 2;
@@ -122,14 +124,13 @@ export function buildTeamEnemyIntelCard(opts: {
     art.mask = mask;
     portraitHost.addChild(art);
 
-    const applyTex = (tex: PIXI.Texture) => {
-      if (portraitHost.destroyed || !tex.width || !tex.height) return;
-      spr.texture = tex;
-      spr.scale.set(Math.min(iw / tex.width, ih / tex.height));
-    };
-    const cached = TextureCache.get(path);
-    if (cached) applyTex(cached);
-    else void TextureCache.load(path).then(applyTex).catch(() => {});
+    unbindPortrait = bindLazySprite(spr, {
+      path,
+      ensure: true,
+      onApplied: (tex) => {
+        spr.scale.set(Math.min(iw / tex.width, ih / tex.height));
+      },
+    });
 
     portraitHost.addChild(drawThinGoldFrame(PORTRAIT_W, bodyH));
   };

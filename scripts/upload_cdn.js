@@ -15,24 +15,20 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import crypto from 'crypto';
-import vm from 'vm';
 import { fileURLToPath } from 'url';
 import { PROJECT_ROOT, loadUploadEnv } from './loadEnv.js';
+import {
+  loadCdnConfig,
+  scanLocalCdnFiles,
+  preflightUpload,
+  MANIFEST_LOCAL,
+} from './cdn_scan.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FORCE = process.argv.includes('--force');
 const DRY_RUN = process.argv.includes('--dry-run');
 const PRUNE = process.argv.includes('--prune');
 const CONCURRENCY = Number(process.env.CDN_UPLOAD_CONCURRENCY || 5);
-const MANIFEST_LOCAL = path.join(PROJECT_ROOT, 'scripts', '.cdn_manifest.json');
-
-function loadCdnConfig() {
-  const file = path.join(PROJECT_ROOT, 'src', 'config', 'CdnConfig.ts');
-  const text = fs.readFileSync(file, 'utf-8');
-  const m = text.match(/export const CDN_CONFIG[^=]*=\s*({[\s\S]*?});/);
-  if (!m) throw new Error(`无法解析 CDN_CONFIG: ${file}`);
-  return vm.runInNewContext(`(${m[1]})`, {});
-}
 
 const cfg = loadCdnConfig();
 const env = loadUploadEnv();
@@ -41,8 +37,6 @@ const SECRET_ID = env.tencentSecretId;
 const SECRET_KEY = env.tencentSecretKey;
 const CDN_BASE_URL = (env.cdnBaseUrl || cfg.baseUrl || '').replace(/\/+$/, '');
 const CDN_FILE_PREFIX = cfg.filePrefix;
-const IGNORE_FILES = new Set(cfg.ignoreFiles || ['game.js', '.DS_Store', 'Thumbs.db']);
-const CDN_LOCAL_DIRS = (cfg.cdnDirs || []).map(d => ({ local: d, remote: d }));
 
 let REGION = env.tencentRegion || '';
 
@@ -150,9 +144,12 @@ async function cosRequest(method, objectPath, body = null, headers = {}) {
   });
 }
 
-async function putObject(objectPath, localPath, contentType = 'application/octet-stream') {
+async function putObject(objectPath, localPath, contentType = 'application/octet-stream', extraHeaders = {}) {
   const body = fs.readFileSync(localPath);
-  const res = await cosRequest('PUT', objectPath, body, { 'Content-Type': contentType });
+  const res = await cosRequest('PUT', objectPath, body, {
+    'Content-Type': contentType,
+    ...extraHeaders,
+  });
   if (res.statusCode < 200 || res.statusCode >= 300) {
     throw new Error(`PUT ${objectPath} 返回 ${res.statusCode}: ${res.body.toString('utf-8').slice(0, 300)}`);
   }
@@ -176,24 +173,6 @@ async function fetchRemoteManifest() {
   } catch (_) {
     return null;
   }
-}
-
-function walkDir(dir, remotePrefix) {
-  const out = [];
-  if (!fs.existsSync(dir)) return out;
-  for (const item of fs.readdirSync(dir)) {
-    if (IGNORE_FILES.has(item)) continue;
-    const full = path.join(dir, item);
-    const remote = remotePrefix ? `${remotePrefix}/${item}` : item;
-    const stat = fs.statSync(full);
-    if (stat.isDirectory()) out.push(...walkDir(full, remote));
-    else out.push({ local: full, remote, size: stat.size });
-  }
-  return out;
-}
-
-function md5File(filePath) {
-  return crypto.createHash('md5').update(fs.readFileSync(filePath)).digest('hex').slice(0, 8);
 }
 
 function contentTypeByExt(file) {
@@ -245,17 +224,23 @@ async function main() {
   }
   if (!BUCKET) throw new Error('缺少 CDN_CLOUD_BUCKET / CdnConfig.cloudBucket');
 
-  const allFiles = [];
-  for (const dir of CDN_LOCAL_DIRS) {
-    allFiles.push(...walkDir(path.join(PROJECT_ROOT, 'minigame', dir.local), dir.remote));
-  }
-  const localManifest = {};
-  for (const f of allFiles) {
-    localManifest[f.remote] = { hash: md5File(f.local), size: f.size };
-  }
-  console.log(`扫描完成: ${allFiles.length} 个文件`);
+  const { allFiles, localManifest } = scanLocalCdnFiles(cfg);
+  console.log(`磁盘扫描: ${allFiles.length} 个文件（cdnDirs 全量）`);
 
   if (!SECRET_ID || !SECRET_KEY) {
+    // 无密钥也先跑本地护栏（dry-run / 配置检查）
+    try {
+      const { warnings } = preflightUpload({
+        cfg, allFiles, localManifest, remoteFiles: {}, allowPrune: PRUNE,
+      });
+      for (const w of warnings) console.warn(w);
+    } catch (e) {
+      if (DRY_RUN) {
+        console.warn('preflight:', e.message || e);
+        return;
+      }
+      throw e;
+    }
     if (DRY_RUN) {
       console.log('dry-run: 未配置腾讯云 SecretId/SecretKey，跳过远端对比。');
       return;
@@ -272,6 +257,12 @@ async function main() {
   console.log(remoteManifest
     ? `云端 manifest: v${oldVersion}, ${Object.keys(oldFiles).length} 个文件`
     : '云端无 manifest，将全量对齐');
+
+  const { warnings, expected } = preflightUpload({
+    cfg, allFiles, localManifest, remoteFiles: oldFiles, allowPrune: PRUNE,
+  });
+  for (const w of warnings) console.warn(w);
+  console.log(`代码期望 CDN 路径: ${expected.length}（已与磁盘交叉校验）`);
 
   const toUpload = [];
   const toDelete = [];
@@ -302,6 +293,10 @@ async function main() {
     return;
   }
   if (toUpload.length === 0 && toDelete.length === 0) {
+    // 仍刷新本地 manifest 缓存，避免开发机清单落后云端
+    if (remoteManifest) {
+      fs.writeFileSync(MANIFEST_LOCAL, JSON.stringify(remoteManifest, null, 2), 'utf-8');
+    }
     console.log('无变更，已是最新。');
     return;
   }
@@ -328,16 +323,27 @@ async function main() {
     for (const rp of toDelete) await deleteObject(`${CDN_FILE_PREFIX}/${rp}`);
   }
 
+  /**
+   * 合并清单：默认保留远端已有条目，再用本地扫描覆盖。
+   * 禁止在 cdn:strip 后用残缺本地扫描整表覆写（曾把 476→15，导致真机立绘全挂）。
+   * --prune 时才以本地为权威全集。
+   */
+  const mergedFiles = PRUNE
+    ? { ...localManifest }
+    : { ...oldFiles, ...localManifest };
   const newManifest = {
     version: oldVersion + 1,
     updated: new Date().toISOString(),
     filePrefix: CDN_FILE_PREFIX,
-    files: localManifest,
+    files: mergedFiles,
   };
   const tmpManifest = path.join(__dirname, '_tmp_cdn_manifest.json');
   fs.writeFileSync(tmpManifest, JSON.stringify(newManifest, null, 2), 'utf-8');
   try {
-    await putObject(`${CDN_FILE_PREFIX}/manifest.json`, tmpManifest, 'application/json');
+    // manifest 必须禁边缘缓存，否则 strip 后残缺清单会长时间毒害真机
+    await putObject(`${CDN_FILE_PREFIX}/manifest.json`, tmpManifest, 'application/json', {
+      'Cache-Control': 'no-cache, max-age=0, must-revalidate',
+    });
   } finally {
     try { fs.unlinkSync(tmpManifest); } catch (_) {}
   }

@@ -15,7 +15,7 @@ import { UI_IMAGES } from '@/config/Assets';
 import { COLORS, FONT_SIZE } from './theme';
 import { makeText } from './text';
 
-export type NamePlaqueSize = 'sm' | 'md' | 'lg' | 'xl';
+export type NamePlaqueSize = 'sm' | 'md' | 'lg' | 'xl' | 'xxl';
 export type NamePlaquePlate = 'title' | 'banner' | 'modal' | 'scene';
 
 export interface NamePlaqueOpts {
@@ -50,6 +50,8 @@ const SIZE_FONT: Record<NamePlaqueSize, number> = {
   md: FONT_SIZE.md,
   lg: FONT_SIZE.lg,
   xl: FONT_SIZE.xl,
+  /** 召唤结果等全屏英雄标题 */
+  xxl: 56,
 };
 
 interface PlateStyle {
@@ -134,22 +136,27 @@ export function makePageTitlePlaque(opts: {
 }
 
 /**
- * 弹窗标题匾（每日签到 / 每日任务）：祥云奶油横匾，对齐 checkin 原型。
+ * 弹窗标题匾（每日签到 / 每日任务 / 召唤结果）：祥云奶油横匾。
+ * 中段须够宽，否则会按字宽强制缩字（召唤结果曾因此显得过小）。
  */
 export function makeModalTitlePlaque(opts: {
   text: string;
   /** 弹窗内容宽，用于夹匾宽 */
   panelWidth: number;
   disabled?: boolean;
+  size?: NamePlaqueSize;
+  height?: number;
 }): NamePlaqueView {
-  // 匾宽略收，给左右祥云留帽；字号用 xl，避免再被中段裁窄缩没
-  const maxW = Math.min(520, opts.panelWidth - 100);
-  const minW = Math.min(420, maxW);
+  const size = opts.size ?? 'xl';
+  const height = opts.height ?? 118;
+  // 少扣边距，保证奶油中段盖住四字标题
+  const maxW = Math.min(560, Math.max(360, opts.panelWidth - 48));
+  const minW = Math.min(460, maxW);
   return makeNamePlaque({
     text: opts.text,
     plate: 'modal',
-    size: 'xl',
-    height: 118,
+    size,
+    height,
     minWidth: minW,
     maxWidth: maxW,
     disabled: opts.disabled,
@@ -239,7 +246,8 @@ export function makeNamePlaque(opts: NamePlaqueOpts): PIXI.Container {
   const title = makeText(opts.text, {
     size: fontSize,
     fill,
-    bold: true,
+    bold: false,
+    role: 'title',
     anchor: 0.5,
     ...(useStroke
       ? { strokeColor: 0xfdf3df, strokeWidth }

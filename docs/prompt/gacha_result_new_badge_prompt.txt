@@ -1,0 +1,6 @@
+Mobile game UI asset ONLY: small mint-jade oval pill badge shape for "NEW" tag.
+Landscape capsule / pill silhouette, glossy jade green (#6aa84f) with soft gold rim,
+subtle highlight on top edge, soft drop shadow. Empty center (NO TEXT, no letters,
+no NEW word, no Chinese). Transparent outside the pill.
+Style: Q-version xianxia casual gacha UI chrome, crisp edges.
+Centered on square canvas with transparent outside.

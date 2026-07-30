@@ -9,7 +9,6 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
 import { TextureCache } from '@/core/TextureCache';
-import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import { gachaPreloadImages, gachaPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ELEMENT_NAME } from '@/balance/ui';
@@ -25,16 +24,24 @@ import { gachaPoolPets } from '@/game/playerGacha';
 import { adUsesLeft, adUsesLeftText, watchAd } from '@/game/adGate';
 import { reportQuest } from '@/game/dailyQuestTracker';
 import {
-  BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES,
+  BACKGROUND_IMAGES, UI_IMAGES, UI_FX_IMAGES, skillIconImage,
 } from '@/config/Assets';
 import {
-  COLORS, FONT_SIZE, RADIUS,
+  COLORS, FONT_SIZE,
   makeBackButton, makeButton, makeCoverBackground, makePanel, makeText, makePageTitlePlaque,
-  attachRarityBadge, makeCurrencyLabel, makeProgressBar, makeActionButton,
+  makeModalTitlePlaque, makeCurrencyLabel, makeProgressBar, makeActionButton,
   SceneFx, type ActionButtonHandle,
 } from '@/ui';
 import { GachaRevealSequence } from './gacha/gachaRevealSequence';
-import { buildGachaCompareCard, pickBestNewOutcome } from './gacha/gachaCompareCard';
+import { buildGachaCompareCard, pickFeaturedOutcome } from './gacha/gachaCompareCard';
+import {
+  buildGachaResultCard, multiResultCardSize, singleResultCardSize,
+  RESULT_CARD_UNDER_HANG,
+} from './gacha/gachaResultCard';
+import {
+  buildGachaShardChip, buildGachaShardResult,
+  multiShardChipSize, singleShardResultSize,
+} from './gacha/gachaShardResult';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
@@ -73,13 +80,13 @@ export class GachaScene implements Scene {
     await ensureAssets(gachaPreloadImages()).catch((e) => {
       console.warn('[Gacha] 壳层资源加载失败', e);
     });
+    await ensurePetAvatars(gachaPetAvatarEntries()).catch((e) => {
+      console.warn('[Gacha] 头像预热失败', e);
+    });
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'gacha') return;
     this._ensurePage();
     this._build();
-    void ensurePetAvatars(gachaPetAvatarEntries()).catch((e) => {
-      console.warn('[Gacha] 头像预热失败', e);
-    });
   }
 
   /** 保证 _page 挂载到 container 且未销毁 */
@@ -373,7 +380,7 @@ export class GachaScene implements Scene {
       highRarityCount: list.filter((o) => o.rarity >= 3).length,
     });
     this._lastCount = count;
-    this._showResults(list);
+    void this._showResults(list);
   }
 
   // ── 结果浮层 + 揭示演出 ──
@@ -383,51 +390,128 @@ export class GachaScene implements Scene {
     this._reveal = null;
     this._fx?.destroy();
     this._fx = null;
+    this._page.visible = true;
   }
 
-  private _showResults(outcomes: PullOutcome[]): void {
+  private async _showResults(outcomes: PullOutcome[]): Promise<void> {
+    // 对比区技能圆标在 pkg-fx：出货后再 ensure，避免量产技只显示首字占位
+    const skillPaths = outcomes
+      .map((o) => PET_MAP.get(o.petId)?.skillId)
+      .filter((id): id is string => !!id)
+      .map((id) => skillIconImage(id));
+    if (skillPaths.length > 0) {
+      await ensureAssets(skillPaths).catch((e) => {
+        console.warn('[GachaScene] 技能图标预热失败', e);
+      });
+    }
+
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     this._teardownResults();
     this._setMainPullButtonsEnabled(false);
+    // 隐藏主界面（保底条/UP/金蛋按钮），避免透出打乱结果页
+    this._page.visible = false;
 
     const overlay = new PIXI.Container();
     this.container.addChild(overlay);
 
+    // 仍用砸蛋山水底，但遮罩加厚，金蛋不再抢戏
+    overlay.addChild(makeCoverBackground(BACKGROUND_IMAGES.gachaEgg, w, h));
+    const allDuplicate = outcomes.every((o) => o.duplicate);
     const scrim = new PIXI.Graphics();
-    scrim.beginFill(COLORS.scrim, 0.82);
+    // 纯碎片：遮罩略浅，弱化「砸蛋大庆」感
+    scrim.beginFill(0x1a2a24, allDuplicate ? 0.42 : 0.55);
     scrim.drawRect(0, 0, w, h);
     scrim.endFill();
     scrim.eventMode = 'static';
     scrim.hitArea = new PIXI.Rectangle(0, 0, w, h);
-    // 吸收空白区域点击，避免穿透到底层主界面按钮
     bindPointerTap(scrim, () => {});
     overlay.addChild(scrim);
 
-    // 受震屏影响的舞台层（scrim 不参与，避免露边）
     const stage = new PIXI.Container();
     overlay.addChild(stage);
     const fxBack = new PIXI.Container();
     const cardsLayer = new PIXI.Container();
     const fxFront = new PIXI.Container();
 
-    const heading = makeText(outcomes.length > 1 ? '十连结果' : '召唤结果', {
-      size: FONT_SIZE.lg, fill: COLORS.textInverse, bold: true, anchor: 0.5,
+    // ── V2：标题下紧贴主视觉 → 对比区 → 底栏等宽贴图钮 ──
+    const btnH = 80;
+    const btnBottomPad = Math.max(14, Game.safeBottom + 8);
+    const btnCenterY = h - btnBottomPad - btnH / 2;
+    const btnTop = btnCenterY - btnH / 2;
+
+    const gapCompareToBtn = 8;
+    /** 主视觉与对比区间距 */
+    const gapCardToCompare = 4;
+
+    const featured = pickFeaturedOutcome(outcomes);
+    let compareH = 0;
+    let compareRoot: PIXI.Container | null = null;
+    if (featured) {
+      const compare = buildGachaCompareCard({
+        w,
+        bottomY: btnTop - gapCompareToBtn,
+        outcome: featured,
+        onDeployed: () => {
+          Platform.showToast(`${PET_MAP.get(featured.petId)?.name ?? ''} 已上阵`);
+          compareRoot?.destroy({ children: true });
+          compareRoot = null;
+        },
+      });
+      if (compare) {
+        compareH = compare.height;
+        compareRoot = compare.root;
+        compareRoot.visible = false;
+        overlay.addChild(compareRoot);
+      }
+    }
+
+    const heading = makeModalTitlePlaque({
+      text: allDuplicate
+        ? '碎片转化'
+        : (outcomes.length > 1 ? '十连结果' : '召唤结果'),
+      // 加宽中段 + xxl，避免四字标题被花边夹窄后强制缩字
+      panelWidth: Math.min(680, w - 40),
+      size: 'xxl',
+      height: 132,
     });
-    heading.position.set(w / 2, Game.safeTop + 24);
+    const headingY = Game.safeTop + 40;
+    heading.position.set(w / 2, headingY);
+
+    let cardsTop = headingY + (heading.plaqueH ?? 96) * 0.5 + 2;
+    if (allDuplicate) {
+      const sub = makeText('—— 重复召唤 ——', {
+        size: FONT_SIZE.sm,
+        fill: COLORS.textSub,
+        bold: true,
+        anchor: 0.5,
+      });
+      sub.position.set(w / 2, cardsTop + 10);
+      stage.addChild(sub);
+      cardsTop += 28;
+    }
+    const cardsBottom = compareH > 0
+      ? btnTop - gapCompareToBtn - compareH - gapCardToCompare
+      : btnTop - 12;
 
     stage.addChild(fxBack, heading, cardsLayer, fxFront);
 
-    const gridTop = Game.safeTop + 72;
-    const cards = this._buildResultCards(outcomes, gridTop);
+    const cards = this._buildResultCards(outcomes, cardsTop, cardsBottom);
     cards.forEach((c) => cardsLayer.addChild(c));
 
-    // 特效宿主（在舞台之上、按钮之下；flash 在最顶但不拦截）
+    // 底栏按钮先建好，演出结束再显示
+    const footer = this._buildResultButtons(overlay, btnCenterY, () => {
+      this._teardownResults();
+      this._page.visible = true;
+      overlay.destroy({ children: true });
+      this._build();
+    });
+    footer.visible = false;
+
     this._fx = new SceneFx();
     this._fx.build(overlay, w, h, stage);
     const fx = this._fx;
 
-    // 跳过按钮（演出中可见）
     const skipBtn = makeButton({
       label: '跳过', width: 110, height: 48, variant: 'ghost',
       onTap: () => this._reveal?.skip(),
@@ -435,7 +519,9 @@ export class GachaScene implements Scene {
     skipBtn.position.set(Math.min(w - 90, Game.contentRightX(20)), Game.safeHeaderCenterY);
     overlay.addChild(skipBtn);
 
-    const centerY = gridTop + (outcomes.length > 1 ? 180 : 230);
+    const centerY = cards.length === 1
+      ? cards[0].y
+      : (cardsTop + cardsBottom) / 2;
     this._reveal = new GachaRevealSequence({
       w, h, centerY, outcomes,
       handles: { fxBack, fxFront, cards, heading },
@@ -445,6 +531,8 @@ export class GachaScene implements Scene {
         starburst: TextureCache.get(UI_FX_IMAGES.starburst),
         aura: TextureCache.get(UI_FX_IMAGES.auraRing),
         spark: TextureCache.get(UI_FX_IMAGES.particleSpark),
+        rays: TextureCache.get(UI_FX_IMAGES.gachaRays),
+        petal: TextureCache.get(UI_FX_IMAGES.gachaPetal),
       },
       flash: (color, peak, dur) => fx.flash(color, peak, dur),
       shake: (lvl) => { if (lvl === 'heavy') fx.shakeHeavy(); else if (lvl === 'medium') fx.shakeMedium(); else fx.shakeLight(); },
@@ -458,40 +546,20 @@ export class GachaScene implements Scene {
       vibrate: (p) => Platform.vibrateShort(p),
       onDone: () => {
         skipBtn.visible = false;
-        this._buildCompareCard(overlay, outcomes);
-        this._buildResultButtons(overlay, () => {
-          this._teardownResults();
-          overlay.destroy({ children: true });
-          this._build(); // _build 会按最新灵玉重建主界面按钮
-        });
+        if (compareRoot) compareRoot.visible = true;
+        footer.visible = true;
       },
     });
     this._reveal.play();
   }
 
-  /** NEW 出货战力对比卡 + 一键上阵（无 NEW 或无可对比对象时不展示） */
-  private _buildCompareCard(overlay: PIXI.Container, outcomes: readonly PullOutcome[]): void {
-    const best = pickBestNewOutcome(outcomes);
-    if (!best) return;
-    const h = Game.logicHeight;
-    // 底部「再抽 / 确定」按钮区顶边约在 h-100，对比卡与其留 14px 间距
-    const resultBtnTop = h - 100;
-    const card = buildGachaCompareCard({
-      w: Game.logicWidth,
-      bottomY: resultBtnTop - 14,
-      outcome: best,
-      onDeployed: () => {
-        Platform.showToast(`${PET_MAP.get(best.petId)?.name ?? ''} 已上阵`);
-        card?.root.destroy({ children: true });
-      },
-    });
-    if (card) overlay.addChild(card.root);
-  }
-
-  /** 结果操作按钮：再抽一次（灵玉足够）+ 确定 */
-  private _buildResultButtons(overlay: PIXI.Container, onClose: () => void): void {
+  /** 结果底栏：奶油 / 翠绿等宽等高贴图钮（对齐 V2） */
+  private _buildResultButtons(
+    overlay: PIXI.Container,
+    centerY: number,
+    onClose: () => void,
+  ): PIXI.Container {
     const w = Game.logicWidth;
-    const h = Game.logicHeight;
     const g = ECONOMY.gacha;
     const el = this._activePoolElement();
     const affordable = this._lastCount === 10
@@ -499,99 +567,93 @@ export class GachaScene implements Scene {
       : PlayerData.lingyu >= g.singleCost;
     const canRepull = affordable && PlayerData.gachaPoolIds(el).length > 0;
 
-    const btnW = 260;
-    const y = h - 100;
+    const wrap = new PIXI.Container();
+    // 两侧严格同尺寸，避免 cream 贴图视觉偏矮
+    const btnW = 300;
+    const btnH = 80;
+    const gap = 18;
 
-    const again = makeButton({
-      label: `再抽 ${this._lastCount === 10 ? '十连' : '单抽'}`, width: btnW, height: 72,
-      variant: 'recruit', enabled: canRepull,
+    const again = makeActionButton({
+      title: `再抽 ${this._lastCount === 10 ? '十连' : '单抽'}`,
+      width: btnW, height: btnH, variant: 'cream', enabled: canRepull,
+      fontSize: FONT_SIZE.md,
       onTap: () => {
         this._teardownResults();
+        this._page.visible = true;
         overlay.destroy({ children: true });
         this._doPull(this._lastCount);
       },
     });
-    again.position.set(w / 2 - btnW / 2 - 14, y);
-    overlay.addChild(again);
+    again.position.set(w / 2 - (btnW + gap) / 2, centerY);
+    wrap.addChild(again);
 
-    const confirm = makeButton({
-      label: '确定', width: btnW, height: 72, variant: 'success',
+    const confirm = makeActionButton({
+      title: '确定', width: btnW, height: btnH, variant: 'success',
+      fontSize: FONT_SIZE.md,
       onTap: onClose,
     });
-    confirm.position.set(w / 2 + btnW / 2 + 14, y);
-    overlay.addChild(confirm);
+    confirm.position.set(w / 2 + (btnW + gap) / 2, centerY);
+    wrap.addChild(confirm);
+
+    overlay.addChild(wrap);
+    return wrap;
   }
 
-  private _buildResultCards(outcomes: PullOutcome[], startY: number): PIXI.Container[] {
+  /**
+   * 结果主视觉：
+   * - 单抽新宠 → 大金框；单抽重复 → 碎片转化英雄区
+   * - 十连：新宠大金框格，重复用小碎晶格（有新宠时整宠仍占主视觉权重）
+   */
+  private _buildResultCards(
+    outcomes: PullOutcome[],
+    topY: number,
+    bottomY: number,
+  ): PIXI.Container[] {
     const w = Game.logicWidth;
-    const cols = outcomes.length > 1 ? 5 : 1;
-    const cardW = outcomes.length > 1 ? 120 : 280;
-    const cardH = cardW * 1.3;
-    const gap = 16;
+    const multi = outcomes.length > 1;
+    const areaH = Math.max(220, bottomY - topY);
+
+    if (!multi) {
+      const o = outcomes[0];
+      if (o.duplicate) {
+        const { w: sw, h: sh } = singleShardResultSize(areaH, Math.min(520, w - 40));
+        const card = buildGachaShardResult(o, sw, sh);
+        card.position.set(w / 2, topY + areaH / 2);
+        return [card];
+      }
+      const { cardW, cardH } = singleResultCardSize(
+        areaH, Math.min(560, w - 24), RESULT_CARD_UNDER_HANG,
+      );
+      const card = buildGachaResultCard(o, cardW, cardH);
+      const hang = RESULT_CARD_UNDER_HANG;
+      const topCy = topY + cardH / 2;
+      const botCy = bottomY - hang - cardH / 2;
+      card.position.set(w / 2, Math.max(topCy, botCy));
+      return [card];
+    }
+
+    const gap = 12;
+    const cols = 5;
+    const rows = Math.ceil(outcomes.length / cols);
+    // 混抽时格宽取整宠卡；纯碎片时用碎晶格
+    const petSize = multiResultCardSize();
+    const shardSize = multiShardChipSize();
+    const cardW = Math.max(petSize.cardW, shardSize.w);
+    const cardH = Math.max(petSize.cardH, shardSize.h);
     const rowW = cols * cardW + (cols - 1) * gap;
     const left = w / 2 - rowW / 2;
+    const gridH = rows * cardH + (rows - 1) * gap;
+    const startY = topY + Math.max(0, (areaH - gridH) / 2);
 
     return outcomes.map((o, i) => {
       const col = i % cols;
       const row = Math.floor(i / cols);
-      const card = this._buildResultCard(o, cardW, cardH);
-      // 以中心为锚，便于揭示时从中心回弹
-      card.pivot.set(cardW / 2, cardH / 2);
-      card.position.set(
-        left + col * (cardW + gap) + cardW / 2,
-        startY + row * (cardH + gap) + cardH / 2,
-      );
+      const card = o.duplicate
+        ? buildGachaShardChip(o, shardSize.w, shardSize.h)
+        : buildGachaResultCard(o, petSize.cardW, petSize.cardH);
+      const cy = startY + row * (cardH + gap) + cardH / 2;
+      card.position.set(left + col * (cardW + gap) + cardW / 2, cy);
       return card;
     });
-  }
-
-  private _buildResultCard(o: PullOutcome, cardW: number, cardH: number): PIXI.Container {
-    const pet = PET_MAP.get(o.petId);
-    const def = getRarity(o.rarity);
-    const card = new PIXI.Container();
-
-    card.addChild(makePanel({
-      width: cardW, height: cardH, radius: RADIUS.small, centered: false,
-      bg: COLORS.panelBg, border: def.color, borderWidth: 3,
-    }));
-
-    const avatarSize = cardW * 0.66;
-    const avatarLeft = (cardW - avatarSize) / 2;
-    const avatarTop = cardH * 0.16;
-
-    const avatar = new PIXI.Sprite(PIXI.Texture.EMPTY);
-    avatar.width = avatarSize;
-    avatar.height = avatarSize;
-    avatar.position.set(avatarLeft, avatarTop);
-    card.addChild(avatar);
-    bindPetAvatarSprite(avatar, o.petId, 1, (tex) => {
-      avatar.texture = tex;
-      avatar.width = avatarSize;
-      avatar.height = avatarSize;
-    });
-    attachRarityBadge(card, o.rarity, avatarLeft, avatarTop, avatarSize, { variant: 'list' });
-
-    const name = pet?.name ?? o.petId;
-    const nameText = makeText(name.length > 5 ? `${name.slice(0, 5)}…` : name, {
-      size: cardW > 200 ? FONT_SIZE.sm : FONT_SIZE.xxs,
-      fill: COLORS.textMain, bold: true, anchor: 0.5,
-    });
-    nameText.position.set(cardW / 2, cardH * 0.74);
-    card.addChild(nameText);
-
-    // NEW SSR/UR 展示护航包内容（碎片可直升 2★，经验可立刻拉等级）
-    const newText = o.escort
-      ? (cardW > 200 ? `NEW · 护航 +${o.escort.shards}碎片 +${o.escort.exp}经验` : 'NEW·护航包')
-      : 'NEW';
-    const tagText = o.duplicate ? `+${o.shards} 碎片` : newText;
-    const tag = makeText(tagText, {
-      size: cardW > 200 ? FONT_SIZE.xs : FONT_SIZE.xxs,
-      fill: o.duplicate ? COLORS.textSub : COLORS.btnSuccessBorder,
-      bold: true, anchor: 0.5,
-    });
-    tag.position.set(cardW / 2, cardH * 0.88);
-    card.addChild(tag);
-
-    return card;
   }
 }

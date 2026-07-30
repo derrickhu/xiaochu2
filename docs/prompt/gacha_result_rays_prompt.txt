@@ -1,0 +1,7 @@
+Mobile game VFX sprite ONLY: soft golden radial light rays for gacha summon reveal.
+Square 1:1 canvas. Pure BLACK background (#000000). Bright warm gold / champagne rays
+radiating from exact center outward in all directions (sunburst / god-rays).
+Soft, premium, not harsh neon. Some rays longer, some shorter, gentle glow bloom at center.
+Style: Q-version xianxia casual gacha, polished cel-shade glow.
+NO TEXT, no labels, no characters, no UI chrome, no egg, no card.
+Ready for additive blend mode over dark scrim.

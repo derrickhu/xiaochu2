@@ -27,7 +27,7 @@ import { analytics } from '@/analytics';
 import { UI_IMAGES } from '@/config/Assets';
 import { ensureAssets } from '@/config/Subpackages';
 import {
-  COLORS, FONT_SIZE, FONT_FAMILY_DISPLAY,
+  COLORS, FONT_SIZE,
   makeActionButton, makeCloseButton, makePanel, makeText, makeModalTitlePlaque, pulse,
 } from '@/ui';
 import {
@@ -361,7 +361,7 @@ export class DailyQuestPanel extends PIXI.Container {
       size: FONT_SIZE.sm,
       fill: claimed ? COLORS.textDisabled : 0x5a3210,
       bold: true, anchor: 0.5,
-      fontFamily: FONT_FAMILY_DISPLAY,
+      role: 'title',
     });
     title.position.set(0, -h / 2 + 28);
     content.addChild(title);

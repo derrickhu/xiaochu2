@@ -1,0 +1,35 @@
+ART STYLE (xiaochu2 brand):
+Q-version cute-chibi xianxia guofeng mobile UI.
+Soft cel-shade, crisp edges, chubby proportions.
+Palette: mint-teal + cream parchment (#fdf3df) + antique gold (#e8a33d) + jade green (#6aa84f).
+FORBIDDEN: photoreal, dark fantasy, purple AI defaults, flat Material cards, giant ornate gold pet result card (reserved for NEW pets only).
+
+SCREEN: 碎片转化结算（单抽重复）9:16 full UI prototype.
+Use reference image for brand palette, misty mountain background mood, footer button style, and bottom parchment panel language ONLY.
+Do NOT copy the large gold-filigree full pet portrait card from the reference.
+
+GOAL: First glance must read as "got shards", NOT "got a pet card". Calmer, more utilitarian than NEW-pet celebration.
+
+COMPOSITION (top → bottom):
+1) TOP: jade back chevron + centered cream plaque title with Chinese text 碎片转化. Small line under plaque: 重复召唤.
+2) CENTER HERO (not a tall gold pet frame):
+   - Soft jade/amber crystal shard cluster / spirit-token pile as dominant visual (~40% of upper half)
+   - Gentle mint sparkles; NO strong golden egg rays; NO egg silhouette
+   - Small circular pet portrait badge (~24% screen width) below or overlapping shard cluster — cute orange fire-fox chibi, modest thin gold rim, NOT full ornate result card
+   - Pet name under badge: 炽羽火狐
+   - Huge primary reward: +5 in extra-large jade/gold numerals + 碎片 beside it — this is the visual climax
+3) BOTTOM info panel (compact cream + thin gold border, soft cloud corner ornaments OK):
+   - 已拥有 R·炽羽火狐 + small jade pill 输出
+   - One cream reward chip only: 获得 +5 碎片
+   - Optional thin line: 碎片 12 / 20
+   - No large three-stat compare grid
+4) FOOTER: cream button 再抽单抽 + jade button 确定
+
+DIFFERENCE vs NEW-pet screen:
+- No full-height ornate gold pet card
+- No NEW badge
+- Title is 碎片转化
+- Shard number is hero; pet is supporting identity
+- Calmer lighting
+
+Chinese UI text as specified. Aspect 9:16 mobile full screen.

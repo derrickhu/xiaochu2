@@ -305,6 +305,13 @@ class PlatformServiceClass {
     } catch (_) {}
   }
 
+  /** 关掉当前原生 toast（激励广告关闭后宿主偶发自带提示时用） */
+  hideToast(): void {
+    try {
+      this._api?.hideToast?.();
+    } catch (_) {}
+  }
+
   /**
    * 激励视频广告。已配置 createRewardedVideoAd 则拉起；
    * 否则开发/本地环境短暂提示后视为成功，便于联调各广告位。
@@ -328,7 +335,11 @@ class PlatformServiceClass {
 
       if (!ad) {
         this.showToast('广告播放中…');
-        setTimeout(() => resolve(true), 700);
+        setTimeout(() => {
+          // 桩结束立刻清掉，避免和业务侧翻倍数额动画叠在一起
+          this.hideToast();
+          resolve(true);
+        }, 700);
         return;
       }
 
@@ -489,6 +500,47 @@ class PlatformServiceClass {
     } catch (e) {
       opts.fail?.(e as { errMsg?: string });
     }
+  }
+
+  /**
+   * 加载本地自定义字体。
+   * 优先 wx/tt.loadFont(path)（同步返回 family）；否则走 loadFontFace。
+   * 非小游戏环境返回 null，由 FontService 用 @font-face 兜底。
+   */
+  loadFont(path: string, family: string): Promise<string | null> {
+    if (!this.isMinigame) return Promise.resolve(null);
+
+    // 微信/抖音小游戏：loadFont 最稳，直接返回可用 family 名
+    if (typeof this._api?.loadFont === 'function') {
+      try {
+        const loaded = this._api.loadFont(path) as string | undefined;
+        return Promise.resolve(loaded || family);
+      } catch (e) {
+        console.warn('[Platform] loadFont 失败', path, e);
+      }
+    }
+
+    if (typeof this._api?.loadFontFace === 'function') {
+      return new Promise((resolve) => {
+        try {
+          this._api.loadFontFace({
+            family,
+            source: `url("${path}")`,
+            global: true,
+            success: () => resolve(family),
+            fail: (err: unknown) => {
+              console.warn('[Platform] loadFontFace 失败', path, err);
+              resolve(null);
+            },
+          });
+        } catch (e) {
+          console.warn('[Platform] loadFontFace 异常', path, e);
+          resolve(null);
+        }
+      });
+    }
+
+    return Promise.resolve(null);
   }
 }
 

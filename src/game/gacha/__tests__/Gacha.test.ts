@@ -1,6 +1,6 @@
 /**
  * 抽卡引擎契约测试：出货概率、硬保底、UR 天井、十连保底、重复转碎片、
- * 全花名册池、UP 池、通用碎片、护航包。RNG 注入保证确定性。
+ * 全花名册池、UP 池、通用碎片。RNG 注入保证确定性。
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -117,33 +117,25 @@ describe('抽卡：全花名册池（可达性修复）', () => {
   });
 });
 
-describe('抽卡：高稀有护航包', () => {
-  it('NEW SSR 附赠本体碎片 + 经验包并回写 outcome', () => {
+describe('抽卡：新宠不再附赠护航包', () => {
+  it('NEW SSR 仅解锁本体，不附赠碎片/经验包', () => {
     const data = richData();
     const expBefore = data.exp;
     const outcome = pullGachaSingle(data, seqRng([0.9, 0]))!;
     expect(outcome.rarity).toBe(3);
     expect(outcome.duplicate).toBe(false);
-    expect(outcome.escort).toEqual(ECONOMY.gacha.escort[3]);
-    expect(data.ownedPets[outcome.petId].shards).toBe(ECONOMY.gacha.escort[3].shards);
-    expect(data.exp - expBefore).toBe(ECONOMY.gacha.escort[3].exp);
+    expect(outcome.shards).toBe(0);
+    expect(data.ownedPets[outcome.petId].shards).toBe(0);
+    expect(data.exp).toBe(expBefore);
   });
 
-  it('重复出货不发护航包', () => {
+  it('重复出货仍按稀有度转碎片', () => {
     const data = richData();
     const first = pullGachaSingle(data, seqRng([0.9, 0]))!;
     const dup = pullGachaSingle(data, seqRng([0.9, 0]))!;
     expect(dup.petId).toBe(first.petId);
     expect(dup.duplicate).toBe(true);
-    expect(dup.escort).toBeUndefined();
-  });
-
-  it('NEW R/SR 无护航包', () => {
-    const data = richData();
-    // rng1=0.7 → SR 档（R 0~0.55 / SR 0.55~0.85）；rng2=0 → 档内首只
-    const outcome = pullGachaSingle(data, seqRng([0.7, 0]))!;
-    expect(outcome.rarity).toBe(2);
-    expect(outcome.escort).toBeUndefined();
+    expect(dup.shards).toBe(ECONOMY.gacha.duplicateShards[dup.rarity]);
   });
 });
 

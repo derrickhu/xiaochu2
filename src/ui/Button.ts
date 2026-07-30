@@ -60,7 +60,7 @@ export function makeButton(opts: ButtonOpts): ButtonHandle {
 
   const btn = new PIXI.Container() as ButtonHandle;
   const bg = new PIXI.Graphics();
-  const text = makeText(label, { size: fontSize, bold: true, anchor: 0.5 });
+  const text = makeText(label, { size: fontSize, bold: false, anchor: 0.5, role: 'title' });
   btn.addChild(bg, text);
 
   let enabled = opts.enabled ?? true;
