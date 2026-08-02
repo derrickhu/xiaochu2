@@ -120,13 +120,13 @@ export class BattleResultOverlay {
     const context = opts.context;
     const extraLines: string[] = [];
 
-    // 每日首胜翻倍：最便宜的回访钩子，直接放大本场基础产出
+    // 每日首胜加成：最便宜的回访钩子，直接放大本场基础产出
     const firstWin = PlayerData.consumeFirstWin();
     const result = firstWin
       ? {
         ...raw,
-        coins: raw.coins * DAILY_FIRST_WIN_MULT,
-        exp: raw.exp * DAILY_FIRST_WIN_MULT,
+        coins: Math.floor(raw.coins * DAILY_FIRST_WIN_MULT),
+        exp: Math.floor(raw.exp * DAILY_FIRST_WIN_MULT),
       }
       : raw;
     if (firstWin) extraLines.push(`每日首胜 · 奖励 ×${DAILY_FIRST_WIN_MULT}`);
@@ -159,9 +159,10 @@ export class BattleResultOverlay {
       }));
     } else {
       const repeat = PlayerData.isRepeatClear(ctrl.stage.id);
-      // 实发币额：重复通关会打折，翻倍广告必须按「实发」翻
+      // 实发：重复通关币/经验同衰减，翻倍广告必须按「实发」翻
       if (repeat) {
         granted.coins = Math.floor(result.coins * ECONOMY.coin.repeatClearPct);
+        granted.exp = Math.floor(result.exp * ECONOMY.coin.repeatClearPct);
       }
       granted.lingyu = PlayerData.recordClear(ctrl.stage.id, result.stars, result.coins);
       PlayerData.addExp(granted.exp);
@@ -172,7 +173,8 @@ export class BattleResultOverlay {
         if (PlayerData.unlockPet(pid)) newlyUnlocked.push(pid);
       }
       if (repeat) {
-        extraLines.push(`重复通关 · 灵宠币按 ${Math.round(ECONOMY.coin.repeatClearPct * 100)}% 结算`);
+        const pct = Math.round(ECONOMY.coin.repeatClearPct * 100);
+        extraLines.push(`重复通关 · 灵宠币/经验按 ${pct}% 结算`);
       }
       reportQuest('stageClear');
     }

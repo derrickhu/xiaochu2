@@ -63,6 +63,8 @@ export class BattleHud {
   private _enemyHpFrame!: PIXI.Sprite | null;
   private _enemyHpText!: PIXI.Text;
   private _enemyElementRow!: PIXI.Container;
+  /** 攻击倒计时：圆形底框 + 文案（怪右侧侧挂） */
+  private _enemyCdBadge!: PIXI.Container;
   private _enemyCdText!: PIXI.Text;
   private _heroHpFill!: PIXI.Graphics;
   private _heroHpFrame!: PIXI.Sprite | null;
@@ -166,7 +168,7 @@ export class BattleHud {
     g.drawRoundedRect(cx - bw / 2, cy - bh / 2, bw, bh, bh / 2);
     g.endFill();
     this._stageSubText.position.set(cx, cy);
-    // Debuff 图标锚在名匾右侧，避免压住「N 回合后攻击」
+    // Debuff 图标锚在名匾右侧，与左右侧挂 HUD 错开
     const iconSize = 34;
     const gap = 8;
     const maxX = Game.logicWidth - UI.board.marginX - iconSize / 2;
@@ -206,7 +208,7 @@ export class BattleHud {
     const turn = this._stageTurnText;
     t.scale.set(1);
     turn.scale.set(1);
-    t.style.fontSize = FONT_SIZE.xs; // 19：长标题（含 BOSS/波次）需避开两端花边
+    t.style.fontSize = FONT_SIZE.xs; // 19：长标题（含首领/波次）需避开两端花边
     turn.style.fontSize = FONT_SIZE.xxs + 2;
     try { t.updateText(true); } catch { /* 部分运行时无 updateText */ }
     try { turn.updateText(true); } catch { /* 部分运行时无 updateText */ }
@@ -288,7 +290,7 @@ export class BattleHud {
     return formatEnemyBattleName(this._ctrl.enemy.def);
   }
 
-  /** 敌人区：立绘 + 金框血条 + 倒计时 + 克制标签（敌人名叠在血条上，见 buildStageHeader） */
+  /** 敌人区：立绘 + 金框血条 + 侧挂倒计时/克制（敌人名叠在血条上，见 buildStageHeader） */
   buildEnemyArea(parent: PIXI.Container): void {
     const w = Game.logicWidth;
     const { enemyCenterX, enemyCenterY, headerY, enemyTagY, enemyHpBarY, enemyCdY } = this._layout;
@@ -324,21 +326,55 @@ export class BattleHud {
     this._enemyHpText.position.set(w / 2, enemyHpBarY + ebh / 2);
     parent.addChild(this._enemyHpText);
 
-    // 倒计时：血条与克制标签之间（mockup：白字 + 深棕描边）
+    // 倒计时：怪右侧侧挂（圆形金框底 + 双行描边字）
+    this._enemyCdBadge = new PIXI.Container();
+    this._enemyCdBadge.position.set(this._layout.enemyCdX, enemyCdY);
+    const cdBadgeSize = UI.battle.enemyAttackCdBadgeSize;
+    const cdBadgeTex = TextureCache.get(UI_BATTLE_IMAGES.attackCdBadge);
+    if (cdBadgeTex) {
+      const frame = new PIXI.Sprite(cdBadgeTex);
+      frame.anchor.set(0.5);
+      const s = cdBadgeSize / Math.max(cdBadgeTex.width, cdBadgeTex.height);
+      frame.scale.set(s);
+      this._enemyCdBadge.addChild(frame);
+    } else {
+      const g = new PIXI.Graphics();
+      const r = cdBadgeSize / 2 - 4;
+      g.beginFill(COLORS.battleTagBg, 0.96);
+      g.lineStyle(3, COLORS.battleTagBorder, 1);
+      g.drawCircle(0, 0, r);
+      g.endFill();
+      this._enemyCdBadge.addChild(g);
+      // CDN/分包未就绪时异步补贴图
+      void TextureCache.load(UI_BATTLE_IMAGES.attackCdBadge).then((tex) => {
+        if (!displayAlive(this._enemyCdBadge) || this._enemyCdBadge.children.some((c) => c instanceof PIXI.Sprite)) {
+          return;
+        }
+        this._enemyCdBadge.removeChildren();
+        const frame = new PIXI.Sprite(tex);
+        frame.anchor.set(0.5);
+        const s = cdBadgeSize / Math.max(tex.width, tex.height);
+        frame.scale.set(s);
+        this._enemyCdBadge.addChildAt(frame, 0);
+        this._enemyCdBadge.addChild(this._enemyCdText);
+      }).catch(() => {});
+    }
     this._enemyCdText = makeText('', {
-      size: FONT_SIZE.sm, fill: COLORS.white, bold: true, anchor: 0.5,
-      strokeColor: COLORS.battlePlaqueText, strokeWidth: 5,
+      size: FONT_SIZE.xs, fill: COLORS.battleTagText, bold: true, anchor: 0.5,
+      strokeColor: COLORS.battleTagTextStroke, strokeWidth: 4,
+      wordWrapWidth: Math.floor(cdBadgeSize * 0.72), align: 'center',
     });
-    this._enemyCdText.position.set(w / 2, enemyCdY);
-    parent.addChild(this._enemyCdText);
+    this._enemyCdBadge.addChild(this._enemyCdText);
+    parent.addChild(this._enemyCdBadge);
 
+    // 克制/抵抗：怪左侧竖排（现有胶囊标签样式）
     this._enemyElementRow = new PIXI.Container();
-    this._enemyElementRow.position.set(w / 2, enemyTagY);
+    this._enemyElementRow.position.set(this._layout.enemyTagX, enemyTagY);
     parent.addChild(this._enemyElementRow);
 
-    // 透明热区：立绘区上沿 → 克制标签下沿（不盖顶栏返回钮）
+    // 透明热区：立绘区上沿 → 血条叠层下沿（不盖顶栏返回钮）
     const hitTop = this._layout.spriteZoneTop;
-    const hitBottom = enemyTagY + 18;
+    const hitBottom = this._layout.spriteZoneBottom;
     this._enemyHitZone = new PIXI.Container();
     this._enemyHitZone.eventMode = 'static';
     this._enemyHitZone.cursor = 'pointer';
@@ -681,6 +717,7 @@ export class BattleHud {
         if (displayAlive(this._enemyContainer)) {
           this._enemyContainer.position.set(enemyCenterX, this._layout.enemyCenterY);
         }
+        this._syncEnemySideHudPos();
       }
       this._enemySprite.tint = enemySpriteTint(tier);
     };
@@ -696,6 +733,7 @@ export class BattleHud {
     if (displayAlive(this._enemyContainer)) {
       this._enemyContainer.position.set(enemyCenterX, this._layout.enemyCenterY);
     }
+    this._syncEnemySideHudPos();
     this._enemyTierRing.clear();
     if (enemyShowsTierRing(tier)) {
       const r = enemyTierRingRadius(displaySize);
@@ -717,20 +755,34 @@ export class BattleHud {
     this.refreshEnemyCd();
   }
 
-  /** 敌人属性克制提示：弱点珠 / 抵抗珠（对齐 xiao_chu） */
+  /** 敌人属性克制提示：弱点珠 / 抵抗珠，怪左侧竖排 */
   private _refreshEnemyElementTags(element: Element): void {
     this._enemyElementRow.removeChildren();
     const weak = counterElementOf(element);
     const resist = resistedElementOf(element);
-    const gap = 14;
+    const gap = 10;
     const weakBanned = this._ctrl.bannedElements.has(weak);
     const weakLabel = weakBanned ? '克制·本关封印' : '克制';
     const weakTag = this._makeElementCounterTag(weakLabel, weak, !weakBanned);
     const resistTag = this._makeElementCounterTag('抵抗', resist, false);
-    const totalW = weakTag.tagW + gap + resistTag.tagW;
-    weakTag.position.set(-totalW / 2, -weakTag.tagH / 2);
-    resistTag.position.set(-totalW / 2 + weakTag.tagW + gap, -resistTag.tagH / 2);
+    const totalH = weakTag.tagH + gap + resistTag.tagH;
+    weakTag.position.set(-weakTag.tagW / 2, -totalH / 2);
+    resistTag.position.set(-resistTag.tagW / 2, -totalH / 2 + weakTag.tagH + gap);
     this._enemyElementRow.addChild(weakTag, resistTag);
+    this._syncEnemySideHudPos();
+  }
+
+  /** 侧挂 HUD 贴怪心（立绘刷新后调用） */
+  private _syncEnemySideHudPos(): void {
+    const y = this._layout.enemyCenterY;
+    this._layout.enemyTagY = y;
+    this._layout.enemyCdY = y;
+    if (displayAlive(this._enemyElementRow)) {
+      this._enemyElementRow.position.set(this._layout.enemyTagX, y);
+    }
+    if (displayAlive(this._enemyCdBadge)) {
+      this._enemyCdBadge.position.set(this._layout.enemyCdX, y);
+    }
   }
 
   /**
@@ -786,34 +838,37 @@ export class BattleHud {
     this._animateHp(this._enemyHpDisp, ratio);
   }
 
-  /** 敌人状态行：蓄力预告（红字）优先于普攻倒计时，附加减伤状态 */
+  /** 敌人攻击倒计时徽章：蓄力预告（红字）优先于普攻倒计时，附加减伤状态 */
   refreshEnemyCd(): void {
     const enemy = this._ctrl.enemy;
+    if (!displayAlive(this._enemyCdBadge)) return;
     if (enemy.hp <= 0) {
+      this._enemyCdBadge.visible = false;
       this._enemyCdText.text = '';
       return;
     }
-    const parts: string[] = [];
+    this._enemyCdBadge.visible = true;
+    const lines: string[] = [];
     if (enemy.charging) {
-      parts.push(`⚠ 蓄力中！下回合重击 ×${enemy.charging.mult}`);
-      this._enemyCdText.style.fill = 0xc0392b;
-      const cdScale = readScale(this._enemyCdText);
+      lines.push('蓄力中', `×${enemy.charging.mult}`);
+      this._enemyCdText.style.fill = 0xffe0a8;
+      const cdScale = readScale(this._enemyCdBadge);
       if (cdScale) {
         TweenManager.cancelTarget(cdScale);
-        cdScale.set(1.25);
+        cdScale.set(1.18);
         TweenManager.to({
           target: cdScale, props: { x: 1, y: 1 },
           duration: UI.anim.chargeWarn, ease: Ease.easeOutQuad,
         });
       }
     } else {
-      parts.push(`${enemy.attackCountdown} 回合后攻击`);
-      this._enemyCdText.style.fill = COLORS.white;
+      lines.push(`${enemy.attackCountdown}回合后`, '攻击');
+      this._enemyCdText.style.fill = COLORS.battleTagText;
     }
     if (enemy.dmgReduction) {
-      parts.push(`减伤${Math.round(enemy.dmgReduction.reduction * 100)}%·剩${enemy.dmgReduction.turnsLeft}回合`);
+      lines.push(`减伤${Math.round(enemy.dmgReduction.reduction * 100)}%`);
     }
-    this._enemyCdText.text = parts.join('  ');
+    this._enemyCdText.text = lines.join('\n');
   }
 
   refreshHeroHp(): void {

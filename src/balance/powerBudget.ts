@@ -22,8 +22,9 @@ export const POWER_CURVE = {
    * - ATK 复利略低于玩家 HP 增速：铺垫关掉血但不劝退，Boss 蓄力技才是生存考验。
    * 旧值 1.40/1.38 是按旧版宠物 5~6%/级 膨胀曲线配的，压平成长后须同步下调。
    *
-   * v0.4.2：玩家 1 天可推至 8-8，后期偏软。HP 1.32→1.36（第 8 章约 +20%）、
+   * v0.4.2：曾 1 天可推至 8-8，后期偏软。HP 1.32→1.36（第 8 章约 +20%）、
    * ATK 1.26→1.29（约 +18%）、DEF 1.20→1.22；前 3 章复利差小，教学手感基本不变。
+   * v0.5：经济侧再收紧（产出/升级/刷关），目标约 4–5 天到第 7 章；敌人曲线本期不动。
    */
   enemy: {
     chapterGrowthHp: 1.36,
@@ -35,9 +36,9 @@ export const POWER_CURVE = {
   },
   /**
    * 经济产出章节成长（复利）：灵宠币 / 经验产出按此放大，与敌人曲线成对校准。
-   * v0.4.2：1.25→1.22，略放缓后期养成，配合敌人加难拉长推进天数。
+   * v0.5：1.22→1.18，放缓后期日产暴涨，配合升级涨价拉长推进天数。
    */
-  economyChapterGrowth: 1.22,
+  economyChapterGrowth: 1.18,
 } as const;
 
 /**
@@ -157,12 +158,15 @@ export function getChapterPower(chapter: number): ChapterPowerAnchor {
  *
  * 口径（与 economy.test.ts 的估算一致，改这里必须同步改那边）：
  * 一名达标玩家一天的体力预算 = 满瓶 ×2 次登录 + 广告回体 ×3，按普通关单价折算场次，
- * 场次分布取 8 成普通 + 2 成精英，并按 `coin.repeatClearPct` 记为重复通关（稳态刷关，不吃首通）。
+ * 场次分布取 8 成普通 + 2 成精英，币与经验均按 `coin.repeatClearPct` 记为重复通关
+ * （稳态刷关，不吃首通；v0.5 起经验与币同衰减）。
  *
  * 曲线形状是刻意的：**日产主要靠场次成长，不靠单关暴涨**。
  * 灵宠币出口是按稀有度定价的固定档（招募封顶 5000 / 碎片包 300~2400 / 通用包 1800），
  * 不随章节膨胀，所以币产复利压到 1.12（见 economy.ts coin.chapterGrowth 注释）；
- * 经验则必须追敌人强度，仍走 economyChapterGrowth(1.22)，故 exp 曲线陡得多。
+ * 经验则必须追敌人强度，仍走 economyChapterGrowth(1.18)，故 exp 曲线陡得多。
+ *
+ * v0.5 目标节奏：约 4–5 天到第 7 章（非一日通关）。日产锚点已按产出下调同步下修。
  *
  * 调经济的顺序：先改这里的目标，再让 coin/exp 的 stageBase 与 chapterGrowth 跟随。
  */
@@ -177,12 +181,13 @@ export interface DailyTargetAnchor {
 }
 
 /** 每日产出目标的锚点章（其余章线性插值，见 getDailyTarget） */
+/** v0.5：与 estimateDaily（重复通关币/经验同 ×0.25）对齐后的锚点 */
 export const DAILY_TARGET: Readonly<Record<number, DailyTargetAnchor>> = {
-  1: { chapter: 1, coins: 650, exp: 24_000, universal: 50 },
-  4: { chapter: 4, coins: 950, exp: 45_000, universal: 54 },
-  8: { chapter: 8, coins: 1560, exp: 106_000, universal: 56 },
-  12: { chapter: 12, coins: 2560, exp: 242_000, universal: 58 },
-  16: { chapter: 16, coins: 4200, exp: 560_000, universal: 62 },
+  1: { chapter: 1, coins: 520, exp: 4200, universal: 50 },
+  4: { chapter: 4, coins: 760, exp: 7100, universal: 54 },
+  8: { chapter: 8, coins: 1260, exp: 14_500, universal: 56 },
+  12: { chapter: 12, coins: 2040, exp: 29_100, universal: 58 },
+  16: { chapter: 16, coins: 3360, exp: 59_000, universal: 60 },
 };
 
 const DAILY_TARGET_CHAPTERS: readonly number[] = Object.keys(DAILY_TARGET)
@@ -235,10 +240,14 @@ export interface TtkBand {
 
 export type TtkStageKind = 'normal' | 'elite' | 'boss';
 
+/**
+ * v0.5：TTK 上限略放宽——「达标」改按真实首通阵容（非爆发队）验关后，
+ * 中手清关会比旧爆发队口径多 2~4 回合，上限跟着挪，避免契约倒逼虚高战力。
+ */
 export const STAGE_TTK: Readonly<Record<TtkStageKind, TtkBand>> = {
-  normal: { min: 2, max: 6 },
-  elite: { min: 3, max: 8 },
-  boss: { min: 6, max: 14 },
+  normal: { min: 2, max: 8 },
+  elite: { min: 3, max: 10 },
+  boss: { min: 6, max: 20 },
 };
 
 /** 取关卡类型的 TTK 目标（未知类型按普通关） */

@@ -142,7 +142,7 @@ describe('星级成长档案', () => {
 
 describe('petExpToNext', () => {
   it('1 级所需经验 = expBase', () => {
-    expect(petExpToNext(1)).toBe(30);
+    expect(petExpToNext(1)).toBe(45);
   });
 
   it('经验需求单调递增', () => {

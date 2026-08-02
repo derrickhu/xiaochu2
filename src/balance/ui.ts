@@ -99,9 +99,12 @@ export const UI = {
     enemyNamePlaqueH: 44,
     /** 敌人名匾底边 → 血条顶边 */
     enemyNameToHpGap: 8,
-    /** 血条 → 倒计时 → 克制标签 的垂直间距 */
-    enemyHpToCdGap: 10,
-    enemyCdToTagGap: 14,
+    /**
+     * 侧挂 HUD：克制/抵抗列、攻击倒计时相对屏左右边的中心 inset（设计像素）。
+     */
+    enemySideHudInset: 104,
+    /** 攻击倒计时圆形底框边长（设计像素） */
+    enemyAttackCdBadgeSize: 128,
     /** 宠物上滑放技能阈值（设计像素，向上位移） */
     skillSwipeThreshold: 40,
     /** 上滑预览最大位移 */

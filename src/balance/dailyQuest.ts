@@ -79,8 +79,8 @@ export const QUEST_ALL_CLEAR_REWARD: RewardBundle = {
 /** 每日出题数 */
 export const DAILY_QUEST_COUNT = 4;
 
-/** 每日首胜奖励倍率（灵宠币与经验） */
-export const DAILY_FIRST_WIN_MULT = 2;
+/** 每日首胜奖励倍率（灵宠币与经验）；v0.5 收紧 2→1.5 */
+export const DAILY_FIRST_WIN_MULT = 1.5;
 
 /** YYYY-MM-DD → 稳定整数，保证同一天全端选出同一组任务 */
 function dateSeed(dateKey: string): number {

@@ -40,7 +40,7 @@ export const STAGE_TYPE_PROFILES: Readonly<Record<StageType, StageTypeDef>> = {
     staminaCost: 9, coinMult: 1.4, expMult: 1.5, shardMult: 1.6, refresh: 'always',
   },
   boss: {
-    type: 'boss', name: 'BOSS', color: 0xffb43d,
+    type: 'boss', name: '首领', color: 0xffb43d,
     staminaCost: 12, coinMult: 2.0, expMult: 1.6, shardMult: 2.2, refresh: 'always',
   },
   dailyResource: {

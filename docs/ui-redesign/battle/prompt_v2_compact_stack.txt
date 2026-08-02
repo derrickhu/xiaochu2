@@ -1,0 +1,13 @@
+Mobile game battle UI redesign mockup, vertical 9:16 phone screen, match-3 RPG combat.
+
+REFERENCE the attached current screenshot for art style (cute slime, orbs, parchment). REDESIGN layout to remove wasted vertical space.
+
+LAYOUT DIRECTION B — "Compressed Chrome Stack":
+- Shrink top decorative header; stage info as a slim floating plaque
+- Enemy occupies a wide cinematic frame: monster larger (about 50% taller than current), centered, with subtle vignette so background doesn't feel empty
+- Merge enemy name plate + HP + countdown into ONE floating info card anchored under the monster chin — single tight block, zero large gaps
+- Team HP bar shares the same horizontal band as pet portraits (HP on top edge of pet panel, not a separate floating bar far above)
+- Reduce gaps between: enemy info → team panel → orb board. Pet panel sits closer to the board
+- Bottom: 6x5 orb board stays fully playable and clear
+
+Same cream/gold Chinese fantasy match-3 look. Monster must feel BIG and close. Clean production mockup. Chinese UI text.

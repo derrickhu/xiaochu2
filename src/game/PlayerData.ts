@@ -591,7 +591,8 @@ class PlayerDataClass {
   /**
    * 通关结算：星数取历史最佳，灵宠币累加；首通额外发灵玉（里程碑产出）。
    *
-   * 重复通关按 ECONOMY.coin.repeatClearPct 衰减发币。体力落地后重复刷已经有体力门控，
+   * 重复通关按 ECONOMY.coin.repeatClearPct 衰减发币（经验衰减在结算层 BattleResultOverlay）。
+   * 体力落地后重复刷已经有体力门控，
    * 但仍保留衰减：首通产出要明显厚于重刷，否则「推新章」会输给「回头刷熟关」，
    * 而第 1 章本身免体力，不衰减就是一个无成本的刷币口。
    * @returns 本次首通发放的灵玉（非首通为 0）

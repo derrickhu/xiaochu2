@@ -1,0 +1,11 @@
+Mobile game UI asset ONLY: ornate circular ATTACK-COUNTDOWN BADGE FRAME for battle HUD, Chinese fantasy match-3 RPG.
+
+Design requirements:
+- Centered circular badge with ornate antique gold / bronze 8-point star or mandala outer frame
+- Inner circle: warm dark brown parchment gradient, empty for Chinese text overlay
+- Thin cream/gold inner ring; soft bevel; phone-readable
+- Transparent background outside the badge
+- NO TEXT, no labels, no captions, no writing, no numbers anywhere
+- Single centered badge, square 1:1 canvas
+
+Runtime path: minigame/subpackages/pkg-battle/images/ui/battle/battle_attack_cd_badge.png

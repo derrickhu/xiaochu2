@@ -2,7 +2,7 @@
  * 持续状态可视化：敌人名匾右侧 + 英雄血条上方各一行小图标。
  *
  * 敌方 Debuff 锚在怪物名右边（layout.enemyStatusIconX/Y，由 HUD 按名匾实宽刷新），
- * 避免压住「N 回合后攻击」/克制标签。数据源为 BattleController.statuses。
+ * 与左侧克制/抵抗、右侧攻击倒计时错开。数据源为 BattleController.statuses。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';

@@ -304,6 +304,8 @@ export const UI_BATTLE_IMAGES = {
   enemyNamePlaque: `${PKG.battle}/images/ui/battle/battle_enemy_name_plaque.png`,
   /** 克制/抵抗标签羊皮纸底板 */
   counterTag: `${PKG.battle}/images/ui/battle/battle_counter_tag.png`,
+  /** 攻击倒计时圆形底框（怪右侧侧挂） */
+  attackCdBadge: `${PKG.battle}/images/ui/battle/battle_attack_cd_badge.png`,
   /** 封印珠圆形叠层（金框 +「封」匾，盖在属性珠上） */
   orbSeal: `${PKG.battle}/images/ui/battle/battle_orb_seal.png`,
 } as const;

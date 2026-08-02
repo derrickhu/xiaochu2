@@ -321,7 +321,7 @@ function attachBossGuardianPet(
       ph.endFill();
       host.addChild(ph);
     }
-    const tag = makeText('BOSS', {
+    const tag = makeText('首领', {
       size: FONT_SIZE.xs, fill: 0xfff4c8, bold: true, anchor: 0.5,
       strokeColor: 0x8a5a18, strokeWidth: 4,
     });

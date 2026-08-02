@@ -1,0 +1,19 @@
+Redesign this mobile match-3 RPG battle screen (9:16). Keep the SAME art style as the attached live screenshot: cream parchment UI, gold trim, cute green slime, colorful orbs, underwater ruins.
+
+LAYOUT = Side-HUD Direction C (improve the current screenshot):
+1) Make the green slime ENEMY MUCH LARGER — dominate the upper half, less empty water left/right.
+2) Move affinity chips to the LEFT of the monster as two small round badges: 克制 and 抵抗.
+3) Move turn countdown to the RIGHT of the monster as a round/plaque badge: "1回合后攻击".
+4) Keep top thin stage banner, middle 5 pet portraits + thin team HP, bottom 6x5 orb board.
+
+ENEMY HP BAR — MOST IMPORTANT, FOLLOW EXACTLY:
+- DO NOT draw a thick sausage bar.
+- DO NOT draw a curved belly-hugging HP arc.
+- DO NOT draw a fat capsule under the monster.
+- Instead copy the CURRENT GAME's elegant HP style from the reference: a STRAIGHT, SLIM horizontal red bar inside a short cream parchment plaque with delicate gold end ornaments.
+- Above that slim bar, a small name plaque: "杂兵 · 木域软泥".
+- HP numbers "885 / 885" centered on the slim bar.
+- The whole name+HP block is a compact floating card just under the monster chin — light, refined, rectangular-ish parchment, NOT meaty.
+
+Creative freedom on badge shapes, lighting, vignette, pet panel density — but HP must stay slim straight parchment, never sausage.
+High-end production UI mockup. Chinese labels only.

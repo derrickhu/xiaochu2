@@ -1,0 +1,20 @@
+Full-screen 9:16 mobile match-3 RPG battle UI mockup. Match the attached screenshot art style exactly (cream/gold UI, cute green slime, orbs, underwater).
+
+Compose like Direction C side-HUD:
+- MUCH LARGER central green slime enemy (hero of top half)
+- LEFT of slime: two small round badges 克制 / 抵抗
+- RIGHT of slime: round badge "1回合后攻击"
+- Top thin parchment stage title
+- Compact 5-pet row + thin green team HP
+- Bottom 6x5 orb board
+
+Enemy HP treatment (override everything else if conflict):
+Look at the REFERENCE screenshot enemy HP — it is a relatively thin straight red bar with gold filigree ends under a separate small name plate.
+Reproduce THAT language, but make the red fill EVEN THINNER (about 1/3 the thickness of a typical mobile "capsule HP").
+Structure:
+  [small cream name tag: 杂兵 · 木域软泥]
+  [thin straight red progress bar ~ width 55% of screen, height very slim, gold ornate endcaps, text 885/885]
+Absolutely forbidden: curved HP hugging the belly; thick hot-dog / sausage / pill HP; fat rounded meaty bar; arc HP.
+Think "elegant thin progress meter on a calligraphy plaque", not "health sausage".
+
+Creative polish welcome on lighting and badges. Chinese UI.

@@ -1,0 +1,13 @@
+Mobile game battle UI redesign mockup, vertical 9:16 phone screen, match-3 RPG combat.
+
+REFERENCE the attached screenshot for style. REDESIGN to maximize monster presence by moving chrome aside.
+
+LAYOUT DIRECTION C — "Side-Anchored Combat HUD":
+- Large enemy portrait dominates the upper-middle: fill ~45% height with the cute green slime, slightly closer to camera
+- Put enemy HP bar as a curved/arc bar hugging the bottom of the monster silhouette, countdown badge on the RIGHT of the monster (not stacked below in empty air)
+- Advantage/resist element chips on the LEFT of the monster as small badges
+- Stage title stays as thin top plaque
+- Team: 5 compact portraits in a denser row; team HP is a thin full-width bar immediately above portraits
+- Orb board remains bottom 38-40%, same 6x5 colorful orbs on cream board
+
+Goal: almost no empty ocean background left/right of monster — monster is the hero of the frame. Same art language as reference. Chinese labels. High-quality UI concept art.

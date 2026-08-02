@@ -78,7 +78,7 @@ export function showEnemyDetailDialog(
   const content = new PIXI.Container();
   let y = 0;
 
-  // 标题：【BOSS】名
+  // 标题：【首领】名
   const titleRow = new PIXI.Container();
   const tag = makeText(`【${ENEMY_TIER_LABEL[tier]}】`, {
     size: FONT_SIZE.md, fill: tierColor, bold: true, anchor: [0, 0],

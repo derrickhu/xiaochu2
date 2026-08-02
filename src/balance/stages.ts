@@ -510,7 +510,7 @@ export function formatStageShortLabel(
 /** 战斗顶栏：章节关卡号 + 名称，Boss 关附加标记 */
 export function formatStageBattleHeader(stage: StageDef): string {
   const base = formatStageShortLabel(stage);
-  return stage.isBoss ? `${base} · BOSS` : base;
+  return stage.isBoss ? `${base} · 首领` : base;
 }
 
 export const CHAPTER_NAME: Readonly<Record<number, string>> = {

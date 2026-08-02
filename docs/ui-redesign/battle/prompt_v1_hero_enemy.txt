@@ -1,0 +1,16 @@
+Mobile game battle UI redesign mockup, vertical 9:16 phone screen, match-3 RPG combat.
+
+REFERENCE the attached current screenshot for art style, orb colors, cream parchment UI, cute green slime enemy, underwater cave background. REDESIGN the LAYOUT only — keep the same Chinese fantasy match-3 aesthetic.
+
+CORE PROBLEM TO FIX: enemy monster is too small; too much empty background wasted around it.
+
+LAYOUT DIRECTION A — "Hero Monster Stage":
+- Top ~38% of screen is a DOMINANT enemy stage: the cute green wood slime fills most of this zone, large and centered, almost edge-to-edge width, feet can overlap HUD slightly
+- Compact thin parchment banner at very top for stage name (keep Chinese style labels)
+- Enemy name + red HP bar + turn countdown OVERLAID tightly on the lower part of the monster (not stacked far below with gaps)
+- Element advantage icons as small chips beside the HP bar, not a separate tall row
+- Middle: thinner team strip — 5 pet portraits in one compact row with a slim green team HP bar above them (reduce vertical chrome)
+- Bottom ~40%: keep 6x5 orb puzzle board similar to reference, cream checkered frame
+
+Visual goals: monster feels twice as impactful; less striped empty bands; clear hierarchy enemy > board > team.
+Polished production UI mockup, soft lighting, no English text except UI icons if needed. Use Chinese labels like 杂兵 · 木域软泥, HP numbers, 回合.

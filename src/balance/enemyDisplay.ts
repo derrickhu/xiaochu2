@@ -19,7 +19,7 @@ export const ENEMY_TIER_LABEL: Readonly<Record<EnemyDisplayTier, string>> = {
   mob: '杂兵',
   elite: '精英',
   miniBoss: '守关',
-  boss: 'BOSS',
+  boss: '首领',
 };
 
 export const ENEMY_TIER_COLOR: Readonly<Record<EnemyDisplayTier, number>> = {

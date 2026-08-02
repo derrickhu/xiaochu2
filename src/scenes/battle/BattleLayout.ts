@@ -28,11 +28,15 @@ export interface BattleLayout {
   enemyNameY: number;
   /** 立绘区上沿（关卡匾下沿；立绘贴顶，名/血条叠在立绘之上） */
   spriteZoneTop: number;
-  /** 立绘区下沿（克制标签下沿：脚在 HUD 后方，真叠层而非上下分离） */
+  /** 立绘区下沿（血条叠层下沿：脚在 HUD 后方，真叠层而非上下分离） */
   spriteZoneBottom: number;
-  /** 克制标签行中心 Y */
+  /** 克制/抵抗侧挂列中心 X（怪左侧） */
+  enemyTagX: number;
+  /** 克制/抵抗侧挂列中心 Y（与怪心对齐，refreshEnemy 会再贴） */
   enemyTagY: number;
-  /** 倒计时文字中心 Y */
+  /** 攻击倒计时侧挂中心 X（怪右侧） */
+  enemyCdX: number;
+  /** 攻击倒计时侧挂中心 Y */
   enemyCdY: number;
   enemyHpBarY: number;
   /** 敌人持续状态图标：首枚中心 X（名匾右侧；由 HUD 按名匾实宽刷新） */
@@ -68,7 +72,8 @@ export function computeBattleLayout(): BattleLayout {
     petStarRowH, petBarPanelPadY, petBoardGap, stageBannerH,
     enemyHpBarWidth, enemyHpBarHeight,
     heroHpBarWidth, heroHpBarHeight, heroBarPanelOverlap,
-    enemyNamePlaqueH, enemyNameToHpGap, enemyHpToCdGap, enemyCdToTagGap, enemySize,
+    enemyNamePlaqueH, enemyNameToHpGap, enemySize,
+    enemySideHudInset,
   } = UI.battle;
   const petGap = UI.battle.petGap;
   const petSize = computePetBarPetSize(Game.logicWidth, 5);
@@ -87,16 +92,11 @@ export function computeBattleLayout(): BattleLayout {
   const heroBarW = Math.min(heroHpBarWidth, petBarPanelW - 24);
   const heroBarY = panelTop - heroHpBarHeight + heroBarPanelOverlap;
 
-  // mockup 自下而上叠在立绘上：克制标签 → 倒计时 → 血条 → 名匾（状态图标叠在血条下沿，不再单独占高）
-  const tagH = 40;
-  const cdH = 28;
   /** 与 BattleStatusIcons.ICON_SIZE 对齐 */
   const statusIconSize = 34;
   const statusIconGap = 6;
-  const enemyTagY = heroBarY - 14 - tagH / 2;
-  const enemyCdY = enemyTagY - tagH / 2 - enemyCdToTagGap - cdH / 2;
-  // 血条直接贴倒计时上方（中间不再插一整行状态图标高度）
-  const enemyHpBarY = enemyCdY - cdH / 2 - enemyHpToCdGap - enemyHpBarHeight;
+  // 侧挂后中间不再堆倒计时/克制行，血条贴近英雄条，立绘区增高
+  const enemyHpBarY = heroBarY - 16 - enemyHpBarHeight;
   // 我方状态图标：血条顶上方留足半高 + 间距，避免压住 HP 数字
   const teamStatusIconY = heroBarY - statusIconGap - statusIconSize / 2;
 
@@ -112,15 +112,19 @@ export function computeBattleLayout(): BattleLayout {
     + UI.battle.enemyNamePlaqueW / 2 + 8 + statusIconSize / 2;
 
   /**
-   * 真叠层立绘区（对齐 mockup v3）：
-   * - 上沿伸到关卡匾后方，下沿到克制标签下沿
-   * - 名匾 / 血条 / 倒计时 / 标签画在立绘之上（同区重叠），禁止「怪在上、UI 在下」分离
+   * 真叠层立绘区（v3d 侧挂）：
+   * - 上沿贴关卡匾，下沿到血条叠层
+   * - 克制/抵抗左挂、攻击倒计时右挂；名匾/血条仍叠在立绘上
    */
-  // 上沿贴关卡匾下沿，立绘贴顶上移，避免头顶大块留白
   const spriteZoneTop = headerY + stageBannerH / 2 + 4;
-  const spriteZoneBottom = enemyTagY + tagH / 2 + 6;
+  const spriteZoneBottom = enemyHpBarY + enemyHpBarHeight / 2 + 8;
   // 布局占位：贴顶；实际中心在 refreshEnemy 按贴图重算
   const enemyCenterY = spriteZoneTop + 6 + enemySize / 2;
+  // 侧挂初值贴怪心；refreshEnemy 会随立绘中心再对齐
+  const enemyTagX = enemySideHudInset;
+  const enemyCdX = Game.logicWidth - enemySideHudInset;
+  const enemyTagY = enemyCenterY;
+  const enemyCdY = enemyCenterY;
 
   return {
     boardX,
@@ -131,7 +135,9 @@ export function computeBattleLayout(): BattleLayout {
     enemyNameY,
     spriteZoneTop,
     spriteZoneBottom,
+    enemyTagX,
     enemyTagY,
+    enemyCdX,
     enemyCdY,
     enemyHpBarY,
     enemyStatusIconX,

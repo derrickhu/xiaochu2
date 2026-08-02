@@ -1,0 +1,23 @@
+Mobile game battle UI concept redesign, vertical 9:16 phone screen, match-3 RPG.
+
+Use the FIRST reference (current live game screenshot) for art language: cream parchment chrome, gold trim, cute green wood slime, colorful elemental orbs, underwater cave background, Chinese fantasy match-3.
+
+Use the SECOND reference only for LAYOUT IDEA: side-anchored combat HUD (element chips left of monster, turn badge right of monster), large dominant enemy, compact team row, bottom 6x5 orb board.
+
+CRITICAL REDESIGN — enemy HP bar must NOT look like a thick sausage / chubby capsule / meaty tube / heavy curved arc glued under the belly.
+Instead, invent an elegant Chinese-fantasy HP treatment that feels premium and light, for example one of:
+- a slim horizontal jade-red bar nested inside a short ornate name plaque under the monster
+- a thin ink-scroll HP strip with delicate gold end caps (same family as the current game bars, but refined and thinner)
+- a small floating status card (name + thin HP + tiny number) hovering just below the monster chin without dominating the silhouette
+Keep the HP readable (numbers + fill), but visually delicate — not a fat sausage.
+
+LAYOUT GOALS (Direction C refined):
+- Monster is the hero of the upper half: larger than current live game, fill width better, less empty ocean left/right
+- Left side of monster: small circular 克制 / 抵抗 element chips
+- Right side of monster: round or plaque badge for "1回合后攻击"
+- Top: thin stage parchment banner
+- Middle: 5 compact pet portraits + thin team HP (can sit above or integrated with pet panel)
+- Bottom: playable 6x5 orb board on cream frame (~38-42% height)
+
+Creative freedom: refine typography plaques, badge shapes, glow, layering — as long as it stays the same game IP look and the HP is elegant/thin (NOT sausage).
+High-quality production UI mockup. Chinese UI labels.

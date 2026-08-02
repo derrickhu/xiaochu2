@@ -13,17 +13,17 @@ import {
 
 describe('stageCoinReward', () => {
   it('第 1 章 0 星基础产出', () => {
-    expect(stageCoinReward(1, 0)).toBe(30);
+    expect(stageCoinReward(1, 0)).toBe(24);
   });
 
   it('三星加成 +60%', () => {
-    expect(stageCoinReward(1, 3)).toBe(48);
+    expect(stageCoinReward(1, 3)).toBe(38);
   });
 
   it('关卡类型倍率接通 stageTypes：精英 ×1.4 / Boss ×2 / 资源关 ×0.4', () => {
-    expect(stageCoinReward(1, 0, 'elite')).toBe(42);
-    expect(stageCoinReward(1, 0, 'boss')).toBe(60);
-    expect(stageCoinReward(1, 0, 'dailyResource')).toBe(12);
+    expect(stageCoinReward(1, 0, 'elite')).toBe(33);
+    expect(stageCoinReward(1, 0, 'boss')).toBe(48);
+    expect(stageCoinReward(1, 0, 'dailyResource')).toBe(9);
   });
 
   it('章节产出递增', () => {
@@ -63,15 +63,17 @@ describe('每日产出目标框架', () => {
     const runs = dailyRuns(chapter);
     const mix = (normal: number, elite: number): number =>
       normal * NORMAL_SHARE + elite * ELITE_SHARE;
+    // 稳态刷关：币与经验均按 repeatClearPct（v0.5 起经验也衰减，防无限刷级）
+    const pct = ECONOMY.coin.repeatClearPct;
     return {
       coins: mix(
         stageCoinReward(chapter, 2, 'normal'),
         stageCoinReward(chapter, 2, 'elite'),
-      ) * runs * ECONOMY.coin.repeatClearPct,
+      ) * runs * pct,
       exp: mix(
         stageDrops('dt_trial_normal', chapter, 2, 'normal').exp,
         stageDrops('dt_trial_elite', chapter, 2, 'elite').exp,
-      ) * runs,
+      ) * runs * pct,
       universal: stageUniversalReward('elite') * ELITE_SHARE * runs
         + ECONOMY.universal.dailyAllClear,
     };
@@ -123,8 +125,8 @@ describe('recruitPrice', () => {
 });
 
 describe('starUpShardCost', () => {
-  it('1★→2★ 消耗 20 碎片', () => {
-    expect(starUpShardCost(1)).toBe(20);
+  it('1★→2★ 消耗 25 碎片', () => {
+    expect(starUpShardCost(1)).toBe(25);
   });
 
   it('5★ 已满不可升', () => {

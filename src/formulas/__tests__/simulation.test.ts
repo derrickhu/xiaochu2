@@ -195,9 +195,27 @@ describe('Boss 是硬墙', () => {
 const stagesOf = (ch: number): string[] =>
   STAGES.filter((s) => s.chapter === ch).map((s) => s.id);
 
+/** 默认 5R + 已通章节 Boss 掉落宠（真实首通阵容，非爆发队） */
+const BOSS_DROPS: Record<number, string> = {
+  1: 'pet_017', 3: 'pet_028', 4: 'pet_025', 5: 'pet_011', 6: 'pet_010', 7: 'pet_029',
+};
+function firstRunTeamIds(chapter: number): string[] {
+  const ids = [...TEAMS.default];
+  for (let ch = 1; ch < chapter; ch++) {
+    const dropId = BOSS_DROPS[ch];
+    if (!dropId) continue;
+    const drop = PET_MAP.get(dropId)!;
+    const idx = ids.findIndex((id) => PET_MAP.get(id)!.element === drop.element);
+    if (idx >= 0) ids[idx] = dropId;
+  }
+  return ids;
+}
+
 function teamAtBudget(ch: number) {
   const b = getChapterBudget(ch);
-  return buildTeam(TEAMS.burst, b.enterLevel, b.enterStar);
+  // 1~8 章用真实首通阵容（防爆发队把偏松难度测绿）；9+ 章掉落宠不足以代表长线达标队，仍用爆发队
+  const ids = ch <= 8 ? firstRunTeamIds(ch) : [...TEAMS.burst];
+  return buildTeam(ids, b.enterLevel, b.enterStar);
 }
 
 /**
@@ -381,29 +399,19 @@ describe('预算符合性：多波关波次数量与分配可用', () => {
 // ════════════════════════════════════════════════════════════════
 
 describe('v0.4 首通路径：Boss 有真实压力，碾压不复存在', () => {
-  /** 默认 5R 队 + 已通章节的 Boss 掉落宠按同元素换入（真实白嫖阵容） */
-  const BOSS_DROPS: Record<number, string> = {
-    1: 'pet_017', 3: 'pet_028', 5: 'pet_011', 6: 'pet_010',
-  };
-  function firstRunTeamIds(chapter: number): string[] {
-    const ids = [...TEAMS.default];
-    for (let ch = 1; ch < chapter; ch++) {
-      const dropId = BOSS_DROPS[ch];
-      if (!dropId) continue;
-      const drop = PET_MAP.get(dropId)!;
-      const idx = ids.findIndex((id) => PET_MAP.get(id)!.element === drop.element);
-      if (idx >= 0) ids[idx] = dropId;
-    }
-    return ids;
-  }
   const firstRunTeam = (ch: number) => {
     const b = getChapterBudget(ch);
     return buildTeam(firstRunTeamIds(ch), b.enterLevel, b.enterStar);
   };
+  const underAt = (ch: number) => {
+    const prev = getChapterBudget(ch - 1);
+    return buildTeam(firstRunTeamIds(ch), prev.enterLevel, prev.enterStar);
+  };
+  const bossOf = (ch: number) => STAGES.find((s) => s.chapter === ch && s.isBoss)!;
 
   it('锚点首通队中手可通 4~8 章 Boss，但用时 ≥ 8 回合（不是秒推）', () => {
     for (const ch of [4, 5, 6, 7, 8]) {
-      const boss = STAGES.find((s) => s.chapter === ch && s.isBoss)!;
+      const boss = bossOf(ch);
       const r = simulateBattle(firstRunTeam(ch), boss.id, COMBO_MODELS.mid);
       expect(r.win, boss.id).toBe(true);
       expect(r.turnsUsed, `${boss.id} 应有真实战斗时长`).toBeGreaterThanOrEqual(8);
@@ -417,7 +425,7 @@ describe('v0.4 首通路径：Boss 有真实压力，碾压不复存在', () => 
     // 两次都表现为「低手与中手在同一回合被同一击带走」——胜负与操作水平完全脱钩，
     // 而这类问题在总量护栏与 TTK 带里都测不出来，必须单独盯单次伤害峰值。
     for (const ch of [4, 5, 6, 7, 8]) {
-      const boss = STAGES.find((s) => s.chapter === ch && s.isBoss)!;
+      const boss = bossOf(ch);
       const r = simulateBattle(firstRunTeam(ch), boss.id, COMBO_MODELS.mid);
       const pct = r.maxEnemyHit / r.heroMaxHp;
       expect(pct, `${boss.id} 最重一击 ${r.maxEnemyHit} / 血池 ${r.heroMaxHp}`)
@@ -425,31 +433,31 @@ describe('v0.4 首通路径：Boss 有真实压力，碾压不复存在', () => 
     }
   });
 
-  it('升星门槛章（4/8 章）：欠一章锚点的队伍被明显拦截', () => {
-    // 4 章（2★→3★）与 8 章（3★→4★）为升星门槛章：
-    // - 终章 8：欠养成中手直接打不过（硬墙）；
-    // - 4 章：中手要么打不过、要么被磨到 TTK ≥ 12 回合（软墙），且低手必败。
-    // 5~7 章锚点只差 4~5 级（平滑推进段），不设墙，由 TTK 变长体现压力。
-    const underAt = (ch: number) => {
-      const prev = getChapterBudget(ch - 1);
-      return buildTeam(firstRunTeamIds(ch), prev.enterLevel, prev.enterStar);
+  it('升星门槛章（4/8 章）与中期章（6/7 章）：欠一章锚点被明显拦截', () => {
+    // 4 章（2★→3★）与 8 章（3★→4★）为升星门槛章；
+    // v0.5：6/7 章也设软墙，避免「不养成也能连推到第 7 章」。
+    // 口径：中手要么打不过、要么被磨到 TTK ≥ 12；8 章硬墙必败。
+    const softWall = (ch: number, label: string) => {
+      const r = simulateBattle(underAt(ch), bossOf(ch).id, COMBO_MODELS.mid);
+      if (r.win) {
+        expect(r.turnsUsed, `${label} 欠养成即便能过也应被明显磨长`).toBeGreaterThanOrEqual(12);
+      }
     };
-    const bossOf = (ch: number) => STAGES.find((s) => s.chapter === ch && s.isBoss)!;
 
     const r8 = simulateBattle(underAt(8), bossOf(8).id, COMBO_MODELS.mid);
     expect(r8.win, '8 章 Boss 欠一章养成不应能过').toBe(false);
 
-    const r4mid = simulateBattle(underAt(4), bossOf(4).id, COMBO_MODELS.mid);
-    if (r4mid.win) {
-      expect(r4mid.turnsUsed, '4 章 Boss 欠养成即便能过也应被明显磨长').toBeGreaterThanOrEqual(12);
-    }
+    softWall(4, '4 章 Boss');
     const r4low = simulateBattle(underAt(4), bossOf(4).id, COMBO_MODELS.low);
     expect(r4low.win, '4 章 Boss 欠养成低手必败').toBe(false);
+
+    softWall(6, '6 章 Boss');
+    softWall(7, '7 章 Boss');
   });
 
   it('操作水平有意义：首通队低手在 3/4/7 章 Boss 打不过（需练级或提升操作）', () => {
     for (const ch of [3, 4, 7]) {
-      const boss = STAGES.find((s) => s.chapter === ch && s.isBoss)!;
+      const boss = bossOf(ch);
       const r = simulateBattle(firstRunTeam(ch), boss.id, COMBO_MODELS.low);
       expect(r.win, boss.id).toBe(false);
     }
@@ -482,7 +490,7 @@ describe('v0.4 面板膨胀护栏：2★ 上限不破万血', () => {
   });
 });
 
-describe('经验产出与升级节奏同量级（消除数量级脱节）', () => {
+describe('经验产出与升级节奏（v0.5：约 4–5 天到第 7 章）', () => {
   /** 单宠从 1 升到 N 级累计经验 */
   const cumExp = (toLevel: number): number => {
     let s = 0;
@@ -494,13 +502,20 @@ describe('经验产出与升级节奏同量级（消除数量级脱节）', () =
     STAGES.filter((s) => s.chapter === ch)
       .reduce((sum, s) => sum + stageDrops(s.dropTableId, s.chapter, 2, s.type).exp, 0);
 
-  it('第 1 章首通产出 ≥ 单宠升到 L10 所需（不再脱节）', () => {
-    expect(chapterFirstClearExp(1)).toBeGreaterThanOrEqual(cumExp(10));
+  it('第 1 章首通产出 ≥ 单宠升到 L7（教学够用，不再喂到通关预算）', () => {
+    expect(chapterFirstClearExp(1)).toBeGreaterThanOrEqual(cumExp(7));
   });
 
-  it('两轮第 1 章产出足以把 5 宠主队推进到通关预算 L12', () => {
+  it('三轮第 1 章产出足以把 5 宠主队推进到通关预算 clearLevel', () => {
     const need = 5 * cumExp(CHAPTER_BUDGET[1].clearLevel);
-    expect(chapterFirstClearExp(1) * 2).toBeGreaterThanOrEqual(need);
+    expect(chapterFirstClearExp(1) * 3).toBeGreaterThanOrEqual(need);
+  });
+
+  it('纯首通 1~6 章经验不足以喂满进第 7 章锚点（必须日刷补养成）', () => {
+    let path = 0;
+    for (let ch = 1; ch <= 6; ch++) path += chapterFirstClearExp(ch);
+    const need = 5 * cumExp(CHAPTER_BUDGET[7].enterLevel);
+    expect(path, `首通=${path} 需求=${need}`).toBeLessThan(need);
   });
 
   it('各章首通产出随章节递增（产出曲线单调）', () => {

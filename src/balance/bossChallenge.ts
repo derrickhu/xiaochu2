@@ -207,54 +207,54 @@ export function bossChallengeConfig(
     case 'multiWave':
       return {
         prepMob: 'enemy_bamboo_tyrant_wood',
-        hintTags: ['BOSS', '多波', '收录'],
+        hintTags: ['首领', '多波', '收录'],
         hintText: '三波试炼：击败魔将后迎战星辉灵鹿高级形态即可收录',
       };
     case 'boardSeal':
       return {
         prepMob: 'enemy_crystal_boss_earth',
         mechanics: ['orb_sealed'],
-        hintTags: ['BOSS', '封印珠', '收录'],
+        hintTags: ['首领', '封印珠', '收录'],
         hintText: '封印珠干扰盘面，击败灵鹿医者高级形态即可收录',
       };
     case 'highDefense':
       return {
         prepMob: 'enemy_crystal_boss_earth',
-        hintTags: ['BOSS', '高防减伤', '收录'],
+        hintTags: ['首领', '高防减伤', '收录'],
         hintText: '幽晶巨像高防减伤：克制 + 爆发，击败深渊水母高级形态收录',
       };
     case 'boardRock':
       return {
         prepMob: 'enemy_golem_earth',
         mechanics: ['orb_rock', 'enemy_seal_cast'],
-        hintTags: ['BOSS', '顽石封印', '战中封珠', '收录'],
+        hintTags: ['首领', '顽石封印', '战中封珠', '收录'],
         hintText: 'Boss 战中会封印珠子：推荐带归墟玄龟（第3章收录）护盾扛压，击败玄影天鹏高级形态收录其净化技',
       };
     case 'selfHeal':
       return {
         prepMob: 'enemy_serpent_water',
         mechanics: ['enemy_poison'],
-        hintTags: ['BOSS', '剧毒', '收录'],
+        hintTags: ['首领', '剧毒', '收录'],
         hintText: 'Boss 会下毒持续掉血：推荐带玄影天鹏（第4章收录）净化解毒，击败金羽仙鹤高级形态收录',
       };
     case 'chargeHit':
       return {
         prepMob: 'enemy_scorpion_metal',
         mechanics: ['enemy_time_squeeze'],
-        hintTags: ['BOSS', '时间压缩', '收录'],
+        hintTags: ['首领', '时间压缩', '收录'],
         hintText: 'Boss 会压缩转珠时间：稳住节奏速战，击败厚土娘娘高级形态收录其加时技',
       };
     case 'noHeart':
       return {
         prepMob: 'enemy_thunderlord_boss_wood',
         mechanics: ['rule_no_heal', 'enemy_heal_block'],
-        hintTags: ['BOSS', '禁心', '禁疗', '收录'],
+        hintTags: ['首领', '禁心', '禁疗', '收录'],
         hintText: '禁心+禁疗双重压制：推荐带归墟玄龟/护盾宠减少掉血，击败裂隙甲虫高级形态收录',
       };
     case 'highAttack':
       return {
         prepMob: 'enemy_bat_fire',
-        hintTags: ['BOSS', '高攻', '收录'],
+        hintTags: ['首领', '高攻', '收录'],
         hintText: '高攻快攻 Boss：治疗护盾到位后收录',
       };
     case 'banElement': {
@@ -263,7 +263,7 @@ export function bossChallengeConfig(
       return {
         prepMob: 'enemy_bat_fire',
         mechanics: [...banMechanics(el), 'enemy_skill_seal_enrage'],
-        hintTags: ['BOSS', ...hint.tags, '技能封印', '狂暴', '收录'],
+        hintTags: ['首领', ...hint.tags, '技能封印', '狂暴', '收录'],
         hintText: `${hint.text}；Boss 会封印技能且低血狂暴，推荐高爆发速杀，击败天外魔君高级形态收录其重力技`,
       };
     }
@@ -271,49 +271,49 @@ export function bossChallengeConfig(
       return {
         prepMob: 'enemy_crystal_warden_earth',
         mechanics: ['enemy_phase'],
-        hintTags: ['BOSS', '形态转换', '收录'],
+        hintTags: ['首领', '形态转换', '收录'],
         hintText: 'Boss 跨血线会转形态并换招：血条分段处留一手爆发',
       };
     case 'elementAbsorb':
       return {
         prepMob: 'enemy_devour_serpent_water',
         mechanics: ['enemy_absorb'],
-        hintTags: ['BOSS', '属性吸收', '收录'],
+        hintTags: ['首领', '属性吸收', '收录'],
         hintText: 'Boss 会吸收克制它的属性：带第二种输出色轮换',
       };
     case 'counterStrike':
       return {
         prepMob: 'enemy_thorn_scorpion_metal',
         mechanics: ['enemy_counter'],
-        hintTags: ['BOSS', '反击态', '收录'],
+        hintTags: ['首领', '反击态', '收录'],
         hintText: 'Boss 反击态下出手越多反伤越重：少而重地打',
       };
     case 'attackDown':
       return {
         prepMob: 'enemy_wither_bat_fire',
         mechanics: ['enemy_atk_down'],
-        hintTags: ['BOSS', '削攻', '收录'],
+        hintTags: ['首领', '削攻', '收录'],
         hintText: 'Boss 会削弱我方伤害：带净化技解除后再爆发',
       };
     case 'lockedColumn':
       return {
         prepMob: 'enemy_bind_slime_wood',
         mechanics: ['orb_locked_col'],
-        hintTags: ['BOSS', '锁列', '收录'],
+        hintTags: ['首领', '锁列', '收录'],
         hintText: '开局锁一整列：先拆封再铺 Combo',
       };
     case 'resolveTank':
       return {
         prepMob: 'enemy_golem_bulwark_earth',
         mechanics: ['enemy_resolve_guard'],
-        hintTags: ['BOSS', '免控坚壁', '收录'],
+        hintTags: ['首领', '免控坚壁', '收录'],
         hintText: 'Boss 凝意期间免疫控制：靠破防与爆发硬拆',
       };
     case 'finalTrial':
       return {
         prepMob: 'enemy_crystal_warden_earth',
         mechanics: ['enemy_final_trial', 'orb_locked_col'],
-        hintTags: ['BOSS', '终局试炼', '锁列', '收录'],
+        hintTags: ['首领', '终局试炼', '锁列', '收录'],
         hintText: '终局试炼：转形态 + 锁列同场，克制/爆发/续航全要到位',
       };
   }

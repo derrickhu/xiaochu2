@@ -8,12 +8,12 @@ import { POWER_CURVE } from './powerBudget';
 export const ECONOMY = {
   /** ── 灵宠币产出 ── */
   coin: {
-    /** 单关基础产出（第 1 章基准） */
-    stageBase: 30,
+    /** 单关基础产出（第 1 章基准）；v0.5 收紧 30→24 */
+    stageBase: 24,
     /**
      * 章节产出成长系数（复利）。
      *
-     * 刻意比经验侧的 economyChapterGrowth(1.22) 缓：灵宠币的出口是**按稀有度定价的固定档**
+     * 刻意比经验侧的 economyChapterGrowth(1.18) 缓：灵宠币的出口是**按稀有度定价的固定档**
      * （招募封顶 5000、碎片包 300~2400、通用碎片包 1800），并不随章节膨胀。
      * 若币产跟着 1.22 复利走，第 16 章日产会是第 1 章的 20 倍而消耗端只涨 4~8 倍，
      * 后期灵宠币直接贬成废纸。这里让币产主要靠**场次成长**（体力上限随章提升）撑，
@@ -57,7 +57,8 @@ export const ECONOMY = {
    * ── 升星碎片消耗：目标星级 → 所需碎片（升星成本的唯一真源）──
    * growth.ts 的 StarProfile 不再重复定义 upgradeCost，统一读这里。
    */
-  starUpShards: { 2: 20, 3: 50, 4: 120, 5: 300 } as Readonly<Record<number, number>>,
+  /** v0.5：2★/3★ 轻度加压，拉长第 2/4 章升星门槛；4★/5★ 不动 */
+  starUpShards: { 2: 25, 3: 65, 4: 120, 5: 300 } as Readonly<Record<number, number>>,
 
   /** ── 抖音侧边栏复访（必接） ── */
   sidebar: {
