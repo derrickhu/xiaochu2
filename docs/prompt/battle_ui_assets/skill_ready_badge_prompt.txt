@@ -1,0 +1,3 @@
+Mobile game UI asset: cream-gold SKILL READY pill badge plate for pet portrait bottom.
+Rounded capsule, cream fill, gold rim, empty center for「技能」text overlay.
+NO TEXT. Runtime: battle_skill_ready_badge.png

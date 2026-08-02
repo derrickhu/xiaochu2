@@ -219,7 +219,18 @@ export class BattlePetBar {
     this._installPetSwipeInput();
   }
 
-  /** 技能说明气泡置顶（须在英雄血条等 HUD 之后调用） */
+  /**
+   * 宠物槽置顶到英雄血条之上：就绪双箭头会伸进血条带，
+   * 若不抬层会被 HP 框盖住（见 skill_ready_v1）。
+   * cream 底板仍留在血条下方，保持连体叠层。
+   */
+  raiseSlotsLayer(parent: PIXI.Container): void {
+    for (const slot of this._slots) {
+      if (displayAlive(slot)) parent.addChild(slot);
+    }
+  }
+
+  /** 技能说明气泡置顶（须在英雄血条 / 宠物槽之后调用） */
   raisePreviewLayer(parent: PIXI.Container): void {
     if (!this._previewLayer) return;
     parent.addChild(this._previewLayer);
@@ -251,7 +262,7 @@ export class BattlePetBar {
     });
   }
 
-  /** 技能就绪槽：旋转光弧 + 上升粒子 + 双箭头（对齐 xiao_chu，无每帧 Graphics 重绘） */
+  /** 技能就绪槽：粗光边 +「技能」匾 + 双箭头 + 闪点（对齐 skill_ready_v1） */
   update(dt: number): void {
     const petSize = this._petSize;
     const canAct = !this._hooks.isBusy() && this._ctrl.state === 'playerTurn';

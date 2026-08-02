@@ -306,6 +306,12 @@ export const UI_BATTLE_IMAGES = {
   counterTag: `${PKG.battle}/images/ui/battle/battle_counter_tag.png`,
   /** 攻击倒计时圆形底框（怪右侧侧挂） */
   attackCdBadge: `${PKG.battle}/images/ui/battle/battle_attack_cd_badge.png`,
+  /** 技能就绪：底部「技能」匾底板 */
+  skillReadyBadge: `${PKG.battle}/images/ui/battle/battle_skill_ready_badge.png`,
+  /** 技能就绪：头顶双箭头 */
+  skillReadyArrow: `${PKG.battle}/images/ui/battle/battle_skill_ready_arrow.png`,
+  /** 技能就绪：边框闪点 */
+  skillReadySpark: `${PKG.battle}/images/ui/battle/battle_skill_ready_spark.png`,
   /** 封印珠圆形叠层（金框 +「封」匾，盖在属性珠上） */
   orbSeal: `${PKG.battle}/images/ui/battle/battle_orb_seal.png`,
 } as const;

@@ -22,7 +22,7 @@ import {
 import {
   COLORS, FONT_SIZE,
   makeBackButton, makeCoverBackground, makeText,
-  attachRarityBadge, makeIconLabel, makeElementOrb,
+  attachRarityBadge, makeIconLabel, makeElementOrb, makeRoleBadge,
   SceneFx, staggerIn, pulse,
 } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
@@ -627,13 +627,23 @@ export class ShopScene implements Scene {
     nameRow.addChild(name);
     const nb = nameRow.getLocalBounds();
     nameRow.pivot.set(nb.x + nb.width / 2, nb.y + nb.height / 2);
-    nameRow.position.set(0, top + 18 + SHOP_UI.portraitSize + 24);
+    // 立绘下方：名 → 定位 → 碎片，标识不压宠身
+    nameRow.position.set(0, top + 18 + SHOP_UI.portraitSize + 16);
     card.addChild(nameRow);
+
+    const roleBadge = makeRoleBadge({
+      role: pet.role,
+      scale: 1.35,
+      maxWidth: cardW - 28,
+      textFill: 0xffffff,
+    });
+    roleBadge.position.set(-roleBadge.width / 2, nameRow.y + 14);
+    card.addChild(roleBadge);
 
     const sub = makeText(this._petSubText(pet), {
       size: SHOP_UI.subSize, fill: COLORS.textSub, bold: true, anchor: 0.5,
     });
-    sub.position.set(0, nameRow.y + 24);
+    sub.position.set(0, roleBadge.y + roleBadge.height + 8);
     card.addChild(sub);
 
     const buy = makeCardBuyButton(
