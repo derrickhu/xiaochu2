@@ -16,7 +16,7 @@ import { PlayerData } from '@/game/PlayerData';
 import type { BattleContext } from '@/game/battleContext';
 import { checkStaminaFor } from '@/game/staminaGate';
 import { reportQuest } from '@/game/dailyQuestTracker';
-import { settleContextVictory } from './battleContextSettle';
+import { contextDropScale, settleContextVictory } from './battleContextSettle';
 import { playBossPetReveal } from './BossPetReveal';
 import { Platform } from '@/core/PlatformService';
 import type { BattleController } from '@/game/battle/BattleController';
@@ -146,6 +146,11 @@ export class BattleResultOverlay {
 
     if (context) {
       // 副玩法自带产出口径：不写主线星数、不发首通灵玉、不触发 Boss 直掉
+      // 折算必须落在 granted 上：展示、广告翻倍与实发共用这一份
+      const scale = contextDropScale(context);
+      granted.coins = Math.floor(granted.coins * scale.coins);
+      granted.exp = Math.floor(granted.exp * scale.exp);
+      granted.universal = Math.floor(granted.universal * scale.universal);
       PlayerData.addExp(granted.exp);
       PlayerData.addCoins(granted.coins);
       PlayerData.addUniversalShards(granted.universal);

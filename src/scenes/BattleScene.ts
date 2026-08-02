@@ -51,6 +51,7 @@ import {
   type EnemyDetailHandle,
 } from './battle/EnemyDetailDialog';
 import { presentSkillCast, type SkillCastDeps } from './battle/battleSkillPresenter';
+import { showTowerBlessPicker } from './battle/TowerBlessPicker';
 import { analytics } from '@/analytics';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 import {
@@ -112,6 +113,8 @@ export class BattleScene implements Scene {
   private _overlay!: BattleResultOverlay;
   private _enemyDetailLayer!: PIXI.Container;
   private _enemyDetail: EnemyDetailHandle | null = null;
+  /** 通天塔三选一浮层容器（仅塔内使用） */
+  private _blessLayer: PIXI.Container | null = null;
 
   private _busy = false;
   /** 失败结算浮层打开中：锁输入，暂不 finish，支持看广告复活 */
@@ -138,7 +141,8 @@ export class BattleScene implements Scene {
     this._context = enter?.context;
     this._maxCombo = 0;
     this._ctrl = new BattleController(stageId, PlayerData.team, Math.random,
-      (id) => ({ level: PlayerData.petLevel(id), star: PlayerData.petStar(id) }));
+      (id) => ({ level: PlayerData.petLevel(id), star: PlayerData.petStar(id) }),
+      this._context?.kind === 'tower' ? PlayerData.towerRunModifiers() : undefined);
     // 体力与秘境次数都在真正开打时才扣：编队页返回不该白吃
     consumeStaminaFor(this._ctrl.stage, this._context);
     if (this._context?.kind === 'realm') {
@@ -231,6 +235,7 @@ export class BattleScene implements Scene {
     this._statusIcons?.destroy();
     this._petBar?.teardownInput();
     this._fx?.destroy();
+    this._blessLayer = null;
     TweenManager.cancelTarget(this.container);
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
   }
@@ -301,6 +306,7 @@ export class BattleScene implements Scene {
     // 怪物详情浮层（结算层之下；点怪打开）
     this._enemyDetailLayer = new PIXI.Container();
     this.container.addChild(this._enemyDetailLayer);
+
     this._hud.bindEnemyDetailTap(
       () => this._openEnemyDetail(),
       () => this._alive && !this._resultOpen,
@@ -321,6 +327,10 @@ export class BattleScene implements Scene {
     }
 
     this._overlay.build(this.container);
+
+    // 通天塔三选一：在结算层之上，选完即销毁
+    this._blessLayer = new PIXI.Container();
+    this.container.addChild(this._blessLayer);
 
     // 初始刷新槽位 CD / 状态行
     this._refreshSkillUi();
@@ -693,9 +703,20 @@ export class BattleScene implements Scene {
     SfxManager.playVictory();
     this._closeEnemyDetail();
     this._resultOpen = true;
-    this._overlay.show(this._ctrl, true, this._resultOptions());
+    await this._presentVictoryResult();
     await delay(0.3);
     return true;
+  }
+
+  /**
+   * 通天塔在结算面板之前插一层三选一：这一层的记忆点应该是「我选了什么」，
+   * 而不是「我又拿了一堆灵宠币」。其他玩法直接弹结算。
+   */
+  private async _presentVictoryResult(): Promise<void> {
+    if (this._context?.kind === 'tower' && this._blessLayer) {
+      await showTowerBlessPicker(this._blessLayer, this._context.floor);
+    }
+    this._overlay.show(this._ctrl, true, this._resultOptions());
   }
 
   private _resultOptions(): BattleResultOptions {

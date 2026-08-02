@@ -67,12 +67,40 @@ export interface TowerState {
   runCds: Record<string, number>;
   /** 本轮已战败，需消耗重置次数才能继续 */
   runEnded: boolean;
-  /** resetsUsed 所属日期 */
+  /** resetDate / resetsUsed 所属日期 */
   resetDate: string;
   /** 今日已用重置次数（免费 + 广告） */
   resetsUsed: number;
   /** 已领取的层数里程碑 */
   claimedMilestones: number[];
+  /**
+   * 本轮登塔已获灵机：id → 叠加层数。
+   * 只在本 run 内有效，战败重置时清零 —— build 是临时的才有重开价值。
+   */
+  runBlesses: Record<string, number>;
+  /** 本 run 已结算过基础塔币的最高层（防止回退重爬重复计币） */
+  runReachedFloor: number;
+  /** 塔币（登塔印记）：唯一跨 run 保留的产出 */
+  coins: number;
+  /** coinBaseToday / exchangeUsed 所属日期 */
+  coinDate: string;
+  /** 今日已发放的基础塔币（突破与守关奖励不计入） */
+  coinBaseToday: number;
+  /** 传承树：节点 id → 已解锁等级（永久，不随 run 清零） */
+  legacy: Record<string, number>;
+  /** 本轮剩余机缘重掷次数（由传承「重掷」提供） */
+  runRerollsLeft: number;
+  /** 今日各兑换项已用次数 */
+  exchangeUsed: Record<string, number>;
+  /**
+   * 当前层的可选路径（层类型 id）。
+   * 抽出后落盘，玩家退出重进不会刷出更好的分支。
+   */
+  runPaths: string[];
+  /** runPaths 对应的层数，与 runFloor 不符时重抽 */
+  runPathsFloor: number;
+  /** 本层已选定的路径类型，战斗结算时读取（空 = 未选） */
+  runPathKind: string;
 }
 
 export interface SaveData {
@@ -156,6 +184,17 @@ export function emptyTowerState(): TowerState {
     resetDate: '',
     resetsUsed: 0,
     claimedMilestones: [],
+    runBlesses: {},
+    runReachedFloor: 0,
+    coins: 0,
+    coinDate: '',
+    coinBaseToday: 0,
+    legacy: {},
+    runRerollsLeft: 0,
+    exchangeUsed: {},
+    runPaths: [],
+    runPathsFloor: 0,
+    runPathKind: '',
   };
 }
 
@@ -308,6 +347,46 @@ function sanitizeTower(raw: unknown): TowerState {
       t.claimedMilestones.filter((n): n is number => typeof n === 'number' && n > 0).map(Math.floor),
     )];
   }
+  if (t.runBlesses && typeof t.runBlesses === 'object') {
+    for (const [id, v] of Object.entries(t.runBlesses as Record<string, unknown>)) {
+      const n = typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : 0;
+      if (n > 0) out.runBlesses[id] = n;
+    }
+  }
+  out.runReachedFloor = Math.max(
+    0,
+    typeof t.runReachedFloor === 'number' ? Math.floor(t.runReachedFloor) : 0,
+  );
+  out.coins = Math.max(0, typeof t.coins === 'number' && Number.isFinite(t.coins) ? Math.floor(t.coins) : 0);
+  if (typeof t.coinDate === 'string') out.coinDate = t.coinDate;
+  out.coinBaseToday = Math.max(
+    0,
+    typeof t.coinBaseToday === 'number' ? Math.floor(t.coinBaseToday) : 0,
+  );
+  if (t.legacy && typeof t.legacy === 'object') {
+    for (const [id, v] of Object.entries(t.legacy as Record<string, unknown>)) {
+      const n = typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : 0;
+      if (n > 0) out.legacy[id] = n;
+    }
+  }
+  out.runRerollsLeft = Math.max(
+    0,
+    typeof t.runRerollsLeft === 'number' ? Math.floor(t.runRerollsLeft) : 0,
+  );
+  if (t.exchangeUsed && typeof t.exchangeUsed === 'object') {
+    for (const [id, v] of Object.entries(t.exchangeUsed as Record<string, unknown>)) {
+      const n = typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : 0;
+      if (n > 0) out.exchangeUsed[id] = n;
+    }
+  }
+  if (Array.isArray(t.runPaths)) {
+    out.runPaths = t.runPaths.filter((k): k is string => typeof k === 'string');
+  }
+  out.runPathsFloor = Math.max(
+    0,
+    typeof t.runPathsFloor === 'number' ? Math.floor(t.runPathsFloor) : 0,
+  );
+  if (typeof t.runPathKind === 'string') out.runPathKind = t.runPathKind;
   return out;
 }
 

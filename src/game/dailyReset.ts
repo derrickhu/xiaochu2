@@ -26,6 +26,13 @@ export function ensureDailyFresh(data: SaveData, today = localDateKey()): boolea
     changed = true;
   }
 
+  if (data.tower.coinDate !== today) {
+    data.tower.coinDate = today;
+    data.tower.coinBaseToday = 0;
+    data.tower.exchangeUsed = {};
+    changed = true;
+  }
+
   return changed;
 }
 

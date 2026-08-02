@@ -24,6 +24,12 @@ import {
 import type { ResolvedLeaderSkill } from '@/balance/leaderSkill';
 import { applyDamageReduction } from '@/formulas/damage';
 import type { MatchGroup } from '@/game/board/BoardModel';
+import {
+  emptyRunModifiers,
+  BIG_MATCH_COUNT, COMBO_MASTER_THRESHOLD, HUNTER_HP_PCT,
+  LAST_STAND_HP_PCT, REAPER_HP_PCT, REVENGE_MAX_STACK,
+  type TowerRunModifiers,
+} from '@/balance/towerBless';
 import { BattleStatusStore, type StatusInstance } from './BattleStatus';
 import {
   runSkill,
@@ -105,15 +111,24 @@ export class BattleController {
   /** 英雄是否受过伤（统计用，不影响星级） */
   tookDamage = false;
 
+  /** 通天塔灵机聚合修正（主线/秘境为空修正） */
+  readonly runMods: TowerRunModifiers;
+  /** 复仇栈：每受一次敌人攻击 +1，玩家回合结算后清零 */
+  private _revengeStacks = 0;
+
   private _statuses = new BattleStatusStore();
 
   /** 本关解析后的各波遭遇（战斗模板 + 收录元信息） */
   private _waves: ResolvedEncounter[];
 
+  /** 队伍攻击总和（雷霆真伤基数） */
+  private _teamAtkTotal = 0;
+
   private _rng: () => number;
 
   /**
    * @param levelStarOf 按宠物 id 取真实养成进度；默认用初始等级/星级（测试与脱离存档场景）
+   * @param runMods 通天塔灵机修正；缺省为空修正，主线与秘境不受影响
    */
   constructor(
     stageId: string,
@@ -121,12 +136,14 @@ export class BattleController {
     rng: () => number = Math.random,
     levelStarOf: (petId: string) => { level: number; star: number } =
       () => ({ level: INITIAL_PET_LEVEL, star: INITIAL_PET_STAR }),
+    runMods: TowerRunModifiers = emptyRunModifiers(),
   ) {
     const stage = STAGE_MAP.get(stageId);
     if (!stage) throw new Error(`未知关卡: ${stageId}`);
     this.stage = stage;
     this._waves = stage.encounters.map((ref) => resolveEncounter(ref));
     this._rng = rng;
+    this.runMods = runMods;
 
     const ids = teamIds && teamIds.length > 0 ? teamIds : DEFAULT_TEAM;
     const members: TeamMember[] = ids
@@ -134,6 +151,8 @@ export class BattleController {
       .filter((def): def is PetDef => !!def)
       .map((def) => ({ def, ...levelStarOf(def.id) }));
 
+    // 灵机的开局冷却减免（速咏 + 势如破竹）叠在初始 CD 上，至少留 1 回合
+    const startCdCut = runMods.skillCdReduce + runMods.floorStartCdReduce;
     this.team = members.map((m) => {
       const profile = petSelfCombatProfile(m.def, m.star, m.level);
       return {
@@ -141,24 +160,28 @@ export class BattleController {
         level: m.level,
         star: m.star,
         skill: skillForPet(m.def, m.star, m.level),
-        atk: petAtkInTeam(members, m),
-        critRate: profile.critRate,
-        critDamage: profile.critDamage,
-        skillCdLeft: skillCdForPet(m.def, m.star, m.level),
+        atk: Math.floor(petAtkInTeam(members, m) * runMods.atkMult),
+        critRate: profile.critRate + runMods.critRateAdd,
+        critDamage: profile.critDamage + runMods.critDamageAdd,
+        skillCdLeft: Math.max(
+          0,
+          skillCdForPet(m.def, m.star, m.level) - startCdCut,
+        ),
       };
     });
-    this.heroMaxHp = teamMaxHp(members);
+    this.heroMaxHp = Math.floor(teamMaxHp(members) * runMods.hpMult);
     this.heroHp = this.heroMaxHp;
     this.teamRcvTotal = teamRcv(members);
     this.teamElementSet = teamElements(members);
+    this._teamAtkTotal = this.team.reduce((sum, p) => sum + p.atk, 0);
 
     const teamFx = teamEffectAggregate(members);
     this.passiveRegenPerTurn = Math.floor(this.heroMaxHp * teamFx.regenPct);
     this.teamDamageMult = teamFx.teamDamageMult;
     this.leaderSkill = teamLeaderSkill(members);
     this.leaderComboBonus = leaderComboBonus(members);
-    this.teamDamageReduction = teamFx.damageReduction;
-    this.teamHealBonus = teamFx.healBonus;
+    this.teamDamageReduction = teamFx.damageReduction + runMods.damageReductionAdd;
+    this.teamHealBonus = teamFx.healBonus + runMods.healBonusAdd;
     const startShield = Math.floor(this.heroMaxHp * teamFx.startShieldPct);
     if (startShield > 0) {
       this._statuses.add({
@@ -196,7 +219,7 @@ export class BattleController {
 
   /** 当前拖珠时限（秒）：基础 ± 加时/时间压缩，夹在 [dragTimeMin, dragTimeMax] */
   get dragTimeLimit(): number {
-    const t = COMBAT.dragTimeLimit + this._statuses.dragTimeDelta();
+    const t = COMBAT.dragTimeLimit + this._statuses.dragTimeDelta() + this.runMods.dragTimeAdd;
     return Math.min(COMBAT.dragTimeMax, Math.max(COMBAT.dragTimeMin, t));
   }
 
@@ -231,7 +254,8 @@ export class BattleController {
    */
   resolveTurn(groups: MatchGroup[]): TurnResolution {
     this.state = 'petAttack';
-    return resolvePlayerTurnDamage({
+    const mods = this.runMods;
+    const resolution = resolvePlayerTurnDamage({
       groups,
       team: this.team,
       enemy: this.enemy,
@@ -247,12 +271,45 @@ export class BattleController {
       teamHealBonus: this.teamHealBonus,
       guaranteedCrit: this._statuses.hasGuaranteedCrit(),
       heartHealMult: this._statuses.heartHealMult(),
-      elementBuffMult: (el) => this._statuses.elementBuffMult(el),
+      elementBuffMult: (el) => this._statuses.elementBuffMult(el) * (mods.elementMult[el] ?? 1),
       elementAbsorbMult: (el) => this._statuses.elementAbsorbMult(el),
       rng: this._rng,
       elementTraitDamageMult: (pet, defender) => this._elementTraitDamageMult(pet.def, defender),
       counterRelation: (attacker, defender) => this._counterRelation(attacker, defender),
+      runDamageMult: this._runDamageMult(),
+      comboMaster: mods.comboMasterMult > 1
+        ? { threshold: COMBO_MASTER_THRESHOLD, mult: mods.comboMasterMult }
+        : undefined,
+      heartFirePerOrb: mods.heartFirePerOrb,
+      thunderTrueDamagePct: mods.thunderTrueDamagePct,
+      thunderMatchCount: BIG_MATCH_COUNT,
+      teamAtkTotal: this._teamAtkTotal,
+      firstMatchCrit: mods.firstMatchCrit,
     });
+    // 复仇是「受击攒、下回合放」，本回合用掉即清
+    this._revengeStacks = 0;
+    return resolution;
+  }
+
+  /**
+   * 与血线相关的灵机增伤（背水 / 猎手 / 收割 / 复仇）。
+   *
+   * 这几条都只依赖结算瞬间的血量快照，故在这里一次算完再传进纯函数，
+   * 避免把「灵机」这个概念漏进伤害结算层。
+   */
+  private _runDamageMult(): number {
+    const mods = this.runMods;
+    let mult = 1;
+    if (mods.lastStandMult > 1 && this.heroHp <= this.heroMaxHp * LAST_STAND_HP_PCT) {
+      mult *= mods.lastStandMult;
+    }
+    const enemyHpPct = this.enemy.hp / Math.max(1, this.enemy.maxHp);
+    if (mods.hunterMult > 1 && enemyHpPct > HUNTER_HP_PCT) mult *= mods.hunterMult;
+    if (mods.reaperMult > 1 && enemyHpPct < REAPER_HP_PCT) mult *= mods.reaperMult;
+    if (mods.revengePerStack > 0 && this._revengeStacks > 0) {
+      mult *= 1 + mods.revengePerStack * this._revengeStacks;
+    }
+    return mult;
   }
 
   /** 应用回血（petAttack 阶段开头调用） */
@@ -268,7 +325,12 @@ export class BattleController {
    */
   applyPetAttack(attack: PetAttack): { enemyDead: boolean } {
     this.enemy.hp = Math.max(0, this.enemy.hp - attack.damage);
-    return { enemyDead: this.enemy.hp <= 0 };
+    const enemyDead = this.enemy.hp <= 0;
+    // 余烬：击败敌人回一口血（跨波累计，是塔内 HP 经济的主要补充）
+    if (enemyDead && this.runMods.killHealPct > 0) {
+      this.applyHeal(Math.floor(this.heroMaxHp * this.runMods.killHealPct));
+    }
+    return { enemyDead };
   }
 
   /**
@@ -341,7 +403,15 @@ export class BattleController {
     const damage = reduced - absorbed;
     this.heroHp = Math.max(0, this.heroHp - damage);
     if (damage > 0) this.tookDamage = true;
+    if (this.runMods.revengePerStack > 0 && reduced > 0) {
+      this._revengeStacks = Math.min(REVENGE_MAX_STACK, this._revengeStacks + 1);
+    }
     return { damage, absorbed, heroDead: this.heroHp <= 0 };
+  }
+
+  /** 当前复仇栈（HUD 展示用） */
+  get revengeStacks(): number {
+    return this._revengeStacks;
   }
 
   /** ── enemyTurn → playerTurn ── */
@@ -374,7 +444,8 @@ export class BattleController {
     }
     const pet = this.team[petIndex];
     const skill = pet.skill;
-    pet.skillCdLeft = skill.cd;
+    // 速咏压缩的是「每次进 CD 的长度」，至少留 1 回合，否则技能可无限连放
+    pet.skillCdLeft = Math.max(1, skill.cd - this.runMods.skillCdReduce);
 
     const result = runSkill(skill, makePetCaster(this.team, petIndex), this._runtimeContext());
     if (!result) throw new Error(`技能未触发: ${skill.id}`);
@@ -415,7 +486,7 @@ export class BattleController {
 
   /** 当前敌人有效防御（破防后） */
   private get _enemyDefEffective(): number {
-    const break_ = this._statuses.defenseBreakPct('enemy');
+    const break_ = Math.min(0.9, this._statuses.defenseBreakPct('enemy') + this.runMods.enemyDefBreak);
     return break_ > 0 ? Math.floor(this.enemy.def_ * (1 - break_)) : this.enemy.def_;
   }
 

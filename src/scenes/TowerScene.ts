@@ -15,9 +15,15 @@ import { TextureCache } from '@/core/TextureCache';
 import { UI } from '@/balance/ui';
 import { formatReward } from '@/balance/rewards';
 import {
-  buildTowerStage, checkpointFloorOf,
+  buildTowerStage,
   TOWER, TOWER_MILESTONE_REWARD, towerStageId,
 } from '@/balance/tower';
+import { describeOwnedBlesses } from '@/balance/towerBless';
+import { TOWER_LEGACY_NODES } from '@/balance/towerLegacy';
+import { TOWER_FLOOR_KINDS, type TowerFloorKind } from '@/balance/towerPath';
+import { showTowerLegacyPanel } from './tower/TowerLegacyPanel';
+import { showTowerSkipDialog } from './tower/TowerSkipDialog';
+import { showTowerPathPicker } from './tower/TowerPathPicker';
 import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import { grantReward } from '@/game/rewardGrant';
@@ -46,6 +52,9 @@ export class TowerScene implements Scene {
   readonly name = 'tower';
   readonly container = new PIXI.Container();
 
+  /** 每次重建/离场自增，异步浮层回调据此判断结果是否已过期 */
+  private _buildSeq = 0;
+
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
@@ -63,6 +72,7 @@ export class TowerScene implements Scene {
   }
 
   onExit(): void {
+    this._buildSeq++;
     this.container.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
     });
@@ -71,6 +81,7 @@ export class TowerScene implements Scene {
   private _build(): void {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
+    this._buildSeq++;
     this.container.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
     });
@@ -95,8 +106,17 @@ export class TowerScene implements Scene {
       `重置 ${PlayerData.towerResetsLeft}/${TOWER.dailyResets}`,
       { size: FONT_SIZE.xs, fill: COLORS.textTitle, bold: true, anchor: [1, 0.5] },
     );
-    resets.position.set(w - 22, Game.safeHeaderCenterY);
+    resets.position.set(w - 22, Game.safeHeaderCenterY - 11);
     this.container.addChild(resets);
+
+    const coins = makeText(
+      `登塔印记 ${PlayerData.towerCoins}`,
+      { size: FONT_SIZE.xxs, fill: 0x8a6a4a, bold: true, anchor: [1, 0.5] },
+    );
+    coins.position.set(w - 22, Game.safeHeaderCenterY + 11);
+    this.container.addChild(coins);
+
+    this._buildLegacyEntry(w, Game.safeTop + 84);
 
     // 内容区给底栏留位；挑战 CTA 叠在底栏上方
     const contentTop = Game.safeTop + 72;
@@ -112,6 +132,50 @@ export class TowerScene implements Scene {
     this._buildMilestone(w, milestoneTop, milestoneH);
     this._buildCta(w, ctaTop);
     buildBottomNav(this.container, w, h, 'tower');
+  }
+
+  /**
+   * 传承入口挂在左侧、塔身之外：它是跨轮的长线目标，不该和「本轮状态」混在一起。
+   * 有可负担的升级时点一下金点，避免玩家攒了一堆印记却不知道能花。
+   */
+  private _buildLegacyEntry(w: number, y: number): void {
+    const btn = new PIXI.Container();
+    const bw = 96;
+    const bh = 34;
+    btn.position.set(20, y);
+    this.container.addChild(btn);
+
+    const bg = new PIXI.Graphics();
+    bg.beginFill(0xfff3d8, 0.96);
+    bg.lineStyle(2, 0xb08a52, 1);
+    bg.drawRoundedRect(0, 0, bw, bh, bh / 2);
+    bg.endFill();
+    btn.addChild(bg);
+
+    const label = makeText('传承', {
+      size: FONT_SIZE.xs, fill: 0x7a5520, bold: true, anchor: 0.5, role: 'title',
+    });
+    label.position.set(bw / 2, bh / 2);
+    btn.addChild(label);
+
+    const affordable = TOWER_LEGACY_NODES.some((n) => {
+      const cost = PlayerData.towerLegacyCost(n.id);
+      return cost != null && PlayerData.towerCoins >= cost;
+    });
+    if (affordable) {
+      const dot = new PIXI.Graphics();
+      dot.beginFill(0xe04a3c, 1);
+      dot.lineStyle(1.5, 0xfff3d8, 1);
+      dot.drawCircle(bw - 6, 6, 6);
+      dot.endFill();
+      btn.addChild(dot);
+    }
+
+    btn.eventMode = 'static';
+    btn.cursor = 'pointer';
+    btn.hitArea = new PIXI.Rectangle(0, 0, bw, bh);
+    pressFeedback(btn);
+    bindPointerTap(btn, () => showTowerLegacyPanel(this.container, () => this._build()));
   }
 
   private _buildStage(w: number, y: number, stageH: number): void {
@@ -187,7 +251,7 @@ export class TowerScene implements Scene {
     cy += 30;
 
     const floorTitle = tower.runEnded
-      ? `第 ${checkpointFloorOf(tower.runFloor)} 层`
+      ? `第 ${PlayerData.towerCheckpointFloor()} 层`
       : `第 ${tower.runFloor} 层`;
     const floorText = makeText(floorTitle, {
       size: 36, fill: 0x5c4033, bold: true, anchor: 0.5,
@@ -230,9 +294,12 @@ export class TowerScene implements Scene {
     }
     meta.position.set(cx, cy);
     card.addChild(meta);
+    cy += 26;
+
+    this._buildBlessRow(card, cx, cy);
 
     const tip = makeText(
-      `血量跨层继承 · 每层回${Math.round(TOWER.healPctPerFloor * 100)}%`,
+      `每层回${Math.round(TOWER.healPctPerFloor * 100)}% · 守关回${Math.round(TOWER.healPctPerGuard * 100)}%`,
       {
         size: 13, fill: 0x5c4033, bold: true, anchor: 0.5,
         wordWrapWidth: STATUS_W - 20,
@@ -241,6 +308,93 @@ export class TowerScene implements Scene {
     );
     tip.position.set(cx, STATUS_H - STATUS_FOOTER_H / 2);
     card.addChild(tip);
+  }
+
+  /** 本轮灵机计数条：点开看全部已得词条 */
+  private _buildBlessRow(card: PIXI.Container, cx: number, y: number): void {
+    const owned = describeOwnedBlesses(PlayerData.towerBlesses);
+    const total = owned.reduce((sum, o) => sum + o.stacks, 0);
+    const row = new PIXI.Container();
+    row.position.set(cx, y);
+    card.addChild(row);
+
+    const pillW = STATUS_W - 40;
+    const pillH = 26;
+    const bg = new PIXI.Graphics();
+    bg.beginFill(total > 0 ? 0xfff3d8 : 0xf0ebe0, 1);
+    bg.lineStyle(1.5, total > 0 ? 0xd8a63c : 0xc4b49a, 1);
+    bg.drawRoundedRect(-pillW / 2, -pillH / 2, pillW, pillH, pillH / 2);
+    bg.endFill();
+    row.addChild(bg);
+
+    const label = makeText(
+      total > 0 ? `本轮灵机 ${total} 道 ›` : '本轮尚无灵机',
+      { size: 13, fill: total > 0 ? 0x7a5520 : 0x9b8b80, bold: true, anchor: 0.5 },
+    );
+    row.addChild(label);
+
+    if (total === 0) return;
+    row.eventMode = 'static';
+    row.cursor = 'pointer';
+    row.hitArea = new PIXI.Rectangle(-pillW / 2, -pillH / 2, pillW, pillH);
+    pressFeedback(row);
+    bindPointerTap(row, () => this._showBlessList(owned));
+  }
+
+  private _showBlessList(
+    owned: ReturnType<typeof describeOwnedBlesses>,
+  ): void {
+    const w = Game.logicWidth;
+    const h = Game.logicHeight;
+    const root = new PIXI.Container();
+    this.container.addChild(root);
+
+    const scrim = new PIXI.Graphics();
+    scrim.beginFill(0x000000, 0.55);
+    scrim.drawRect(0, 0, w, h);
+    scrim.endFill();
+    scrim.eventMode = 'static';
+    root.addChild(scrim);
+    bindPointerTap(scrim, () => root.destroy({ children: true }));
+
+    const panelW = Math.min(420, w - 80);
+    const lineH = 40;
+    const panelH = Math.min(h - 160, 76 + owned.length * lineH + 16);
+    const panel = new PIXI.Container();
+    panel.position.set(w / 2, h / 2);
+    root.addChild(panel);
+    panel.addChild(makePanel({
+      width: panelW, height: panelH, radius: 16,
+      bg: 0xfffaf0, bgAlpha: 0.98, border: 0xb08a52, borderWidth: 2,
+      centered: true,
+    }));
+
+    const title = makeText('本轮灵机', {
+      size: FONT_SIZE.md, fill: 0x5c4033, bold: true, anchor: 0.5, role: 'title',
+    });
+    title.position.set(0, -panelH / 2 + 28);
+    panel.addChild(title);
+
+    let y = -panelH / 2 + 60;
+    for (const o of owned) {
+      const name = makeText(
+        o.stacks > 1 ? `${o.def.name} ×${o.stacks}` : o.def.name,
+        { size: FONT_SIZE.xs, fill: 0x7a5520, bold: true, anchor: [0, 0.5] },
+      );
+      name.position.set(-panelW / 2 + 20, y + lineH / 2);
+      panel.addChild(name);
+
+      const desc = makeText(o.text, {
+        size: 13, fill: 0x6b5b50, bold: true, anchor: [1, 0.5],
+      });
+      desc.position.set(panelW / 2 - 20, y + lineH / 2);
+      const maxDescW = panelW - 60 - name.width;
+      if (desc.width > maxDescW) desc.scale.set(maxDescW / desc.width);
+      panel.addChild(desc);
+
+      y += lineH;
+      if (y > panelH / 2 - 20) break;
+    }
   }
 
   /** 状态卡血条：胶囊绿条 + 末端金菱 */
@@ -505,10 +659,11 @@ export class TowerScene implements Scene {
         title: `挑战第${tower.runFloor}层`,
         width: CTA_BTN_W,
         height: CTA_BTN_H,
-        onTap: () => this._challenge(tower.runFloor),
+        onTap: () => void this._challenge(tower.runFloor),
       });
       btn.position.set(w / 2, y + CTA_BTN_H / 2);
       this.container.addChild(btn);
+      this._buildSkipHint(w, y + CTA_BTN_H + 14);
       return;
     }
 
@@ -528,8 +683,10 @@ export class TowerScene implements Scene {
     this.container.addChild(btn);
 
     if (canReset) {
+      const start = PlayerData.towerCheckpointFloor();
+      const reroll = Math.max(0, start - 1) + PlayerData.towerLegacy.startBlesses;
       const sub = makeText(
-        `从第 ${checkpointFloorOf(tower.runFloor)} 层满血重来`,
+        `从第 ${start} 层满血重来 · 灵机重掷 ${reroll} 道`,
         { size: FONT_SIZE.xxs, fill: 0x8a6a4a, bold: true, anchor: 0.5 },
       );
       sub.position.set(w / 2, y + CTA_BTN_H + 14);
@@ -537,12 +694,67 @@ export class TowerScene implements Scene {
     }
   }
 
-  private _challenge(floor: number): void {
+  /**
+   * 直登入口。只在当前层明显低于主线进度时出现，所以早早开塔、一路爬上来的玩家
+   * 根本看不到它 —— 它补的是「推了很久主线才第一次进塔」的入场摩擦。
+   */
+  private _buildSkipHint(w: number, y: number): void {
+    const target = PlayerData.towerSkipTarget;
+    if (target == null) return;
+
+    const hint = makeText(`实力已远超本层 · 直登第 ${target} 层`, {
+      size: FONT_SIZE.xxs, fill: 0x9a6a2a, bold: true, anchor: 0.5,
+    });
+    hint.position.set(w / 2, y);
+    hint.eventMode = 'static';
+    hint.cursor = 'pointer';
+    hint.hitArea = new PIXI.Rectangle(
+      -hint.width / 2 - 12, -hint.height / 2 - 8,
+      hint.width + 24, hint.height + 16,
+    );
+    pressFeedback(hint);
+    bindPointerTap(hint, () => void this._skipToEntry(target));
+    this.container.addChild(hint);
+  }
+
+  private async _skipToEntry(target: number): Promise<void> {
+    const from = PlayerData.tower.runFloor;
+    const seq = this._buildSeq;
+    if (!await showTowerSkipDialog(this.container, from, target)) return;
+    if (seq !== this._buildSeq) return;
+    const landed = PlayerData.towerSkipToEntryFloor();
+    if (landed == null) return;
+    analytics.track('tower_skip', { from, to: landed });
+    Platform.showToast(`已直登第 ${landed} 层`, 'success');
+    this._build();
+  }
+
+  /**
+   * 择路 → 进战斗 / 就地结算。
+   * 非战斗路径已在浮层内推进层数，回来只需重建本页。
+   */
+  private async _challenge(floor: number): Promise<void> {
     if (PlayerData.team.length === 0) {
       Platform.showToast('至少上阵 1 只灵宠');
       return;
     }
-    buildTowerStage(floor);
+    // 择路是异步的，期间玩家可能已经离开本页
+    const seq = this._buildSeq;
+    const choice = await showTowerPathPicker(this.container, floor);
+    if (seq !== this._buildSeq || !choice) return;
+    if (!choice.needsBattle) {
+      this._build();
+      return;
+    }
+    this._enterFloorBattle(floor, choice.kind);
+  }
+
+  private _enterFloorBattle(floor: number, kind: TowerFloorKind): void {
+    const def = TOWER_FLOOR_KINDS[kind];
+    buildTowerStage(floor, {
+      difficultyMult: def.difficultyMult,
+      extraWaves: def.extraWaves,
+    });
     const context: BattleContext = { kind: 'tower', floor };
     analytics.track('tower_floor_start', {
       floor,

@@ -36,7 +36,19 @@ import {
 } from './staminaService';
 import { DEV_LEGACY_SAVE_KEYS } from '@/config/CloudConfig';
 import { CHECKIN_CYCLE_DAYS } from '@/balance/checkin';
-import { checkpointFloorOf, TOWER } from '@/balance/tower';
+import {
+  checkpointFloorOf, towerDailyBaseCap, towerEntryFloor, towerHealPctFor,
+  TOWER, TOWER_COIN,
+} from '@/balance/tower';
+import {
+  aggregateBlessModifiers, getBless, rollBlessChoices,
+  type TowerBlessDef, type TowerRunModifiers,
+} from '@/balance/towerBless';
+import {
+  aggregateLegacyEffects, legacyUpgradeCost, TOWER_EXCHANGE_MAP,
+  type TowerExchangeOption, type TowerLegacyEffects,
+} from '@/balance/towerLegacy';
+import { rollTowerPaths, TOWER_FLOOR_KINDS, type TowerFloorKind } from '@/balance/towerPath';
 import { SECRET_REALM } from '@/balance/secretRealm';
 import { AD_PLACEMENTS, type AdPlacementId } from '@/balance/monetization';
 import {
@@ -752,14 +764,31 @@ class PlayerDataClass {
     return this._data.tower;
   }
 
-  /** 通天塔今日剩余重置次数（免费 + 广告） */
+  /** 传承树聚合出的长期效果（塔内所有规则读这一份） */
+  get towerLegacy(): TowerLegacyEffects {
+    return aggregateLegacyEffects(this.tower.legacy);
+  }
+
+  /** 通天塔今日剩余重置次数（免费 + 广告 + 传承「续命」） */
   get towerResetsLeft(): number {
-    return Math.max(0, TOWER.dailyResets - this.tower.resetsUsed);
+    const total = TOWER.dailyResets + this.towerLegacy.bonusFreeResets;
+    return Math.max(0, total - this.tower.resetsUsed);
   }
 
   /** 下一次重置是否需要看广告（免费额度已用完） */
   get towerResetNeedsAd(): boolean {
-    return this.tower.resetsUsed >= TOWER.freeResets;
+    const free = TOWER.freeResets + this.towerLegacy.bonusFreeResets;
+    return this.tower.resetsUsed >= free;
+  }
+
+  /** 本轮战败会回退到的层（受传承「稳固」影响） */
+  towerCheckpointFloor(floor = this.tower.runFloor): number {
+    return checkpointFloorOf(floor, this.towerLegacy.checkpointEvery);
+  }
+
+  /** 通关该层后回复的 HP 比例（受传承「回气」影响） */
+  towerHealPct(floor: number): number {
+    return towerHealPctFor(floor, this.towerLegacy.healPctBonus);
   }
 
   /** 本轮是否已战败封盘（需重置才能再进） */
@@ -789,19 +818,322 @@ class PlayerDataClass {
   }
 
   /**
-   * 消耗一次重置：回退到最近存档点，满血续战。
+   * 消耗一次重置：开启新一轮登塔，从最近存档点满血起步。
+   *
+   * 灵机清零是 roguelike 的立身之本 —— build 临时才有重开价值。但从第 30 层
+   * 空手起步在数值上不可能过，因此按起始层数补发等量随机灵机：损失的是「选择」，
+   * 不是「强度」，而随机补发本身又让每一轮起手都不一样。
+   *
    * @returns 次数不足返回 false
    */
-  towerReset(): boolean {
+  towerReset(rng: () => number = Math.random): boolean {
     if (this.towerResetsLeft <= 0) return false;
+    const fx = this.towerLegacy;
     const t = this._data.tower;
     t.resetsUsed++;
-    t.runFloor = checkpointFloorOf(t.runFloor);
+    t.runFloor = checkpointFloorOf(t.runFloor, fx.checkpointEvery);
     t.runHpPct = 1;
     t.runCds = {};
     t.runEnded = false;
+    t.runBlesses = {};
+    t.runReachedFloor = 0;
+    t.runRerollsLeft = fx.rerollsPerRun;
+    const compensate = Math.max(0, t.runFloor - 1) + fx.startBlesses;
+    for (const def of rollBlessChoices({}, rng, { count: compensate })) {
+      this._grantBless(def.id);
+    }
     this._save();
     return true;
+  }
+
+  /**
+   * 按主线进度可直登到的层；不高于当前层时返回 null（无可跳内容）。
+   *
+   * 只在「当前层明显低于自身实力」时才有值，所以早早开塔、一路爬上来的玩家
+   * 永远看不到这个入口 —— 它是给「推了很久主线才第一次进塔」的玩家补摩擦的。
+   */
+  get towerSkipTarget(): number | null {
+    const target = towerEntryFloor(this.clearedChapters);
+    // 差不到一个守关段就别打断玩家了：为跳 3 层弹一次确认框纯属噪音
+    const gap = target - this._data.tower.runFloor;
+    return gap >= TOWER.milestoneEvery ? target : null;
+  }
+
+  /**
+   * 直登：把起始层提到与主线进度相称的高度。
+   *
+   * 跳过的层一律不发奖 —— 基础塔币按 runReachedFloor 跳过、突破塔币按
+   * bestFloor 跳过、里程碑直接记为已领。这是「跳过内容即放弃内容奖励」的通行规则，
+   * 也是它不会变成白嫖通道的原因。作为交换，按层数补发随机灵机，
+   * 否则空手站上第 40 层在数值上不可能过 —— 一次抽取内每种灵机只出一次，
+   * 所以补发量天然封顶在灵机种类数，直登玩家不会比正常爬上来的更强。
+   *
+   * @returns 无可跳内容时返回 null
+   */
+  towerSkipToEntryFloor(rng: () => number = Math.random): number | null {
+    const target = this.towerSkipTarget;
+    if (target == null) return null;
+    const fx = this.towerLegacy;
+    const t = this._data.tower;
+    t.runFloor = target;
+    t.runHpPct = 1;
+    t.runCds = {};
+    t.runEnded = false;
+    t.runBlesses = {};
+    t.runPaths = [];
+    t.runPathsFloor = 0;
+    t.runPathKind = '';
+    t.runRerollsLeft = fx.rerollsPerRun;
+    t.runReachedFloor = target - 1;
+    t.bestFloor = Math.max(t.bestFloor, target - 1);
+    for (let f = TOWER.milestoneEvery; f < target; f += TOWER.milestoneEvery) {
+      if (!t.claimedMilestones.includes(f)) t.claimedMilestones.push(f);
+    }
+    const compensate = Math.max(0, target - 1) + fx.startBlesses;
+    for (const def of rollBlessChoices({}, rng, { count: compensate })) {
+      this._grantBless(def.id);
+    }
+    this._save();
+    return target;
+  }
+
+  // ── 灵机（本轮登塔临时构筑） ──
+
+  /** 本轮剩余机缘重掷次数 */
+  get towerRerollsLeft(): number {
+    return this.tower.runRerollsLeft;
+  }
+
+  /** 消耗一次重掷；无次数返回 false */
+  consumeTowerReroll(): boolean {
+    const t = this._data.tower;
+    if (t.runRerollsLeft <= 0) return false;
+    t.runRerollsLeft--;
+    this._save();
+    return true;
+  }
+
+  /** 本轮已获灵机：id → 叠加层数 */
+  get towerBlesses(): Readonly<Record<string, number>> {
+    return this.tower.runBlesses;
+  }
+
+  /** 本轮灵机聚合出的战斗修正 */
+  towerRunModifiers(): TowerRunModifiers {
+    return aggregateBlessModifiers(this.towerBlesses);
+  }
+
+  /** 抽取本层机缘候选（已叠满的不再进池；候选数与品质倾斜受传承影响） */
+  rollTowerBlessChoices(guardFloor: boolean, rng: () => number = Math.random): TowerBlessDef[] {
+    const fx = this.towerLegacy;
+    return rollBlessChoices(this.towerBlesses, rng, {
+      guardFloor,
+      count: fx.pickCount,
+      tierBoost: fx.tierBoost,
+    });
+  }
+
+  /** 领取一个灵机；未知 id 或已叠满返回 false */
+  grantTowerBless(id: string): boolean {
+    if (!this._grantBless(id)) return false;
+    this._save();
+    return true;
+  }
+
+  /** 随机发放 count 道灵机（事件层用），返回实际发出的定义 */
+  grantRandomTowerBlesses(
+    count: number,
+    rng: () => number = Math.random,
+    opts: { guardFloor?: boolean } = {},
+  ): TowerBlessDef[] {
+    const picked = rollBlessChoices(this.towerBlesses, rng, {
+      count,
+      guardFloor: opts.guardFloor,
+      tierBoost: this.towerLegacy.tierBoost,
+    });
+    const granted = picked.filter((def) => this._grantBless(def.id));
+    if (granted.length > 0) this._save();
+    return granted;
+  }
+
+  /** 随机弃掉一层已有灵机（淬炼炉），无灵机返回 null */
+  dropRandomTowerBless(rng: () => number = Math.random): TowerBlessDef | null {
+    const t = this._data.tower;
+    const ids = Object.keys(t.runBlesses).filter((id) => (t.runBlesses[id] ?? 0) > 0);
+    if (ids.length === 0) return null;
+    const id = ids[Math.min(ids.length - 1, Math.floor(rng() * ids.length))];
+    t.runBlesses[id] -= 1;
+    if (t.runBlesses[id] <= 0) delete t.runBlesses[id];
+    this._save();
+    return getBless(id);
+  }
+
+  /** 直接调整本轮续战血量比例（事件层用），返回调整后的值 */
+  adjustTowerRunHp(delta: number): number {
+    const t = this._data.tower;
+    t.runHpPct = Math.min(1, Math.max(TOWER.minCarryHpPct, t.runHpPct + delta));
+    this._save();
+    return t.runHpPct;
+  }
+
+  /** 直接发放塔币（事件层秘藏用，不吃每日基础上限） */
+  addTowerCoins(amount: number): number {
+    const n = Math.max(0, Math.floor(amount));
+    if (n <= 0) return 0;
+    this._data.tower.coins += n;
+    this._save();
+    return n;
+  }
+
+  private _grantBless(id: string): boolean {
+    const def = getBless(id);
+    if (!def) return false;
+    const t = this._data.tower;
+    const cur = t.runBlesses[id] ?? 0;
+    if (cur >= def.maxStacks) return false;
+    t.runBlesses[id] = cur + 1;
+    return true;
+  }
+
+  // ── 分支路径 ──
+
+  /**
+   * 当前层的可选路径。抽出后落盘：玩家退出重进不该刷出更好的分支，
+   * 否则「选哪条」就退化成「重开到出好路为止」。
+   */
+  towerPaths(rng: () => number = Math.random): TowerFloorKind[] {
+    const t = this._data.tower;
+    if (t.runPathsFloor !== t.runFloor || t.runPaths.length === 0) {
+      t.runPaths = rollTowerPaths(t.runFloor, rng);
+      t.runPathsFloor = t.runFloor;
+      t.runPathKind = '';
+      this._save();
+    }
+    return t.runPaths.filter(
+      (k): k is TowerFloorKind => k in TOWER_FLOOR_KINDS,
+    );
+  }
+
+  /** 本层已选定的路径类型；未选或已过期时回退到寻常道 */
+  get towerPathKind(): TowerFloorKind {
+    const t = this.tower;
+    if (t.runPathsFloor !== t.runFloor) return 'battle';
+    return t.runPathKind in TOWER_FLOOR_KINDS
+      ? t.runPathKind as TowerFloorKind
+      : 'battle';
+  }
+
+  /** 选定本层路径（进战斗或结算事件前调用） */
+  chooseTowerPath(kind: TowerFloorKind): void {
+    const t = this._data.tower;
+    t.runPathKind = kind;
+    t.runPathsFloor = t.runFloor;
+    this._save();
+  }
+
+  // ── 塔币（登塔印记） ──
+
+  get towerCoins(): number {
+    return this.tower.coins;
+  }
+
+  /** 今日还能拿多少基础塔币（突破与守关奖励不受此限） */
+  get towerCoinBaseLeft(): number {
+    const t = this.tower;
+    return Math.max(0, towerDailyBaseCap(t.bestFloor) - t.coinBaseToday);
+  }
+
+  /**
+   * 通关一层后结算塔币。
+   *
+   * 基础部分按「本 run 首次抵达的层」发放（累计即等于本轮最高层），因此重复
+   * 刷同一高度收益恒定；突破历史纪录与守关首过是一次性大额，且不吃每日上限。
+   *
+   * @returns 本次实发数量与构成
+   */
+  towerSettleCoins(
+    floor: number,
+    opts: { guardFirstClear?: boolean; bonus?: number } = {},
+  ): { total: number; base: number; breakthrough: number; guard: number } {
+    const t = this._data.tower;
+    const prevBest = t.bestFloor;
+    // 「印记·丰」放大的是最终发放量，不放大日限：产出更快但天花板不动
+    const mult = this.towerLegacy.coinMult;
+
+    let base = 0;
+    if (floor > t.runReachedFloor) {
+      const want = (floor - t.runReachedFloor) * TOWER_COIN.perFloor;
+      base = Math.min(want, this.towerCoinBaseLeft);
+      t.runReachedFloor = floor;
+      t.coinBaseToday += base;
+    }
+
+    const breakthrough = floor > prevBest
+      ? (floor - prevBest) * TOWER_COIN.perBreakthrough
+      : 0;
+    // 险径的额外印记与守关首过同档：都属于「选了更难的路」的直接回报
+    const guard = (opts.guardFirstClear ? TOWER_COIN.perGuardFirstClear : 0)
+      + Math.max(0, Math.floor(opts.bonus ?? 0));
+
+    const total = Math.floor((base + breakthrough + guard) * mult);
+    if (total > 0) t.coins += total;
+    this._save();
+    return { total, base, breakthrough, guard };
+  }
+
+  // ── 传承树与印记兑换（塔币的消耗端） ──
+
+  /** 指定传承节点的当前等级 */
+  towerLegacyLevel(id: string): number {
+    return this.tower.legacy[id] ?? 0;
+  }
+
+  /** 升级下一级需要的塔币；已满级返回 null */
+  towerLegacyCost(id: string): number | null {
+    return legacyUpgradeCost(id, this.towerLegacyLevel(id));
+  }
+
+  /**
+   * 升一级传承节点。
+   *
+   * 「重掷」升级会立刻补足本轮剩余次数，否则玩家在塔中途买了重掷却要等下一轮
+   * 才生效，体感上像是买了个空气。
+   *
+   * @returns 满级或塔币不足返回 false
+   */
+  upgradeTowerLegacy(id: string): boolean {
+    const cost = this.towerLegacyCost(id);
+    if (cost == null) return false;
+    const t = this._data.tower;
+    if (t.coins < cost) return false;
+    t.coins -= cost;
+    t.legacy[id] = (t.legacy[id] ?? 0) + 1;
+    const rerolls = aggregateLegacyEffects(t.legacy).rerollsPerRun;
+    if (t.runRerollsLeft < rerolls) t.runRerollsLeft = rerolls;
+    this._save();
+    return true;
+  }
+
+  /** 指定兑换项今日剩余次数 */
+  towerExchangeLeft(id: string): number {
+    const opt = TOWER_EXCHANGE_MAP.get(id);
+    if (!opt) return 0;
+    return Math.max(0, opt.dailyLimit - (this.tower.exchangeUsed[id] ?? 0));
+  }
+
+  /**
+   * 兑换一次；塔币不足或今日次数用尽返回 null。
+   * 实际发奖由调用方走 grantReward，这里只负责扣币与记次数。
+   */
+  consumeTowerExchange(id: string): TowerExchangeOption | null {
+    const opt = TOWER_EXCHANGE_MAP.get(id);
+    if (!opt || this.towerExchangeLeft(id) <= 0) return null;
+    const t = this._data.tower;
+    if (t.coins < opt.cost) return null;
+    t.coins -= opt.cost;
+    t.exchangeUsed[id] = (t.exchangeUsed[id] ?? 0) + 1;
+    this._save();
+    return opt;
   }
 
   /** 领取层数里程碑；已领过返回 false */
@@ -887,6 +1219,11 @@ class PlayerDataClass {
 
   private _settleStamina(): void {
     if (settleStamina(this._data.stamina, this.staminaMax)) this._save();
+  }
+
+  /** 已通关章数：体力上限与通天塔的等效章节地板都读这一份 */
+  get clearedChapters(): number {
+    return this._clearedChapters();
   }
 
   /** 已通关章数（用于体力上限成长）；未通任何章时为 1 */
