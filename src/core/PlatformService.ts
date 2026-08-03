@@ -379,6 +379,92 @@ class PlatformServiceClass {
     resolve?.(ok);
   }
 
+  /**
+   * 插屏广告（抖音流量主 / 广告金政策建议接入）。
+   * 未配置 adUnitId、宿主不支持、加载失败 → resolve(false)，不挡流程。
+   * 抖音要求「展示成功后再播须 destroy 再建」：每次调用新建实例，关闭后销毁。
+   */
+  showInterstitialAd(adUnitId = ''): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!adUnitId) {
+        resolve(false);
+        return;
+      }
+      const create = this._api?.createInterstitialAd;
+      if (typeof create !== 'function') {
+        resolve(false);
+        return;
+      }
+
+      let ad: any = null;
+      let settled = false;
+      let shown = false;
+      const finish = (ok: boolean): void => {
+        if (settled) return;
+        settled = true;
+        try { ad?.destroy?.(); } catch { /* ignore */ }
+        resolve(ok);
+      };
+
+      try {
+        ad = create.call(this._api, { adUnitId });
+      } catch {
+        resolve(false);
+        return;
+      }
+      if (!ad?.show) {
+        resolve(false);
+        return;
+      }
+
+      ad.onError?.(() => finish(false));
+      ad.onClose?.(() => finish(true));
+      ad.onLoad?.(() => {
+        try {
+          const p = ad.show();
+          if (p?.then) {
+            p.then(() => { shown = true; }).catch(() => finish(false));
+          } else {
+            shown = true;
+          }
+        } catch {
+          finish(false);
+        }
+      });
+
+      // 创建后会自动 load；超时仍未展示则放行（避免卡死跳转）
+      setTimeout(() => {
+        if (!settled && !shown) finish(false);
+      }, 5000);
+    });
+  }
+
+  /**
+   * 订阅消息（抖音广告金政策建议接入）。
+   * 必须在用户点击/支付回调里调用；tmplIds 来自后台「运营-订阅消息」。
+   * 返回各模板 id → accept|reject|ban|fail；失败或未配置返回空对象。
+   */
+  requestSubscribeMessage(tmplIds: readonly string[]): Promise<Record<string, string>> {
+    return new Promise((resolve) => {
+      const ids = tmplIds.filter(Boolean).slice(0, 3);
+      const api = this._api?.requestSubscribeMessage;
+      if (typeof api !== 'function' || ids.length === 0) {
+        resolve({});
+        return;
+      }
+      try {
+        api.call(this._api, {
+          tmplIds: ids,
+          success: (res: Record<string, string>) => resolve(res ?? {}),
+          fail: () => resolve({}),
+          complete: () => { /* success/fail 已 settle */ },
+        });
+      } catch {
+        resolve({});
+      }
+    });
+  }
+
   showModal(title: string, content: string): void {
     try {
       this._api?.showModal?.({ title, content, showCancel: false });

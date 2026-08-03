@@ -16,6 +16,7 @@ import { FlashOverlay } from '@/core/FlashOverlay';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
 import { ELEMENT_BLADE_IMAGES, ELEMENT_IMPACT_IMAGES, ORB_IMAGES, UI_FX_IMAGES } from '@/config/Assets';
+import { applyTextResolution } from '@/ui/text';
 import {
   applyDmgRenderStyle,
   buildPetDmgLabel,
@@ -118,10 +119,10 @@ export class BattleFx {
 
     this._floatPool = new ObjectPool<PIXI.Text>({
       create: () => {
-        const t = new PIXI.Text('', {
+        const t = applyTextResolution(new PIXI.Text('', {
           fontSize: 40, fill: 0xffffff, fontWeight: 'bold',
           stroke: 0x000000, strokeThickness: 4,
-        });
+        }));
         t.anchor.set(0.5);
         return t;
       },
@@ -142,7 +143,7 @@ export class BattleFx {
 
     this._petDmgPool = new ObjectPool<PIXI.Text>({
       create: () => {
-        const t = new PIXI.Text('', { fontSize: 42, fill: 0xffffff });
+        const t = applyTextResolution(new PIXI.Text('', { fontSize: 42, fill: 0xffffff }));
         t.anchor.set(0.5, 0.5);
         return t;
       },
@@ -932,10 +933,10 @@ export class BattleFx {
   /** 技能名横幅：放大弹入 → 短暂停留 → 淡出 */
   showSkillBanner(name: string, color: number): Promise<void> {
     return new Promise((resolve) => {
-      const t = new PIXI.Text(name, {
+      const t = applyTextResolution(new PIXI.Text(name, {
         fontSize: 64, fill: color, fontWeight: 'bold',
         stroke: 0x1a1126, strokeThickness: 7,
-      });
+      }));
       t.anchor.set(0.5);
       t.position.set(Game.logicWidth / 2, Game.logicHeight * 0.42);
       setScaleSafe(t, 1.8);

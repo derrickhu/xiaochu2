@@ -7,6 +7,7 @@ import { TweenManager } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
 import { minigameFrameDelay } from '@/core/animationGuard';
 import { bindPointerTap } from '@/utils/bindPointerTap';
+import { applyTextResolution } from '@/ui/text';
 
 /** 圆角文字按钮：纯 Graphics 底 + 居中文字，点击回调 */
 export function makeButton(
@@ -18,7 +19,9 @@ export function makeButton(
   bg.drawRoundedRect(-width / 2, -height / 2, width, height, height / 2);
   bg.endFill();
   btn.addChild(bg);
-  const text = new PIXI.Text(label, { fontSize: Math.floor(height * 0.45), fill: 0xffffff, fontWeight: 'bold' });
+  const text = applyTextResolution(
+    new PIXI.Text(label, { fontSize: Math.floor(height * 0.45), fill: 0xffffff, fontWeight: 'bold' }),
+  );
   text.anchor.set(0.5);
   btn.addChild(text);
   btn.eventMode = 'static';

@@ -19,6 +19,7 @@ import { formatReward, type RewardBundle } from '@/balance/rewards';
 import { PlayerData } from '@/game/PlayerData';
 import { grantReward } from '@/game/rewardGrant';
 import { adUsesLeft, watchAd } from '@/game/adGate';
+import { tryRequestSubscribe } from '@/game/subscribeGate';
 import { AD_REWARD_MULT } from '@/balance/monetization';
 import {
   canClaimAllClear, hasClaimableQuest, isQuestDone, todayQuests,
@@ -528,6 +529,7 @@ export class DailyQuestPanel extends PIXI.Container {
     if (this._busy || !isQuestDone(quest) || PlayerData.isQuestClaimed(quest.id)) return;
     this._busy = true;
     try {
+      await tryRequestSubscribe('quest');
       if (!PlayerData.markQuestClaimed(quest.id)) return;
       grantReward(quest.reward);
       analytics.trackDailyQuestClaim(quest.id, {

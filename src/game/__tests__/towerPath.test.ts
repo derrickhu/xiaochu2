@@ -78,6 +78,18 @@ describe('路径抽取', () => {
       .toBeGreaterThan(TOWER_FLOOR_KINDS.battle.coinBonus);
     expect(TOWER_FLOOR_KINDS.elite.richBless).toBe(true);
   });
+
+  it('择路文案用玩家语言，统一叫机缘、不塞开发者术语', () => {
+    for (const def of Object.values(TOWER_FLOOR_KINDS)) {
+      expect(def.badge.length).toBeGreaterThan(0);
+      expect(def.summary.length).toBeGreaterThan(0);
+      expect(def.payoff.length).toBeGreaterThan(0);
+      expect(def.summary + def.payoff).not.toMatch(/×|品质↑|1\.35/);
+    }
+    expect(TOWER_FLOOR_KINDS.battle.payoff).toContain('机缘');
+    expect(TOWER_FLOOR_KINDS.elite.payoff).toMatch(/罕有|奇珍/);
+    expect(TOWER_FLOOR_KINDS.event.badge).toBe('不打架');
+  });
 });
 
 describe('路径落盘', () => {

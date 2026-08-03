@@ -36,7 +36,7 @@ import type { BattleLayout } from './BattleLayout';
 import type { BattleFx } from './BattleFx';
 import { ComboDisplay } from './ComboDisplay';
 import { COLORS, FONT_SIZE, RADIUS } from '@/ui/theme';
-import { makeText } from '@/ui/text';
+import { applyTextResolution, makeText } from '@/ui/text';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
 export class BattleHud {
@@ -295,7 +295,9 @@ export class BattleHud {
     const w = Game.logicWidth;
     const { enemyCenterX, enemyCenterY, headerY, enemyTagY, enemyHpBarY, enemyCdY } = this._layout;
 
-    this._waveText = new PIXI.Text('', { fontSize: 22, fill: COLORS.textSub });
+    this._waveText = applyTextResolution(
+      new PIXI.Text('', { fontSize: 22, fill: COLORS.textSub }),
+    );
     this._waveText.anchor.set(1, 0.5);
     this._waveText.position.set(w - 30, headerY);
     this._waveText.visible = false;
@@ -1215,7 +1217,9 @@ export class BattleHud {
     ring.position.set(enemyCenterX, headY);
     const radius = 34;
     for (let i = 0; i < 3; i++) {
-      const star = new PIXI.Text('✦', { fontSize: 26, fill: 0xffd54f, fontWeight: 'bold' });
+      const star = applyTextResolution(
+        new PIXI.Text('✦', { fontSize: 26, fill: 0xffd54f, fontWeight: 'bold' }),
+      );
       star.anchor.set(0.5);
       const a = (i / 3) * Math.PI * 2;
       star.position.set(Math.cos(a) * radius, Math.sin(a) * radius * 0.4);

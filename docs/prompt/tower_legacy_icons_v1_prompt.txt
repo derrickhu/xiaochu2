@@ -1,0 +1,21 @@
+Game UI icon sheet, 4 columns x 2 rows, equal cells, soft cream separation between cells.
+Style MUST match the attached 传承 UI prototype icons: guofeng / Q cultivation, soft cel-shaded, warm parchment game UI, circular gold-rimmed medallions, gentle glow. Same polish and lighting as reference.
+
+NO TEXT, no labels, no captions, no Chinese characters anywhere EXCEPT the carved seal character 印 which is part of icon #8 art only.
+NO watermarks, NO phone frames, NO UI chrome, NO price buttons, NO progress dots.
+
+Each cell: ONE circular medallion icon centered, gold thin rim, soft drop shadow, transparent-feeling cream cell background (will be removed).
+
+Row1 left→right:
+1) 广纳: four glowing pale cards fanned on dark jade-green ground, lotus rune glow on each card
+2) 重掷: single ivory die with dark pips, surrounded by mint wind swirls on soft green
+3) 窥机: open treasure chest with mystical eye above, gold sparkles, teal-green ground
+4) 初启: rolled parchment scroll tied with red cord, small wooden tag (blank tag, NO readable text), warm cream ground
+
+Row2 left→right:
+5) 稳固: stone checkpoint stele beside glowing lantern, warm brown ground (stele face blank or abstract marks, NO readable 存档 text)
+6) 续命: single glowing phoenix/golden feather with ember sparkles, warm amber ground
+7) 回气: luminous white lotus on green water ripples, starry teal ground
+8) 印记·丰: two wooden/jade seal cubes stacked with carved character 印, golden sparkles, honey ground
+
+Keep icon art dense and readable at 128px. Consistent rim thickness and lighting across all 8.

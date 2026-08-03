@@ -310,7 +310,7 @@ export class TowerScene implements Scene {
     card.addChild(tip);
   }
 
-  /** 本轮灵机计数条：点开看全部已得词条 */
+  /** 本轮机缘计数条：点开看全部已得词条；旁白钉死「仅本轮有效」 */
   private _buildBlessRow(card: PIXI.Container, cx: number, y: number): void {
     const owned = describeOwnedBlesses(PlayerData.towerBlesses);
     const total = owned.reduce((sum, o) => sum + o.stacks, 0);
@@ -328,10 +328,17 @@ export class TowerScene implements Scene {
     row.addChild(bg);
 
     const label = makeText(
-      total > 0 ? `本轮灵机 ${total} 道 ›` : '本轮尚无灵机',
+      total > 0 ? `本轮机缘 ${total} 道 ›` : '本轮尚无机缘',
       { size: 13, fill: total > 0 ? 0x7a5520 : 0x9b8b80, bold: true, anchor: 0.5 },
     );
     row.addChild(label);
+
+    const hint = makeText(
+      total > 0 ? '点开可查看 · 仅本轮有效' : '打完可选 · 仅本轮有效',
+      { size: 11, fill: 0x9b8b80, bold: true, anchor: 0.5 },
+    );
+    hint.position.set(0, pillH / 2 + 12);
+    row.addChild(hint);
 
     if (total === 0) return;
     row.eventMode = 'static';
@@ -359,7 +366,7 @@ export class TowerScene implements Scene {
 
     const panelW = Math.min(420, w - 80);
     const lineH = 40;
-    const panelH = Math.min(h - 160, 76 + owned.length * lineH + 16);
+    const panelH = Math.min(h - 160, 96 + owned.length * lineH + 16);
     const panel = new PIXI.Container();
     panel.position.set(w / 2, h / 2);
     root.addChild(panel);
@@ -369,13 +376,19 @@ export class TowerScene implements Scene {
       centered: true,
     }));
 
-    const title = makeText('本轮灵机', {
+    const title = makeText('本轮机缘', {
       size: FONT_SIZE.md, fill: 0x5c4033, bold: true, anchor: 0.5, role: 'title',
     });
-    title.position.set(0, -panelH / 2 + 28);
+    title.position.set(0, -panelH / 2 + 26);
     panel.addChild(title);
 
-    let y = -panelH / 2 + 60;
+    const sub = makeText('重置后全部清空', {
+      size: FONT_SIZE.xxs, fill: 0x8a6a4a, bold: true, anchor: 0.5,
+    });
+    sub.position.set(0, -panelH / 2 + 48);
+    panel.addChild(sub);
+
+    let y = -panelH / 2 + 72;
     for (const o of owned) {
       const name = makeText(
         o.stacks > 1 ? `${o.def.name} ×${o.stacks}` : o.def.name,
@@ -686,7 +699,7 @@ export class TowerScene implements Scene {
       const start = PlayerData.towerCheckpointFloor();
       const reroll = Math.max(0, start - 1) + PlayerData.towerLegacy.startBlesses;
       const sub = makeText(
-        `从第 ${start} 层满血重来 · 灵机重掷 ${reroll} 道`,
+        `从第 ${start} 层满血重来 · 机缘重掷 ${reroll} 道`,
         { size: FONT_SIZE.xxs, fill: 0x8a6a4a, bold: true, anchor: 0.5 },
       );
       sub.position.set(w / 2, y + CTA_BTN_H + 14);

@@ -10,6 +10,7 @@ import type { BattleLayout } from './BattleLayout';
 import type { BattleFx } from './BattleFx';
 import { dmgFloatScale } from './damageFloatStyle';
 import { displayAlive, readScale } from '@/core/animationGuard';
+import { applyTextResolution } from '@/ui/text';
 
 const COMBO_FONT = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
 
@@ -99,7 +100,7 @@ function styledText(content: string, fontSize: number, fill: string, strokeW: nu
   // 部分宿主会缓存旧 style；显式再关一次
   t.style.dropShadow = false;
   t.style.fontStyle = 'normal';
-  return t;
+  return applyTextResolution(t);
 }
 
 export class ComboDisplay {

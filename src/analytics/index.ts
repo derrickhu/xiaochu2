@@ -187,6 +187,11 @@ export const analytics = {
     track(EVENT_NAMES.AD_CLOSE, { scene, ad_type: 'reward', completed, ...extra });
   },
 
+  /** 订阅消息授权结果（抖音留存 / 广告金相关） */
+  trackSubscribeResult(scene: string, accepted: number): void {
+    track('subscribe_result', { scene, accepted: Math.max(0, Math.floor(accepted)) });
+  },
+
   /** 内购发起（IAP 未开启时不会触发，桩先落地保证开付费当天就有数） */
   trackPurchaseInitiate(skuId: string, priceFen: number): void {
     track(EVENT_NAMES.PURCHASE_INITIATE, { sku_id: skuId, price_fen: Math.floor(priceFen) });

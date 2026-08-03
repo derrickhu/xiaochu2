@@ -27,7 +27,7 @@ export function showTowerSkipDialog(
   const skippedMilestones = Math.floor((toFloor - 1) / TOWER.milestoneEvery)
     - Math.floor(Math.max(0, fromFloor - 1) / TOWER.milestoneEvery);
   const lines = [
-    `直接从第 ${toFloor} 层起步，并按层数补发 ${toFloor - 1} 道随机灵机。`,
+    `直接从第 ${toFloor} 层起步，并按层数补发 ${toFloor - 1} 道随机机缘。`,
     `第 ${fromFloor}~${toFloor - 1} 层视为跳过，不发登塔印记。`,
   ];
   if (skippedMilestones > 0) {

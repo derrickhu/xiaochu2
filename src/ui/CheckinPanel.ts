@@ -15,6 +15,7 @@ import { formatReward } from '@/balance/rewards';
 import { PlayerData } from '@/game/PlayerData';
 import { grantReward } from '@/game/rewardGrant';
 import { adUsesLeft, watchAd } from '@/game/adGate';
+import { tryRequestSubscribe } from '@/game/subscribeGate';
 import { AD_REWARD_MULT } from '@/balance/monetization';
 import { analytics } from '@/analytics';
 import { UI_IMAGES } from '@/config/Assets';
@@ -642,6 +643,8 @@ export class CheckinPanel extends PIXI.Container {
   private async _sign(): Promise<void> {
     if (this._signing || !PlayerData.canCheckinToday) return;
     this._signing = true;
+    // 订阅须在点击手势内调用（抖音广告金 / 留存建议接入）
+    await tryRequestSubscribe('checkin');
 
     const day = PlayerData.doCheckin();
     if (day === null) {

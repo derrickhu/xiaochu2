@@ -1,0 +1,3 @@
+Tower bless picker UI chrome assets for Chinese fantasy match-3 RPG.
+Match style of implemented-02-bless prototype: cream parchment, antique gold filigree, ink brown, soft ink-wash, WeChat mini-game UI.
+NO TEXT, no labels, no captions, no writing anywhere.

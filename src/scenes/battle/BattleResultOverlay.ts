@@ -28,6 +28,8 @@ import {
 } from '@/ui';
 import type { ActionButtonHandle } from '@/ui/ActionButton';
 import { adUsesLeft, adUsesLeftText, watchAd } from '@/game/adGate';
+import { tryShowInterstitial } from '@/game/interstitialAd';
+import { tryRequestSubscribe } from '@/game/subscribeGate';
 import {
   type ConcreteReward,
   concreteRewardHasValue,
@@ -384,6 +386,14 @@ export class BattleResultOverlay {
       this.clear();
       SceneManager.switchTo(scene, data);
     };
+    /** 返回类 CTA：先软播插屏（失败不影响跳转），再顺手要一次订阅 */
+    const leaveWithAds = (scene: string, data?: unknown): void => {
+      void (async () => {
+        await tryRequestSubscribe('victory_leave');
+        await tryShowInterstitial('victory_home');
+        go(scene, data);
+      })();
+    };
 
     if (context?.kind === 'tower') {
       btns.push(makeActionButton({
@@ -394,7 +404,7 @@ export class BattleResultOverlay {
       btns.push(makeActionButton({
         title: '返回主页', width: btnW, height: btnH, variant: 'cream',
         fontSize: FONT_SIZE.md,
-        onTap: () => go('title'),
+        onTap: () => leaveWithAds('title'),
       }));
       return btns;
     }
@@ -408,7 +418,7 @@ export class BattleResultOverlay {
       btns.push(makeActionButton({
         title: '返回主页', width: btnW, height: btnH, variant: 'cream',
         fontSize: FONT_SIZE.md,
-        onTap: () => go('title'),
+        onTap: () => leaveWithAds('title'),
       }));
       return btns;
     }
@@ -432,7 +442,7 @@ export class BattleResultOverlay {
     btns.push(makeActionButton({
       title: '返回主页', width: btnW, height: btnH, variant: 'cream',
       fontSize: FONT_SIZE.md,
-      onTap: () => go('title'),
+      onTap: () => leaveWithAds('title'),
     }));
     return btns;
   }

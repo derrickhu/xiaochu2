@@ -222,6 +222,42 @@ export const UI_IMAGES = {
   towerPagoda: `${PKG.scene}/images/ui/tower/tower_pagoda.png`,
   /** 通天塔暖金杏渐变挑战匾钮（pkg-scene / CDN） */
   towerBtnCta: `${PKG.scene}/images/ui/tower/tower_btn_cta.png`,
+  /** 机缘三选一：标题匾（对齐 implemented-02） */
+  towerBlessTitlePlaque: `${PKG.scene}/images/ui/tower/bless_title_plaque.png`,
+  /** 机缘卡底板：寻常 / 罕有 / 奇珍 */
+  towerBlessCardCommon: `${PKG.scene}/images/ui/tower/bless_card_common.png`,
+  towerBlessCardRare: `${PKG.scene}/images/ui/tower/bless_card_rare.png`,
+  towerBlessCardEpic: `${PKG.scene}/images/ui/tower/bless_card_epic.png`,
+  /** 品质六角角标底板 */
+  towerBlessBadgeCommon: `${PKG.scene}/images/ui/tower/bless_badge_common.png`,
+  towerBlessBadgeRare: `${PKG.scene}/images/ui/tower/bless_badge_rare.png`,
+  towerBlessBadgeEpic: `${PKG.scene}/images/ui/tower/bless_badge_epic.png`,
+  /** 重掷：骰子图标 + 暖金按钮板 */
+  towerBlessDice: `${PKG.scene}/images/ui/tower/bless_dice.png`,
+  towerBlessRerollBtn: `${PKG.scene}/images/ui/tower/bless_reroll_btn.png`,
+  /** 择路卡底插画（对齐 implemented-01-path） */
+  towerPathArtBattle: `${PKG.scene}/images/ui/tower/path_art_battle.png`,
+  towerPathArtElite: `${PKG.scene}/images/ui/tower/path_art_elite.png`,
+  towerPathArtEvent: `${PKG.scene}/images/ui/tower/path_art_event.png`,
+  towerPathArtRest: `${PKG.scene}/images/ui/tower/path_art_rest.png`,
+  towerPathArtGuard: `${PKG.scene}/images/ui/tower/path_art_guard.png`,
+  /** 传承面板卷轴底板（金玉角饰已画进底板，外沿透明；pkg-scene / CDN） */
+  towerLegacyPanelBg: `${PKG.scene}/images/ui/tower/tower_legacy_panel_bg.png`,
+  /** 三列列头卷云匾（自 legacy-ui-v1 裁切，已抹掉字，列名由代码渲染） */
+  towerLegacyPlaqueInsight: `${PKG.scene}/images/ui/tower/tower_legacy_plaque_insight.png`,
+  towerLegacyPlaqueRoot: `${PKG.scene}/images/ui/tower/tower_legacy_plaque_root.png`,
+  towerLegacyPlaqueLegacy: `${PKG.scene}/images/ui/tower/tower_legacy_plaque_legacy.png`,
+  /** 登塔印记玉印币标 */
+  towerCurrencySeal: `${PKG.scene}/images/ui/tower/tower_currency_seal.png`,
+  /** 传承节点圆形图标 */
+  towerLegacyPickWide: `${PKG.scene}/images/ui/tower/tower_legacy_pick_wide.png`,
+  towerLegacyReroll: `${PKG.scene}/images/ui/tower/tower_legacy_reroll.png`,
+  towerLegacyInsight: `${PKG.scene}/images/ui/tower/tower_legacy_insight.png`,
+  towerLegacyStartBless: `${PKG.scene}/images/ui/tower/tower_legacy_start_bless.png`,
+  towerLegacyCheckpoint: `${PKG.scene}/images/ui/tower/tower_legacy_checkpoint.png`,
+  towerLegacySecondWind: `${PKG.scene}/images/ui/tower/tower_legacy_second_wind.png`,
+  towerLegacyRegen: `${PKG.scene}/images/ui/tower/tower_legacy_regen.png`,
+  towerLegacyCoin: `${PKG.scene}/images/ui/tower/tower_legacy_coin.png`,
   railDaily: `${IMG}/ui/icon/rail_daily.png`,
   /** 日常任务全清宝箱（pkg-scene / CDN） */
   questChest: `${PKG.scene}/images/ui/icon/quest_chest.png`,
@@ -284,6 +320,49 @@ export const UI_IMAGES = {
   /** 碎片转化：专属圆形头像框 */
   gachaShardAvatarFrame: `${PKG.scene}/images/ui/frame/gacha_shard_avatar_frame.png`,
 } as const;
+
+/**
+ * 机缘圆形水墨图标（id 与 balance/towerBless 一一对应）。
+ * 路径：pkg-scene/images/ui/tower/{blessId}.png
+ */
+export function towerBlessIcon(blessId: string): string {
+  return `${PKG.scene}/images/ui/tower/${blessId}.png`;
+}
+
+/** 机缘三选一进场预加载清单（标题匾 + 卡板 + 骰子 + 当前候选图标） */
+export function towerBlessPickerAssets(blessIds: readonly string[] = []): string[] {
+  return [
+    UI_IMAGES.towerBlessTitlePlaque,
+    UI_IMAGES.towerBlessCardCommon,
+    UI_IMAGES.towerBlessCardRare,
+    UI_IMAGES.towerBlessCardEpic,
+    UI_IMAGES.towerBlessBadgeCommon,
+    UI_IMAGES.towerBlessBadgeRare,
+    UI_IMAGES.towerBlessBadgeEpic,
+    UI_IMAGES.towerBlessDice,
+    UI_IMAGES.towerBlessRerollBtn,
+    ...blessIds.map(towerBlessIcon),
+  ];
+}
+
+const TOWER_PATH_ART: Readonly<Record<string, string>> = {
+  battle: UI_IMAGES.towerPathArtBattle,
+  elite: UI_IMAGES.towerPathArtElite,
+  event: UI_IMAGES.towerPathArtEvent,
+  rest: UI_IMAGES.towerPathArtRest,
+  guard: UI_IMAGES.towerPathArtGuard,
+};
+
+/** 择路卡底水墨插画路径 */
+export function towerPathArt(kind: string): string {
+  return TOWER_PATH_ART[kind] ?? UI_IMAGES.towerPathArtBattle;
+}
+
+/** 择路浮层进场预加载（当前可选路径插画） */
+export function towerPathPickerAssets(kinds: readonly string[] = []): string[] {
+  const set = new Set(kinds.map(towerPathArt));
+  return [...set];
+}
 
 /** 战斗 HUD 专用贴图（pkg-battle，对齐 battle_ui_mockup；进战斗按需加载） */
 export const UI_BATTLE_IMAGES = {

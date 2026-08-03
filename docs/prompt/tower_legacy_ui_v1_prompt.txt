@@ -1,0 +1,107 @@
+Mobile game UI prototype mockup, 9:16 portrait, NO phone frame, NO watermark.
+
+MATCH STYLE of reference images (jiling path picker / bless picker):
+- Warm guofeng / Q cultivation mobile game UI
+- Cream parchment panel, soft gold ornate thin border, jade-green accent corners
+- Misty mountain + distant pagoda backdrop behind dim scrim (blurred, atmospheric)
+- Soft cel-shaded illustration language, cute but refined — NOT photoreal, NOT dark neon, NOT purple
+
+SCREEN PURPOSE:
+「传承」meta-upgrade shop — spend permanent currency「登塔印记」on quality-of-life for future tower runs.
+Does NOT buy attack/defense power.
+
+════════════════════════════════════
+DESIGN SPEC (must follow)
+════════════════════════════════════
+Aesthetic: Luxury/refined guofeng parchment panel (aligned with existing tower redesign)
+Palette:
+  - Parchment cream #F7F0E1
+  - Deep ink brown #4A3428 (titles)
+  - Soft gold #C9A15B (borders, accents)
+  - Jade mint #6B9E7A (「机变」column accent)
+  - Warm clay #C47A5A (「根基」column accent)
+  - Amber honey #D4A24A (「余荫」column accent)
+Typography feel: calligraphic display title + clean readable Chinese UI body (not Inter/Roboto)
+
+LAYOUT (top → bottom):
+1) Dimmed scenic tower background full-bleed
+2) Centered large parchment modal (~88% width, ~86% height) with gold frame
+
+HEADER (inside modal):
+- Top-left round close ✕ on small cream seal
+- Center brush title「传承」large
+- Top-right jade-coin chip: seal icon +「印记 162」
+- One-line teaching subtitle under title (critical for clarity):
+  「用印记买永久便利 · 不加强战力 · 重置后仍保留」
+- Two pill tabs under subtitle: active「传承」(filled soft gold) | inactive「兑换」(outline)
+
+BODY — three unequal-feel columns (left/mid slightly denser, right has breathing room):
+Each column has:
+  A) Colored top ribbon / seal badge with column name
+  B) Plain-language one-liner under name (NOT abstract jargon alone)
+  C) Stack of upgrade tiles with ICON + clear copy
+
+COLUMN 1 — accent jade mint —「机变」
+  Plain hint:「每轮选择更多」
+  Tiles:
+  1) Icon: four small glowing cards fan
+     Name「广纳」 Tag「一次买断」
+     Effect line:「选机灵时多看 1 张（四选一）」
+     Cost chip:「600」
+  2) Icon: circular refresh / dice swirl
+     Name「重掷」 Level dots ○○○ (empty)
+     Effect:「本轮机灵不满意，可重抽 1 次」
+     Cost:「200」
+  3) Icon: eye with sparkle over treasure card
+     Name「窥机」 Level dots ○○○
+     Effect:「罕有 / 奇珍机灵更容易出现」
+     Cost:「250」
+
+COLUMN 2 — accent warm clay —「根基」
+  Plain hint:「失败少亏 · 开局更稳」
+  Tiles:
+  1) Icon: gift scroll tied with red cord
+     Name「初启」 Level ○○○
+     Effect:「开塔就白送 1 道随机机灵」
+     Cost:「300」
+  2) Icon: stone checkpoint stele / save lantern
+     Name「稳固」 Level ○○
+     Effect:「战败回退更近（存档更密）」
+     Cost:「500」
+  3) Icon: phoenix feather / second chance flame
+     Name「续命」 Tag「每日」
+     Effect:「每天第一次重置不占次数」
+     Cost:「1500」
+
+COLUMN 3 — accent amber honey —「余荫」
+  Plain hint:「爬得越久 · 赚得越多」
+  Tiles:
+  1) Icon: healing mist / lotus recovering HP
+     Name「回气」 Level ○○○○
+     Effect:「打完战斗层多回一点血」
+     Cost:「200」
+  2) Icon: stacked seal stamps raining lightly
+     Name「印记·丰」 Level ○○○
+     Effect:「通关拿到的登塔印记 +10%」
+     Cost:「400」
+  (leave soft empty parchment space under last tile — intentional asymmetry)
+
+TILE RULES:
+- Each tile: cream inset card, soft gold hairline, LEFT circular icon (illustrated, not emoji), RIGHT text stack
+- Name bold brown; effect in darker readable gray-brown, short plain Chinese
+- Bottom-right small cost chip with tiny seal glyph
+- Level dots under name when multi-level
+- NO dense walls of identical white boxes; icons create instant recognition
+- One tile may show slight gold glow as "affordable / recommended" (e.g. 重掷 200)
+
+FOOTER micro line inside modal bottom:
+「点条目消耗印记升级 · 点满仍可去「兑换」花印记」
+
+ABSOLUTELY AVOID:
+- Flat plain white identical cards with only text (that's the bad current UI)
+- Purple/neon/cyberpunk
+- Dashboard clutter, tiny unreadable paragraphs
+- English UI chrome, watermarks, phone bezels
+- Selling ATK/DEF power fantasy in the copy
+
+Chinese labels required throughout. High-fidelity game UI mock, polished, readable on mobile.

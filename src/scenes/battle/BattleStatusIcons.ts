@@ -13,6 +13,7 @@ import type { StatusInstance, StatusKind, StatusOwner } from '@/game/battle/Batt
 import type { BattleController } from '@/game/battle/BattleController';
 import type { BattleLayout } from './BattleLayout';
 import { COLORS, FONT_SIZE } from '@/ui/theme';
+import { applyTextResolution } from '@/ui/text';
 
 interface IconStyle {
   glyph: string;
@@ -162,17 +163,17 @@ export class BattleStatusIcons {
     bg.endFill();
     c.addChild(bg);
 
-    const glyph = new PIXI.Text(style.glyph, {
+    const glyph = applyTextResolution(new PIXI.Text(style.glyph, {
       fontSize: FONT_SIZE.xxs + 5, fill: style.color, fontWeight: 'bold',
-    });
+    }));
     glyph.anchor.set(0.5);
     glyph.position.set(0, -1);
     c.addChild(glyph);
 
-    const turnsText = new PIXI.Text('', {
+    const turnsText = applyTextResolution(new PIXI.Text('', {
       fontSize: FONT_SIZE.xxs, fill: COLORS.textMain, fontWeight: 'bold',
       stroke: COLORS.panelBg, strokeThickness: 3,
-    });
+    }));
     turnsText.anchor.set(1, 1);
     turnsText.position.set(half + 2, half + 4);
     c.addChild(turnsText);

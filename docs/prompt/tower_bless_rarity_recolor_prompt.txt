@@ -1,0 +1,16 @@
+Create a clean UI asset sheet for a Chinese xianxia mobile game blessing picker.
+Layout: 2 rows x 3 columns, equal cells, thin white gutters.
+
+STRICT: NO TEXT, no Chinese characters, no labels, no numbers, no watermarks.
+
+Row 1 — vertical card frames (portrait, rounded rectangle ~2:3), blank interior for content:
+1) COMMON — muted ink-gray / cool stone parchment. Thin slate-gray border, subtle corner flourishes in charcoal. Looks ordinary and understated. Not gold. Not shiny.
+2) RARE — warm premium gold / amber parchment. Bright gold border with ornate corner flourishes. Clearly more valuable than common. Looks rare/precious.
+3) EPIC — rich purple / orchid parchment. Violet-purple border with ornate corner flourishes and soft purple glow. Highest rarity look.
+
+Row 2 — hexagonal badge plates (pointy-top hex), cream interior, ornate metallic rim matching rarity:
+4) COMMON badge — slate/silver-gray metal rim, muted
+5) RARE badge — bright gold metal rim, premium
+6) EPIC badge — purple/amethyst metal rim, luxurious
+
+Style: same premium ink-wash UI craft as the reference cards. Soft parchment texture. Transparent-friendly edges (clean silhouette on light bg). Consistent lighting from upper-left.

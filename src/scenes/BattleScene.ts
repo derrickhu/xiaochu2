@@ -624,7 +624,7 @@ export class BattleScene implements Scene {
     return waveAdvanced;
   }
 
-  /** GM：立即通关当前关卡（跳过剩余波次与演出） */
+  /** GM：立即通关当前关卡（跳过剩余波次与演出；通天塔仍走机缘三选一） */
   private _executeGmInstantClear(): string {
     if (!this._alive || this._ctrl.isFinished) return '战斗已结束';
     this._resolveSeq++;
@@ -638,7 +638,7 @@ export class BattleScene implements Scene {
     this._settleBattleVisuals();
     this._closeEnemyDetail();
     this._resultOpen = true;
-    this._overlay.show(this._ctrl, true, this._resultOptions());
+    void this._presentVictoryResult();
     return `已通关：${this._ctrl.stage.name}`;
   }
 

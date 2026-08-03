@@ -22,6 +22,8 @@ export interface TowerLegacyNode {
   costs: readonly number[];
   /** 按等级生成描述；level 0 表示「未解锁时的下一级效果」由调用方自行 +1 */
   desc: (level: number) => string;
+  /** 角标（如「一次买断」「每日」），无则不显示 */
+  tag?: string;
 }
 
 export const LEGACY_LINE_NAME: Readonly<Record<LegacyLine, string>> = {
@@ -30,11 +32,19 @@ export const LEGACY_LINE_NAME: Readonly<Record<LegacyLine, string>> = {
   legacy: '余荫',
 };
 
+/** 三列人话短提示（对齐 docs/ui-redesign/tower/legacy-ui-v1.png） */
 export const LEGACY_LINE_HINT: Readonly<Record<LegacyLine, string>> = {
-  insight: '让每一轮的选择更多',
-  root: '让失败更便宜',
-  legacy: '让长线产出更快',
+  insight: '每轮选择更多',
+  root: '失败少亏 · 开局更稳',
+  legacy: '爬得越久 · 赚得越多',
 };
+
+/** 面板顶栏教学句：先讲清「买啥」再看条目 */
+export const LEGACY_PANEL_INTRO =
+  '花印记买永久便利，重置后还在';
+
+export const LEGACY_PANEL_FOOTER =
+  '点条目消耗印记升级 · 点满仍可去「兑换」花印记';
 
 /** 每级「回气」为战斗层追加的回血比例 */
 const REGEN_PER_LEVEL = 0.005;
@@ -47,42 +57,44 @@ export const TOWER_LEGACY_NODES: readonly TowerLegacyNode[] = [
   {
     id: 'legacy_pick_wide', name: '广纳', line: 'insight',
     costs: [600],
-    desc: () => '每层机缘由三选一变为四选一',
+    tag: '一次买断',
+    desc: () => '选机灵时多看 1 张（四选一）',
   },
   {
     id: 'legacy_reroll', name: '重掷', line: 'insight',
     costs: [200, 450, 800],
-    desc: (lv) => `每轮登塔可重掷机缘 ${lv} 次`,
+    desc: (lv) => `本轮机灵不满意，可重抽 ${lv} 次`,
   },
   {
     id: 'legacy_insight', name: '窥机', line: 'insight',
     costs: [250, 550, 1000],
-    desc: (lv) => `罕有与奇珍机缘出现率提升 ${Math.round(INSIGHT_PER_LEVEL * lv * 100)}%`,
+    desc: (lv) => `罕有 / 奇珍机灵更容易出现（+${Math.round(INSIGHT_PER_LEVEL * lv * 100)}%）`,
   },
   {
     id: 'legacy_start_bless', name: '初启', line: 'root',
     costs: [300, 700, 1300],
-    desc: (lv) => `每轮开局额外获得 ${lv} 道随机机缘`,
+    desc: (lv) => `开塔就白送 ${lv} 道随机机灵`,
   },
   {
     id: 'legacy_checkpoint', name: '稳固', line: 'root',
     costs: [500, 1200],
-    desc: (lv) => `存档点间隔缩短至 ${Math.max(2, TOWER.checkpointEvery - lv)} 层`,
+    desc: (lv) => `战败回退更近（存档每 ${Math.max(2, TOWER.checkpointEvery - lv)} 层）`,
   },
   {
     id: 'legacy_second_wind', name: '续命', line: 'root',
     costs: [1500],
-    desc: () => '每日首次重置不占用重置次数',
+    tag: '每日',
+    desc: () => '每天第一次重置不占次数',
   },
   {
     id: 'legacy_regen', name: '回气', line: 'legacy',
     costs: [200, 400, 700, 1100],
-    desc: (lv) => `战斗层回复提升至 ${((TOWER.healPctPerFloor + REGEN_PER_LEVEL * lv) * 100).toFixed(1)}%`,
+    desc: (lv) => `打完战斗层多回一点血（${((TOWER.healPctPerFloor + REGEN_PER_LEVEL * lv) * 100).toFixed(1)}%）`,
   },
   {
     id: 'legacy_coin', name: '印记·丰', line: 'legacy',
     costs: [400, 900, 1600],
-    desc: (lv) => `登塔印记产出 +${Math.round(COIN_PER_LEVEL * lv * 100)}%`,
+    desc: (lv) => `通关拿到的登塔印记 +${Math.round(COIN_PER_LEVEL * lv * 100)}%`,
   },
 ];
 

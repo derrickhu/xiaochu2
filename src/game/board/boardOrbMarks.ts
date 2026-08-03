@@ -1,6 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
 import { UI_BATTLE_IMAGES } from '@/config/Assets';
+import { applyTextResolution } from '@/ui/text';
 
 /**
  * 封印珠叠层：优先用 battle_orb_seal 贴图（金框 +「封」匾）；
@@ -36,11 +37,11 @@ export function drawSealMark(layer: PIXI.Container, cx: number, cy: number, size
   plaque.endFill();
   mark.addChild(plaque);
 
-  const label = new PIXI.Text('封', {
+  const label = applyTextResolution(new PIXI.Text('封', {
     fontSize: Math.floor(size * 0.28),
     fill: 0x3f2408,
     fontWeight: 'bold',
-  });
+  }));
   label.anchor.set(0.5);
   label.position.set(0, half * 0.6);
   mark.addChild(label);

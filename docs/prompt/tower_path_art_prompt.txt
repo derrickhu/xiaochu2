@@ -1,0 +1,21 @@
+Create a clean 3-column x 2-row UI art sheet for a Chinese xianxia idle game path picker.
+Each cell is a vertical card-bottom illustration vignette (portrait orientation), ink-wash watercolor style on soft parchment, matching the reference UI aesthetic.
+
+STRICT RULES:
+- NO TEXT, no Chinese characters, no labels, no captions, no numbers, no watermarks anywhere
+- No UI chrome, no buttons, no badges, no card frames
+- Soft cream/parchment background in each cell, subtle paper texture
+- Consistent brush style, soft edges, premium game UI illustration quality
+- Clear visual differentiation between the six cells by color mood and subject
+
+Row 1 (left to right):
+1) ELITE / hard path — crimson-red ink wash: steep jagged cliffs, a dangerous winding mountain trail, a single torn war banner / flag on a peak, ominous storm haze. Feeling: perilous, hard fight.
+2) EVENT / encounter — indigo-blue ink wash: misty mountains with a small pavilion / temple roof peeking through fog, mysterious lantern glow, soft moonlit clouds. Feeling: unknown fortune, no battle.
+3) BATTLE / normal path — warm gold-brown ink wash: a serene stone paifang gate on a mountain road, gentle pines, peaceful daylight path. Feeling: steady ordinary battle.
+
+Row 2 (left to right):
+4) REST — jade-green ink wash: a quiet meditation chamber / mossy courtyard with a small spring basin and soft bamboo, calm healing atmosphere.
+5) GUARD / boss — rich amber-gold ink wash: a grand ancient tower gate with guardian beast silhouette and dramatic clouds, milestone boss presence.
+6) SPARE (same style as #3 but slightly different angle of the gold paifang path) — warm gold-brown ink wash, keep unused if needed.
+
+Equal cell sizes, thin white gutters between cells, flat orthographic presentation, no shadows connecting cells.

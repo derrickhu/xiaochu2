@@ -12,8 +12,15 @@ export type TowerFloorKind = 'battle' | 'elite' | 'event' | 'rest' | 'guard';
 export interface TowerFloorKindDef {
   kind: TowerFloorKind;
   name: string;
-  /** 一行说明，路径选择卡上直接展示 */
-  desc: string;
+  /**
+   * 角标：先回答「交不交手 / 难不难」。
+   * 玩家扫一眼就要懂，禁止塞「×1.35」这类开发者语言。
+   */
+  badge: string;
+  /** 一句主文案：这条路会发生什么 */
+  summary: string;
+  /** 一行回报：换来什么（沿用「机缘」这个已教会的词） */
+  payoff: string;
   /** 是否需要进战斗 */
   combat: boolean;
   /** 难度乘区（仅战斗层有意义） */
@@ -22,34 +29,49 @@ export interface TowerFloorKindDef {
   extraWaves: number;
   /** 通关后额外塔币 */
   coinBonus: number;
-  /** 机缘品质是否倾斜（等同守关层） */
+  /** 机缘高品质倾斜（等同守关层：罕有/奇珍更易出现） */
   richBless: boolean;
 }
 
 export const TOWER_FLOOR_KINDS: Readonly<Record<TowerFloorKind, TowerFloorKindDef>> = {
   battle: {
-    kind: 'battle', name: '寻常道', desc: '常规战斗，胜后得一道机缘',
+    kind: 'battle', name: '寻常道',
+    badge: '常规',
+    summary: '打一场普通战',
+    payoff: '胜后选 1 张机缘',
     combat: true, difficultyMult: 1, extraWaves: 0, coinBonus: 0, richBless: false,
   },
   elite: {
-    kind: 'elite', name: '险径', desc: '敌手更强，机缘品质更高',
+    kind: 'elite', name: '险径',
+    badge: '更难',
+    summary: '敌人更强，多打一波',
+    payoff: '更容易出罕有/奇珍 · +10 印记',
     combat: true, difficultyMult: 1.35, extraWaves: 1, coinBonus: 10, richBless: true,
   },
   event: {
-    kind: 'event', name: '奇遇', desc: '不必交手，但结果未知',
+    kind: 'event', name: '奇遇',
+    badge: '不打架',
+    summary: '随机好事或坏事',
+    payoff: '可能回血、掉血、换机缘、得印记',
     combat: false, difficultyMult: 1, extraWaves: 0, coinBonus: 0, richBless: false,
   },
   rest: {
-    kind: 'rest', name: '静室', desc: `回复 ${Math.round(0.25 * 100)}% 生命，不得机缘`,
+    kind: 'rest', name: '静室',
+    badge: '休整',
+    summary: '不战斗，调息养伤',
+    payoff: '回复 25% 生命 · 无机缘',
     combat: false, difficultyMult: 1, extraWaves: 0, coinBonus: 0, richBless: false,
   },
   guard: {
-    kind: 'guard', name: '守关', desc: '镇塔之主当前，胜后大补给',
+    kind: 'guard', name: '守关',
+    badge: '守关',
+    summary: '镇塔之主当前',
+    payoff: '胜后大补给 · 珍稀机缘更易现身',
     combat: true, difficultyMult: 1, extraWaves: 1, coinBonus: 0, richBless: true,
   },
 };
 
-/** 休整层的回复比例 */
+/** 休整层的回复比例（与静室 payoff 文案同步） */
 export const TOWER_REST_HEAL_PCT = 0.25;
 
 /** 前若干层不给分支：新手先把「打一层选一张」的基本节奏走顺 */
