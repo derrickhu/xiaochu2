@@ -10,6 +10,10 @@
  *   npm run cdn:upload
  *   npm run cdn:upload -- --force
  *   npm run cdn:upload -- --prune
+ *   npm run cdn:upload -- --only subpackages/pkg-audio/bgm
+ *
+ * --only 用于「本地资源不全，但要上传某个新增目录」的场景（例如新拆出 bgm/ 目录）。
+ * 此时目录级残缺护栏按定义必然触发，故在该范围外一律不比对、不上传、不删除。
  */
 import fs from 'fs';
 import path from 'path';
@@ -29,6 +33,31 @@ const FORCE = process.argv.includes('--force');
 const DRY_RUN = process.argv.includes('--dry-run');
 const PRUNE = process.argv.includes('--prune');
 const CONCURRENCY = Number(process.env.CDN_UPLOAD_CONCURRENCY || 5);
+
+function fatalArg(msg) {
+  console.error(`CDN 上传失败: ${msg}`);
+  process.exit(1);
+}
+
+/** --only <远端路径前缀>：把本次上传限定在该前缀内 */
+const ONLY_PREFIX = (() => {
+  const i = process.argv.indexOf('--only');
+  if (i < 0) return '';
+  const v = process.argv[i + 1];
+  if (!v || v.startsWith('--')) {
+    fatalArg('--only 需要一个远端路径前缀，如 --only subpackages/pkg-audio/bgm');
+  }
+  return v.replace(/^\/+|\/+$/g, '');
+})();
+
+if (ONLY_PREFIX && PRUNE) {
+  // prune 要以本地为权威全集，而 --only 的前提正是本地不全
+  fatalArg('--only 不能与 --prune 同用（prune 需要全集视角，会误删范围外的云端文件）');
+}
+
+const inOnlyScope = (remotePath) => !ONLY_PREFIX
+  || remotePath === ONLY_PREFIX
+  || remotePath.startsWith(`${ONLY_PREFIX}/`);
 
 const cfg = loadCdnConfig();
 const env = loadUploadEnv();
@@ -224,14 +253,21 @@ async function main() {
   }
   if (!BUCKET) throw new Error('缺少 CDN_CLOUD_BUCKET / CdnConfig.cloudBucket');
 
-  const { allFiles, localManifest } = scanLocalCdnFiles(cfg);
-  console.log(`磁盘扫描: ${allFiles.length} 个文件（cdnDirs 全量）`);
+  const scanned = scanLocalCdnFiles(cfg);
+  const allFiles = scanned.allFiles.filter((f) => inOnlyScope(f.remote));
+  const localManifest = Object.fromEntries(
+    Object.entries(scanned.localManifest).filter(([rp]) => inOnlyScope(rp)),
+  );
+  console.log(ONLY_PREFIX
+    ? `磁盘扫描: ${allFiles.length} 个文件（限定 --only ${ONLY_PREFIX}，全量为 ${scanned.allFiles.length}）`
+    : `磁盘扫描: ${allFiles.length} 个文件（cdnDirs 全量）`);
 
   if (!SECRET_ID || !SECRET_KEY) {
     // 无密钥也先跑本地护栏（dry-run / 配置检查）
     try {
       const { warnings } = preflightUpload({
         cfg, allFiles, localManifest, remoteFiles: {}, allowPrune: PRUNE,
+        onlyPrefix: ONLY_PREFIX,
       });
       for (const w of warnings) console.warn(w);
     } catch (e) {
@@ -260,6 +296,7 @@ async function main() {
 
   const { warnings, expected } = preflightUpload({
     cfg, allFiles, localManifest, remoteFiles: oldFiles, allowPrune: PRUNE,
+    onlyPrefix: ONLY_PREFIX,
   });
   for (const w of warnings) console.warn(w);
   console.log(`代码期望 CDN 路径: ${expected.length}（已与磁盘交叉校验）`);

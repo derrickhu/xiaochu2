@@ -109,24 +109,42 @@ export function collectExpectedCdnPaths(cfg) {
 
 /**
  * 上传前护栏：禁止 strip 后残缺本地覆写 / 漏传。
+ *
+ * onlyPrefix（对应 --only）会把「本地相对云端是否残缺」这一类护栏限定在该前缀内。
+ * 这不是放行后门：--only 与 --prune 互斥、清单走合并、范围外一个文件都不动，
+ * 因此范围外本地为空是预期状态，再按全量口径判残缺只会永远误报。
+ *
  * @returns {{ warnings: string[], missingLocal: string[] }}
  */
-export function preflightUpload({ cfg, allFiles, localManifest, remoteFiles = {}, allowPrune = false }) {
+export function preflightUpload({
+  cfg, allFiles, localManifest, remoteFiles = {}, allowPrune = false, onlyPrefix = '',
+}) {
   const warnings = [];
-  const remoteCount = Object.keys(remoteFiles).length;
+  const inScope = (p) => !onlyPrefix || p === onlyPrefix || p.startsWith(`${onlyPrefix}/`);
+  const scopedRemote = onlyPrefix
+    ? Object.keys(remoteFiles).filter(inScope)
+    : Object.keys(remoteFiles);
+  const remoteCount = scopedRemote.length;
   const localCount = allFiles.length;
 
-  if (fs.existsSync(STRIP_MARKER)) {
+  if (fs.existsSync(STRIP_MARKER) && !onlyPrefix) {
     throw new Error(
       '检测到 minigame/.cdn_stripped（已执行 cdn:strip）。\n'
       + '请先 npm run cdn:restore 恢复本地资源，再 cdn:upload。\n'
       + '禁止在瘦包状态下上传（会漏文件 / 污染清单）。',
     );
   }
+  if (fs.existsSync(STRIP_MARKER) && onlyPrefix) {
+    warnings.push(
+      `注意: 处于 cdn:strip 状态，但 --only ${onlyPrefix} 已限定范围，仅该前缀内的文件参与上传。`,
+    );
+  }
 
   for (const dir of cfg.cdnDirs || []) {
+    // --only 之外的目录本次不动，比对它们没有意义
+    if (onlyPrefix && !inScope(dir) && !onlyPrefix.startsWith(`${dir}/`)) continue;
     const localInDir = allFiles.filter((f) => f.remote === dir || f.remote.startsWith(`${dir}/`)).length;
-    const remoteInDir = Object.keys(remoteFiles).filter((k) => k === dir || k.startsWith(`${dir}/`)).length;
+    const remoteInDir = scopedRemote.filter((k) => k === dir || k.startsWith(`${dir}/`)).length;
     if (remoteInDir >= 5 && localInDir === 0) {
       throw new Error(
         `目录 ${dir} 本地 0 文件，但云端有 ${remoteInDir} 个。疑似 strip 后上传，已中止。\n`
@@ -153,7 +171,7 @@ export function preflightUpload({ cfg, allFiles, localManifest, remoteFiles = {}
     );
   }
 
-  const expected = collectExpectedCdnPaths(cfg);
+  const expected = collectExpectedCdnPaths(cfg).filter(inScope);
   const missingLocal = expected.filter((p) => !localManifest[p]);
   // 本地没有、云端也没有 → 新资源漏传，必须拦
   const missingBoth = missingLocal.filter((p) => !remoteFiles[p]);
