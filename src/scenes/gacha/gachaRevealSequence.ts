@@ -46,6 +46,8 @@ export interface GachaRevealDeps {
   shake: (level: 'light' | 'medium' | 'heavy') => void;
   burst: (x: number, y: number, color: number, strong: boolean) => void;
   vibrate: (pattern: 'light' | 'medium' | 'heavy') => void;
+  /** 与 vibrate 同样走注入：本模块只管什么时候该响，不管响什么 */
+  sfx: (kind: 'draw' | 'rare') => void;
   onDone: () => void;
 }
 
@@ -75,6 +77,7 @@ export class GachaRevealSequence {
     d.flash(color, 0.5, 0.4);
     d.shake('light');
     d.vibrate('light');
+    d.sfx('draw');
     this._spawnSummonCircle(cx, cy, color);
     this._spawnLightPillar(cx, cy, color);
     this._spawnRays(cx, cy, color);
@@ -108,6 +111,7 @@ export class GachaRevealSequence {
         d.flash(color, 0.42, 0.5);
         d.shake(highest >= 4 ? 'heavy' : 'medium');
         d.vibrate('heavy');
+        d.sfx('rare');
         d.burst(cx, cy, color, true);
       });
     }

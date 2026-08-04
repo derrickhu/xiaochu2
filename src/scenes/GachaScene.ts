@@ -8,6 +8,7 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
+import { SfxManager } from '@/core/SfxManager';
 import { TextureCache } from '@/core/TextureCache';
 import { gachaPreloadImages, gachaPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
@@ -544,6 +545,10 @@ export class GachaScene implements Scene {
         blendMode: PIXI.BLEND_MODES.ADD,
       }),
       vibrate: (p) => Platform.vibrateShort(p),
+      sfx: (kind) => {
+        if (kind === 'draw') SfxManager.playGachaDraw();
+        else SfxManager.playGachaReveal();
+      },
       onDone: () => {
         skipBtn.visible = false;
         if (compareRoot) compareRoot.visible = true;

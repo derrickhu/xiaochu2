@@ -8,6 +8,7 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
+import { SfxManager } from '@/core/SfxManager';
 import { TextureCache } from '@/core/TextureCache';
 import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import { shopPreloadImages, shopPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
@@ -680,11 +681,13 @@ export class ShopScene implements Scene {
 
   private _onBuyUniversal(packSize: number, cost: number): void {
     if (!PlayerData.spendCoins(cost)) {
+      SfxManager.playDenied();
       Platform.showToast('灵宠币不足');
       return;
     }
     PlayerData.addUniversalShards(packSize);
     Platform.vibrateShort('light');
+    SfxManager.playShopPurchase();
     Platform.showToast(`通用碎片 +${packSize}`, 'success');
     const ref = this._cards.get('universal');
     if (ref) ref.sub.text = this._universalSubText();
@@ -697,12 +700,14 @@ export class ShopScene implements Scene {
     const ref = this._cards.get(petId);
     if (!ref || !ref.petId) return;
     if (!PlayerData.spendCoins(ref.cost)) {
+      SfxManager.playDenied();
       Platform.showToast('灵宠币不足');
       return;
     }
     const pet = PETS.find((p) => p.id === petId);
     PlayerData.addShards(petId, ref.packSize);
     Platform.vibrateShort('light');
+    SfxManager.playShopPurchase();
     Platform.showToast(`${pet?.name ?? '灵宠'} +${ref.packSize} 碎片`);
     if (pet) ref.sub.text = this._petSubText(pet);
     this._refreshCoins();

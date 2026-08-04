@@ -87,6 +87,6 @@ export function makeBackButton(opts: BackButtonOpts): PIXI.Container {
   btn.hitArea = new PIXI.Rectangle(-hitW / 2, -hitH * 0.42, hitW, hitH);
   btn.interactiveChildren = false;
   bindPointerTap(btn, opts.onTap);
-  pressFeedback(btn);
+  pressFeedback(btn, { sfx: 'back' });
   return btn;
 }

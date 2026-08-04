@@ -217,6 +217,7 @@ export const UI_IMAGES = {
   realmBtnCta: `${PKG.scene}/images/ui/realm/realm_btn_cta.png`,
   /** 左侧玩法栏：签到 / 通天塔 / 日常 / 活动（对齐 home_hub_v4） */
   railCheckin: `${IMG}/ui/icon/rail_checkin.png`,
+  railSettings: `${IMG}/ui/icon/rail_settings.png`,
   railTower: `${IMG}/ui/icon/rail_tower.png`,
   /** 通天塔主视觉宝塔立绘（pkg-scene / CDN） */
   towerPagoda: `${PKG.scene}/images/ui/tower/tower_pagoda.png`,

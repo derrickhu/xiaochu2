@@ -10,6 +10,7 @@ import { TweenManager, Ease } from '@/core/TweenManager';
 import { EventBus } from '@/core/EventBus';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
+import { SfxManager } from '@/core/SfxManager';
 import { CHECKIN_DAYS, checkinDay } from '@/balance/checkin';
 import { formatReward } from '@/balance/rewards';
 import { PlayerData } from '@/game/PlayerData';
@@ -664,6 +665,7 @@ export class CheckinPanel extends PIXI.Container {
       y: Game.logicHeight / 2,
     };
     Platform.vibrateShort('medium');
+    SfxManager.playRewardGet();
     playClaimBurst(this._fxLayer, from.x, from.y);
     const flySec = playRewardFly(this._fxLayer, def.reward, from);
 

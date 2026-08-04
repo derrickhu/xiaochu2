@@ -10,6 +10,7 @@ import { TextureCache } from '@/core/TextureCache';
 import { petDetailPreloadImages } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { Platform } from '@/core/PlatformService';
+import { SfxManager } from '@/core/SfxManager';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { PET_MAP, type PetDef, INITIAL_PET_LEVEL, INITIAL_PET_STAR } from '@/balance/pets';
 import { getStarProfile, MAX_PET_STAR } from '@/balance/growth';
@@ -1268,10 +1269,12 @@ export class PetDetailScene implements Scene {
     const before = this._currentStats();
     const beforeProgress = this._currentProgress();
     if (!PlayerData.levelUp(this._petId)) {
+      SfxManager.playDenied();
       Platform.showToast(PlayerData.levelUpCost(this._petId) === null ? '已满级' : '经验不足');
       return;
     }
     Platform.vibrateShort('light');
+    SfxManager.playPetLevelUp();
     reportQuest('petLevelUp');
     this._build();
     this._playGrowthFeedback(before, false);
@@ -1282,10 +1285,12 @@ export class PetDetailScene implements Scene {
     const before = this._currentStats();
     const beforeProgress = this._currentProgress();
     if (!PlayerData.starUp(this._petId, true)) {
+      SfxManager.playDenied();
       Platform.showToast(PlayerData.starUpCost(this._petId) === null ? '已满星' : '碎片不足');
       return;
     }
     Platform.vibrateShort('medium');
+    SfxManager.playPetStarUp();
     reportQuest('petStarUp');
     this._build();
     this._playGrowthFeedback(before, true);

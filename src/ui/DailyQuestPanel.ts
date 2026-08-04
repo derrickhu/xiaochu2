@@ -11,6 +11,7 @@ import { TweenManager, Ease } from '@/core/TweenManager';
 import { EventBus } from '@/core/EventBus';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
+import { SfxManager } from '@/core/SfxManager';
 import {
   QUEST_ALL_CLEAR_ID, QUEST_ALL_CLEAR_REWARD,
   type DailyQuestDef, type QuestTrigger,
@@ -551,6 +552,7 @@ export class DailyQuestPanel extends PIXI.Container {
     try {
       if (!PlayerData.markQuestClaimed(QUEST_ALL_CLEAR_ID)) return;
       grantReward(QUEST_ALL_CLEAR_REWARD);
+      SfxManager.playChestOpen();
       analytics.trackDailyQuestClaim(QUEST_ALL_CLEAR_ID, {
         questName: '全部完成',
         reward: formatReward(QUEST_ALL_CLEAR_REWARD),
@@ -608,6 +610,7 @@ export class DailyQuestPanel extends PIXI.Container {
       y: Game.logicHeight / 2,
     };
     Platform.vibrateShort('medium');
+    SfxManager.playRewardGet();
     playClaimBurst(this._fxLayer, from.x, from.y);
     const flySec = playRewardFly(this._fxLayer, reward, from);
     pulse(this._body, { peak: 1.015, duration: 0.24 });

@@ -5,6 +5,7 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager } from '@/core/SceneManager';
+import { SfxManager } from '@/core/SfxManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
 import { STAGES } from '@/balance/stages';
@@ -305,7 +306,7 @@ export class BattleResultOverlay {
     content.position.set(0, -panelH / 2 + padTop);
 
     if (newlyUnlocked.length > 0) {
-      // 先播全屏收服演出，再弹出胜利结算板
+      // 先播全屏收服演出，再弹出胜利结算板；号角跟板一起出，不跟收服抢时段
       card.alpha = 0;
       card.visible = false;
       void playBossPetReveal({
@@ -313,10 +314,12 @@ export class BattleResultOverlay {
         petIds: newlyUnlocked,
         onDone: () => {
           card.visible = true;
+          SfxManager.playVictory();
           this._playCardEnter(card, panelH);
         },
       });
     } else {
+      SfxManager.playVictory();
       this._playCardEnter(card, panelH);
     }
   }
@@ -590,6 +593,7 @@ export class BattleResultOverlay {
     card.addChildAt(board, 0);
     content.position.set(0, -panelH / 2 + padTop);
 
+    SfxManager.playGameOver();
     this._playCardEnter(card, panelH);
   }
 

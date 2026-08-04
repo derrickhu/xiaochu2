@@ -22,35 +22,40 @@
     {
       "name": "gameover",
       "priority": "p0",
-      "text": "deep hollow wooden thud followed by a low descending guzheng string slide, dark and resigned, dry with a short decaying tail, no music, no voice",
-      "duration": 2.0,
+      "text": "solo soft bamboo xiao flute, only three slow descending sad minor notes fading into quiet silence, lonely heartbroken intimate close-mic, breathy fragile tone, completely dry and sparse, no percussion no drum no gong no erhu no guzheng flourish no bright bells no harmony no music loop no voice",
+      "duration": 2.6,
+      "prompt_influence": 0.8,
+      "trim": false,
       "output": "../../minigame/subpackages/pkg-audio/audio/gameover.mp3",
-      "notes": "修正：当前 gameover.mp3 与 reward.mp3 是同一个文件，打输和领奖播同一个声音。失败音必须下行、低沉，和上行的奖励音明确区分。"
+      "notes": "失败要的是「难受」不是「气势」。忌大鼓/大厅/齐奏；用孤笛下行小调，空、静、心酸。备选：_gameover_b 玉碎、_gameover_c 古琴。"
     },
 
     {
       "name": "ui_click",
       "priority": "p1",
-      "text": "single short crisp wooden block tap, hardwood on hardwood, very fast attack, tight quick decay, completely dry, no reverb, no music, no voice",
-      "duration": 0.18,
+      "text": "clean soft UI button click, gentle polished jade bead tap, smooth and clear not scratchy, short bright tick without noise or grit, pleasant mobile interface feedback, dry studio, no rasp, no hiss, no plastic scrape, no wood thud, no reverb, no music, no voice",
+      "duration": 0.14,
+      "prompt_influence": 0.75,
       "output": "../../minigame/subpackages/pkg-audio/audio/ui_click.mp3",
-      "notes": "全局按钮。目前 Button/IconButton/ActionButton 只有缩放与振动，无声。必须极干极短，否则连点会发黏。"
+      "notes": "全局按钮。要清脆干净，忌沙哑/刺耳。禁止猛抬高频 EQ。"
     },
     {
       "name": "ui_back",
       "priority": "p1",
-      "text": "short muted wooden tap, lower pitched and softer than a click, quick decay, completely dry, no reverb, no music, no voice",
-      "duration": 0.2,
+      "text": "soft clean UI back click, lower gentle jade tap, smooth muted tick, short and pleasant, no scratch no rasp no hiss, dry studio, no thud, no reverb, no music, no voice",
+      "duration": 0.15,
+      "prompt_influence": 0.75,
       "output": "../../minigame/subpackages/pkg-audio/audio/ui_back.mp3",
-      "notes": "返回/关闭。与 ui_click 同材质、低一度，形成「进/退」的听觉对位。"
+      "notes": "返回/关闭。比 ui_click 低软一档，仍要干净。"
     },
     {
       "name": "ui_tab",
       "priority": "p1",
-      "text": "light bamboo click, thin and papery, instant attack, almost no tail, dry, no reverb, no music, no voice",
-      "duration": 0.15,
+      "text": "light clean UI tab click, tiny soft glass ping, airy smooth and clear, very short, no scratch no rasp no hiss, dry studio, no thud, no reverb, no music, no voice",
+      "duration": 0.12,
+      "prompt_influence": 0.75,
       "output": "../../minigame/subpackages/pkg-audio/audio/ui_tab.mp3",
-      "notes": "标签页/分栏切换。比 ui_click 更轻更薄，避免与主按钮抢注意力。"
+      "notes": "底栏/分栏。更轻更短，忌沙哑。"
     },
 
     {
@@ -110,6 +115,15 @@
       "notes": "商店购买成功。算盘声给「结算完成」的确定感。"
     },
 
+    {
+      "name": "pet_skill",
+      "priority": "p1",
+      "text": "sharp silk whoosh rising into a bright jade chime strike, mystical pet skill cast, clear attack with short shimmering tail, dry with light air, no music, no voice, no reverb wash",
+      "duration": 0.85,
+      "prompt_influence": 0.55,
+      "output": "../../minigame/subpackages/pkg-audio/audio/pet_skill.mp3",
+      "notes": "上滑施放主动技。旧文件峰值约 -24dB、均值 -41dB，BGM 下几乎听不见。"
+    },
     {
       "name": "enemy_charge",
       "priority": "p3",

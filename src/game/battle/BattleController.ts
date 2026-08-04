@@ -240,6 +240,11 @@ export class BattleController {
     return this._statuses.all;
   }
 
+  /** 是否有硬闸门生效（表现层据此判断该播「闸门破解」还是常规命中音） */
+  get hasActiveGate(): boolean {
+    return this._statuses.hasActiveGate();
+  }
+
   /** 当前拖珠时限（秒）：基础 ± 加时/时间压缩，夹在 [dragTimeMin, dragTimeMax] */
   get dragTimeLimit(): number {
     const t = COMBAT.dragTimeLimit + this._statuses.dragTimeDelta() + this.runMods.dragTimeAdd;

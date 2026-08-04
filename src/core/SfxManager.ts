@@ -10,6 +10,7 @@
 import { AUDIO } from '@/config/Audio';
 import { ensureAudioSubpackage } from '@/config/Subpackages';
 import { CdnAssetService } from '@/core/CdnAssetService';
+import { BgmManager } from '@/core/BgmManager';
 import { COMBO_MILESTONES, getComboTier } from '@/scenes/battle/ComboDisplay';
 import { Platform } from './PlatformService';
 
@@ -27,14 +28,50 @@ export const COMBO_PITCH_SCALE = [
 
 const SCALE = COMBO_PITCH_SCALE;
 
-const SFX_PATHS = Object.values(AUDIO).filter(
+/** 全部短音效（不含 BGM）。战斗进场时整批预热，见 BattleScene._enter */
+export const SFX_PATHS = Object.values(AUDIO).filter(
   (p) => p !== AUDIO.mainBgm && p !== AUDIO.bossBgm,
 );
+
+/**
+ * 一次只可能响一声的音效，池给 1 就够。
+ *
+ * 这不是省内存的微调：默认池 4 × 35 条音效 = 140 个 InnerAudioContext，
+ * 部分机型到不了这个数就创建失败，代价是整类音效静默。
+ * 只有真会自身重叠的（连点按钮、多段消除、逐回合跳伤）才需要多个实例。
+ */
+const SINGLE_SHOT: ReadonlySet<string> = new Set([
+  AUDIO.petLevelup, AUDIO.petStarup,
+  AUDIO.gachaDraw, AUDIO.gachaRevealRare,
+  AUDIO.rewardGet, AUDIO.chestOpen, AUDIO.shopPurchase,
+  AUDIO.sceneTransition, AUDIO.errorDenied,
+  AUDIO.enemyCharge, AUDIO.gateActivate, AUDIO.gateBroken,
+  AUDIO.phaseShift, AUDIO.shieldGain, AUDIO.orbSeal,
+  AUDIO.victory, AUDIO.gameover, AUDIO.boss,
+]);
+
+/** UI 点击会被连点，2 个实例足够错开相邻两声 */
+const UI_TAP_POOL_SIZE = 2;
+const UI_TAPS: ReadonlySet<string> = new Set([AUDIO.uiClick, AUDIO.uiBack, AUDIO.uiTab]);
+
+/**
+ * 启动时预建池的范围：进首页就可能触发的。
+ * 其余（抽卡、升星、闸门…）留给首次播放时懒建 —— 那些场合都有动画铺垫，
+ * 晚一帧无感，换来启动时少建几十个音频实例。
+ */
+const EAGER_WARMUP: readonly string[] = [
+  AUDIO.uiClick, AUDIO.uiBack, AUDIO.uiTab, AUDIO.errorDenied,
+  AUDIO.eliminate, AUDIO.combo, AUDIO.rolling,
+  AUDIO.attack, AUDIO.enemyAttack, AUDIO.heroHurt, AUDIO.block,
+  AUDIO.petSkill, AUDIO.skill, AUDIO.enemySkill,
+];
 
 type SfxPool = { idx: number; items: WechatMinigame.InnerAudioContext[] };
 
 class SfxManagerClass {
   enabled = true;
+  /** 总音量倍率（设置面板调节）；单条 playXxx 的 volume 再叠在这之上 */
+  private _masterVolume = 1;
   private _sfxPool: Record<string, SfxPool> = {};
   /** 逻辑路径 → 可播路径（USER_DATA 缓存或包内） */
   private _resolvedSrc: Record<string, string> = {};
@@ -47,18 +84,27 @@ class SfxManagerClass {
     this.enabled = enabled;
   }
 
+  setMasterVolume(volume: number): void {
+    this._masterVolume = Math.max(0, Math.min(1, volume));
+  }
+
+  get masterVolume(): number {
+    return this._masterVolume;
+  }
+
   toggle(): boolean {
     this.enabled = !this.enabled;
     return this.enabled;
   }
 
   /**
-   * 预下载并建池。CDN 预热后调用，避免进战后首击无声。
+   * 预建池，避免首次触发时无声。默认只热高频音效（EAGER_WARMUP），
+   * 低频的等真正播放时懒建。
    *
    * 必须等 pkg-audio 分包就位：短音效现在留在包内，分包未加载时
    * 逻辑路径还不可读，建池会拿不到 src。loadSubpackage 幂等，重复 await 无代价。
    */
-  async warmup(paths: readonly string[] = SFX_PATHS): Promise<void> {
+  async warmup(paths: readonly string[] = EAGER_WARMUP): Promise<void> {
     if (!Platform.isMinigame) return;
     await ensureAudioSubpackage().catch((e) => {
       console.warn('[SfxManager] audio 分包加载失败', e);
@@ -236,7 +282,9 @@ class SfxManagerClass {
 
   playPetSkill(): void {
     if (!this.enabled) return;
-    this._play(AUDIO.petSkill, 0.7);
+    // 上滑施法瞬间要盖过战斗 BGM；旧 pet_skill 峰值过低时像没声音
+    BgmManager.duck(0.25, 700);
+    this._play(AUDIO.petSkill, 0.9);
   }
 
   playSkill(): void {
@@ -256,12 +304,16 @@ class SfxManagerClass {
 
   playVictory(): void {
     if (!this.enabled) return;
-    this._play(AUDIO.victory, 0.6);
+    // 胜利音必须压过 BGM；短暂压低背景，否则结算一刻像没声音
+    BgmManager.duck(0.15, 1600);
+    this._play(AUDIO.victory, 0.9);
   }
 
   playGameOver(): void {
     if (!this.enabled) return;
-    this._play(AUDIO.gameover, 0.6);
+    // 失败孤笛约 2.6s；压 BGM 让下行尾音不被盖掉
+    BgmManager.duck(0.1, 2800);
+    this._play(AUDIO.gameover, 0.95);
   }
 
   playNextFloor(): void {
@@ -275,9 +327,118 @@ class SfxManagerClass {
     }, 90);
   }
 
+  // ── UI 交互 ──
+  // 点击音会被高频连点触发；音量不能太低——手机喇叭对短促瞬态本就弱，
+  // 0.4 档实测像「没声音」。压戏靠音效本身短干，不靠把音量抹掉。
+
+  playUiClick(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.uiClick, 0.8);
+  }
+
+  playUiBack(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.uiBack, 0.75);
+  }
+
+  playUiTab(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.uiTab, 0.8);
+  }
+
+  /** 操作被拒（体力不足/条件不满足），给明确反馈避免玩家反复点 */
+  playDenied(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.errorDenied, 0.75);
+  }
+
+  playSceneTransition(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.sceneTransition, 0.55);
+  }
+
+  // ── 养成与奖励 ──
+
+  playPetLevelUp(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.petLevelup, 0.8);
+  }
+
+  playPetStarUp(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.petStarup, 0.85);
+  }
+
+  playGachaDraw(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.gachaDraw, 0.8);
+  }
+
+  playGachaReveal(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.gachaRevealRare, 0.9);
+  }
+
+  playRewardGet(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.rewardGet, 0.8);
+  }
+
+  playChestOpen(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.chestOpen, 0.8);
+  }
+
+  playShopPurchase(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.shopPurchase, 0.8);
+  }
+
+  // ── 战斗信息 ──
+
+  /** 敌人蓄力预警：玩家靠它决定攒盾还是抢输出，音量给足 */
+  playEnemyCharge(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.enemyCharge, 0.85);
+  }
+
+  playGateActivate(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.gateActivate, 0.85);
+  }
+
+  playGateBroken(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.gateBroken, 0.8);
+  }
+
+  playPhaseShift(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.phaseShift, 0.85);
+  }
+
+  playShieldGain(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.shieldGain, 0.7);
+  }
+
+  /** 每回合都响，音量必须压住，否则几回合就烦 */
+  playDotTick(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.dotTick, 0.45);
+  }
+
+  playOrbSeal(): void {
+    if (!this.enabled) return;
+    this._play(AUDIO.orbSeal, 0.75);
+  }
+
   private _poolSizeFor(src: string, requested?: number): number {
     if (src === AUDIO.combo) return this._comboPoolSize;
-    return requested ?? this._poolSize;
+    if (requested != null) return requested;
+    if (SINGLE_SHOT.has(src)) return 1;
+    if (UI_TAPS.has(src)) return UI_TAP_POOL_SIZE;
+    return this._poolSize;
   }
 
   private _ensureResolved(logical: string): Promise<string> {
@@ -375,7 +536,7 @@ class SfxManagerClass {
 
     const a = this._getPooled(src, poolSize);
     if (!a) return;
-    a.volume = volume;
+    a.volume = Math.max(0, Math.min(1, volume * this._masterVolume));
     try { a.stop(); } catch (_) {}
     try { a.seek(0); } catch (_) {}
     const rate = playbackRate !== 1.0 ? playbackRate : 1.0;

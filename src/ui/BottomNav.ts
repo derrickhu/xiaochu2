@@ -88,7 +88,7 @@ function makeBottomNavTab(opts: {
   root.hitArea = new PIXI.Rectangle(-hitSz / 2, -hitSz / 2 + iconLift / 2, hitSz, hitSz + 28);
   root.interactiveChildren = false;
   bindPointerTap(root, opts.onTap);
-  pressFeedback(root);
+  pressFeedback(root, { sfx: 'tab' });
   return root;
 }
 

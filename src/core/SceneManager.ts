@@ -66,6 +66,8 @@ class SceneManagerClass {
 
     // 退出当前场景
     if (this._currentScene) {
+      // 不在这里播 scene_transition：几乎所有切场景都先经过 pressFeedback 点击音，
+      // 再叠 0.3s 丝巾扫尾会听成「点完还有拖音」。过渡音留给少数需要氛围的调用点显式播。
       TweenManager.cancelTarget(this._currentScene.container);
       this._currentScene.onExit?.();
       Game.stage.removeChild(this._currentScene.container);

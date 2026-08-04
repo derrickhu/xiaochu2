@@ -16,6 +16,12 @@ export function warmupCdnAssets(): void {
   if (started || !Platform.isMinigame || !CdnAssetService.enabled) return;
   started = true;
 
+  // SFX 建池不等 CDN：音效已在包内，只需分包就位。
+  // 若串在 preloadPaths 之后，就得先下完 2.1MB BGM，首页最初几秒点按钮全是静音。
+  void SfxManager.warmup().catch((e) => {
+    console.warn('[CDN] 音效预热失败', e);
+  });
+
   void (async () => {
     try {
       await CdnAssetService.fetchManifest();
@@ -31,7 +37,6 @@ export function warmupCdnAssets(): void {
     // 商店壳优先：进页才下会空壳半晌。短音效已留包内，只有 BGM 需要从 CDN 拉
     const bgmPaths = [AUDIO.mainBgm, AUDIO.bossBgm];
     void CdnAssetService.preloadPaths([...SHOP_SHELL_IMAGES, ...petPaths, ...bgmPaths])
-      .then(() => SfxManager.warmup())
       .catch((e) => {
         console.warn('[CDN] 资源预热失败', e);
       });

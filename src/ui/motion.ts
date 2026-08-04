@@ -7,6 +7,7 @@
 import * as PIXI from 'pixi.js';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
+import { SfxManager } from '@/core/SfxManager';
 import { iosPlatform } from '@/core/webglContextPatch';
 
 /** iOS 真机 Tween 补间可能不生效，UI 须直接落到终态（与 SceneManager 进场 instant 一致） */
@@ -69,15 +70,29 @@ export function fadeOut(
   });
 }
 
+/** pressFeedback 的音效类型；`none` 用于本身另有音效的场合，避免叠两声 */
+export type PressSfx = 'click' | 'back' | 'tab' | 'none';
+
 /**
- * 按钮按下缩放反馈：按下缩小、抬起/点击回弹。
+ * 按钮按下缩放反馈：按下缩小、抬起/点击回弹，并播点击音。
  * 由 makeButton 默认接入；也可手动给任意可交互容器附加。
+ *
+ * 音效挂在这里而不是各按钮组件里，因为所有按钮（Button / IconButton /
+ * ActionButton / BackButton / BottomNav / 导航箭头…）都经过本函数，
+ * 一处接入即全局覆盖，也不会有人新写按钮时漏掉。
+ *
+ * 播在 pointerdown 而非 pointertap：按下即响才有手感，
+ * 等到 tap 会晚一个手指抬起的时间。
  *
  * 只在 pointerup / pointerupoutside 回弹，不在 pointertap 上回弹：
  * tap 回调常切场景或 destroy 按钮，若再 tween scale 会读到 null。
  */
-export function pressFeedback(target: PIXI.Container, opts?: { scale?: number }): void {
+export function pressFeedback(
+  target: PIXI.Container,
+  opts?: { scale?: number; sfx?: PressSfx },
+): void {
   const downScale = opts?.scale ?? 0.94;
+  const sfx = opts?.sfx ?? 'click';
   const alive = (): boolean => {
     if (target.destroyed) return false;
     // 勿读 target.scale 做探测：destroy 后 transform 为 null，getter 会抛错
@@ -86,6 +101,9 @@ export function pressFeedback(target: PIXI.Container, opts?: { scale?: number })
 
   const press = (): void => {
     if (!alive()) return;
+    if (sfx === 'click') SfxManager.playUiClick();
+    else if (sfx === 'back') SfxManager.playUiBack();
+    else if (sfx === 'tab') SfxManager.playUiTab();
     try {
       TweenManager.cancelTarget(target.scale);
       TweenManager.to({

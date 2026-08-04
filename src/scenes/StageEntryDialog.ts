@@ -26,6 +26,7 @@ import {
   makeModalTitlePlaque, makeStarRow, makeElementOrb,
 } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
+import { pressFeedback } from '@/ui/motion';
 
 /** 对齐 UI 图：略宽于签到板；PAD_TOP 加大避免关卡名贴顶匾 */
 const PANEL_W = 620;
@@ -359,6 +360,8 @@ function buildDifficultyPills(opts: {
     cell.hitArea = new PIXI.Rectangle(0, 0, half, h);
     cell.interactiveChildren = false;
     bindPointerTap(cell, () => opts.onSelect(elite));
+    // 分档切换不是 makeButton，补 tab 点击音
+    pressFeedback(cell, { sfx: 'tab' });
     root.addChild(cell);
   };
 

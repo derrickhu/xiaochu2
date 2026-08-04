@@ -21,7 +21,7 @@ import { makeText } from './text';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { pressFeedback } from './motion';
 
-export type HomeRailId = 'checkin' | 'daily' | 'shop' | 'sidebar' | 'desktop';
+export type HomeRailId = 'checkin' | 'daily' | 'shop' | 'settings' | 'sidebar' | 'desktop';
 
 export interface HomeRailItem {
   id: HomeRailId;
@@ -42,6 +42,7 @@ export const DEFAULT_HOME_RAIL: readonly HomeRailItem[] = [
   { id: 'checkin', label: '签到', glyph: '签', iconPath: UI_IMAGES.railCheckin },
   { id: 'daily', label: '日常', glyph: '常', iconPath: UI_IMAGES.railDaily },
   { id: 'shop', label: '商店', glyph: '店', iconPath: UI_IMAGES.navShop },
+  { id: 'settings', label: '设置', glyph: '设', iconPath: UI_IMAGES.railSettings },
 ];
 
 /**
@@ -65,6 +66,8 @@ export function buildHomePlayRailItems(): HomeRailItem[] {
         };
       case 'shop':
         return { ...item, onTap: () => SceneManager.switchTo('shop') };
+      case 'settings':
+        return { ...item, onTap: () => EventBus.emit('settings:open') };
       default:
         return { ...item };
     }

@@ -16,7 +16,7 @@ import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
 import { BgmManager } from '@/core/BgmManager';
-import { SfxManager } from '@/core/SfxManager';
+import { SfxManager, SFX_PATHS } from '@/core/SfxManager';
 import { enemyDisplayTierOf } from '@/balance/enemyDisplay';
 import { isComboMilestone } from './battle/ComboDisplay';
 import { GMManager } from '@/core/GMManager';
@@ -184,7 +184,9 @@ export class BattleScene implements Scene {
     await Promise.all([
       ensureAssets(battlePreloadImages(stageId, PlayerData.team)),
       ensurePetAvatars(battlePetAvatarEntries(stageId, PlayerData.team)),
-      SfxManager.warmup().catch((e) => console.warn('[Battle] sfx warmup', e)),
+      // 战斗内音效密集且贴演出，传全量而非默认的高频子集：
+      // 进场本就在等贴图，这里多建几个池不额外增加等待
+      SfxManager.warmup(SFX_PATHS).catch((e) => console.warn('[Battle] sfx warmup', e)),
     ]);
     // pkg-fx 特效贴图懒加载：不阻塞进场；失败/加载中时演出自动降级为纯白粒子
     void ensureAssets([
@@ -552,6 +554,10 @@ export class BattleScene implements Scene {
       }
       await delay(UI.anim.attackGap);
       if (isStale()) return false;
+    } else if (this._ctrl.hasActiveGate) {
+      // 闸门在场却没拦住：这一声是「你解开了」的确认。
+      // 少了它，玩家只知道这次没被归零，不知道是自己凑对了条件。
+      SfxManager.playGateBroken();
     }
 
     let appliedDamage = 0;
@@ -728,7 +734,8 @@ export class BattleScene implements Scene {
       await this._hud.playWaveEnter();
       return false;
     }
-    SfxManager.playVictory();
+    // 胜利音改在结算板真正弹出时播（BattleResultOverlay），
+    // 避免通天塔三选一 / Boss 收服演出把 2s 号角提前耗掉，玩家看到「战斗胜利！」时没声。
     this._closeEnemyDetail();
     this._resultOpen = true;
     await this._presentVictoryResult();
@@ -777,7 +784,7 @@ export class BattleScene implements Scene {
 
   /** 致死受击可读停顿后再弹失败，避免「还没看清伤害就结算」 */
   private async _presentDefeatAfterHit(): Promise<void> {
-    SfxManager.playGameOver();
+    // 失败音改在结算板弹出时播（BattleResultOverlay），与「战斗失败」标题对齐
     await delay(UI.anim.defeatHitHold);
     if (this._resultOpen) return;
     this._showDefeatOverlay();
@@ -806,9 +813,7 @@ export class BattleScene implements Scene {
 
     const result = this._ctrl.enemyAct();
     this._hud.refreshEnemyCd();
-    if (!ENEMY_SILENT_ACTIONS.has(result.action)) {
-      SfxManager.playEnemySkill();
-    }
+    playEnemyActionSfx(result.action);
     switch (result.action) {
       case 'attack':
       case 'chargedAttack': {
@@ -945,6 +950,7 @@ export class BattleScene implements Scene {
     for (const tick of result.dotTicks ?? []) {
       if (isStale()) return;
       if (tick.amount <= 0) continue;
+      SfxManager.playDotTick();
       if (tick.owner === 'enemy') {
         await this._hud.playEnemyDotTick(this._fx, tick.amount);
       } else {
@@ -1131,6 +1137,28 @@ const ENEMY_SILENT_ACTIONS: ReadonlySet<EnemyActResult['action']> = new Set([
   'attack',
   'chargedAttack',
 ]);
+
+/** 有专属音的敌人行动。这几类要么是预警、要么是机制登场，需要能一听就分辨出来 */
+const ENEMY_ACTION_SFX: Partial<Record<EnemyActResult['action'], () => void>> = {
+  charge: () => SfxManager.playEnemyCharge(),
+  phaseShift: () => SfxManager.playPhaseShift(),
+  elementGate: () => SfxManager.playGateActivate(),
+  comboGate: () => SfxManager.playGateActivate(),
+  damageVoid: () => SfxManager.playGateActivate(),
+  undying: () => SfxManager.playGateActivate(),
+  sealOrbs: () => SfxManager.playOrbSeal(),
+  counterSeal: () => SfxManager.playOrbSeal(),
+  shield: () => SfxManager.playShieldGain(),
+};
+
+function playEnemyActionSfx(action: EnemyActResult['action']): void {
+  const special = ENEMY_ACTION_SFX[action];
+  if (special) {
+    special();
+    return;
+  }
+  if (!ENEMY_SILENT_ACTIONS.has(action)) SfxManager.playEnemySkill();
+}
 
 /**
  * 闸门登场横幅文案。必须把「要做什么」讲清楚——闸门是谜题不是惩罚，

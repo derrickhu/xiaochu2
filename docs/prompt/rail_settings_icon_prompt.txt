@@ -1,0 +1,13 @@
+Game UI icon, 160x160 pixel square canvas, centered subject with transparent margin.
+Style match casual Chinese fantasy mobile game rail icons: soft 3D, rounded bubbly forms,
+sage green + cream + dull gold accents, clean outlines, gentle gradients, polished casual game art.
+
+Subject: a decorative round gear / cog settings emblem.
+- Thick sage-green metal gear with rounded teeth (not sharp industrial)
+- Cream center disk with a small jade-green gem or yin-yang-free jade bead in the middle
+- Thin gold rim accents on the gear teeth tips
+- Soft drop shadow under the gear for slight 3D lift
+- Same visual weight and padding as a calendar check-in icon or parchment scroll icon
+
+NO TEXT, no labels, no captions, no letters, no Chinese characters, no numbers, no watermark.
+Plain transparent background (checkerboard not needed). Single icon only, no grid, no frame, no UI chrome.

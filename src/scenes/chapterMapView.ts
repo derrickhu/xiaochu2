@@ -24,6 +24,7 @@ import { BACKGROUND_IMAGES, chapterRegionBg, MAP_UI_IMAGES } from '@/config/Asse
 import { getPetAvatarTexture, loadPetAvatarTexture } from '@/config/petAvatarTexture';
 import { COLORS, FONT_SIZE, makeText, makeStarRow } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
+import { pressFeedback } from '@/ui/motion';
 import { ScrollListController } from '@/ui/ScrollList';
 
 /** 圆柱关卡点显示尺寸（略小，给星星/Boss 让视觉重心） */
@@ -239,6 +240,8 @@ function buildStageNode(
     wrap.eventMode = 'static';
     wrap.cursor = 'pointer';
     bindPointerTap(wrap, opts.onTap, { guard: () => !opts.scroll.moved });
+    // 关卡节点不走 makeButton，原先只有 tap 无点击音
+    pressFeedback(wrap);
   } else {
     wrap.eventMode = 'none';
   }

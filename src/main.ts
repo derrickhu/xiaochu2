@@ -6,7 +6,9 @@ import { Game } from '@/core/Game';
 import { SceneManager } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
 import { BgmManager } from '@/core/BgmManager';
+import { loadAudioSettings } from '@/core/AudioSettings';
 import { Platform } from '@/core/PlatformService';
+import { SettingsPanel } from '@/ui/SettingsPanel';
 import { BackendService } from '@/core/BackendService';
 import { configureWechatShare } from '@/core/ShareService';
 import { initAnalytics, analytics, setAnalyticsUserId } from '@/analytics';
@@ -144,6 +146,7 @@ async function main(): Promise<void> {
   OverlayManager.container.addChild(new CheckinPanel());
   OverlayManager.container.addChild(new DailyQuestPanel());
   OverlayManager.container.addChild(new StaminaPanel());
+  OverlayManager.container.addChild(new SettingsPanel());
 
   if (GMManager.isRuntimeAllowed) {
     OverlayManager.container.addChild(new GMPanel());
@@ -167,6 +170,8 @@ async function main(): Promise<void> {
   warmupCdnAssets();
 
   await ensureAudioSubpackage();
+  // 先落用户音量偏好，再起播——否则会先以默认量轰一声再被调低
+  loadAudioSettings();
   BgmManager.playMain();
 
   analytics.trackSessionStart({
