@@ -186,8 +186,8 @@ class GMManagerClass {
     this._commands.push({
       id: 'instant_clear',
       group: '战斗',
-      name: '一键通关',
-      desc: '秒杀当前关敌人并结算（战斗中）',
+      name: '跳过本波',
+      desc: '跳过当前波；末波则结算通关（战斗中）',
       execute: () => {
         if (!this._instantClearHandler) return '请进入战斗后使用';
         return this._instantClearHandler();

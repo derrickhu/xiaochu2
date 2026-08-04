@@ -30,7 +30,7 @@ const SCALE = COMBO_PITCH_SCALE;
 
 /** 全部短音效（不含 BGM）。战斗进场时整批预热，见 BattleScene._enter */
 export const SFX_PATHS = Object.values(AUDIO).filter(
-  (p) => p !== AUDIO.mainBgm && p !== AUDIO.bossBgm,
+  (p) => p !== AUDIO.mainBgm && p !== AUDIO.battleBgm && p !== AUDIO.bossBgm,
 );
 
 /**
@@ -174,7 +174,8 @@ class SfxManagerClass {
       this._playEx(AUDIO.boss, 0.6, SCALE[0]);
       setTimeout(() => {
         if (this.enabled) {
-          this._playEx(AUDIO.victory, 0.5, SCALE[4]);
+          // 不用 victory：结算短曲太长，高连击会误播整段号角
+          this._playEx(AUDIO.levelup, 0.5, SCALE[4]);
           this._playEx(AUDIO.skill, 0.4, SCALE[7]);
           this._playComboEx(0.35, SCALE[7]);
         }
@@ -188,7 +189,7 @@ class SfxManagerClass {
       const impactVol = Math.min(0.8, 0.5 + (comboNum / 10) * 0.1);
       this._playEx(AUDIO.boss, impactVol, 0.6);
       setTimeout(() => {
-        if (this.enabled) this._playEx(AUDIO.victory, impactVol * 0.7, 1.0);
+        if (this.enabled) this._playEx(AUDIO.levelup, impactVol * 0.7, 1.0);
       }, 80);
     }
   }
@@ -304,9 +305,9 @@ class SfxManagerClass {
 
   playVictory(): void {
     if (!this.enabled) return;
-    // 胜利音必须压过 BGM；短暂压低背景，否则结算一刻像没声音
-    BgmManager.duck(0.15, 1600);
-    this._play(AUDIO.victory, 0.9);
+    // 胜利短曲约 8.5s，压 BGM 全程，否则中段被战斗曲盖掉
+    BgmManager.duck(0.12, 8500);
+    this._play(AUDIO.victory, 0.95);
   }
 
   playGameOver(): void {
@@ -314,6 +315,13 @@ class SfxManagerClass {
     // 失败孤笛约 2.6s；压 BGM 让下行尾音不被盖掉
     BgmManager.duck(0.1, 2800);
     this._play(AUDIO.gameover, 0.95);
+  }
+
+  /** 离开结算板时掐掉胜负短曲，避免切场景后还在响 */
+  stopSettlementSting(): void {
+    this._stop(AUDIO.victory);
+    this._stop(AUDIO.gameover);
+    BgmManager.unduck();
   }
 
   playNextFloor(): void {
@@ -419,7 +427,8 @@ class SfxManagerClass {
 
   playShieldGain(): void {
     if (!this.enabled) return;
-    this._play(AUDIO.shieldGain, 0.7);
+    // 护盾是信息音，不能盖过战斗反馈；旧版太亮太突
+    this._play(AUDIO.shieldGain, 0.45);
   }
 
   /** 每回合都响，音量必须压住，否则几回合就烦 */
@@ -510,6 +519,14 @@ class SfxManagerClass {
 
   private _play(src: string, volume?: number): void {
     this._playEx(src, volume ?? 1, 1.0);
+  }
+
+  private _stop(src: string): void {
+    const pool = this._sfxPool[src];
+    if (!pool) return;
+    for (const a of pool.items) {
+      try { a.stop(); } catch (_) { /* ignore */ }
+    }
   }
 
   /** 支持 playbackRate 变调（xiao_chu _playSfxEx + BGM 双保险） */

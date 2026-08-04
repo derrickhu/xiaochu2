@@ -13,6 +13,8 @@ const BGM = `${SUBPACKAGE_ROOT.audio}/bgm`;
 
 export const AUDIO = {
   mainBgm: `${BGM}/bgm.mp3`,
+  /** 常规战斗（非 Boss / 守关波） */
+  battleBgm: `${BGM}/battle_bgm.mp3`,
   bossBgm: `${BGM}/boss_bgm.mp3`,
 
   eliminate: `${A}/eliminate.mp3`,

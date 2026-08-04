@@ -210,7 +210,7 @@ export class BattleScene implements Scene {
     });
   }
 
-  /** Boss / 守关波切 Boss BGM，其余保持主 BGM */
+  /** Boss / 守关波切 Boss BGM，其余切常规战斗曲 */
   private _syncBattleBgm(playEntranceSfx = false): void {
     const tier = enemyDisplayTierOf(this._ctrl.enemy.def);
     const intense = this._ctrl.stage.isBoss || tier === 'boss' || tier === 'miniBoss';
@@ -218,7 +218,7 @@ export class BattleScene implements Scene {
       BgmManager.playBoss();
       if (playEntranceSfx) SfxManager.playBoss();
     } else {
-      BgmManager.resumeNormal();
+      BgmManager.playBattle();
     }
   }
 
@@ -315,10 +315,10 @@ export class BattleScene implements Scene {
       () => this._alive && !this._resultOpen,
     );
 
-    // 跳过关卡须在敌人详情热区之后挂载，否则全宽点怪区会吃掉点击
+    // 跳过本波须在敌人详情热区之后挂载，否则全宽点怪区会吃掉点击
     if (GMManager.isEnabled) {
       const skipBtn = makeButton({
-        label: '跳过关卡', width: 148, height: 48, variant: 'danger',
+        label: '跳过本波', width: 148, height: 48, variant: 'danger',
         onTap: () => { GMManager.executeCommand('instant_clear'); },
       });
       // 避开右上角微信胶囊/收起区：靠左于胶囊，纵向落到 safeTop 下方
@@ -658,19 +658,37 @@ export class BattleScene implements Scene {
     return waveAdvanced;
   }
 
-  /** GM：立即通关当前关卡（跳过剩余波次与演出；通天塔仍走机缘三选一） */
+  /**
+   * GM：跳过当前波。
+   * 还有下一波 → 推进一波并刷新；已是末波 → 直接结算（通天塔仍走机缘三选一）。
+   */
   private _executeGmInstantClear(): string {
-    if (!this._alive || this._ctrl.isFinished) return '战斗已结束';
+    if (!this._alive || this._ctrl.isFinished || this._resultOpen) return '战斗已结束';
     this._resolveSeq++;
     this._stopPresent?.();
     this._stopPresent = null;
     this._busy = false;
     this._boardView?.cancelDrag();
     if (this._ctrl.turnsUsed === 0) this._ctrl.turnsUsed = 1;
-    while (this._ctrl.hasNextWave()) this._ctrl.nextWave();
+    this._closeEnemyDetail();
+
+    if (this._ctrl.hasNextWave()) {
+      const from = this._ctrl.waveIndex + 1;
+      this._ctrl.nextWave();
+      this._settleBattleVisuals();
+      this._syncBattleBgm();
+      this._hud.refreshEnemy(false);
+      this._hud.refreshHeroHp();
+      this._hud.refreshStageHeader();
+      this._refreshSkillUi();
+      this._ctrl.beginPlayerTurn();
+      void this._hud.playWaveEnter();
+      const to = this._ctrl.waveIndex + 1;
+      return `已跳过第 ${from} 波 → 第 ${to}/${this._ctrl.totalWaves} 波`;
+    }
+
     this._ctrl.enemy.hp = 0;
     this._settleBattleVisuals();
-    this._closeEnemyDetail();
     this._resultOpen = true;
     void this._presentVictoryResult();
     return `已通关：${this._ctrl.stage.name}`;

@@ -1,5 +1,5 @@
 /**
- * 背景音乐管理（主循环 + Boss 战）
+ * 背景音乐管理（主循环 + 常规战斗 + Boss 战）
  *
  * 使用平台 InnerAudioContext，路径见 config/Audio.ts。
  * CDN 音频异步 resolve 后再设 src，不阻塞主流程。
@@ -8,14 +8,17 @@ import { AUDIO } from '@/config/Audio';
 import { CdnAssetService } from '@/core/CdnAssetService';
 import { Platform } from './PlatformService';
 
+type CombatKind = 'battle' | 'boss';
+
 class BgmManagerClass {
   private _ctx: WechatMinigame.InnerAudioContext | null = null;
-  private _bossCtx: WechatMinigame.InnerAudioContext | null = null;
+  private _combatCtx: WechatMinigame.InnerAudioContext | null = null;
+  private _combatKind: CombatKind | null = null;
   private _enabled = true;
   /** 默认低于 SFX：BGM 常驻，抬太高会盖掉按钮/战斗反馈（见 AudioSettings） */
   private _volume = 0.28;
   private _mainLogical = AUDIO.mainBgm;
-  private _bossLogical = AUDIO.bossBgm;
+  private _duckTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** 播放主 BGM（已在播则忽略） */
   playMain(): void {
@@ -44,39 +47,19 @@ class BgmManagerClass {
     });
   }
 
-  /** Boss 战 BGM：暂停主 BGM，播 Boss 曲 */
-  playBoss(): void {
-    if (!this._enabled || !Platform.isMinigame) return;
-    this._destroyBoss();
-    if (this._ctx) {
-      try { this._ctx.stop(); } catch (_) {}
-    }
-
-    const ctx = Platform.createInnerAudioContext();
-    if (!ctx) return;
-
-    this._bossCtx = ctx;
-    ctx.loop = true;
-    ctx.volume = Math.min(1, this._volume * 1.2);
-    ctx.onError((err) => {
-      console.warn('[BgmManager] Boss BGM 加载失败:', this._bossLogical, err);
-      this._destroyBoss();
-    });
-    void CdnAssetService.resolveOrDownload(this._bossLogical).then((src) => {
-      if (this._bossCtx !== ctx) return;
-      ctx.src = src;
-      ctx.play();
-    }).catch((e) => {
-      console.warn('[BgmManager] Boss BGM CDN 解析失败', e);
-      if (this._bossCtx !== ctx) return;
-      ctx.src = this._bossLogical;
-      ctx.play();
-    });
+  /** 常规战斗 BGM：暂停主 BGM，播战斗曲 */
+  playBattle(): void {
+    this._playCombat('battle', AUDIO.battleBgm, 1.0);
   }
 
-  /** Boss 战结束：销毁 Boss 曲，恢复主 BGM */
+  /** Boss 战 BGM：暂停主 BGM，播 Boss 曲（略抬音量） */
+  playBoss(): void {
+    this._playCombat('boss', AUDIO.bossBgm, 1.2);
+  }
+
+  /** 战斗结束：销毁战斗曲，恢复主 BGM */
   resumeNormal(): void {
-    this._destroyBoss();
+    this._destroyCombat();
     if (!this._enabled || !Platform.isMinigame) return;
     if (this._ctx) {
       try {
@@ -90,13 +73,13 @@ class BgmManagerClass {
 
   pause(): void {
     try { this._ctx?.pause(); } catch (_) {}
-    try { this._bossCtx?.pause(); } catch (_) {}
+    try { this._combatCtx?.pause(); } catch (_) {}
   }
 
   resume(): void {
     if (!this._enabled) return;
     try {
-      if (this._bossCtx) this._bossCtx.play();
+      if (this._combatCtx) this._combatCtx.play();
       else if (this._ctx) this._ctx.play();
       else this.playMain();
     } catch (_) {}
@@ -104,7 +87,7 @@ class BgmManagerClass {
 
   stop(): void {
     this._destroyMain();
-    this._destroyBoss();
+    this._destroyCombat();
   }
 
   setEnabled(enabled: boolean): void {
@@ -116,7 +99,10 @@ class BgmManagerClass {
   setVolume(volume: number): void {
     this._volume = Math.max(0, Math.min(1, volume));
     if (this._ctx) this._ctx.volume = this._volume;
-    if (this._bossCtx) this._bossCtx.volume = Math.min(1, this._volume * 1.2);
+    if (this._combatCtx) {
+      const mult = this._combatKind === 'boss' ? 1.2 : 1.0;
+      this._combatCtx.volume = Math.min(1, this._volume * mult);
+    }
   }
 
   get volume(): number {
@@ -133,18 +119,71 @@ class BgmManagerClass {
    */
   duck(level = 0.15, ms = 1400): void {
     if (!this._enabled) return;
-    const base = this._volume;
-    const ducked = Math.max(0, Math.min(1, base * level));
+    if (this._duckTimer != null) {
+      clearTimeout(this._duckTimer);
+      this._duckTimer = null;
+    }
+    const ducked = Math.max(0, Math.min(1, this._volume * level));
     try {
       if (this._ctx) this._ctx.volume = ducked;
-      if (this._bossCtx) this._bossCtx.volume = ducked;
+      if (this._combatCtx) this._combatCtx.volume = ducked;
     } catch (_) { /* ignore */ }
-    setTimeout(() => {
-      try {
-        if (this._ctx) this._ctx.volume = this._volume;
-        if (this._bossCtx) this._bossCtx.volume = Math.min(1, this._volume * 1.2);
-      } catch (_) { /* ignore */ }
+    this._duckTimer = setTimeout(() => {
+      this._duckTimer = null;
+      this._restoreDuckedVolume();
     }, ms);
+  }
+
+  /** 结算短曲被点掉时立刻还原 BGM，不要等 duck 定时器跑完 */
+  unduck(): void {
+    if (this._duckTimer != null) {
+      clearTimeout(this._duckTimer);
+      this._duckTimer = null;
+    }
+    this._restoreDuckedVolume();
+  }
+
+  private _restoreDuckedVolume(): void {
+    const combatMult = this._combatKind === 'boss' ? 1.2 : 1.0;
+    try {
+      if (this._ctx) this._ctx.volume = this._volume;
+      if (this._combatCtx) {
+        this._combatCtx.volume = Math.min(1, this._volume * combatMult);
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  private _playCombat(kind: CombatKind, logical: string, volumeMult: number): void {
+    if (!this._enabled || !Platform.isMinigame) return;
+    // 同曲已在播：不重切，避免波次切换时重头播
+    if (this._combatCtx && this._combatKind === kind) return;
+
+    this._destroyCombat();
+    if (this._ctx) {
+      try { this._ctx.stop(); } catch (_) {}
+    }
+
+    const ctx = Platform.createInnerAudioContext();
+    if (!ctx) return;
+
+    this._combatCtx = ctx;
+    this._combatKind = kind;
+    ctx.loop = true;
+    ctx.volume = Math.min(1, this._volume * volumeMult);
+    ctx.onError((err) => {
+      console.warn(`[BgmManager] ${kind} BGM 加载失败:`, logical, err);
+      this._destroyCombat();
+    });
+    void CdnAssetService.resolveOrDownload(logical).then((src) => {
+      if (this._combatCtx !== ctx) return;
+      ctx.src = src;
+      ctx.play();
+    }).catch((e) => {
+      console.warn(`[BgmManager] ${kind} BGM CDN 解析失败`, e);
+      if (this._combatCtx !== ctx) return;
+      ctx.src = logical;
+      ctx.play();
+    });
   }
 
   private _destroyMain(): void {
@@ -154,11 +193,12 @@ class BgmManagerClass {
     this._ctx = null;
   }
 
-  private _destroyBoss(): void {
-    if (!this._bossCtx) return;
-    try { this._bossCtx.stop(); } catch (_) {}
-    try { this._bossCtx.destroy(); } catch (_) {}
-    this._bossCtx = null;
+  private _destroyCombat(): void {
+    if (!this._combatCtx) return;
+    try { this._combatCtx.stop(); } catch (_) {}
+    try { this._combatCtx.destroy(); } catch (_) {}
+    this._combatCtx = null;
+    this._combatKind = null;
   }
 }
 

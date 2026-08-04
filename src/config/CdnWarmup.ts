@@ -35,7 +35,7 @@ export function warmupCdnAssets(): void {
     });
 
     // 商店壳优先：进页才下会空壳半晌。短音效已留包内，只有 BGM 需要从 CDN 拉
-    const bgmPaths = [AUDIO.mainBgm, AUDIO.bossBgm];
+    const bgmPaths = [AUDIO.mainBgm, AUDIO.battleBgm, AUDIO.bossBgm];
     void CdnAssetService.preloadPaths([...SHOP_SHELL_IMAGES, ...petPaths, ...bgmPaths])
       .catch((e) => {
         console.warn('[CDN] 资源预热失败', e);

@@ -93,6 +93,8 @@ export class BattleResultOverlay {
 
   clear(): void {
     this._open = false;
+    // 点「下一关 / 再打一次 / 返回」等离开时掐掉胜负短曲
+    SfxManager.stopSettlementSting();
     this._overlayLayer.removeChildren().forEach((c) => c.destroy({ children: true }));
   }
 

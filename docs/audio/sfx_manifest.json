@@ -159,10 +159,11 @@
     {
       "name": "shield_gain",
       "priority": "p3",
-      "text": "soft jade dome forming with a gentle protective shimmer, warm and reassuring, short tail, dry, no music, no voice",
-      "duration": 0.6,
+      "text": "very soft quiet protective whoosh, gentle air cushion forming, muted soft jade tap almost whispered, warm low shimmer barely there, smooth fade in and out, intimate dry studio, no sharp attack, no bright bells, no chime burst, no metallic ping, no music, no voice",
+      "duration": 0.45,
+      "prompt_influence": 0.75,
       "output": "../../minigame/subpackages/pkg-audio/audio/shield_gain.mp3",
-      "notes": "我方获得护盾。现在只有视觉。"
+      "notes": "获得护盾。要轻、软、不抢戏；忌亮叮/金属刺。"
     },
     {
       "name": "dot_tick",
