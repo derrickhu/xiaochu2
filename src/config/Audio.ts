@@ -1,13 +1,19 @@
 /**
  * 音频资源路径（相对 minigame 根目录，位于 pkg-audio 分包）
+ *
+ * 分两个目录是刻意的，因为两类音频的加载策略相反：
+ * - `audio/` 短音效留包内（CdnConfig.bundledDirs），要「按下即响」；
+ * - `bgm/`   长背景乐走 CDN（CdnConfig.cdnDirs），省 2.1MB 包体，晚几百毫秒无感。
+ * 改动这里的目录名要同步 CdnConfig，否则 SFX 会被 cdn:strip 删掉导致整局静音。
  */
 import { SUBPACKAGE_ROOT } from '@/config/Subpackages';
 
 const A = `${SUBPACKAGE_ROOT.audio}/audio`;
+const BGM = `${SUBPACKAGE_ROOT.audio}/bgm`;
 
 export const AUDIO = {
-  mainBgm: `${A}/bgm.mp3`,
-  bossBgm: `${A}/boss_bgm.mp3`,
+  mainBgm: `${BGM}/bgm.mp3`,
+  bossBgm: `${BGM}/boss_bgm.mp3`,
 
   eliminate: `${A}/eliminate.mp3`,
   combo: `${A}/combo.mp3`,

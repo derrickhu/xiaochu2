@@ -39,8 +39,12 @@ export const CDN_CONFIG: CdnConfig = {
   downloadRetry: 2,
   downloadTimeoutMs: 30000,
   /**
-   * 大体积立绘 / 场景底图 / 音频走 CDN。
+   * 大体积立绘 / 场景底图 / BGM 走 CDN。
    * 微信上传前务必 `npm run cdn:strip` 物理剔除（勿只靠 packOptions.ignore）。
+   *
+   * 短音效**不在此列**：它们要求「按下即响」，走 CDN 时首次播放必然延迟，
+   * 且一旦 strip 后 manifest 漏登记就会整局静音（曾发生：技能音效全哑）。
+   * 全部 SFX 合计仅约 276KB，留包内换取确定性。
    */
   cdnDirs: [
     'subpackages/pkg-pet/images',
@@ -48,14 +52,16 @@ export const CDN_CONFIG: CdnConfig = {
     'subpackages/pkg-enemy-cr/images',
     /** 含战斗/秘境/通天塔/签到等场景图；整包走 CDN，避免单分包与总包超限 */
     'subpackages/pkg-scene/images',
-    'subpackages/pkg-audio/audio',
+    /** 仅 BGM（约 2.1MB），短音效留包内 */
+    'subpackages/pkg-audio/bgm',
   ],
-  /** 主包 UI / 棋盘珠 / 战斗 HUD / 特效等首屏与操作强依赖资源留包内 */
+  /** 主包 UI / 棋盘珠 / 战斗 HUD / 特效 / 短音效等首屏与操作强依赖资源留包内 */
   bundledDirs: [
     'images',
     'subpackages/pkg-battle',
     'subpackages/pkg-fx',
     'subpackages/pkg-shop',
+    'subpackages/pkg-audio/audio',
   ],
   ignoreFiles: ['game.js', '.DS_Store', 'Thumbs.db'],
 };

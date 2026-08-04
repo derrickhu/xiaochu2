@@ -1,0 +1,170 @@
+================================================================================
+小畜2 BGM 生成提示词（Suno）
+================================================================================
+
+用法：Suno 至今没有公开 API（2026-07 起仅对受邀伙伴探索），所以流程是手动的：
+  1. 打开 suno.com，开 Custom Mode（必须，否则 Style/结构标签会被忽略）
+  2. Style of Music 填下面的 [STYLE] 整段
+  3. Lyrics 框填 [STRUCTURE] 整段（纯段落标记，不写歌词）
+  4. 勾选 Instrumental
+  5. 每首生成 2~4 版，选循环接得最顺的那一版
+  6. 下载 mp3 → 转码（见文末规格）→ 放入 minigame/subpackages/pkg-audio/bgm/
+
+不要用第三方 Suno API 网关：那些是账号代理，有封号和授权风险。
+
+--------------------------------------------------------------------------------
+世界观与音色统一原则
+--------------------------------------------------------------------------------
+
+游戏是国风五行消除 RPG（灵宠、秘境、通天塔）。所有曲目共享三件标志性乐器，
+只改配器密度、BPM 与调性明暗 —— 这样不同场景的曲子听起来才是同一个世界，
+而不是一个拼盘。
+
+  标志性乐器（每首都要出现至少两件）：古筝(guzheng)、笛/箫(dizi/xiao)、
+                                     framedrum/taiko 低鼓
+  可选补充：琵琶(pipa)、二胡(erhu)、编钟(bianzhong bells)、木鱼(wooden fish)
+  一律避免：西式弦乐群铺底、电子合成器 pad、爵士和声、人声
+
+游戏 BGM 必须能无缝循环。Suno 不保证首尾相接，所以结构里刻意让 [Outro] 用
+和 [Intro] 相同的乐器和调性收尾，剪辑时更容易找到接点。
+
+--------------------------------------------------------------------------------
+1. 主界面 / 主城 BGM（bgm.mp3，替换现有 1.31MB 版本）
+--------------------------------------------------------------------------------
+
+[STYLE]
+traditional Chinese instrumental, guzheng and bamboo dizi flute lead, soft frame
+drum pulse, pentatonic melody, warm and contemplative, spacious, gentle wooden
+fish percussion, 78 BPM, key of D minor pentatonic, instrumental, no vocals,
+loopable game background music, clean mix, no western strings, no synth pads
+
+[STRUCTURE]
+[Intro: solo guzheng, sparse]
+[Loop A: dizi flute melody enters over guzheng arpeggios]
+[Loop B: frame drum joins, fuller but still calm]
+[Loop A variation: melody ornamented, wooden fish accents]
+[Outro: back to solo guzheng, same phrase as intro]
+
+意图：这是玩家停留最久的一首，必须耐听。刻意压住鼓的存在感、留大量空间 ——
+主城 BGM 一旦有推进感，挂机整理编队时会很快让人想关声音。
+
+--------------------------------------------------------------------------------
+2. 常规战斗 BGM（新增 battle_bgm.mp3）
+--------------------------------------------------------------------------------
+
+[STYLE]
+traditional Chinese instrumental battle music, driving taiko and frame drums,
+pipa tremolo and guzheng runs, erhu counter-melody, pentatonic, urgent but
+heroic, 128 BPM, key of E minor pentatonic, instrumental, no vocals, loopable
+game combat music, tight punchy mix, no western orchestra, no synth
+
+[STRUCTURE]
+[Intro: two-bar drum fill]
+[Loop A: pipa tremolo ostinato with driving drums]
+[Loop B: erhu melody over the ostinato, rising tension]
+[Loop A variation: guzheng glissando accents]
+[Outro: drum fill resolving to the opening pattern]
+
+意图：目前常规战斗直接用主城 BGM，是「打起来平平无奇」体感的一部分。
+战斗曲要有明确的脉冲（128 BPM 对应转珠节奏），但不能盖过消珠与技能音效 ——
+所以让鼓和琵琶占中低频，把 2~5kHz 留给 SFX。
+
+--------------------------------------------------------------------------------
+3. Boss 战 BGM（boss_bgm.mp3，替换现有 801KB 版本）
+--------------------------------------------------------------------------------
+
+[STYLE]
+epic traditional Chinese boss battle music, thunderous taiko ensemble, low
+bianzhong bronze bells, aggressive pipa and guzheng, erhu wailing high melody,
+dark pentatonic, ominous and overwhelming, 140 BPM, key of C minor pentatonic,
+instrumental, no vocals, loopable, wide dramatic mix, no western brass, no synth
+
+[STRUCTURE]
+[Intro: single massive gong strike then low bell drone]
+[Loop A: relentless taiko pattern with low bronze bells]
+[Loop B: erhu high wailing melody, pipa aggressive tremolo]
+[Loop A variation: doubled drums, bell accents on downbeats]
+[Outro: gong strike back to the bell drone]
+
+意图：与常规战斗曲的区别要在两秒内听出来 —— 加低频铜钟和大锣、调性转暗、
+BPM 抬到 140。玩家听到就知道这场不一样，这比弹窗提示有效。
+
+--------------------------------------------------------------------------------
+4. 通天塔 BGM（新增 tower_bgm.mp3）
+--------------------------------------------------------------------------------
+
+[STYLE]
+mysterious traditional Chinese instrumental, sparse xiao flute and bowed erhu,
+distant bianzhong bells, slow deep frame drum, minor pentatonic, ethereal and
+ascending, echoing hall reverb, 92 BPM, key of A minor pentatonic, instrumental,
+no vocals, loopable game music, atmospheric, no western strings, no synth pads
+
+[STRUCTURE]
+[Intro: distant bell echoes]
+[Loop A: xiao flute long tones over slow drum]
+[Loop B: erhu enters, layered bells, sense of climbing]
+[Loop A variation: sparser, more reverb]
+[Outro: bells fade back to the intro echo]
+
+意图：通天塔是长时间爬层的 roguelike 循环，要「空、远、向上」，不要战斗曲的
+推进感 —— 玩家在这里做的是路径抉择，不是抢输出。
+
+--------------------------------------------------------------------------------
+5. 秘境 BGM（新增 realm_bgm.mp3，可选）
+--------------------------------------------------------------------------------
+
+[STYLE]
+traditional Chinese instrumental, guzheng and pipa interplay, light bamboo
+flute, mid-tempo frame drum, bright pentatonic, adventurous and curious,
+104 BPM, key of G major pentatonic, instrumental, no vocals, loopable game
+music, clear mix, no western instruments, no synth
+
+[STRUCTURE]
+[Intro: pipa plucked motif]
+[Loop A: guzheng and pipa call-and-response over light drum]
+[Loop B: bamboo flute melody, fuller arrangement]
+[Loop A variation: pipa motif ornamented]
+[Outro: solo pipa motif, same as intro]
+
+意图：秘境是资源采集向的日常内容，用大调五声、轻快但不紧迫，和战斗/塔区分开。
+
+--------------------------------------------------------------------------------
+6. 胜利结算短曲（新增 victory_jingle.mp3，可选）
+--------------------------------------------------------------------------------
+
+[STYLE]
+short triumphant traditional Chinese fanfare, guzheng flourish, bright dizi
+flute, single gong hit, celebratory pentatonic, 6 seconds, instrumental, no
+vocals, no loop, clean bright mix
+
+[STRUCTURE]
+[Fanfare: gong hit, guzheng ascending flourish, dizi resolving phrase]
+
+意图：现在胜利只有一个 8.4KB 的 victory.mp3 音效。结算画面值得一段短曲，
+但务必控制在 6 秒内 —— 更长会挡住玩家点「继续」。
+
+================================================================================
+交付规格（下载后必须转码）
+================================================================================
+
+Suno 下载的是 44.1kHz 立体声 ~192kbps，直接用会让 BGM 分包翻倍。
+BGM 走 CDN，但仍要压：
+
+  # 主城/塔/秘境（氛围向，可用较低码率）
+  ffmpeg -i suno_download.mp3 -ac 2 -ar 44100 -b:a 96k bgm.mp3
+
+  # 战斗/Boss（低频信息多，留高一点）
+  ffmpeg -i suno_download.mp3 -ac 2 -ar 44100 -b:a 112k boss_bgm.mp3
+
+  # 胜利短曲（短，可给足码率）
+  ffmpeg -i suno_download.mp3 -ac 2 -ar 44100 -b:a 128k victory_jingle.mp3
+
+循环点处理：Suno 出的曲子首尾一般接不上，用 [Outro] 与 [Intro] 同乐器的设计
+找接点，在 Audacity 里裁到整小节，做 20~50ms 交叉淡化。
+
+放置位置与后续步骤：
+  1. 文件放 minigame/subpackages/pkg-audio/bgm/
+  2. 新增曲目要在 src/config/Audio.ts 的 AUDIO 表里登记
+  3. 跑 npm run cdn:upload 上传（BGM 在 CdnConfig.cdnDirs 里，走 CDN）
+  4. 注意：短音效在 bundledDirs（包内），不要把 BGM 放进 audio/ 目录，
+     否则会被打进包体；也不要把短音效放进 bgm/，否则会被 cdn:strip 删掉

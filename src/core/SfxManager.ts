@@ -2,9 +2,13 @@
  * 国风音效管理 — 移植自 xiao_chu/js/runtime/music.js
  *
  * 转珠交互、消除连击、战斗伤害等 SFX；BGM 仍由 BgmManager 负责。
- * 瘦包后音频在 CDN：播放前必须 resolveOrDownload，不可直接用逻辑路径。
+ *
+ * 短音效留在包内（见 CdnConfig.bundledDirs），因为它们要求「按下即响」，
+ * 且走 CDN 时一旦 manifest 漏登记就会整局静音。只有 BGM 走 CDN，
+ * 那里播放前必须 resolveOrDownload，不可直接用逻辑路径。
  */
 import { AUDIO } from '@/config/Audio';
+import { ensureAudioSubpackage } from '@/config/Subpackages';
 import { CdnAssetService } from '@/core/CdnAssetService';
 import { COMBO_MILESTONES, getComboTier } from '@/scenes/battle/ComboDisplay';
 import { Platform } from './PlatformService';
@@ -50,9 +54,15 @@ class SfxManagerClass {
 
   /**
    * 预下载并建池。CDN 预热后调用，避免进战后首击无声。
+   *
+   * 必须等 pkg-audio 分包就位：短音效现在留在包内，分包未加载时
+   * 逻辑路径还不可读，建池会拿不到 src。loadSubpackage 幂等，重复 await 无代价。
    */
   async warmup(paths: readonly string[] = SFX_PATHS): Promise<void> {
     if (!Platform.isMinigame) return;
+    await ensureAudioSubpackage().catch((e) => {
+      console.warn('[SfxManager] audio 分包加载失败', e);
+    });
     await Promise.all(paths.map(async (p) => {
       try {
         await this._ensureResolved(p);
@@ -347,6 +357,13 @@ class SfxManagerClass {
       const sync = CdnAssetService.resolveAsset(src);
       if (sync) {
         this._resolvedSrc[src] = sync;
+      } else if (!CdnAssetService.isCdnPath(src)) {
+        /**
+         * 包内音效：直接用逻辑路径，不因 fs 探测失败而丢掉这一次播放。
+         * 分包刚加载完时 accessSync 可能仍报错，而此时 InnerAudioContext
+         * 用逻辑路径已经能播——之前卡在这里会让整局技能音全哑。
+         */
+        this._resolvedSrc[src] = src;
       } else {
         // 尚未下载：触发 CDN，本次跳过（warmup 后应已就绪）
         void this._ensureResolved(src).catch((e) => {

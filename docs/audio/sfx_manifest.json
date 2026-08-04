@@ -1,0 +1,187 @@
+{
+  "_readme": [
+    "待补音效清单。用 game-sfx-gen 技能生成：",
+    "  python3 ~/.cursor/skills/game-sfx-gen/scripts/gen_sfx.py --manifest docs/audio/sfx_manifest.json --dry-run",
+    "去掉 --dry-run 实际生成（需 ELEVENLABS_API_KEY）。已存在的文件默认跳过，重做加 --force --only <name>。",
+    "",
+    "音色家族：整套走国风实体乐器与自然材质（木、竹、玉、铜、丝弦、石、水），",
+    "不用西式电子合成音。同类时机共享材质，只换包络与音高，这样听起来才是一套。",
+    "",
+    "priority 说明（字段仅供人读，脚本忽略）：",
+    "  p0 = 修正现存错误音；p1 = 高频交互，最影响手感；",
+    "  p2 = 养成与奖励回路的情绪峰值；p3 = 战斗信息补完；p4 = 锦上添花"
+  ],
+  "defaults": {
+    "bitrate": "96k",
+    "prompt_influence": 0.45,
+    "mono": true,
+    "trim": true,
+    "normalize": true
+  },
+  "sfx": [
+    {
+      "name": "gameover",
+      "priority": "p0",
+      "text": "deep hollow wooden thud followed by a low descending guzheng string slide, dark and resigned, dry with a short decaying tail, no music, no voice",
+      "duration": 2.0,
+      "output": "../../minigame/subpackages/pkg-audio/audio/gameover.mp3",
+      "notes": "修正：当前 gameover.mp3 与 reward.mp3 是同一个文件，打输和领奖播同一个声音。失败音必须下行、低沉，和上行的奖励音明确区分。"
+    },
+
+    {
+      "name": "ui_click",
+      "priority": "p1",
+      "text": "single short crisp wooden block tap, hardwood on hardwood, very fast attack, tight quick decay, completely dry, no reverb, no music, no voice",
+      "duration": 0.18,
+      "output": "../../minigame/subpackages/pkg-audio/audio/ui_click.mp3",
+      "notes": "全局按钮。目前 Button/IconButton/ActionButton 只有缩放与振动，无声。必须极干极短，否则连点会发黏。"
+    },
+    {
+      "name": "ui_back",
+      "priority": "p1",
+      "text": "short muted wooden tap, lower pitched and softer than a click, quick decay, completely dry, no reverb, no music, no voice",
+      "duration": 0.2,
+      "output": "../../minigame/subpackages/pkg-audio/audio/ui_back.mp3",
+      "notes": "返回/关闭。与 ui_click 同材质、低一度，形成「进/退」的听觉对位。"
+    },
+    {
+      "name": "ui_tab",
+      "priority": "p1",
+      "text": "light bamboo click, thin and papery, instant attack, almost no tail, dry, no reverb, no music, no voice",
+      "duration": 0.15,
+      "output": "../../minigame/subpackages/pkg-audio/audio/ui_tab.mp3",
+      "notes": "标签页/分栏切换。比 ui_click 更轻更薄，避免与主按钮抢注意力。"
+    },
+
+    {
+      "name": "pet_levelup",
+      "priority": "p2",
+      "text": "bright jade chime with a gentle rising shimmer, warm and encouraging, clean short tail, no music, no voice",
+      "duration": 1.2,
+      "output": "../../minigame/subpackages/pkg-audio/audio/pet_levelup.mp3",
+      "notes": "灵宠升级。现有 levelup.mp3 被连击音阶复用了，这里另起一条，避免养成反馈和战斗音混淆。"
+    },
+    {
+      "name": "pet_starup",
+      "priority": "p2",
+      "text": "resonant bronze bell strike with rising jade shimmer and a soft airy swell, ceremonial and grand, medium hall space, no music, no voice",
+      "duration": 2.2,
+      "output": "../../minigame/subpackages/pkg-audio/audio/pet_starup.mp3",
+      "notes": "升星/觉醒。比 pet_levelup 更盛大更长，这是养成线最强的情绪峰值。"
+    },
+    {
+      "name": "gacha_draw",
+      "priority": "p2",
+      "text": "silk scroll unfurling with a rising airy whoosh, building anticipation, ends unresolved without a hit, dry, no music, no voice",
+      "duration": 1.0,
+      "output": "../../minigame/subpackages/pkg-audio/audio/gacha_draw.mp3",
+      "notes": "抽卡抽取瞬间。刻意不收尾、不落定，把落定感留给 gacha_reveal。"
+    },
+    {
+      "name": "gacha_reveal_rare",
+      "priority": "p2",
+      "text": "bright golden bell burst with cascading jade sparkles and a warm sustained glow, triumphant reveal, medium hall space, no music, no voice",
+      "duration": 2.4,
+      "output": "../../minigame/subpackages/pkg-audio/audio/gacha_reveal_rare.mp3",
+      "notes": "稀有揭示。与 gacha_draw 成对使用，构成「拉起—落定」。"
+    },
+    {
+      "name": "reward_get",
+      "priority": "p2",
+      "text": "light coin and jade beads landing together with a short bright ring, satisfying and clean, quick decay, dry, no music, no voice",
+      "duration": 0.8,
+      "output": "../../minigame/subpackages/pkg-audio/audio/reward_get.mp3",
+      "notes": "签到/任务/结算领取。现有 reward.mp3 已被战斗内命中与回血复用，UI 领取需要独立音。"
+    },
+    {
+      "name": "chest_open",
+      "priority": "p2",
+      "text": "wooden chest lid creaking open then a bright cascade of jade beads and coins, warm and generous, no music, no voice",
+      "duration": 1.8,
+      "output": "../../minigame/subpackages/pkg-audio/audio/chest_open.mp3",
+      "notes": "关卡宝箱开启。"
+    },
+    {
+      "name": "shop_purchase",
+      "priority": "p2",
+      "text": "abacus beads clacking once then a short bright coin ring, decisive and clean, dry, no music, no voice",
+      "duration": 0.7,
+      "output": "../../minigame/subpackages/pkg-audio/audio/shop_purchase.mp3",
+      "notes": "商店购买成功。算盘声给「结算完成」的确定感。"
+    },
+
+    {
+      "name": "enemy_charge",
+      "priority": "p3",
+      "text": "low ominous rumble swelling upward with a tightening metallic tension, threatening build-up, ends without release, no music, no voice",
+      "duration": 1.2,
+      "output": "../../minigame/subpackages/pkg-audio/audio/enemy_charge.mp3",
+      "notes": "敌人蓄力预警。信息价值最高的一条：玩家靠它决定是攒盾还是抢输出，光看动画容易漏。"
+    },
+    {
+      "name": "gate_activate",
+      "priority": "p3",
+      "text": "heavy stone slab grinding shut with a resonant metallic lock snapping into place, forbidding and final, medium room, no music, no voice",
+      "duration": 1.6,
+      "output": "../../minigame/subpackages/pkg-audio/audio/gate_activate.mp3",
+      "notes": "硬闸门登场（五行阵盾/连锁盾/锋锐无效等）。要一听就懂「路被封了、得换打法」，不能只是又一个 debuff 音。"
+    },
+    {
+      "name": "gate_broken",
+      "priority": "p3",
+      "text": "stone cracking apart then a bright metallic lock shattering with a clean release, relief and breakthrough, no music, no voice",
+      "duration": 1.4,
+      "output": "../../minigame/subpackages/pkg-audio/audio/gate_broken.mp3",
+      "notes": "满足闸门条件、伤害正常打出的那一下。与 gate_activate 成对，把闸门做成「解谜—破解」而不是纯惩罚。"
+    },
+    {
+      "name": "phase_shift",
+      "priority": "p3",
+      "text": "deep gong strike with a dark rising swell and low earth rumble, transformation and dread, large hall space, no music, no voice",
+      "duration": 2.2,
+      "output": "../../minigame/subpackages/pkg-audio/audio/phase_shift.mp3",
+      "notes": "Boss 跨血线转阶段。"
+    },
+    {
+      "name": "shield_gain",
+      "priority": "p3",
+      "text": "soft jade dome forming with a gentle protective shimmer, warm and reassuring, short tail, dry, no music, no voice",
+      "duration": 0.6,
+      "output": "../../minigame/subpackages/pkg-audio/audio/shield_gain.mp3",
+      "notes": "我方获得护盾。现在只有视觉。"
+    },
+    {
+      "name": "dot_tick",
+      "priority": "p3",
+      "text": "very short soft wet bubble pop, subtle and low, minimal presence, completely dry, no reverb, no music, no voice",
+      "duration": 0.25,
+      "output": "../../minigame/subpackages/pkg-audio/audio/dot_tick.mp3",
+      "notes": "中毒/持续伤害跳伤。每回合都响，必须做得很轻，否则几回合就令人烦躁。"
+    },
+    {
+      "name": "orb_seal",
+      "priority": "p3",
+      "text": "dull stone slab sliding over a surface with a muted locking thud, oppressive and heavy, dry, no music, no voice",
+      "duration": 0.7,
+      "output": "../../minigame/subpackages/pkg-audio/audio/orb_seal.mp3",
+      "notes": "珠子被封印（含克属封印整片封色）。与 gate_activate 同材质家族，但更短更闷。"
+    },
+
+    {
+      "name": "scene_transition",
+      "priority": "p4",
+      "text": "soft silk fabric sweep with a light airy tail, smooth and brief, no music, no voice",
+      "duration": 0.5,
+      "output": "../../minigame/subpackages/pkg-audio/audio/scene_transition.mp3",
+      "notes": "场景切换。要极轻，频繁出现的过渡音一重就烦。"
+    },
+    {
+      "name": "error_denied",
+      "priority": "p4",
+      "text": "short dull wooden knock, flat and unresolved, slightly dissonant, completely dry, no reverb, no music, no voice",
+      "duration": 0.3,
+      "output": "../../minigame/subpackages/pkg-audio/audio/error_denied.mp3",
+      "notes": "体力不足/条件不满足/操作无效。给「被拒绝」的明确反馈，避免玩家反复点。"
+    }
+  ]
+}
