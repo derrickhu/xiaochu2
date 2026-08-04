@@ -3,8 +3,8 @@
  *
  * 入口在首页左栏「设置」。拖滑条即生效并落盘（见 AudioSettings）。
  *
- * 滑条拖动必须挂到全屏层：微信小游戏里 pointermove 只在当前 hit 目标上派发，
- * 手指稍微滑出细条就会断——看起来像「不能拖」。
+ * 滑条拖动走 canvas touch/pointer 链（与 ScrollList / 战斗拖宠一致）：
+ * 微信小游戏里只挂 PIXI pointermove 时，手指一出细条就会断。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -16,6 +16,9 @@ import {
   setSfxVolume,
 } from '@/core/AudioSettings';
 import { SfxManager } from '@/core/SfxManager';
+import { Platform } from '@/core/PlatformService';
+import { bindCanvasPointerMove, type CanvasPointerMoveHandle } from '@/minigame/canvasInteraction';
+import { designEventToLocal } from '@/utils/clientEventToDesign';
 import {
   COLORS, FONT_SIZE,
   makeCloseButton, makePanel, makeText, makeModalTitlePlaque,
@@ -24,15 +27,23 @@ import { pressFeedback } from './motion';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
 const PANEL_W = 560;
-const PANEL_H = 460;
+const PANEL_H = 400;
 const SLIDER_W = 300;
 const SLIDER_H = 36;
 const KNOB_R = 20;
 const STEP = 0.05;
+/** 滑条命中区（相对 slider root 中心） */
+const HIT = {
+  x: -SLIDER_W / 2 - 8,
+  y: -SLIDER_H / 2 - 28,
+  w: SLIDER_W + 16,
+  h: SLIDER_H + 56,
+};
 
 interface SliderHandle {
   root: PIXI.Container;
   setValue: (v: number) => void;
+  destroy: () => void;
 }
 
 function makeStepBtn(label: string, onTap: () => void): PIXI.Container {
@@ -59,8 +70,8 @@ function makeVolumeSlider(opts: {
   label: string;
   value: number;
   onChange: (v: number) => void;
-  /** 拖动手势要挂到的全屏容器（本弹窗根），手指移出细条也能续拖 */
-  dragLayer: PIXI.Container;
+  /** 面板是否打开；关闭时忽略 canvas 触摸 */
+  isActive: () => boolean;
   previewSfx?: boolean;
 }): SliderHandle {
   const root = new PIXI.Container();
@@ -86,15 +97,12 @@ function makeVolumeSlider(opts: {
   const hit = new PIXI.Container();
   hit.eventMode = 'static';
   hit.cursor = 'pointer';
-  hit.hitArea = new PIXI.Rectangle(
-    -SLIDER_W / 2 - 8, -SLIDER_H / 2 - 24, SLIDER_W + 16, SLIDER_H + 48,
-  );
+  hit.hitArea = new PIXI.Rectangle(HIT.x, HIT.y, HIT.w, HIT.h);
   root.addChild(hit);
 
   let value = Math.max(0, Math.min(1, opts.value));
   let dragging = false;
-  let moveBound: ((e: PIXI.FederatedPointerEvent) => void) | null = null;
-  let upBound: (() => void) | null = null;
+  let bridge: CanvasPointerMoveHandle | null = null;
 
   const paint = (): void => {
     track.clear();
@@ -114,7 +122,6 @@ function makeVolumeSlider(opts: {
     knob.beginFill(0xfff6e4, 1);
     knob.drawCircle(kx, 0, KNOB_R);
     knob.endFill();
-    // 中心小点，增强「可拖」手感
     knob.beginFill(COLORS.trackFill, 1);
     knob.drawCircle(kx, 0, 6);
     knob.endFill();
@@ -131,45 +138,57 @@ function makeVolumeSlider(opts: {
     if (announce && opts.previewSfx) SfxManager.playUiClick();
   };
 
-  const setFromGlobal = (global: PIXI.Point | PIXI.ObservablePoint): void => {
-    const local = root.toLocal(global);
-    applyValue((local.x + SLIDER_W / 2) / SLIDER_W, false);
+  const valueFromLocalX = (lx: number): void => {
+    applyValue((lx + SLIDER_W / 2) / SLIDER_W, false);
   };
 
-  const unbindDrag = (): void => {
-    if (moveBound) opts.dragLayer.off('pointermove', moveBound);
-    if (upBound) {
-      opts.dragLayer.off('pointerup', upBound);
-      opts.dragLayer.off('pointerupoutside', upBound);
-      opts.dragLayer.off('pointercancel', upBound);
-    }
-    moveBound = null;
-    upBound = null;
-  };
+  const inHit = (lx: number, ly: number): boolean => (
+    lx >= HIT.x && lx <= HIT.x + HIT.w && ly >= HIT.y && ly <= HIT.y + HIT.h
+  );
 
   const endDrag = (): void => {
     if (!dragging) return;
     dragging = false;
-    unbindDrag();
     if (opts.previewSfx) SfxManager.playUiClick();
   };
 
-  hit.on('pointerdown', (e: PIXI.FederatedPointerEvent) => {
-    e.stopPropagation();
+  const onCanvasMove = (e: unknown): void => {
+    if (!dragging || !opts.isActive()) return;
+    const p = designEventToLocal(root, e);
+    valueFromLocalX(p.x);
+  };
+
+  const onCanvasUp = (): void => {
+    endDrag();
+  };
+
+  const onCanvasDown = (e: unknown): void => {
+    if (!opts.isActive() || dragging) return;
+    const p = designEventToLocal(root, e);
+    if (!inHit(p.x, p.y)) return;
     dragging = true;
-    setFromGlobal(e.global);
-    // 拖动手势挂全屏层：移出细条 / 滑到遮罩上也不会断
-    moveBound = (ev: PIXI.FederatedPointerEvent) => {
-      if (!dragging) return;
-      ev.stopPropagation();
-      setFromGlobal(ev.global);
-    };
-    upBound = () => endDrag();
-    opts.dragLayer.on('pointermove', moveBound);
-    opts.dragLayer.on('pointerup', upBound);
-    opts.dragLayer.on('pointerupoutside', upBound);
-    opts.dragLayer.on('pointercancel', upBound);
-  });
+    valueFromLocalX(p.x);
+  };
+
+  // 真机：整条链挂 canvas；浏览器 / 开发者工具：PIXI down + canvas move/up
+  if (Platform.isMinigame && !Platform.isDevtools) {
+    bridge = bindCanvasPointerMove({
+      onDown: onCanvasDown,
+      onMove: onCanvasMove,
+      onUp: onCanvasUp,
+    });
+  } else {
+    hit.on('pointerdown', (e: PIXI.FederatedPointerEvent) => {
+      e.stopPropagation();
+      dragging = true;
+      const local = root.toLocal(e.global);
+      valueFromLocalX(local.x);
+    });
+    bridge = bindCanvasPointerMove({
+      onMove: onCanvasMove,
+      onUp: onCanvasUp,
+    });
+  }
 
   const minus = makeStepBtn('−', () => applyValue(value - STEP, true));
   minus.position.set(-SLIDER_W / 2 - 44, 0);
@@ -185,6 +204,11 @@ function makeVolumeSlider(opts: {
     setValue: (v) => {
       value = Math.max(0, Math.min(1, v));
       paint();
+    },
+    destroy: () => {
+      bridge?.destroy();
+      bridge = null;
+      dragging = false;
     },
   };
 }
@@ -237,7 +261,6 @@ export class SettingsPanel extends PIXI.Container {
     this._dim.drawRect(0, 0, w, h);
     this._dim.endFill();
     this._dim.eventMode = 'static';
-    // 点遮罩关闭；拖滑条时 pointerdown 已 stopPropagation，不会误关
     this._dim.on('pointertap', () => this.close());
     this.addChild(this._dim);
 
@@ -260,31 +283,25 @@ export class SettingsPanel extends PIXI.Container {
     plaque.position.set(0, -PANEL_H / 2 + 52);
     this._content.addChild(plaque);
 
-    const tip = makeText('拖动滑条或点两侧加减；音乐默认偏低，避免盖过按钮音效', {
-      size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: 0.5,
-      wordWrapWidth: PANEL_W - 80,
-    });
-    tip.position.set(0, -PANEL_H / 2 + 108);
-    this._content.addChild(tip);
+    const isActive = (): boolean => this._isOpen && this.visible;
 
-    const s = getAudioSettings();
     this._bgmSlider = makeVolumeSlider({
       label: '音乐',
-      value: s.bgmVolume,
+      value: getAudioSettings().bgmVolume,
       onChange: (v) => setBgmVolume(v),
-      dragLayer: this,
+      isActive,
     });
-    this._bgmSlider.root.position.set(0, -10);
+    this._bgmSlider.root.position.set(0, -20);
     this._content.addChild(this._bgmSlider.root);
 
     this._sfxSlider = makeVolumeSlider({
       label: '音效',
-      value: s.sfxVolume,
+      value: getAudioSettings().sfxVolume,
       onChange: (v) => setSfxVolume(v),
-      dragLayer: this,
+      isActive,
       previewSfx: true,
     });
-    this._sfxSlider.root.position.set(0, 120);
+    this._sfxSlider.root.position.set(0, 100);
     this._content.addChild(this._sfxSlider.root);
 
     const closeBtn = makeCloseButton({ onTap: () => this.close() });

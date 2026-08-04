@@ -665,12 +665,13 @@ export class ShopScene implements Scene {
     return card;
   }
 
+  /** 商品卡副文案：购买可得数量（持有量在点卡详情里看，避免被当成「买多少」） */
   private _universalSubText(): string {
-    return `碎片 ${PlayerData.universalShards}`;
+    return `碎片 ×${ECONOMY.shop.universalPackSize}`;
   }
 
-  private _petSubText(pet: PetDef): string {
-    return `碎片 ${PlayerData.petShards(pet.id)}`;
+  private _petSubText(_pet: PetDef): string {
+    return `碎片 ×${ECONOMY.shop.packSize}`;
   }
 
   private _refreshAllBuyEnabled(): void {

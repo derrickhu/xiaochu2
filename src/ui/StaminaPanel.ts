@@ -170,21 +170,24 @@ export class StaminaPanel extends PIXI.Container {
     }
 
     // ── 进度条 ──
+    // 与下方信息卡必须留空：叠在一起时只会露出金框顶边+绿条，像「多了一层怪底板」
     const barW = PANEL_W - 96;
+    const barH = 36;
+    const barY = heroY + 52;
     const bar = makeProgressBar({
       width: barW,
-      height: 36,
+      height: barH,
       ratio,
       fill: short > 0 ? 0xe8a33d : 0x5cbf4a,
       fillFull: 0x5cbf4a,
       frame: true,
     });
-    bar.position.set(-barW / 2, heroY + 52);
+    bar.position.set(-barW / 2, barY);
     this._body.addChild(bar);
 
     // ── 恢复信息卡 ──
-    const infoY = heroY + 118;
     const infoH = 110;
+    const infoY = barY + barH + 18 + infoH / 2;
     const info = makePanel({
       width: PANEL_W - 72, height: infoH, radius: 16, centered: true,
       bg: 0xfff8ec, border: COLORS.panelBorderSoft, borderWidth: 2,
