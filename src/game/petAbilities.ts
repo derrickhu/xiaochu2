@@ -54,7 +54,7 @@ export function resolvePetAbilities(pet: PetDef, progress: PetProgress): Resolve
     },
     passiveLines: bundle.displayLines,
     bundle,
-    leader: resolveLeaderSkill(pet.role, pet.rarity),
+    leader: resolveLeaderSkill(pet),
   };
 }
 

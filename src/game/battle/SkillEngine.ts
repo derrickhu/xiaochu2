@@ -10,6 +10,7 @@ import { getSkill, resolveSkillVfx, getSkillTierBonus, getSkillStarOverride } fr
 import { getStarProfile } from '@/balance/growth';
 import { getRaritySkillPower } from '@/balance/rarity';
 import { skillMasteryRank, masteryEffectMult } from '@/balance/skillGrowth';
+import { applyResist, type ResistKind, type ResistQuota } from '@/balance/petTags';
 import type { StatusKind, StatusStackPolicy } from './BattleStatus';
 import { defenseReduction, expectedCritFactor } from '@/formulas/damage';
 
@@ -47,8 +48,15 @@ export interface SkillRuntimeContext {
   enemyEnraged?: boolean;
   /** 敌人是否凝意中（免疫眩晕与威吓）；默认 false */
   enemyResolute?: boolean;
+  /** 敌人是否已挂着不灭（避免每回合空放同一招占掉行动）；默认 false */
+  enemyUndying?: boolean;
   /** 队伍人数（敌方技能封印随机选目标用）；默认 0 */
   teamSize?: number;
+  /**
+   * 我方抗性配额（0..1）。放在技能引擎而不是状态应用处，是因为满配要让敌人这一招
+   * 整个哑火（返回 false，不占技能位也不出提示），而不是先上一个 0 回合的状态。
+   */
+  teamResists?: ResistQuota;
   /** 随机源（敌方技能封印选目标）；默认 Math.random */
   rng?: () => number;
 }
@@ -96,6 +104,12 @@ export type BoardRequest =
       /** 净化：解除全部封印珠 */
       type: 'unsealAll';
       vfx: SkillVfxId;
+    }
+  | {
+      /** 克属封印：封锁盘面上该属性的全部珠 */
+      type: 'sealElement';
+      element: Element;
+      vfx: SkillVfxId;
     };
 
 export interface SkillResult {
@@ -133,7 +147,13 @@ export interface SkillResult {
     | 'atkDebuff'
     | 'resolve'
     | 'elementAbsorb'
-    | 'counterStrike';
+    | 'counterStrike'
+    // ── 硬闸门 ──
+    | 'elementGate'
+    | 'comboGate'
+    | 'damageVoid'
+    | 'undying'
+    | 'counterSeal';
   vfxEvents: readonly SkillVfxId[];
   damageEvents: DamageEvent[];
   healEvents: HealEvent[];
@@ -216,6 +236,11 @@ export function applyPetSkillModifiers(
   });
 
   return { ...skill, cd: Math.max(1, cd), effects, desc: override?.desc ?? skill.desc };
+}
+
+/** 按抗性配额削减骚扰的持续回合 / 颗数；满配返回 0，让这一招整个哑火 */
+function resistedAmount(ctx: SkillRuntimeContext, kind: ResistKind, amount: number): number {
+  return applyResist(amount, ctx.teamResists?.[kind] ?? 0);
 }
 
 export function runSkill(skill: SkillDef, caster: SkillCaster, ctx: SkillRuntimeContext): SkillResult | null {
@@ -315,6 +340,16 @@ function inferAction(skill: SkillDef): SkillResult['action'] {
       return 'elementAbsorb';
     case 'counterAttack':
       return 'counterStrike';
+    case 'elementGate':
+      return 'elementGate';
+    case 'comboGate':
+      return 'comboGate';
+    case 'damageVoid':
+      return 'damageVoid';
+    case 'undying':
+      return 'undying';
+    case 'counterSeal':
+      return 'counterSeal';
   }
 }
 
@@ -565,29 +600,35 @@ const EFFECT_HANDLERS: { [K in SkillEffectDef['kind']]: EffectHandler<K> } = {
 
   // ── 目标十三新增（敌人侧） ──
 
-  sealOrbs: (effect, { vfx, result }) => {
-    result.boardRequests.push({ type: 'sealRandom', count: effect.count, vfx });
+  sealOrbs: (effect, { vfx, ctx, result }) => {
+    const count = resistedAmount(ctx, 'sealOrbs', effect.count);
+    if (count <= 0) return false;
+    result.boardRequests.push({ type: 'sealRandom', count, vfx });
     return true;
   },
 
-  timeSqueeze: (effect, { vfx, result }) => {
+  timeSqueeze: (effect, { vfx, ctx, result }) => {
+    const turns = resistedAmount(ctx, 'timeSqueeze', effect.turns);
+    if (turns <= 0) return false;
     result.statusEvents.push({
       target: 'team',
       status: 'timeSqueeze',
       value: effect.seconds,
-      turns: effect.turns,
+      turns,
       stack: 'max',
       vfx,
     });
     return true;
   },
 
-  healBlock: (effect, { vfx, result }) => {
+  healBlock: (effect, { vfx, ctx, result }) => {
+    const turns = resistedAmount(ctx, 'healBlock', effect.turns);
+    if (turns <= 0) return false;
     result.statusEvents.push({
       target: 'team',
       status: 'healBlock',
       value: effect.mult,
-      turns: effect.turns,
+      turns,
       stack: 'replace',
       vfx,
     });
@@ -647,6 +688,69 @@ const EFFECT_HANDLERS: { [K in SkillEffectDef['kind']]: EffectHandler<K> } = {
     return true;
   },
 
+  // ── 硬闸门（离散开关，堆数值无法抵消；求值见 balance/damageGates） ──
+
+  elementGate: (effect, { vfx, result }) => {
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'elementGate',
+      value: effect.need,
+      turns: effect.turns,
+      stack: 'replace',
+      vfx,
+    });
+    return true;
+  },
+
+  comboGate: (effect, { vfx, result }) => {
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'comboGate',
+      value: effect.need,
+      turns: effect.turns,
+      stack: 'replace',
+      vfx,
+    });
+    return true;
+  },
+
+  damageVoid: (effect, { vfx, ctx, result }) => {
+    // 阈值按敌人血池换算成绝对值，跨章自动缩放，不用每关手填
+    const threshold = Math.max(1, Math.floor(ctx.enemy.maxHp * effect.thresholdPct));
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'damageVoid',
+      value: threshold,
+      turns: effect.turns,
+      stack: 'replace',
+      vfx,
+    });
+    return true;
+  },
+
+  undying: (effect, { vfx, ctx, result }) => {
+    // 已经挂着就不重放：不灭没有回合数，否则敌人每个 CD 都会空放一次白占行动
+    if (ctx.enemyUndying) return false;
+    // 血线已经低于阈值就不再上不灭：被打穿一次后 HP=1，这条守卫天然保证每场只留一次命
+    if (ctx.enemy.hp <= ctx.enemy.maxHp * effect.hpThresholdPct) return false;
+    result.statusEvents.push({
+      target: 'enemy',
+      status: 'undying',
+      value: effect.hpThresholdPct,
+      stack: 'ignoreIfPresent',
+      vfx,
+    });
+    return true;
+  },
+
+  counterSeal: (_effect, { vfx, ctx, result }) => {
+    // 封「克制敌人自己」那一色：玩家打 Boss 必然带这色，封它才真正逼出第二输出。
+    // 不另挂状态——封印珠沿用棋盘既有的「邻格消除即解封」规则，玩家可以自己拆。
+    const element = counterElementOf(ctx.enemy.element);
+    result.boardRequests.push({ type: 'sealElement', element, vfx });
+    return true;
+  },
+
   resolve: (effect, { vfx, ctx, result }) => {
     // 已在凝意中不重复叠加（否则每次 CD 到就无限续，等于永久免控）
     if (ctx.enemyResolute) return false;
@@ -664,13 +768,15 @@ const EFFECT_HANDLERS: { [K in SkillEffectDef['kind']]: EffectHandler<K> } = {
   skillSeal: (effect, { vfx, ctx, result }) => {
     const teamSize = ctx.teamSize ?? 0;
     if (teamSize <= 0) return false;
+    const turns = resistedAmount(ctx, 'skillSeal', effect.turns);
+    if (turns <= 0) return false;
     const rng = ctx.rng ?? Math.random;
     const petIndex = Math.min(teamSize - 1, Math.floor(rng() * teamSize));
     result.statusEvents.push({
       target: 'team',
       status: 'skillSeal',
       value: petIndex,
-      turns: effect.turns,
+      turns,
       stack: 'replace',
       vfx,
     });

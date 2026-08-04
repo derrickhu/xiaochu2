@@ -56,7 +56,13 @@ export type SkillVfxId =
   | 'enemyAtkDebuff'
   | 'enemyResolve'
   | 'enemyElementAbsorb'
-  | 'enemyCounter';
+  | 'enemyCounter'
+  // ── 硬闸门（伤害降为 1 的离散开关） ──
+  | 'enemyElementGate'
+  | 'enemyComboGate'
+  | 'enemyDamageVoid'
+  | 'enemyUndying'
+  | 'enemyCounterSeal';
 
 /** 转珠形状：random=随机若干颗，row=整行，col=整列，cross=十字 */
 export type ConvertShape = 'random' | 'row' | 'col' | 'cross';
@@ -231,6 +237,35 @@ export type SkillEffectDef =
       kind: 'counterAttack';
       /** 敌方反击：我方本回合每次消珠出手反弹 敌攻 × multiplier */
       multiplier: number;
+      turns: number;
+    }
+  // ── 硬闸门：不满足条件伤害直接降为 1，堆数值无法抵消（求值见 balance/damageGates） ──
+  | {
+      kind: 'elementGate';
+      /** 五行阵盾：首消需覆盖 need 种属性，否则整回合消珠伤害降为 1 */
+      need: number;
+      turns: number;
+    }
+  | {
+      kind: 'comboGate';
+      /** 连锁盾：首消需达到 need 连，否则整回合消珠伤害降为 1 */
+      need: number;
+      turns: number;
+    }
+  | {
+      kind: 'damageVoid';
+      /** 锋锐无效：单次伤害超过 敌人maxHp × thresholdPct 即归零，5 连消除可穿透 */
+      thresholdPct: number;
+      turns: number;
+    }
+  | {
+      kind: 'undying';
+      /** 不灭（根性）：HP 高于该比例时致死伤害留 1 血，每场一次 */
+      hpThresholdPct: number;
+    }
+  | {
+      kind: 'counterSeal';
+      /** 克属封印：封锁「克制敌人自身」那一色的全部珠，逼玩家备第二输出色 */
       turns: number;
     };
 

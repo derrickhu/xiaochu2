@@ -186,5 +186,38 @@ function applyEnemySkillResult(ctx: EnemyTurnContext, result: SkillResult): Enem
     // 自身 buff，不占普攻（与减伤同口径）：凝意的代价是一个技能位，不是一回合输出
     return followUpBasicAttack(ctx, { ...base, action: 'resolve', turns: resolve.turns });
   }
+
+  // ── 硬闸门：都是敌人自身的架势，同样不占普攻，玩家的代价是这几回合要改打法 ──
+  const elementGate = result.statusEvents.find((e) => e.status === 'elementGate');
+  if (elementGate) {
+    return followUpBasicAttack(ctx, {
+      ...base, action: 'elementGate', value: elementGate.value, turns: elementGate.turns,
+    });
+  }
+  const comboGate = result.statusEvents.find((e) => e.status === 'comboGate');
+  if (comboGate) {
+    return followUpBasicAttack(ctx, {
+      ...base, action: 'comboGate', value: comboGate.value, turns: comboGate.turns,
+    });
+  }
+  const damageVoid = result.statusEvents.find((e) => e.status === 'damageVoid');
+  if (damageVoid) {
+    return followUpBasicAttack(ctx, {
+      ...base, action: 'damageVoid', value: damageVoid.value, turns: damageVoid.turns,
+    });
+  }
+  const undying = result.statusEvents.find((e) => e.status === 'undying');
+  if (undying) {
+    return followUpBasicAttack(ctx, { ...base, action: 'undying' });
+  }
+  const sealElementReq = result.boardRequests.find((b) => b.type === 'sealElement');
+  if (sealElementReq && sealElementReq.type === 'sealElement') {
+    return {
+      ...base,
+      action: 'counterSeal',
+      sealedOrb: sealElementReq.element,
+      absorbElementName: ELEMENT_NAME[sealElementReq.element],
+    };
+  }
   return idle();
 }

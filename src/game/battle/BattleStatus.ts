@@ -2,6 +2,7 @@
  * 战斗状态系统：统一管理护盾、增伤、减伤、蓄力等持续效果。
  */
 import type { Element } from '@/balance/combat';
+import type { GateSnapshot } from '@/balance/damageGates';
 
 export type StatusOwner = 'team' | 'enemy';
 export type StatusKind =
@@ -23,7 +24,12 @@ export type StatusKind =
   | 'enrage'            // enemy：狂暴中（value = atkMult，无 turns = 永久）
   | 'resolve'           // enemy：凝意中，免疫眩晕与威吓
   | 'elementAbsorb'     // enemy：吸收 element 属性，该色消珠伤害 ×value
-  | 'counterStrike';    // enemy：反击态，我方每次出手反弹 敌攻×value
+  | 'counterStrike'     // enemy：反击态，我方每次出手反弹 敌攻×value
+  // ── 硬闸门：离散开关，不满足即伤害降为 1（求值统一走 balance/damageGates） ──
+  | 'elementGate'       // enemy：首消需覆盖 value 种属性
+  | 'comboGate'         // enemy：首消需达到 value 连
+  | 'damageVoid'        // enemy：单次伤害上限 value（绝对值），5 连消除可穿透
+  | 'undying';          // enemy：不灭（根性），HP 高于 value 比例时致死伤害留 1 血（每场一次）
 export type StatusStackPolicy = 'replace' | 'max' | 'add' | 'ignoreIfPresent';
 
 /** 我方可被净化技清除的 debuff */
@@ -169,6 +175,38 @@ export class BattleStatusStore {
   /** 敌人反击乘区（我方每次出手反弹 敌攻×该值；无则 0） */
   counterStrikeMult(): number {
     return this.get('enemy', 'counterStrike')?.value ?? 0;
+  }
+
+  // ── 硬闸门查询 ──
+
+  /** 当前生效的闸门快照，交给 damageGates 统一求值（0 = 该闸门未生效） */
+  gateSnapshot(): GateSnapshot {
+    return {
+      elementNeed: this.get('enemy', 'elementGate')?.value ?? 0,
+      comboNeed: this.get('enemy', 'comboGate')?.value ?? 0,
+      voidThreshold: this.get('enemy', 'damageVoid')?.value ?? 0,
+    };
+  }
+
+  /** 是否有任意闸门生效（UI 判断要不要显示常驻提示条） */
+  hasActiveGate(): boolean {
+    const g = this.gateSnapshot();
+    return g.elementNeed > 0 || g.comboNeed > 0 || g.voidThreshold > 0;
+  }
+
+  /** 不灭的血线比例（无则 0） */
+  undyingThreshold(): number {
+    return this.get('enemy', 'undying')?.value ?? 0;
+  }
+
+  /**
+   * 消耗不灭：返回 true 表示这一击被挡下，敌人留在 1 血。
+   * 消耗即移除，保证每场只留一次命；施法侧的血线守卫会阻止它在 1 血时重新挂上。
+   */
+  consumeUndying(): boolean {
+    if (!this.get('enemy', 'undying')) return false;
+    this.remove('enemy', 'undying');
+    return true;
   }
 
   /** 净化：清除我方全部 debuff，返回被清除的状态（用于演出） */

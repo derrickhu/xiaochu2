@@ -12,6 +12,11 @@ import { resolveEncounter, type EnemyDef } from '@/balance/enemies';
 import { formatEnemyBattleName } from '@/balance/enemyDisplay';
 import { skillForEnemy } from '@/game/battle/SkillEngine';
 import { enemyStats } from '@/formulas/growth';
+import type { PetDef } from '@/balance/pets';
+import {
+  buildCounterChecklist, type CounterCheck, type CounterStatus,
+} from '@/balance/stageCounterplay';
+import { resolveMechanics } from '@/balance/stageMechanics';
 import type { StageDef } from '@/balance/stages';
 import { ELEMENT_NAME } from '@/balance/ui';
 import type { SkillDef } from '@/balance/skills';
@@ -25,6 +30,8 @@ export interface TeamEnemyIntelHandle {
   root: PIXI.Container;
   height: number;
   setWave(index: number): void;
+  /** 编队变动后重算「必带对策」勾选状态 */
+  setTeam(team: readonly PetDef[]): void;
 }
 
 const PLATE_BG = 0xfff8ec;
@@ -46,10 +53,15 @@ const INFO_PAD = 12;
 export function buildTeamEnemyIntelCard(opts: {
   stage: StageDef;
   width: number;
+  /** 当前编队；用于「必带对策清单」的勾选，可后续经 setTeam 更新 */
+  team?: readonly PetDef[];
 }): TeamEnemyIntelHandle {
   const { stage, width } = opts;
   const encounters = stage.encounters.map(resolveEncounter);
   const waveCount = Math.max(1, encounters.length);
+  let team: readonly PetDef[] = opts.team ?? [];
+  // 清单条目由关卡机制决定，与编队无关，故高度可在建卡时一次算定
+  const counterTags = resolveMechanics(stage.mechanics).counterTags;
 
   const root = new PIXI.Container();
   const tabsH = waveCount > 1 ? TAB_H + 8 : 0;
@@ -57,8 +69,9 @@ export function buildTeamEnemyIntelCard(opts: {
   const rightX = leftColW + COL_GAP;
   const infoInnerW = width - rightX - OUTER_PAD_RIGHT;
 
+  const checklistH = counterplayHeight(counterTags.length);
   const maxInfoH = Math.max(
-    ...encounters.map((enc) => estimateInfoHeight(enc.def, stage, infoInnerW)),
+    ...encounters.map((enc) => estimateInfoHeight(enc.def, stage, infoInnerW) + checklistH),
     160,
   );
   /** 立绘框高度固定 = 外卡内容区高度（顶底贴齐说明区） */
@@ -180,6 +193,14 @@ export function buildTeamEnemyIntelCard(opts: {
       const tipBlock = buildStageTip(tip.startsWith('本关') ? tip : `本关：${tip}`, infoContentW);
       tipBlock.position.set(0, y);
       infoHost.addChild(tipBlock);
+      y += tipBlock.tipH;
+    }
+
+    // 必带对策清单：机制不再只是一句提示，而是「你这队缺哪几项」
+    if (counterTags.length > 0) {
+      const list = buildCounterplayList(buildCounterChecklist(stage, team), infoContentW);
+      list.position.set(0, y);
+      infoHost.addChild(list);
     }
   };
 
@@ -229,6 +250,10 @@ export function buildTeamEnemyIntelCard(opts: {
       if (index < 0 || index >= waveCount) return;
       selected = index;
       refresh();
+    },
+    setTeam(next: readonly PetDef[]) {
+      team = next;
+      if (counterTags.length > 0) refresh();
     },
   };
 
@@ -287,6 +312,69 @@ function estimateStageTipHeight(text: string, width: number): number {
   tipText.destroy(true);
   return h;
 }
+
+/** 清单行高：一行标签 + 一行说明；条目数固定，故高度可预先算定 */
+const CHECK_ROW_H = 32;
+const CHECK_HEAD_H = 22;
+
+function counterplayHeight(count: number): number {
+  return count > 0 ? CHECK_HEAD_H + count * CHECK_ROW_H + 8 : 0;
+}
+
+/**
+ * 「必带对策」清单。
+ *
+ * 三态用颜色与符号双编码：满足=绿勾、缺失=红叉、看操作=灰点。第三态刻意不用红叉，
+ * 免得玩家去背包里找一只根本不存在的「铺连宠」。
+ */
+function buildCounterplayList(
+  checks: readonly CounterCheck[],
+  width: number,
+): PIXI.Container {
+  const c = new PIXI.Container();
+  const missing = checks.filter((k) => k.status === 'missing').length;
+
+  const head = makeText(
+    missing > 0 ? `必带对策（还缺 ${missing} 项）` : '必带对策（编队已就绪）',
+    {
+      size: FONT_SIZE.xxs, bold: true, anchor: [0, 0],
+      fill: missing > 0 ? 0xc0392b : 0x2f7d4f,
+    },
+  );
+  head.position.set(0, 0);
+  c.addChild(head);
+
+  checks.forEach((check, i) => {
+    const y = CHECK_HEAD_H + i * CHECK_ROW_H;
+    const style = CHECK_STYLE[check.status];
+    const mark = makeText(style.glyph, {
+      size: FONT_SIZE.xxs, fill: style.color, bold: true, anchor: [0, 0],
+    });
+    mark.position.set(2, y);
+    c.addChild(mark);
+
+    const tag = makeText(check.tag, {
+      size: FONT_SIZE.xxs, fill: style.color, bold: true, anchor: [0, 0],
+    });
+    tag.position.set(20, y);
+    c.addChild(tag);
+
+    const detail = makeText(check.detail, {
+      size: 12, fill: COLORS.textSub, anchor: [0, 0],
+      wordWrapWidth: Math.max(60, width - 20),
+    });
+    detail.position.set(20, y + 15);
+    c.addChild(detail);
+  });
+
+  return c;
+}
+
+const CHECK_STYLE: Readonly<Record<CounterStatus, { glyph: string; color: number }>> = {
+  met: { glyph: '✓', color: 0x2f7d4f },
+  missing: { glyph: '✕', color: 0xc0392b },
+  manual: { glyph: '•', color: 0x8a7a5c },
+};
 
 function skillBoxHeight(count: number): number {
   const iconSize = 44;

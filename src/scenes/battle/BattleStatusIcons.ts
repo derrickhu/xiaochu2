@@ -8,6 +8,7 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { UI } from '@/balance/ui';
+import { describeUnmet, type GateUnmet } from '@/balance/damageGates';
 import { displayAlive, readScale, cancelDisplayTweens } from '@/core/animationGuard';
 import type { StatusInstance, StatusKind, StatusOwner } from '@/game/battle/BattleStatus';
 import type { BattleController } from '@/game/battle/BattleController';
@@ -30,6 +31,11 @@ const ENEMY_ICON: Partial<Record<StatusKind, IconStyle>> = {
   enemyDamageReduction: { glyph: '减', color: 0xb0c4de, debuff: false },
   charge: { glyph: '蓄', color: 0xff5252, debuff: false },
   enrage: { glyph: '暴', color: 0xff2d2d, debuff: false },
+  // 硬闸门：图标只负责「还剩几回合」，条件正文由下方常驻条承担
+  elementGate: { glyph: '阵', color: 0x7ad3ff, debuff: false },
+  comboGate: { glyph: '锁', color: 0x9ae6a0, debuff: false },
+  damageVoid: { glyph: '钝', color: 0xffb74d, debuff: false },
+  undying: { glyph: '灭', color: 0xff8a80, debuff: false },
 };
 
 /** 我方侧图标（owner === 'team'；护盾走血条青色段，不进图标行） */
@@ -56,7 +62,10 @@ interface IconEntry {
 export class BattleStatusIcons {
   private _enemyRow!: PIXI.Container;
   private _teamRow!: PIXI.Container;
+  private _gateBar!: PIXI.Text;
   private readonly _icons = new Map<string, IconEntry>();
+  /** 上一回合没过的闸门；有值时常驻条改写成「还差多少」 */
+  private _shortfall: readonly GateUnmet[] = [];
 
   constructor(
     private readonly _ctrl: BattleController,
@@ -67,6 +76,18 @@ export class BattleStatusIcons {
     this._enemyRow = new PIXI.Container();
     this._syncEnemyRowPos();
     parent.addChild(this._enemyRow);
+
+    // 闸门条件常驻在敌人立绘下沿：图标只能说明「还剩几回合」，
+    // 但玩家真正需要一直看见的是「这回合要做到什么」
+    this._gateBar = applyTextResolution(new PIXI.Text('', {
+      fontSize: FONT_SIZE.xxs, fill: 0xffe9b0, fontWeight: 'bold',
+      stroke: 0x2b1c10, strokeThickness: 4,
+      align: 'center', wordWrap: true, wordWrapWidth: Game.logicWidth - 48,
+    }));
+    this._gateBar.anchor.set(0.5, 0);
+    this._gateBar.position.set(Game.logicWidth / 2, this._layout.enemyStatusIconY + ICON_SIZE);
+    this._gateBar.visible = false;
+    parent.addChild(this._gateBar);
 
     this._teamRow = new PIXI.Container();
     // 英雄血条正上方靠左（右侧留给 buff 状态文字行）
@@ -99,6 +120,27 @@ export class BattleStatusIcons {
     // 敌方：从名匾右侧向右排布（不居中，避免压倒计时）
     this._layoutRow(enemyList, this._enemyRow, 'enemy', false);
     this._layoutRow(teamList, this._teamRow, 'team', false);
+    this._refreshGateBar();
+  }
+
+  /** 由 BattleScene 在回合结算后回填「还差多少」；空数组 = 本回合过了 */
+  setGateShortfall(unmet: readonly GateUnmet[]): void {
+    this._shortfall = unmet;
+    this._refreshGateBar();
+  }
+
+  private _refreshGateBar(): void {
+    if (!this._gateBar || this._gateBar.destroyed) return;
+    const lines: string[] = [];
+    // 差多少排在最前：条件玩家已经读过一遍了，真正要盯的是缺口
+    for (const u of this._shortfall) lines.push(describeUnmet(u));
+    for (const s of this._ctrl.statuses) {
+      if (s.owner !== 'enemy') continue;
+      const text = gateConditionText(s);
+      if (text) lines.push(text);
+    }
+    this._gateBar.visible = lines.length > 0;
+    this._gateBar.text = lines.join('\n');
   }
 
   destroy(): void {
@@ -197,4 +239,21 @@ export class BattleStatusIcons {
 
 function iconKey(s: StatusInstance): string {
   return `${s.owner}:${s.kind}`;
+}
+
+/** 闸门的一行条件；非闸门状态返回 null（它们有图标就够了） */
+function gateConditionText(s: StatusInstance): string | null {
+  const left = s.turnsLeft != null ? ` · 剩 ${s.turnsLeft} 回合` : '';
+  switch (s.kind) {
+    case 'elementGate':
+      return `五行阵盾：首消需 ${s.value} 种属性${left}`;
+    case 'comboGate':
+      return `连锁盾：首消需 ${s.value} 连${left}`;
+    case 'damageVoid':
+      return `锋锐无效：大伤害被吞，用 5 连及以上穿透${left}`;
+    case 'undying':
+      return '不灭：一次致死会留 1 血，备好持续伤害补刀';
+    default:
+      return null;
+  }
 }

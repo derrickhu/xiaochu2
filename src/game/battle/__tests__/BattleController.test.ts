@@ -439,7 +439,11 @@ describe('阶段十二·角色专属战斗属性（全队聚合）', () => {
 
 describe('resolvePlayerTurnDamage：治疗强化 / 全队增伤透传（纯函数）', () => {
   const firePet = (): TeamPet => ({
-    def: { element: 'fire' } as TeamPet['def'],
+    // 特攻属性避开敌人的 water，好让断言量到的只有 teamDamageMult 这一路
+    def: {
+      element: 'fire',
+      tags: { killerElement: 'earth', bondTags: [], resist: 'sealOrbs' },
+    } as unknown as TeamPet['def'],
     level: 1,
     star: 1,
     skill: {} as TeamPet['skill'],

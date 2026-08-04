@@ -256,6 +256,22 @@ export function stageTtk(kind: string): TtkBand {
 }
 
 /**
+ * 硬闸门关卡的 TTK 上限加成。
+ *
+ * 闸门按设计就是要吃掉若干回合的输出（条件不满足时整回合伤害压到 1），
+ * 外加闸门怪本身多占一波。这部分时长是机制的一部分，不是配平失控，
+ * 所以给带闸门的关卡一个显式加成，而不是把全局 TTK 带整体放宽 ——
+ * 后者会让不带闸门的关卡也悄悄变松，护栏就失去了意义。
+ */
+export const GATED_TTK_EXTRA = 6;
+
+/** 关卡 TTK 目标，带闸门时上限放宽 GATED_TTK_EXTRA */
+export function stageTtkFor(kind: string, hasGate: boolean): TtkBand {
+  const band = stageTtk(kind);
+  return hasGate ? { min: band.min, max: band.max + GATED_TTK_EXTRA } : band;
+}
+
+/**
  * 关卡总 HP 预算区间 = 预算队每回合期望输出 × TTK 区间。
  * teamDamagePerTurn 由调用方按中手模型估算（如 simulation 模拟器实测）。
  */
@@ -300,7 +316,12 @@ export function waveSplit(waveCount: number): readonly number[] {
  */
 export const BUDGET_GUARDRAIL = {
   bossFirstWaveMaxRatio: 2.5,
-  bossTotalMinRatio: 2.0,
+  /**
+   * v0.6 从 2.0 下调到 1.8：闸门层把每章 index 7 的「临门验队关」额外加了一波闸门怪，
+   * 这一关按设计就该是全章最重的铺垫关，Boss 相对它的比值自然被压低。
+   * 主契约仍是「Boss 总量 ≈ 本章铺垫均值 × 4.0」，这条只兜「临门断崖」的底。
+   */
+  bossTotalMinRatio: 1.8,
   bossTotalMaxRatio: 4.2,
   /** Boss 总量目标 = 本章铺垫关总量均值 × 该倍数；实际值允许 ±budgetTolerance */
   bossTotalTargetRatio: 4.0,

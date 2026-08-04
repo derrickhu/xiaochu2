@@ -15,11 +15,17 @@ import {
 import { resolveEncounter, type ResolvedEncounter } from '@/balance/enemies';
 import { STAGE_MAP, type StageDef } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
+import {
+  evaluateCompPenalty,
+  NO_COMP_PENALTY,
+  type CompPenalty,
+} from '@/balance/damageGates';
 import { ECONOMY } from '@/balance/economy';
 import { stageDrops } from '@/formulas/economyOutput';
 import {
   teamMaxHp, teamRcv, teamElements, petAtkInTeam, teamEffectAggregate, petSelfCombatProfile,
-  teamLeaderSkill, leaderComboBonus, type TeamMember,
+  teamLeaderSkill, leaderComboBonus, leaderTurnMods,
+  type LeaderTurnMods, type TeamMember,
 } from '@/formulas/team';
 import type { ResolvedLeaderSkill } from '@/balance/leaderSkill';
 import { applyDamageReduction } from '@/formulas/damage';
@@ -83,6 +89,10 @@ export class BattleController {
   readonly bannedElements: ReadonlySet<Element>;
   /** 机制战前提示（UI 展示） */
   readonly mechanicHints: readonly string[];
+  /** 战前「必带对策」清单标签（编队界面逐条比对当前阵容） */
+  readonly counterTags: readonly string[];
+  /** 同源相斥的结算结果（无该机制时为中性值） */
+  readonly compPenalty: CompPenalty;
 
   state: BattleState = 'playerTurn';
 
@@ -97,6 +107,8 @@ export class BattleController {
   readonly leaderComboBonus: number;
   /** 队长技解析结果（战斗内 UI 展示用；无人上阵为 null） */
   readonly leaderSkill: ResolvedLeaderSkill | null;
+  /** 队长技里需要看盘面的部分（专精令 / 连锋令 / 疾锋令） */
+  private readonly _leaderTurnMods: LeaderTurnMods;
 
   // ── 战斗属性（阶段十二，构造时定值，全队属性聚合后封顶） ──
   readonly teamDamageReduction: number;
@@ -110,6 +122,8 @@ export class BattleController {
   turnsUsed = 0;
   /** 英雄是否受过伤（统计用，不影响星级） */
   tookDamage = false;
+  /** 不灭刚刚挡下一次致死伤害（表现层播「不灭」横幅后由场景清零） */
+  undyingTriggered = false;
 
   /** 通天塔灵机聚合修正（主线/秘境为空修正） */
   readonly runMods: TowerRunModifiers;
@@ -180,6 +194,7 @@ export class BattleController {
     this.teamDamageMult = teamFx.teamDamageMult;
     this.leaderSkill = teamLeaderSkill(members);
     this.leaderComboBonus = leaderComboBonus(members);
+    this._leaderTurnMods = leaderTurnMods(members);
     this.teamDamageReduction = teamFx.damageReduction + runMods.damageReductionAdd;
     this.teamHealBonus = teamFx.healBonus + runMods.healBonusAdd;
     const startShield = Math.floor(this.heroMaxHp * teamFx.startShieldPct);
@@ -196,8 +211,16 @@ export class BattleController {
     this.noHeartHeal = mech.noHeartHeal;
     this.bannedElements = new Set(mech.bannedElements);
     this.mechanicHints = mech.hints;
+    this.counterTags = mech.counterTags;
+
+    // 同源相斥：开场读一次队伍属性种类数。属性铺太宽敌人变强、收太窄敌人减伤，
+    // 中间才是甜点区——这条直接拆掉「五色齐 + 总攻最高」的恒定最优解。
+    this.compPenalty = mech.compPenalty
+      ? evaluateCompPenalty(this.teamElementSet.size)
+      : NO_COMP_PENALTY;
 
     this.enemy = spawnBattleEnemy(this.stage, this._waves, 0);
+    this._applyCompPenaltyToEnemy();
   }
 
   /** 当前护盾值（吸收敌人伤害，先于 HP 扣减） */
@@ -285,6 +308,8 @@ export class BattleController {
       thunderMatchCount: BIG_MATCH_COUNT,
       teamAtkTotal: this._teamAtkTotal,
       firstMatchCrit: mods.firstMatchCrit,
+      gates: this._statuses.gateSnapshot(),
+      leader: this._leaderTurnMods,
     });
     // 复仇是「受击攒、下回合放」，本回合用掉即清
     this._revengeStacks = 0;
@@ -309,6 +334,13 @@ export class BattleController {
     if (mods.revengePerStack > 0 && this._revengeStacks > 0) {
       mult *= 1 + mods.revengePerStack * this._revengeStacks;
     }
+    // 队长技的血线条件档（昂扬令 / 血战令）与灵机同为「看结算瞬间血量」，并在此
+    const hp = this._leaderTurnMods.hpConditional;
+    if (hp) {
+      const pct = this.heroHp / Math.max(1, this.heroMaxHp);
+      const met = hp.mode === 'high' ? pct >= hp.threshold : pct <= hp.threshold;
+      if (met) mult *= hp.mult;
+    }
     return mult;
   }
 
@@ -324,13 +356,29 @@ export class BattleController {
    * 返回敌人是否死亡（死亡后由场景决定调用 nextWave 或结束战斗）
    */
   applyPetAttack(attack: PetAttack): { enemyDead: boolean } {
-    this.enemy.hp = Math.max(0, this.enemy.hp - attack.damage);
-    const enemyDead = this.enemy.hp <= 0;
+    const enemyDead = this.damageEnemy(attack.damage);
     // 余烬：击败敌人回一口血（跨波累计，是塔内 HP 经济的主要补充）
     if (enemyDead && this.runMods.killHealPct > 0) {
       this.applyHeal(Math.floor(this.heroMaxHp * this.runMods.killHealPct));
     }
     return { enemyDead };
+  }
+
+  /**
+   * 对敌人扣血的唯一入口（消珠 / 主动技 / DoT 都必须走这里），返回是否死亡。
+   *
+   * 不灭（根性）在此拦截：血线以上的致死伤害留 1 血并消耗掉状态。
+   * 三条致死路径统一收口是必须的——只挡消珠会让「用技能补最后一下」白嫖过根性。
+   */
+  damageEnemy(amount: number): boolean {
+    const next = this.enemy.hp - amount;
+    if (next <= 0 && this._statuses.consumeUndying()) {
+      this.enemy.hp = 1;
+      this.undyingTriggered = true;
+      return false;
+    }
+    this.enemy.hp = Math.max(0, next);
+    return this.enemy.hp <= 0;
   }
 
   /**
@@ -354,7 +402,30 @@ export class BattleController {
     this.waveIndex++;
     this._statuses.clearOwner('enemy');
     this.enemy = spawnBattleEnemy(this.stage, this._waves, this.waveIndex);
+    this._applyCompPenaltyToEnemy();
     return this.enemy;
+  }
+
+  /**
+   * 同源相斥落到当前波敌人身上：攻击乘区直接改 atk，减伤挂成无限期状态。
+   * 每次换波都要重新施加——clearOwner('enemy') 会把上一波的减伤一并清掉。
+   */
+  private _applyCompPenaltyToEnemy(): void {
+    const { enemyAtkMult, enemyReduction } = this.compPenalty;
+    if (enemyAtkMult !== 1) {
+      this.enemy.atk = Math.floor(this.enemy.atk * enemyAtkMult);
+    }
+    if (enemyReduction > 0) {
+      this._statuses.add({
+        id: 'enemy_comp_penalty',
+        kind: 'enemyDamageReduction',
+        owner: 'enemy',
+        value: enemyReduction,
+        sourceSkillId: 'rule_comp_penalty',
+        stack: 'max',
+      });
+      this._syncEnemyStatusMirrors();
+    }
   }
 
   /** ── petAttack → enemyTurn ── */
@@ -373,7 +444,8 @@ export class BattleController {
     const dotTicks = this._statuses.tickTurnEnd();
     for (const tick of dotTicks) {
       if (tick.owner === 'enemy') {
-        this.enemy.hp = Math.max(0, this.enemy.hp - tick.amount);
+        // 走统一入口：DoT 补上最后一刀同样会被不灭挡下，否则毒能白嫖过根性
+        this.damageEnemy(tick.amount);
       } else {
         this.heroHp = Math.max(0, this.heroHp - tick.amount);
         if (tick.amount > 0) this.tookDamage = true;
@@ -462,6 +534,7 @@ export class BattleController {
       getEnemyHp: () => this.enemy.hp,
       getEnemyMaxHp: () => this.enemy.maxHp,
       setEnemyHp: (hp) => { this.enemy.hp = hp; },
+      damageEnemy: (amount) => this.damageEnemy(amount),
       applyEnemyDamage: (amount) => this.applyEnemyDamage(amount),
       applyHeal: (amount) => this.applyHeal(amount),
       addStatus: (status) => this._statuses.add(status),
@@ -503,6 +576,7 @@ export class BattleController {
       teamHealBonus: this.teamHealBonus,
       enemyEnraged: !!this._statuses.get('enemy', 'enrage'),
       enemyResolute: this._statuses.isResolute(),
+      enemyUndying: this._statuses.undyingThreshold() > 0,
       teamAtkDebuffMult: this._statuses.teamAtkDebuffMult(),
       rng: this._rng,
     });

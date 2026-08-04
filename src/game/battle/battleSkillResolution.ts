@@ -7,6 +7,8 @@ export interface BattleSkillApplyContext {
   getEnemyHp: () => number;
   getEnemyMaxHp: () => number;
   setEnemyHp: (hp: number) => void;
+  /** 对敌人扣血的统一入口（会经过不灭拦截），返回敌人是否死亡 */
+  damageEnemy: (amount: number) => boolean;
   applyEnemyDamage: (amount: number) => { damage: number; absorbed: number; heroDead: boolean };
   applyHeal: (amount: number) => void;
   addStatus: (status: StatusInstance) => void;
@@ -28,7 +30,8 @@ export function applySkillResult(
 ): void {
   for (const event of result.damageEvents) {
     if (event.target === 'enemy') {
-      ctx.setEnemyHp(Math.max(0, ctx.getEnemyHp() - event.amount));
+      // 技能直伤同样受不灭拦截，否则「用技能补最后一刀」能白嫖过根性
+      ctx.damageEnemy(event.amount);
     } else {
       ctx.applyEnemyDamage(event.amount);
     }

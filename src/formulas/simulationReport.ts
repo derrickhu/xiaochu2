@@ -10,12 +10,19 @@ export interface ComboModel {
   matchCount: number;
   /** 是否会用主动技（低手不主动放技能） */
   useSkills: boolean;
+  /**
+   * 硬闸门的满足率（0~1）。模拟器是概率模型、没有真实盘面，无法判定
+   * 「首消是否覆盖了 3 种属性」，故用熟练度折算成期望：
+   * 队伍属性/combo 上限压根够不到需求时算硬失败（与本值无关），
+   * 够得到时按本值折算「手上功夫能不能稳定摆出来」。
+   */
+  gateCompliance: number;
 }
 
 export const COMBO_MODELS: Readonly<Record<'low' | 'mid' | 'high', ComboModel>> = {
-  low: { name: '低手3C', combo: 3, matchCount: 3, useSkills: false },
-  mid: { name: '中手5C', combo: 5, matchCount: 3, useSkills: true },
-  high: { name: '高手7C', combo: 7, matchCount: 4, useSkills: true },
+  low: { name: '低手3C', combo: 3, matchCount: 3, useSkills: false, gateCompliance: 0.3 },
+  mid: { name: '中手5C', combo: 5, matchCount: 3, useSkills: true, gateCompliance: 0.7 },
+  high: { name: '高手7C', combo: 7, matchCount: 4, useSkills: true, gateCompliance: 0.95 },
 };
 
 export interface SimResult {

@@ -1,3 +1,4 @@
+import { resolveResists } from '@/balance/petTags';
 import type { EnemyUnit, TeamPet } from './battleTypes';
 import type { SkillCaster, SkillRuntimeContext } from './SkillEngine';
 
@@ -16,6 +17,8 @@ export function makeSkillRuntimeContext(params: {
   enemyEnraged?: boolean;
   /** 敌人是否凝意中（免疫眩晕与威吓） */
   enemyResolute?: boolean;
+  /** 敌人是否已挂着不灭（避免空放同一招） */
+  enemyUndying?: boolean;
   /** 我方伤害削弱乘区（敌方削攻 debuff） */
   teamAtkDebuffMult?: number;
   /** 随机源（敌方技能封印选目标） */
@@ -40,7 +43,10 @@ export function makeSkillRuntimeContext(params: {
     teamHealBonus: params.teamHealBonus,
     enemyEnraged: params.enemyEnraged ?? false,
     enemyResolute: params.enemyResolute ?? false,
+    enemyUndying: params.enemyUndying ?? false,
     teamSize: params.team.length,
+    // 抗性配额直接从上阵表算，不走参数：任何调用点忘了传都会静默丢失免疫
+    teamResists: resolveResists(params.team.map((p) => p.def.tags.resist)),
     rng: params.rng,
   };
 }

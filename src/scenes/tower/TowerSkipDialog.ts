@@ -60,8 +60,31 @@ export function showTowerSkipDialog(
     };
     bindPointerTap(scrim, () => dismiss(false));
 
-    const panelW = Math.min(420, Game.logicWidth - 64);
-    const panelH = 148 + lines.length * 28;
+    // 先排文案量高度，再定板高（书法标题 + 换行说明不能用固定步进）
+    const panelW = Math.min(480, Game.logicWidth - 56);
+    const textW = panelW - 48;
+    const padTop = 22;
+    const padBottom = 18;
+    const titleGap = 14;
+    const lineGap = 8;
+    const btnGap = 18;
+    const btnH = 38;
+
+    const title = makeText(`直登第 ${toFloor} 层`, {
+      size: FONT_SIZE.sm, fill: TITLE_BROWN, bold: true, anchor: [0.5, 0], role: 'title',
+    });
+    const bodyTexts = lines.map((line) => makeText(line, {
+      size: FONT_SIZE.xs, fill: 0x5b4a3c, anchor: [0.5, 0],
+      wordWrapWidth: textW, align: 'center',
+    }));
+    const bodyH = bodyTexts.reduce(
+      (sum, t, i) => sum + t.height + (i > 0 ? lineGap : 0),
+      0,
+    );
+    const panelH = Math.ceil(
+      padTop + title.height + titleGap + bodyH + btnGap + btnH + padBottom,
+    );
+
     const panel = new PIXI.Container();
     panel.position.set(Game.logicWidth / 2, Game.logicHeight / 2);
     root.addChild(panel);
@@ -71,29 +94,20 @@ export function showTowerSkipDialog(
       centered: true,
     }));
 
-    const top = -panelH / 2;
-    const title = makeText(`直登第 ${toFloor} 层`, {
-      size: FONT_SIZE.lg, fill: TITLE_BROWN, bold: true, anchor: 0.5, role: 'title',
-    });
-    title.position.set(0, top + 32);
+    let y = -panelH / 2 + padTop;
+    title.position.set(0, y);
     panel.addChild(title);
-
-    let y = top + 68;
-    for (const line of lines) {
-      const text = makeText(line, {
-        size: FONT_SIZE.xs, fill: 0x5b4a3c, bold: true, anchor: [0.5, 0],
-        wordWrapWidth: panelW - 44, align: 'center',
-      });
+    y += title.height + titleGap;
+    for (const text of bodyTexts) {
       text.position.set(0, y);
       panel.addChild(text);
-      y += 28;
+      y += text.height + lineGap;
     }
-
-    const btnY = -top - 34;
-    panel.addChild(buildButton('直登', panelW / 4, btnY, 0xfff3d8, 0xd8a63c, 0x7a5520,
-      () => dismiss(true)));
+    const btnY = y + btnGap - lineGap + btnH / 2;
     panel.addChild(buildButton('再想想', -panelW / 4, btnY, 0xf2ece2, 0xbdae9c, 0x7c6f62,
       () => dismiss(false)));
+    panel.addChild(buildButton('直登', panelW / 4, btnY, 0xfff3d8, 0xd8a63c, 0x7a5520,
+      () => dismiss(true)));
 
     panel.scale.set(0.9);
     TweenManager.to({

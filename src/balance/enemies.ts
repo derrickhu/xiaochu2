@@ -222,6 +222,76 @@ export const MOBS: readonly MobDef[] = [
     baseHp: 780, baseAtk: 145, baseDef: 40, attackInterval: 1,
     image: enemyImageOf('enemy_golem_earth'),
   },
+
+  // ── 硬闸门载体（9）──
+  // 闸门是「不满足条件伤害降为 1」的离散开关，堆数值抵消不掉，只能改阵容或改操作。
+  // 这批怪的定位是让每一档闸门都有专属面孔：玩家看到这只怪就知道要换什么打法。
+  // 攻防刻意压在同档基准以下 —— 闸门本身已经是压力，再叠高数值就变成双重惩罚。
+  // 立绘沿用同族基础怪（同 image 覆盖约定）。
+  {
+    // Ch1-2 轻闸门：只要两种属性，第一小时就把「数值不是万能」教到
+    id: 'enemy_ward_slime_wood', name: '结界藤泥', element: 'wood', displayTier: 'elite',
+    baseHp: 900, baseAtk: 150, baseDef: 15, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.elementGateLight],
+    image: enemyImageOf('enemy_slime_wood'),
+  },
+  {
+    id: 'enemy_knot_bat_fire', name: '缠丝火蝠', element: 'fire', displayTier: 'elite',
+    baseHp: 760, baseAtk: 175, baseDef: 8, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.comboGateLight],
+    image: enemyImageOf('enemy_bat_fire'),
+  },
+  {
+    // Ch3-6 常规单闸门
+    id: 'enemy_wuxing_golem_earth', name: '五行石傀', element: 'earth', displayTier: 'elite',
+    baseHp: 1350, baseAtk: 160, baseDef: 65, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.elementGate],
+    image: enemyImageOf('enemy_golem_earth'),
+  },
+  {
+    id: 'enemy_chain_serpent_water', name: '锁链寒蛟', element: 'water', displayTier: 'elite',
+    baseHp: 1150, baseAtk: 195, baseDef: 25, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.comboGate],
+    image: enemyImageOf('enemy_serpent_water'),
+  },
+  {
+    // Ch7-10 反数值堆叠：越堆攻越吃亏，逼玩家去练 5 连
+    id: 'enemy_blunt_scorpion_metal', name: '钝锋铁蝎', element: 'metal', displayTier: 'elite',
+    baseHp: 1400, baseAtk: 190, baseDef: 60, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.damageVoid],
+    image: enemyImageOf('enemy_scorpion_metal'),
+  },
+  {
+    id: 'enemy_grit_golem_earth', name: '不灭岩傀', element: 'earth', displayTier: 'miniBoss',
+    baseHp: 1500, baseAtk: 200, baseDef: 70, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.undying, ENEMY_SKILL_IDS.golemGuardHeavy],
+    image: enemyImageOf('enemy_golem_earth'),
+  },
+  {
+    // Ch11-14 封主色：逼出第二输出位
+    id: 'enemy_sealward_toad_water', name: '封色毒蟾', element: 'water', displayTier: 'elite',
+    baseHp: 1250, baseAtk: 200, baseDef: 25, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.counterSeal, ENEMY_SKILL_IDS.healBlock],
+    image: enemyImageOf('enemy_toad_water'),
+  },
+  {
+    // Ch11-14 双闸门同场：属性闸 + 不灭，一次考编队宽度与补刀手段
+    id: 'enemy_wuxing_tyrant_wood', name: '五行魔将', element: 'wood', displayTier: 'miniBoss',
+    baseHp: 1450, baseAtk: 225, baseDef: 40, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.elementGateBoss, ENEMY_SKILL_IDS.undying],
+    image: enemyImageOf('enemy_bamboo_tyrant_wood'),
+  },
+  {
+    // Ch15-16 复合终局：连锁闸 + 锋锐无效同场，转阶段后再加属性闸。
+    // 三条闸门错开 CD，任一时刻最多两条同时生效，保证总有能出输出的窗口。
+    id: 'enemy_gatelord_metal', name: '万缚蝎王', element: 'metal', displayTier: 'miniBoss',
+    baseHp: 1600, baseAtk: 240, baseDef: 75, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.comboGateBoss, ENEMY_SKILL_IDS.damageVoid],
+    image: enemyImageOf('enemy_scorpion_metal'),
+    phases: [
+      { hpThreshold: 0.5, label: '万缚展开', addSkillIds: [ENEMY_SKILL_IDS.elementGateBoss] },
+    ],
+  },
 ];
 
 export const MOB_MAP: ReadonlyMap<string, MobDef> = new Map(MOBS.map((m) => [m.id, m]));

@@ -10,6 +10,7 @@ import { Platform } from '@/core/PlatformService';
 import {
   ELITE_MODE, eliteStageIdOf, eliteStageOf, hasEliteVariant, isEliteUnlocked,
 } from '@/balance/eliteMode';
+import { buildCounterChecklist } from '@/balance/stageCounterplay';
 import { CHAPTER_NAME, formatStageShortLabel, type StageDef } from '@/balance/stages';
 import { ELEMENT_NAME } from '@/balance/ui';
 import { getStageType } from '@/balance/stageTypes';
@@ -515,11 +516,15 @@ function buildEnemySummaryBox(stage: StageDef): { root: PIXI.Container; height: 
       align: 'center',
     })
     : null;
+  // 硬闸门必须在点「出战」之前就看得见，否则它只是惩罚而不是谜题
+  const counterLines = buildCounterLines(stage);
 
   const padTop = 28;
   const padBot = 18;
   const gap = 8;
-  const innerH = summary.height + (hint ? gap + hint.height : 0);
+  const innerH = summary.height
+    + (hint ? gap + hint.height : 0)
+    + counterLines.reduce((sum, t) => sum + t.height + 4, counterLines.length ? gap : 0);
   const h = padTop + innerH + padBot;
 
   const box = makeContentBox(h);
@@ -529,11 +534,40 @@ function buildEnemySummaryBox(stage: StageDef): { root: PIXI.Container; height: 
 
   summary.position.set(0, padTop);
   root.addChild(summary);
+  let y = padTop + summary.height;
   if (hint) {
-    hint.position.set(0, padTop + summary.height + gap);
+    hint.position.set(0, y + gap);
     root.addChild(hint);
+    y += gap + hint.height;
+  }
+  if (counterLines.length > 0) {
+    y += gap;
+    for (const line of counterLines) {
+      line.position.set(0, y);
+      root.addChild(line);
+      y += line.height + 4;
+    }
   }
   return { root, height: h };
+}
+
+/**
+ * 「必带对策」一行一条。
+ *
+ * 这里只列条件、不判定编队是否满足 —— 地图弹层还没进编队页，玩家改不了队，
+ * 摆一排红叉只会制造焦虑。勾选状态留给编队页的敌情卡（那里改了能立刻看到变化）。
+ */
+function buildCounterLines(stage: StageDef): PIXI.Text[] {
+  const checks = buildCounterChecklist(stage, []);
+  if (checks.length === 0) return [];
+  return checks.map((check, i) => makeText(
+    i === 0 ? `必带对策：${check.tag}` : `　　　　　${check.tag}`,
+    {
+      size: FONT_SIZE.xxs, fill: 0xb0722c, bold: true, anchor: [0.5, 0],
+      wordWrapWidth: BOX_W - BOX_PAD_X * 2,
+      align: 'center',
+    },
+  ));
 }
 
 /** 同宽淡奶油底；标签+图标+文案整行居中 */

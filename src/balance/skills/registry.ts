@@ -10,11 +10,16 @@ import {
   makeElementBuff,
   makeEnemyAtkDebuff,
   makeEnemyCharge,
+  makeEnemyComboGate,
   makeEnemyCounter,
+  makeEnemyCounterSeal,
+  makeEnemyDamageVoid,
   makeEnemyElementAbsorb,
+  makeEnemyElementGate,
   makeEnemyEnrage,
   makeEnemyGuard,
   makeEnemyResolve,
+  makeEnemyUndying,
   makeEnemyHeal,
   makeEnemyHealBlock,
   makeEnemyPoison,
@@ -173,6 +178,18 @@ export const SKILLS: readonly SkillDef[] = [
   makeEnemyResolve({ id: ENEMY_SKILL_IDS.resolve, name: '凝意', turns: 3, cd: 5 }),
   makeEnemyElementAbsorb({ id: ENEMY_SKILL_IDS.elementAbsorb, name: '五行吸纳', mult: 0.2, turns: 2, cd: 5 }),
   makeEnemyCounter({ id: ENEMY_SKILL_IDS.counterStrike, name: '荆棘反噬', multiplier: 0.22, turns: 3, cd: 5 }),
+
+  // ── 硬闸门：三档梯度。轻档从第 1 章就上，让「数值不是万能」在第一小时被教到；
+  // 常规/首领档随章加压。CD 均大于持续回合，保证每个闸门之间都有能自由输出的窗口。
+  makeEnemyElementGate({ id: ENEMY_SKILL_IDS.elementGateLight, name: '两仪盾', need: 2, turns: 3, cd: 4 }),
+  makeEnemyElementGate({ id: ENEMY_SKILL_IDS.elementGate, name: '三才阵盾', need: 3, turns: 4, cd: 5 }),
+  makeEnemyElementGate({ id: ENEMY_SKILL_IDS.elementGateBoss, name: '五行大阵', need: 4, turns: 4, cd: 5 }),
+  makeEnemyComboGate({ id: ENEMY_SKILL_IDS.comboGateLight, name: '缠丝结', need: 3, turns: 3, cd: 4 }),
+  makeEnemyComboGate({ id: ENEMY_SKILL_IDS.comboGate, name: '连锁盾', need: 5, turns: 3, cd: 4 }),
+  makeEnemyComboGate({ id: ENEMY_SKILL_IDS.comboGateBoss, name: '万缚锁链', need: 7, turns: 3, cd: 5 }),
+  makeEnemyDamageVoid({ id: ENEMY_SKILL_IDS.damageVoid, name: '锋锐无效', thresholdPct: 0.12, turns: 4, cd: 5 }),
+  makeEnemyUndying({ id: ENEMY_SKILL_IDS.undying, name: '不灭根性', hpThresholdPct: 0.3, cd: 1 }),
+  makeEnemyCounterSeal({ id: ENEMY_SKILL_IDS.counterSeal, name: '克属封印', turns: 2, cd: 4 }),
 
   // ── 量产名录 pet_031~pet_100 的技能（见 creatureRoster.ts）──
   // R/SR 由「蓝图 × 属性」矩阵生成，SSR/UR 为手写复合招牌技

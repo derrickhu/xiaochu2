@@ -6,6 +6,8 @@ import type { PetRole, SkillTraitDef, StatBlock, GrowthBlock } from './petRoles'
 import type { Rarity } from './rarity';
 import { CREATURES, STARTER_CREATURE_IDS, DEFAULT_SUMMON_POOL_R_IDS, type CreatureDef } from './creatures';
 import { resolvePetPassiveBundle, type PassiveEffectBundle } from './passiveEffects';
+import { petTagsOf, type PetTags } from './petTags';
+export type { PetTags } from './petTags';
 export { PET_ROLE_NAME, getPetRole, getStatUi, STAT_UI, type PetRole, type PetTraitDef, type SkillTraitDef, type StatKey, type StatUiDef } from './petRoles';
 export type { Rarity } from './rarity';
 export type { PassiveEffectBundle } from './passiveEffects';
@@ -21,6 +23,8 @@ export interface PetDef {
   skillId: string;
   /** 专属技能修饰 / 元素克制（非 PassiveEffect 管线） */
   skillTraits?: readonly SkillTraitDef[];
+  /** 特攻 / 羁绊 / 抗性配额（由 id+element+role 确定性派生，见 petTags.ts） */
+  tags: PetTags;
 }
 
 function petView(c: CreatureDef): PetDef {
@@ -34,6 +38,7 @@ function petView(c: CreatureDef): PetDef {
     growthProfile: c.growthProfile,
     skillId: c.skillId,
     skillTraits: c.skillTraits,
+    tags: petTagsOf(c),
   };
 }
 

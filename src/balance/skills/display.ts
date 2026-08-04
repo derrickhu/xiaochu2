@@ -65,6 +65,16 @@ function describeEffect(e: SkillEffectDef): string {
       return `吸收${e.element ? ELEMENT_NAME[e.element] : '克制色'} 伤害×${e.mult} ${e.turns}回合`;
     case 'counterAttack':
       return `反击 每次出手反弹 敌攻×${e.multiplier} ${e.turns}回合`;
+    case 'elementGate':
+      return `五行阵盾 首消需${e.need}种属性 ${e.turns}回合`;
+    case 'comboGate':
+      return `连锁盾 首消需${e.need}连 ${e.turns}回合`;
+    case 'damageVoid':
+      return `锋锐无效 单次>${pct(e.thresholdPct)}血上限即归零 ${e.turns}回合`;
+    case 'undying':
+      return `不灭 HP>${pct(e.hpThresholdPct)}时致死留1血（每场一次）`;
+    case 'counterSeal':
+      return `克属封印 封锁克制色全部珠 ${e.turns}回合`;
   }
 }
 

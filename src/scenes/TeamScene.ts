@@ -37,7 +37,7 @@ import {
   type TeamOverviewSnapshot,
 } from './teamOverviewPanel';
 import { addTeamPetAvatar, addTeamPrepSlotPet, buildTeamPetList } from './teamPetList';
-import { buildTeamEnemyIntelCard } from './teamEnemyIntelCard';
+import { buildTeamEnemyIntelCard, type TeamEnemyIntelHandle } from './teamEnemyIntelCard';
 import {
   buildTeamPrepSummary,
   makeSectionTitle,
@@ -80,6 +80,8 @@ export class TeamScene implements Scene {
   private readonly _enterSeq = new SceneEnterSeq();
   private _summaryHost: PIXI.Container | null = null;
   private _summaryW = 0;
+  /** 战前编队页的敌情卡；换宠后要重算「必带对策」勾选 */
+  private _intel: TeamEnemyIntelHandle | null = null;
 
   onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
@@ -192,7 +194,8 @@ export class TeamScene implements Scene {
     stageLabel.position.set(w / 2, Game.safeHeaderCenterY + 36);
     this.container.addChild(stageLabel);
 
-    const intel = buildTeamEnemyIntelCard({ stage, width: panelW });
+    const intel = buildTeamEnemyIntelCard({ stage, width: panelW, team: this._teamDefs() });
+    this._intel = intel;
     intel.root.position.set((w - panelW) / 2, y);
     this.container.addChild(intel.root);
     y += intel.height + 10;
@@ -396,7 +399,7 @@ export class TeamScene implements Scene {
   private _onSlotTap(petId: string, index: number): void {
     const pet = PET_MAP.get(petId);
     if (!pet) return;
-    const skill = resolveLeaderSkill(pet.role, pet.rarity);
+    const skill = resolveLeaderSkill(pet);
     if (index === 0) {
       Platform.showToast(`队长 ${pet.name} · ${skill.text}`);
       return;
@@ -406,6 +409,13 @@ export class TeamScene implements Scene {
     Platform.showToast(`${pet.name} 已任队长 · ${skill.text}`, 'success');
     this._refreshTeamUi();
     if (Platform.isMinigame) Game.syncFrameToScreen();
+  }
+
+  /** 当前上阵灵宠定义（空槽位过滤掉） */
+  private _teamDefs(): PetDef[] {
+    return PlayerData.team
+      .map((id) => PET_MAP.get(id))
+      .filter((def): def is PetDef => !!def);
   }
 
   private _refreshTeamUi(): void {
@@ -476,6 +486,7 @@ export class TeamScene implements Scene {
     if (prep && this._summaryHost) {
       this._summaryHost.removeChildren().forEach((c) => c.destroy({ children: true }));
       this._summaryHost.addChild(buildTeamPrepSummary(members, this._summaryW));
+      this._intel?.setTeam(members.map((m) => m.def));
     } else if (!prep) {
       this._prevAgg = refreshTeamOverviewPanel(
         this._overview,

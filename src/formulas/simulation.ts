@@ -14,6 +14,7 @@ import type { PetDef } from '@/balance/pets';
 import type { StageDef } from '@/balance/stages';
 import { STAGE_MAP } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
+import { applyDamageVoid, GATE_FAIL_MULT } from '@/balance/damageGates';
 import type { SkillDef } from '@/balance/skills';
 import { applyDamageReduction, calcHeal } from './damage';
 import { starsFromTurns } from './stars';
@@ -25,6 +26,9 @@ import {
   teamEffectAggregate,
   petSelfCombatProfile,
   leaderComboBonus,
+  leaderTurnMods,
+  killerMult,
+  teamResists,
   type TeamMember,
 } from './team';
 import {
@@ -101,8 +105,25 @@ export function simulateBattle(
   const teamFx = teamEffectAggregate(members);
   const passiveRegenPerTurn = Math.floor(heroMaxHp * teamFx.regenPct);
   const teamDamageMult = teamFx.teamDamageMult;
-  // 队长技：辅助队长的每连加成；三维档队长技已经含在 petAtkInTeam/teamMaxHp 里
+  // 队长技：静态档已含在 petAtkInTeam/teamMaxHp/teamFx 里，这里只取每连加成与条件档
   const comboBonus = leaderComboBonus(members);
+  const leaderMods = leaderTurnMods(members);
+  const resists = teamResists(members);
+  // 概率模型没有真实盘面，连锋令/疾锋令按模型的 combo 与消除颗数判定（与闸门同口径）
+  const leaderComboMult = leaderMods.comboStep && model.combo >= leaderMods.comboStep.threshold
+    ? leaderMods.comboStep.mult
+    : 1;
+  const leaderBigMatchMult = leaderMods.bigMatch && model.matchCount >= leaderMods.bigMatch.matchCount
+    ? leaderMods.bigMatch.mult
+    : 1;
+  /** 血线条件档按结算瞬间血量求值（镜像 BattleController._runDamageMult） */
+  const leaderHpMult = (): number => {
+    const c = leaderMods.hpConditional;
+    if (!c) return 1;
+    const pct = heroHp / Math.max(1, heroMaxHp);
+    const met = c.mode === 'high' ? pct >= c.threshold : pct <= c.threshold;
+    return met ? c.mult : 1;
+  };
   const teamDmgReduction = teamFx.damageReduction;
   const teamHealBonus = teamFx.healBonus;
 
@@ -134,9 +155,15 @@ export function simulateBattle(
     resolve: { turnsLeft: number } | null;
     absorb: { element: Element; mult: number; turnsLeft: number } | null;
     counter: { mult: number; turnsLeft: number } | null;
+    // ── 硬闸门（镜像 BattleStatusStore 的同名状态） ──
+    elementGate: { need: number; turnsLeft: number } | null;
+    comboGate: { need: number; turnsLeft: number } | null;
+    damageVoid: { threshold: number; turnsLeft: number } | null;
+    undying: boolean;
   } = {
     dmgBuff: null, enemyDefBreak: null, enemyDot: null, heroDot: null,
     healBlock: null, atkDebuff: null, resolve: null, absorb: null, counter: null,
+    elementGate: null, comboGate: null, damageVoid: null, undying: false,
   };
   const effEnemyDef = (): number =>
     st.enemyDefBreak ? Math.floor(enemy.def_ * (1 - st.enemyDefBreak.pct)) : enemy.def_;
@@ -159,7 +186,8 @@ export function simulateBattle(
     }
 
     enemyReduction = enemy.dmgReduction?.reduction ?? 0;
-    buffMult = (st.dmgBuff?.mult ?? 1.0) * teamDamageMult * (st.atkDebuff?.mult ?? 1);
+    buffMult = (st.dmgBuff?.mult ?? 1.0) * teamDamageMult * (st.atkDebuff?.mult ?? 1)
+      * leaderComboMult * leaderBigMatchMult * leaderHpMult();
     dmgToEnemy = 0;
     healThisTurn = passiveRegenPerTurn;
 
@@ -183,6 +211,7 @@ export function simulateBattle(
 
     // ── 转珠消除：覆盖元素造伤，心珠回血 ──
     let hitsThisTurn = 0;
+    const gateMult = gateTurnMult();
     for (const el of covered) {
       if (bannedSet.has(el)) continue; // 禁用属性珠：消除无伤害
       const pet = firstPetOf(el);
@@ -190,10 +219,18 @@ export function simulateBattle(
       hitsThisTurn += groupsPerType;
       // 属性吸收：被吸那一色伤害打折（镜像 battleTurnResolution.elementAbsorbMult）
       const absorb = st.absorb && st.absorb.element === el ? st.absorb.mult : 1;
-      dmgToEnemy += groupsPerType * orbGroupDamage(
-        pet.atk, el, enemy, effEnemyDef(), model, buffMult, enemyReduction,
+      // 专精令只抬持有者本色，故按元素分别乘（镜像 battleTurnResolution 的分组乘区）
+      const leaderEl = leaderMods.elementMult?.element === el ? leaderMods.elementMult.mult : 1;
+      const killer = killerMult(pet.def, enemy.def.element);
+      const perGroup = orbGroupDamage(
+        pet.atk, el, enemy, effEnemyDef(), model, buffMult * leaderEl * killer, enemyReduction,
         { critRate: pet.critRate, critDamage: pet.critDamage }, comboBonus,
-      ) * absorb;
+      ) * absorb * gateMult;
+      // 锋锐无效按「单次出手」判定，故先对单组求值再乘组数
+      const afterVoid = applyDamageVoid(
+        perGroup, model.matchCount, st.damageVoid?.threshold ?? 0,
+      ).damage;
+      dmgToEnemy += groupsPerType * afterVoid;
     }
     // 持续伤害（点燃）：每回合对敌人结算
     if (st.enemyDot) dmgToEnemy += st.enemyDot.amount;
@@ -203,7 +240,7 @@ export function simulateBattle(
       * (st.healBlock?.mult ?? 1);
 
     heroHp = Math.min(heroMaxHp, heroHp + healThisTurn);
-    enemy.hp = Math.max(0, enemy.hp - Math.floor(dmgToEnemy));
+    damageEnemy(Math.floor(dmgToEnemy));
 
     // 反击态：按本回合出手次数反弹（镜像 BattleController.applyCounterStrike）。
     // 计入 maxEnemyHit，好让「单次最重一击 ≤ 血池 75%」的护栏也能抓住致死反击。
@@ -255,6 +292,35 @@ export function simulateBattle(
 
   // ════════ 内部闭包 ════════
 
+  /**
+   * 硬闸门在期望模型下的伤害乘区（镜像 damageGates.evaluateTurnGates）。
+   *
+   * 模拟器没有真实盘面，故分两层判定：队伍属性覆盖数 / combo 上限压根够不到需求 =
+   * 硬失败（只能换阵容），够得到则按熟练度折算「手上功夫能不能稳定摆出来」。
+   */
+  function gateTurnMult(): number {
+    let mult = 1;
+    if (st.elementGate) {
+      const usable = [...covered].filter((el) => !bannedSet.has(el) && firstPetOf(el)).length;
+      mult *= usable >= st.elementGate.need ? model.gateCompliance : GATE_FAIL_MULT;
+    }
+    if (st.comboGate) {
+      mult *= model.combo >= st.comboGate.need ? model.gateCompliance : GATE_FAIL_MULT;
+    }
+    return mult;
+  }
+
+  /** 对敌人扣血的统一入口，含不灭拦截（镜像 BattleController.damageEnemy） */
+  function damageEnemy(amount: number): void {
+    if (amount <= 0) return;
+    if (enemy.hp - amount <= 0 && st.undying) {
+      st.undying = false;
+      enemy.hp = 1;
+      return;
+    }
+    enemy.hp = Math.max(0, enemy.hp - amount);
+  }
+
   function decayStatuses(): void {
     if (st.dmgBuff) {
       st.dmgBuff.turnsLeft--;
@@ -297,6 +363,18 @@ export function simulateBattle(
       st.counter.turnsLeft--;
       if (st.counter.turnsLeft <= 0) st.counter = null;
     }
+    if (st.elementGate) {
+      st.elementGate.turnsLeft--;
+      if (st.elementGate.turnsLeft <= 0) st.elementGate = null;
+    }
+    if (st.comboGate) {
+      st.comboGate.turnsLeft--;
+      if (st.comboGate.turnsLeft <= 0) st.comboGate = null;
+    }
+    if (st.damageVoid) {
+      st.damageVoid.turnsLeft--;
+      if (st.damageVoid.turnsLeft <= 0) st.damageVoid = null;
+    }
   }
 
   function runtimeContext(): SkillRuntimeContext {
@@ -317,7 +395,9 @@ export function simulateBattle(
       teamHealBonus,
       enemyEnraged,
       enemyResolute: !!st.resolve,
+      enemyUndying: st.undying,
       teamSize: team.length,
+      teamResists: resists,
       // 模拟器确定性：技能封印固定选第 0 只
       rng: () => 0,
     };
@@ -378,6 +458,14 @@ export function simulateBattle(
         }
       } else if (event.status === 'counterStrike') {
         st.counter = { mult: event.value, turnsLeft: event.turns ?? 0 };
+      } else if (event.status === 'elementGate') {
+        st.elementGate = { need: event.value, turnsLeft: event.turns ?? 0 };
+      } else if (event.status === 'comboGate') {
+        st.comboGate = { need: event.value, turnsLeft: event.turns ?? 0 };
+      } else if (event.status === 'damageVoid') {
+        st.damageVoid = { threshold: event.value, turnsLeft: event.turns ?? 0 };
+      } else if (event.status === 'undying') {
+        st.undying = true;
       } else if (event.status === 'enrage') {
         if (!enemyEnraged) {
           enemyEnraged = true;

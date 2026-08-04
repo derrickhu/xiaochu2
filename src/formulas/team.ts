@@ -20,9 +20,11 @@ export interface TeamMember {
 type StatKey = keyof StatBlock;
 
 export type { TeamEffectBundle };
+export type { LeaderTurnMods } from './passiveCombat';
 export {
   teamEffectAggregate, teamStatMultiplier, selfStatMultiplier, petSelfCombatProfile,
-  teamLeaderSkill, leaderComboBonus,
+  teamLeaderSkill, leaderComboBonus, leaderTurnMods, NO_LEADER_TURN_MODS,
+  teamBonds, teamResists, killerMult,
 } from './passiveCombat';
 
 export function petAtkInTeam(members: readonly TeamMember[], target: TeamMember): number {

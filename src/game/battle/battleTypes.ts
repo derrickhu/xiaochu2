@@ -1,4 +1,5 @@
 import type { Element, OrbType } from '@/balance/combat';
+import type { GateUnmet } from '@/balance/damageGates';
 import type { EnemyDef } from '@/balance/enemies';
 import type { PetDef } from '@/balance/pets';
 import type { SkillDef, SkillVfxId } from '@/balance/skills';
@@ -85,6 +86,12 @@ export interface EnemyActResult {
     | 'resolve'
     | 'elementAbsorb'
     | 'counterStrike'
+    // ── 硬闸门（不满足条件伤害降为 1；克属封印是按颜色的整片封珠） ──
+    | 'elementGate'
+    | 'comboGate'
+    | 'damageVoid'
+    | 'undying'
+    | 'counterSeal'
     /** Boss 跨血线转阶段（本回合只做变身，可携带切入技） */
     | 'phaseShift';
   damage: number;
@@ -96,6 +103,8 @@ export interface EnemyActResult {
   skillName?: string;
   /** sealOrbs：请求封印的珠数（场景落地到 BoardModel） */
   boardSealCount?: number;
+  /** counterSeal：请求整片封印的珠色（场景落地到 BoardModel.sealByOrb） */
+  sealedOrb?: Element;
   /** skillSeal：被封印主动技的宠物 index */
   sealedPetIndex?: number;
   /** poison=每回合伤害；timeSqueeze=秒数；healBlock=回复乘区；enrage=攻击乘区 */
@@ -120,6 +129,10 @@ export interface PetAttack {
   isCrit: boolean;
   /** 克制关系：1 克制 / -1 被克 / 0 无 */
   counter: 1 | 0 | -1;
+  /** 锋锐无效：这一击超过阈值被归零（表现层播「无效」） */
+  voided?: boolean;
+  /** 锋锐无效：达到 5 连穿透并拿到额外增伤（表现层播「贯通」） */
+  pierced?: boolean;
 }
 
 /** 一回合消除的结算结果 */
@@ -128,6 +141,8 @@ export interface TurnResolution {
   comboMul: number;
   attacks: PetAttack[];
   heal: number;
+  /** 本回合未满足的硬闸门（非空即整回合伤害被压到 1，表现层提示还差多少） */
+  gateUnmet: readonly GateUnmet[];
 }
 
 export interface BattleResult {

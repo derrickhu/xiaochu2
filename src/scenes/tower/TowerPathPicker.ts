@@ -371,8 +371,33 @@ function buildOutcomePanel(
   lines: readonly string[],
   onClose: () => void,
 ): PIXI.Container {
-  const panelW = Math.min(400, Game.logicWidth - 72);
-  const panelH = 100 + lines.length * 30;
+  // 先按内容实测高度再定板高：书法标题 + 自动换行正文不能用固定步进，否则必叠字
+  const panelW = Math.min(480, Game.logicWidth - 56);
+  const textW = panelW - 48;
+  const padTop = 22;
+  const padBottom = 18;
+  const titleGap = 16;
+  const lineGap = 10;
+  const btnGap = 18;
+  const btnW = 160;
+  const btnH = 40;
+
+  const head = makeText(title, {
+    size: FONT_SIZE.sm, fill: TITLE_BROWN, bold: true, anchor: [0.5, 0], role: 'title',
+  });
+  const bodyTexts = lines.map((line) => makeText(line, {
+    size: FONT_SIZE.xs, fill: 0x5b4a3c, anchor: [0.5, 0],
+    wordWrapWidth: textW, align: 'center',
+  }));
+
+  const bodyH = bodyTexts.reduce(
+    (sum, t, i) => sum + t.height + (i > 0 ? lineGap : 0),
+    0,
+  );
+  const panelH = Math.ceil(
+    padTop + head.height + titleGap + bodyH + btnGap + btnH + padBottom,
+  );
+
   const panel = new PIXI.Container();
   panel.position.set(Game.logicWidth / 2, Game.logicHeight / 2);
   panel.addChild(makePanel({
@@ -381,28 +406,20 @@ function buildOutcomePanel(
     centered: true,
   }));
 
-  const top = -panelH / 2;
-  const head = makeText(title, {
-    size: FONT_SIZE.md, fill: TITLE_BROWN, bold: true, anchor: 0.5, role: 'title',
-  });
-  head.position.set(0, top + 28);
+  let y = -panelH / 2 + padTop;
+  head.position.set(0, y);
   panel.addChild(head);
+  y += head.height + titleGap;
 
-  let y = top + 58;
-  for (const line of lines) {
-    const text = makeText(line, {
-      size: FONT_SIZE.xs, fill: 0x5b4a3c, bold: true, anchor: 0.5,
-      wordWrapWidth: panelW - 40, align: 'center',
-    });
+  for (const text of bodyTexts) {
     text.position.set(0, y);
     panel.addChild(text);
-    y += 30;
+    y += text.height + lineGap;
   }
+  y += btnGap - lineGap;
 
-  const btnW = 140;
-  const btnH = 34;
   const btn = new PIXI.Container();
-  btn.position.set(0, -top - 30);
+  btn.position.set(0, y + btnH / 2);
   const bg = new PIXI.Graphics();
   bg.beginFill(0xfff3d8, 1);
   bg.lineStyle(2, 0xd8a63c, 1);

@@ -1,4 +1,5 @@
 import type { Element, OrbType } from '../combat';
+import { VOID_PIERCE_MATCH_COUNT } from '../damageGates';
 import { ELEMENT_NAME } from '../ui';
 import type {
   ConvertShape,
@@ -529,6 +530,86 @@ export function makeEnemyCounter(p: {
     desc: `${p.turns} 回合内进入反击态，我方每次出手反弹其攻击 ${pct(p.multiplier)} 的伤害`,
     effects: [{ kind: 'counterAttack', multiplier: p.multiplier, turns: p.turns }],
     basePower: p.multiplier * p.turns * 10,
+  };
+}
+
+// ════════ 硬闸门蓝图 ════════
+//
+// 与减伤/吸收这类连续乘区不同，闸门是离散开关：不满足条件伤害直接降为 1，
+// 数值再高也没用。为了不让它变成惩罚，三条约束贯穿这一组蓝图：
+// 只认首消（天降不背刺）、限时 3~5 回合（能周旋）、解法挂在属性/操作上（不绑单卡）。
+
+/** 五行阵盾：首消需打出足够多种属性的伤害，否则整回合归零 */
+export function makeEnemyElementGate(p: {
+  id: string; name: string; need: number; turns: number; cd: number;
+}): SkillDef {
+  return {
+    id: p.id, name: p.name, category: 'enemyGuard', cd: p.cd,
+    owner: 'enemy', trigger: 'enemyCooldown', target: 'self', vfx: 'enemyElementGate',
+    tags: ['闸门', '五行阵盾'],
+    desc: `${p.turns} 回合内张开五行阵盾：首消需打出 ${p.need} 种属性的伤害，否则本回合伤害降为 1`,
+    effects: [{ kind: 'elementGate', need: p.need, turns: p.turns }],
+    basePower: p.need * p.turns * 6,
+  };
+}
+
+/** 连锁盾：首消需达到指定连数，否则整回合归零 */
+export function makeEnemyComboGate(p: {
+  id: string; name: string; need: number; turns: number; cd: number;
+}): SkillDef {
+  return {
+    id: p.id, name: p.name, category: 'enemyGuard', cd: p.cd,
+    owner: 'enemy', trigger: 'enemyCooldown', target: 'self', vfx: 'enemyComboGate',
+    tags: ['闸门', '连锁盾'],
+    desc: `${p.turns} 回合内张开连锁盾：首消需达到 ${p.need} 连，否则本回合伤害降为 1`,
+    effects: [{ kind: 'comboGate', need: p.need, turns: p.turns }],
+    basePower: p.need * p.turns * 4,
+  };
+}
+
+/**
+ * 锋锐无效：单次伤害超过血池比例即归零——数值越高越吃亏。
+ * 解法是消出 5 连及以上穿透并额外增伤，把「堆攻」这条路换成「练手」。
+ */
+export function makeEnemyDamageVoid(p: {
+  id: string; name: string; thresholdPct: number; turns: number; cd: number;
+}): SkillDef {
+  return {
+    id: p.id, name: p.name, category: 'enemyGuard', cd: p.cd,
+    owner: 'enemy', trigger: 'enemyCooldown', target: 'self', vfx: 'enemyDamageVoid',
+    tags: ['闸门', '锋锐无效'],
+    desc: `${p.turns} 回合内无效化单次超过自身 ${pct(p.thresholdPct)} 生命的伤害；`
+      + `${VOID_PIERCE_MATCH_COUNT} 连及以上的消除可穿透并额外增伤`,
+    effects: [{ kind: 'damageVoid', thresholdPct: p.thresholdPct, turns: p.turns }],
+    basePower: p.turns * 12,
+  };
+}
+
+/** 不灭（根性）：血线以上的致死伤害留 1 血，每场一次。持续伤害/固定伤害都能补掉 */
+export function makeEnemyUndying(p: {
+  id: string; name: string; hpThresholdPct: number; cd: number;
+}): SkillDef {
+  return {
+    id: p.id, name: p.name, category: 'enemyGuard', cd: p.cd,
+    owner: 'enemy', trigger: 'enemyCooldown', target: 'self', vfx: 'enemyUndying',
+    tags: ['闸门', '不灭'],
+    desc: `生命高于 ${pct(p.hpThresholdPct)} 时，致死伤害会留下 1 点生命（每场一次）`,
+    effects: [{ kind: 'undying', hpThresholdPct: p.hpThresholdPct }],
+    basePower: 30,
+  };
+}
+
+/** 克属封印：封锁「克制敌人自身」那一色的全部珠，逼玩家备第二输出色 */
+export function makeEnemyCounterSeal(p: {
+  id: string; name: string; turns: number; cd: number;
+}): SkillDef {
+  return {
+    id: p.id, name: p.name, category: 'enemyDebuff', cd: p.cd,
+    owner: 'enemy', trigger: 'enemyCooldown', target: 'board', vfx: 'enemyCounterSeal',
+    tags: ['封印', '克属封印'],
+    desc: '封印盘面上克制自身那一色的全部珠子（邻格消除可解封）',
+    effects: [{ kind: 'counterSeal', turns: p.turns }],
+    basePower: p.turns * 10,
   };
 }
 

@@ -1,5 +1,12 @@
 import { type Element } from '@/balance/combat';
+import {
+  applyDamageVoid,
+  evaluateTurnGates,
+  NO_GATES,
+  type GateSnapshot,
+} from '@/balance/damageGates';
 import { calcDamage, calcHeal, comboMultiplier } from '@/formulas/damage';
+import { killerMult, type LeaderTurnMods } from '@/formulas/team';
 import type { MatchGroup } from '@/game/board/BoardModel';
 import type { EnemyUnit, TeamPet, TurnResolution } from './battleTypes';
 
@@ -44,6 +51,36 @@ export interface ResolvePlayerTurnOptions {
   teamAtkTotal?: number;
   /** 本回合首次出手必定暴击（一击必杀） */
   firstMatchCrit?: boolean;
+
+  /** 当前生效的硬闸门（缺省 = 无闸门，主线早期与秘境不传） */
+  gates?: GateSnapshot;
+
+  /**
+   * 队长技里需要看盘面的部分（专精令 / 连锋令 / 疾锋令）。
+   * 血线条件档已由控制器按当时血量折进 runDamageMult，不走这里。
+   */
+  leader?: LeaderTurnMods;
+}
+
+/**
+ * 统计首消（waveIndex === 0）情况，供闸门判定。
+ * 只认玩家亲手摆出的第一波：天降连锁不参与，避免随机 combo 背刺。
+ * 属性数只算「真能造成伤害」的色——未编入队伍或被本关禁用的珠不算数，
+ * 口径对齐 PAD 的「属性攻击盾」而非「属性盾」。
+ */
+function firstWaveStats(opts: ResolvePlayerTurnOptions): { elements: number; combo: number } {
+  const elements = new Set<Element>();
+  let combo = 0;
+  for (const group of opts.groups) {
+    if ((group.waveIndex ?? 0) !== 0) continue;
+    combo++;
+    if (group.orb === 'heart') continue;
+    const element = group.orb as Element;
+    if (opts.bannedElements.has(element)) continue;
+    if (!opts.team.some((p) => p.def.element === element)) continue;
+    elements.add(element);
+  }
+  return { elements: elements.size, combo };
 }
 
 export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnResolution {
@@ -62,10 +99,23 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
     ? opts.comboMaster.mult
     : 1;
   const heartFireMult = 1 + (opts.heartFirePerOrb ?? 0) * heartOrbs;
-  const runMult = (opts.runDamageMult ?? 1) * comboMasterMult * heartFireMult;
+  const baseRunMult = (opts.runDamageMult ?? 1) * comboMasterMult * heartFireMult;
   const thunderPct = opts.thunderTrueDamagePct ?? 0;
   const thunderMatch = opts.thunderMatchCount ?? Infinity;
   let firstAttackPending = opts.firstMatchCrit === true;
+
+  // 硬闸门：任一未满足则整回合消珠伤害压到 1，堆数值无法抵消
+  const gates = opts.gates ?? NO_GATES;
+  const stats = firstWaveStats(opts);
+  const verdict = evaluateTurnGates(gates, stats);
+
+  // 连锋令按首消 combo 判定，口径与连锁盾一致：天降凑出来的连不算数，
+  // 否则「铺连」这个操作目标会被随机性稀释掉
+  const leader = opts.leader;
+  const leaderComboMult = leader?.comboStep && stats.combo >= leader.comboStep.threshold
+    ? leader.comboStep.mult
+    : 1;
+  const runMult = baseRunMult * leaderComboMult;
 
   for (const group of opts.groups) {
     if (group.orb === 'heart') {
@@ -80,6 +130,13 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
     // 暴击为「个体属性」：用出手宠自身的暴击率掷骰、暴击伤害结算；必暴击 buff 强制暴击
     const isCrit = opts.guaranteedCrit || firstAttackPending || opts.rng() < pet.critRate;
     firstAttackPending = false;
+    // 专精令按属性、疾锋令按单组消除数生效，两者都是「这一组」的乘区而非整回合的
+    const leaderElementMult = leader?.elementMult?.element === element
+      ? leader.elementMult.mult
+      : 1;
+    const leaderBigMatchMult = leader?.bigMatch && group.cells.length >= leader.bigMatch.matchCount
+      ? leader.bigMatch.mult
+      : 1;
     const raw = calcDamage({
       atk: pet.atk,
       matchCount: group.cells.length,
@@ -89,28 +146,42 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
       defenderDef: opts.enemyDefEffective,
       isCrit,
       critDamage: pet.critDamage,
-      buffMult: opts.teamDamageMult * opts.elementBuffMult(element) * runMult,
+      buffMult: opts.teamDamageMult
+        * opts.elementBuffMult(element)
+        * runMult
+        * leaderElementMult
+        * leaderBigMatchMult,
       comboBonus: opts.leaderComboBonus,
-    }) * opts.elementTraitDamageMult(pet, opts.enemy.def.element);
-    // 属性吸收与减伤同层（都是敌方抗性），在增伤乘区之后结算
+    })
+      * opts.elementTraitDamageMult(pet, opts.enemy.def.element)
+      // 特攻与克制同层但独立：对位宠靠这一乘区压过错位的高星宠
+      * killerMult(pet.def, opts.enemy.def.element);
+    // 属性吸收与减伤同层（都是敌方抗性），在增伤乘区之后结算；
+    // 闸门乘区最后压上，未满足时配合 Math.max(1) 就是「伤害降为 1」
     let damage = Math.max(
       1,
       Math.floor(
         raw
         * (1 - (opts.enemy.dmgReduction?.reduction ?? 0))
-        * opts.elementAbsorbMult(element),
+        * opts.elementAbsorbMult(element)
+        * verdict.turnMult,
       ),
     );
-    // 雷霆真伤不吃防御与抗性，直接叠在该组伤害上
-    if (thunderPct > 0 && group.cells.length >= thunderMatch) {
+    // 雷霆真伤不吃防御与抗性，但闸门未过时不给它开后门
+    if (verdict.turnMult > 0 && thunderPct > 0 && group.cells.length >= thunderMatch) {
       damage += Math.floor((opts.teamAtkTotal ?? 0) * thunderPct);
     }
+    // 锋锐无效：超过阈值的一击归零，5 连消除可穿透并拿额外增伤
+    const voidOutcome = applyDamageVoid(damage, group.cells.length, gates.voidThreshold);
+    damage = Math.max(1, voidOutcome.damage);
     attacks.push({
       petIndex,
       element,
       damage,
       isCrit,
       counter: opts.counterRelation(element, opts.enemy.def.element),
+      voided: voidOutcome.voided,
+      pierced: voidOutcome.pierced,
     });
   }
 
@@ -122,5 +193,6 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
     comboMul,
     attacks,
     heal: heartHeal + opts.passiveRegenPerTurn,
+    gateUnmet: verdict.unmet,
   };
 }

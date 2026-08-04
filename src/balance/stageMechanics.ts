@@ -31,6 +31,13 @@ export interface MechanicDef {
   noHeartHeal?: boolean;
   /** 禁用某属性珠（消除无伤害，等同未覆盖） */
   banElement?: Element;
+  /** 同源相斥：读队伍属性种类数，过多则敌人变强、过少则敌人减伤 */
+  compPenalty?: boolean;
+  /**
+   * 战前「必带对策」清单项。区别于 uiHint 的一句话描述，
+   * 这里是玩家可自查的短标签，编队界面会逐条比对当前阵容能否应对。
+   */
+  counterTags?: readonly string[];
 }
 
 export const MECHANICS: Readonly<Record<string, MechanicDef>> = {
@@ -146,7 +153,52 @@ export const MECHANICS: Readonly<Record<string, MechanicDef>> = {
     uiHint: '终局试炼：克制/爆发/续航全要到位',
   },
 
+  // ── enemy 轴（硬闸门：不满足条件伤害直接降为 1，堆数值无法抵消） ──
+  gate_element: {
+    id: 'gate_element', axis: 'enemy', name: '五行阵盾',
+    desc: '敌人张开阵盾数回合：首消必须打出足够多种属性的伤害，否则整回合伤害降为 1。'
+      + '只看首消，天降连锁不参与判定。',
+    uiHint: '敌人有五行阵盾：首消要打出多种属性，否则本回合几乎无伤害',
+    counterTags: ['多属性覆盖'],
+  },
+  gate_combo: {
+    id: 'gate_combo', axis: 'enemy', name: '连锁盾',
+    desc: '敌人张开连锁盾数回合：首消需达到指定连数，否则整回合伤害降为 1。'
+      + '同样只认首消，避免天降 combo 帮倒忙或背刺。',
+    uiHint: '敌人有连锁盾：首消要铺够连数，否则本回合几乎无伤害',
+    counterTags: ['铺连能力'],
+  },
+  gate_damage_void: {
+    id: 'gate_damage_void', axis: 'enemy', name: '锋锐无效',
+    desc: '单次伤害超过阈值即被无效化——数值越高越吃亏。'
+      + '解法是消出 5 连及以上：达到即穿透并额外增伤，把「堆攻」换成「练手」。',
+    uiHint: '敌人无效化大伤害：用 5 连及以上消除穿透',
+    counterTags: ['5 连消除'],
+  },
+  gate_undying: {
+    id: 'gate_undying', axis: 'enemy', name: '不灭',
+    desc: '血线以上的致死伤害会留 1 血，每场一次。'
+      + '解法多条：持续伤害、固定伤害、追打，都能把这 1 血抹掉。',
+    uiHint: '敌人有不灭：会留 1 血一次，备好持续伤害补刀',
+    counterTags: ['持续伤害'],
+  },
+  gate_counter_seal: {
+    id: 'gate_counter_seal', axis: 'enemy', name: '克属封印',
+    desc: '封锁「克制敌人自身」那一色的全部珠。玩家赖以输出的主色整片锁死，'
+      + '必须临时改用第二输出色，或先花几手拆封。',
+    uiHint: '敌人会封克制色：备好第二输出属性',
+    counterTags: ['第二输出色'],
+  },
+
   // ── rule 轴 ──
+  rule_comp_penalty: {
+    id: 'rule_comp_penalty', axis: 'rule', name: '同源相斥',
+    desc: '本关会看你的队伍属性构成：属性种类过多则敌人攻击提升，过少则敌人减伤。'
+      + '「五色齐 + 总攻最高」在这里不再是万能解，中间的种类数才是甜点区。',
+    uiHint: '本关同源相斥：属性种类太多或太少都会吃亏',
+    compPenalty: true,
+    counterTags: ['精简属性'],
+  },
   rule_multi_wave: {
     id: 'rule_multi_wave', axis: 'rule', name: '多波',
     desc: '多波敌人，需保留血量与技能节奏。',
@@ -218,11 +270,16 @@ export interface MechanicEffects {
   noHeartHeal: boolean;
   bannedElements: Element[];
   hints: string[];
+  /** 本关是否启用同源相斥（战斗开始时读队伍属性种类数结算） */
+  compPenalty: boolean;
+  /** 战前「必带对策」清单（去重后的短标签） */
+  counterTags: string[];
 }
 
 export function resolveMechanics(ids: readonly string[] | undefined): MechanicEffects {
   const eff: MechanicEffects = {
     sealOrbs: 0, sealColumns: 0, noHeartHeal: false, bannedElements: [], hints: [],
+    compPenalty: false, counterTags: [],
   };
   if (!ids) return eff;
   for (const id of ids) {
@@ -232,6 +289,10 @@ export function resolveMechanics(ids: readonly string[] | undefined): MechanicEf
     if (m.sealColumns) eff.sealColumns = Math.max(eff.sealColumns, m.sealColumns);
     if (m.noHeartHeal) eff.noHeartHeal = true;
     if (m.banElement && !eff.bannedElements.includes(m.banElement)) eff.bannedElements.push(m.banElement);
+    if (m.compPenalty) eff.compPenalty = true;
+    for (const tag of m.counterTags ?? []) {
+      if (!eff.counterTags.includes(tag)) eff.counterTags.push(tag);
+    }
     eff.hints.push(m.uiHint);
   }
   return eff;

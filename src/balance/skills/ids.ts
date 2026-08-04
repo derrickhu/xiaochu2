@@ -63,4 +63,14 @@ export const ENEMY_SKILL_IDS = {
   resolve: 'enemy_resolve',
   elementAbsorb: 'enemy_element_absorb',
   counterStrike: 'enemy_counter_strike',
+  // ── 硬闸门：三档梯度（轻/常规/首领），按章逐级加压 ──
+  elementGateLight: 'enemy_element_gate_light',
+  elementGate: 'enemy_element_gate',
+  elementGateBoss: 'enemy_element_gate_boss',
+  comboGateLight: 'enemy_combo_gate_light',
+  comboGate: 'enemy_combo_gate',
+  comboGateBoss: 'enemy_combo_gate_boss',
+  damageVoid: 'enemy_damage_void',
+  undying: 'enemy_undying',
+  counterSeal: 'enemy_counter_seal',
 } as const;

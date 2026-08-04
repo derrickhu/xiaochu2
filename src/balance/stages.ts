@@ -18,6 +18,7 @@ import {
   CHAPTER_BOSS_CHALLENGE,
   recipeForChallenge,
 } from './bossChallenge';
+import { applyGateLayer } from './stageGates';
 
 export type { BossChallengeKind };
 export {
@@ -476,9 +477,15 @@ function buildTrialChapter(def: TrialChapterDef): StageDef[] {
 
 const TRIAL_STAGES: readonly StageDef[] = TRIAL_CHAPTERS.flatMap(buildTrialChapter);
 
+/**
+ * 闸门层统一在最后叠加，而不是散进各章定义里。
+ *
+ * 手写的 Ch1-3 与生成的 Ch4-16 是两套写法，若把闸门分别写进去，
+ * 「第几章上什么闸门」这条节奏线就被拆成两半，改一次难度曲线要翻两处。
+ */
 export const STAGES: readonly StageDef[] = [
   ...CHAPTER_1, ...CHAPTER_2, ...CHAPTER_3, ...TRIAL_STAGES,
-];
+].map(applyGateLayer);
 
 const STAGE_REGISTRY = new Map<string, StageDef>(STAGES.map((s) => [s.id, s]));
 

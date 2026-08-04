@@ -500,6 +500,16 @@ const SKILL_ICON_ALIASES: Readonly<Record<string, string>> = {
   enemy_resolve: 'pet_earth_shield',
   enemy_element_absorb: 'pet_shadow_purify',
   enemy_counter_strike: 'pet_metal_multi_hit',
+  // 硬闸门：同机制的三档梯度共用一个图标（换的是档位不是招式）
+  enemy_element_gate_light: 'pet_void_resonance',
+  enemy_element_gate: 'pet_void_resonance',
+  enemy_element_gate_boss: 'pet_void_resonance',
+  enemy_combo_gate_light: 'pet_star_cross',
+  enemy_combo_gate: 'pet_star_cross',
+  enemy_combo_gate_boss: 'pet_star_cross',
+  enemy_damage_void: 'pet_frost_guard',
+  enemy_undying: 'pet_abyss_bulwark',
+  enemy_counter_seal: 'pet_skyfall_gravity',
   // 招牌技（SSR/UR）尚未独立出图 → 借机制接近的手写宠技图
   pet_sig_metal_ruin: 'pet_metal_slash',
   pet_sig_metal_bastion: 'pet_frost_guard',

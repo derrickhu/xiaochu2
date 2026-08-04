@@ -17,7 +17,8 @@ import { DEFAULT_TEAM, INITIAL_PET_LEVEL, INITIAL_PET_STAR, PET_MAP } from '@/ba
 import { STAGES, stageWaveCount } from '@/balance/stages';
 import { resolveEncounter } from '@/balance/enemies';
 import { CHAPTER_BUDGET, getChapterBudget } from '@/balance/growth';
-import { BUDGET_GUARDRAIL, CHAPTER_POWER, stageTtk } from '@/balance/powerBudget';
+import { BUDGET_GUARDRAIL, CHAPTER_POWER, stageTtk, stageTtkFor } from '@/balance/powerBudget';
+import { resolveMechanics } from '@/balance/stageMechanics';
 import { enemyStats, petExpToNext, petHp as petHpOf } from '../growth';
 import { stageDrops } from '../economyOutput';
 import {
@@ -300,6 +301,10 @@ function stageWaveHps(stageId: string): number[] {
   return s.encounters.map((e) => enemyStats(resolveEncounter(e).def, s.chapter, s.difficulty).hp);
 }
 
+/** 关卡是否挂了硬闸门（闸门按设计会多吃回合，TTK 与波数契约都要区别对待） */
+const hasHardGate = (stage: { mechanics?: readonly string[] }): boolean =>
+  (stage.mechanics ?? []).some((m) => m.startsWith('gate_'));
+
 const stageTotalHp = (stageId: string): number =>
   stageWaveHps(stageId).reduce((a, b) => a + b, 0);
 
@@ -340,10 +345,12 @@ describe('预算护栏：Boss 波次平滑（消灭 HP 断崖）', () => {
     }
   });
 
-  it('1-5 具体锚点：总量约 5000（旧版 12078 断崖已消除）', () => {
+  // v0.6 上调区间：第 1 章 Boss 加了一波轻闸门怪（结界藤泥），总量从约 5000 抬到约 6300。
+  // 旧版 12078 的断崖仍然要防，故上限只放到 7000。
+  it('1-5 具体锚点：总量约 6300（旧版 12078 断崖已消除）', () => {
     const total = stageTotalHp('stage_1_8');
-    expect(total).toBeGreaterThanOrEqual(4200);
-    expect(total).toBeLessThanOrEqual(5800);
+    expect(total).toBeGreaterThanOrEqual(5400);
+    expect(total).toBeLessThanOrEqual(7000);
   });
 });
 
@@ -373,9 +380,10 @@ describe('预算符合性：达标队伍 TTK 落在目标带内（中手口径�
       const team = teamAtBudget(ch);
       for (const s of STAGES.filter((x) => x.chapter === ch)) {
         const r = simulateBattle(team, s.id, COMBO_MODELS.mid);
-        const band = stageTtk(s.type);
+        const band = stageTtkFor(s.type, hasHardGate(s));
         expect(r.win, s.id).toBe(true);
-        expect(r.turnsUsed, `${s.id}(${s.type})`).toBeLessThanOrEqual(band.max);
+        expect(r.turnsUsed, `${s.id}(${s.type}${hasHardGate(s) ? '·闸门' : ''})`)
+          .toBeLessThanOrEqual(band.max);
         if (s.isBoss) expect(r.turnsUsed, s.id).toBeGreaterThanOrEqual(2);
       }
     });
@@ -383,9 +391,9 @@ describe('预算符合性：达标队伍 TTK 落在目标带内（中手口径�
 });
 
 describe('预算符合性：多波关波次数量与分配可用', () => {
-  it('所有 Boss 关均为 3 波（prep + tier1 + tier2）', () => {
+  it('Boss 关 3 波（prep + tier1 + tier2）；带闸门的多一波闸门怪', () => {
     for (const s of STAGES.filter((x) => x.isBoss)) {
-      expect(stageWaveCount(s)).toBe(3);
+      expect(stageWaveCount(s), s.id).toBe(hasHardGate(s) ? 4 : 3);
     }
   });
 });
@@ -436,7 +444,7 @@ describe('v0.4 首通路径：Boss 有真实压力，碾压不复存在', () => 
   it('升星门槛章（4/8 章）与中期章（6/7 章）：欠一章锚点被明显拦截', () => {
     // 4 章（2★→3★）与 8 章（3★→4★）为升星门槛章；
     // v0.5：6/7 章也设软墙，避免「不养成也能连推到第 7 章」。
-    // 口径：中手要么打不过、要么被磨到 TTK ≥ 12；8 章硬墙必败。
+    // 口径：中手要么打不过、要么被磨到 TTK ≥ 12；8 章硬墙必须超出 Boss TTK 上限。
     const softWall = (ch: number, label: string) => {
       const r = simulateBattle(underAt(ch), bossOf(ch).id, COMBO_MODELS.mid);
       if (r.win) {
@@ -444,8 +452,16 @@ describe('v0.4 首通路径：Boss 有真实压力，碾压不复存在', () => 
       }
     };
 
-    const r8 = simulateBattle(underAt(8), bossOf(8).id, COMBO_MODELS.mid);
-    expect(r8.win, '8 章 Boss 欠一章养成不应能过').toBe(false);
+    // v0.6：宠物个体化（per-pet 队长技 + 特攻 + 羁绊）整体抬高了我方强度，
+    // 欠一章养成不再必败，但会被磨到远超 Boss TTK 上限 —— 判定改用「超出 TTK 带」，
+    // 因为「31 回合才推掉」和「打不过」对玩家是同一件事，而前者不依赖 TURN_CAP 取值。
+    const boss8 = bossOf(8);
+    const r8 = simulateBattle(underAt(8), boss8.id, COMBO_MODELS.mid);
+    const band8 = stageTtkFor(boss8.type, hasHardGate(boss8));
+    if (r8.win) {
+      expect(r8.turnsUsed, '8 章 Boss 欠一章养成即便耗过也应远超 TTK 上限')
+        .toBeGreaterThan(band8.max);
+    }
 
     softWall(4, '4 章 Boss');
     const r4low = simulateBattle(underAt(4), bossOf(4).id, COMBO_MODELS.low);

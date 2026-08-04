@@ -15,6 +15,12 @@ export interface Cell {
 export interface MatchGroup {
   orb: OrbType;
   cells: Cell[];
+  /**
+   * 该组属于第几波消除：0 = 玩家亲手摆出的首消，>0 = 下落后天降连锁产生。
+   * 硬闸门只认首消，天降再多也不参与判定，避免随机 combo 背刺玩家。
+   * 缺省视为首消（findMatches 总会显式写入，构造合成组时可省略）。
+   */
+  waveIndex?: number;
 }
 
 /** 一颗珠的下落位移（供动画使用） */
@@ -153,6 +159,23 @@ export class BoardModel {
     return sealed;
   }
 
+  /**
+   * 封印盘面上该颜色的全部珠（克属封印）。
+   * 与散点封印同规则（邻格消除即解封），但压迫是「按颜色」的：
+   * 玩家赖以输出的那一色整片锁死，必须临时改用第二输出色。
+   */
+  sealByOrb(orb: OrbType): Cell[] {
+    const sealed: Cell[] = [];
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.grid[r][c] !== orb || this._locked[r][c]) continue;
+        this._locked[r][c] = true;
+        sealed.push({ r, c });
+      }
+    }
+    return sealed;
+  }
+
   /** 取该格用于消除判定的颜色：封印珠视为 null（不参与连消） */
   private _matchColor(row: number, col: number): OrbType | null {
     return this._locked[row][col] ? null : this.grid[row][col];
@@ -161,8 +184,10 @@ export class BoardModel {
   /**
    * 消除检测：先标记所有行/列 3+ 连，再把相邻同色标记珠 BFS 合并为组
    * （十字/L/T 形算一组，与 xiao_chu findMatchesSeparate 行为一致）
+   *
+   * @param waveIndex 本次检测处于连锁的第几波，写入每组的 waveIndex 供闸门判定首消
    */
-  findMatches(): MatchGroup[] {
+  findMatches(waveIndex = 0): MatchGroup[] {
     const { rows, cols, grid } = this;
     const marked: boolean[][] = Array.from({ length: rows }, () => new Array(cols).fill(false));
     // 封印珠视为 null，不参与连消判定
@@ -219,7 +244,7 @@ export class BoardModel {
             }
           }
         }
-        groups.push({ orb, cells });
+        groups.push({ orb, cells, waveIndex });
       }
     }
     return groups;

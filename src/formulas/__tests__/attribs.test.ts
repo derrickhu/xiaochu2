@@ -9,6 +9,7 @@ import type { PetRole, AttribKey } from '@/balance/petRoles';
 import { RARITIES, getRarityAttribPower, type Rarity } from '@/balance/rarity';
 import { ROLE_STAR_EFFECTS, isStarEffectUnlocked } from '@/balance/passiveEffects';
 import { computePetCombatAttribs, resolvePetPassiveBundle } from '@/balance/passiveEffects';
+import { resolveLeaderSkill } from '@/balance/leaderSkill';
 import { teamEffectAggregate, type TeamMember } from '@/formulas/team';
 import { petSelfCombatProfile, teamStatMultiplier } from '@/formulas/passiveCombat';
 import { COMBAT } from '@/balance/combat';
@@ -138,21 +139,32 @@ describe('单调性', () => {
 });
 
 describe('teamEffectAggregate', () => {
-  it('单宠队伍等于自身贡献（同等级口径）', () => {
+  /**
+   * 队长技的静态档也折进 teamEffectAggregate，故被动口径的断言要扣掉首位那一份。
+   * 直接比对「同一只宠在不同养成度下的差值」，队长贡献两边相同、自动抵消。
+   */
+  it('单宠队伍等于自身贡献 + 队长静态档（同等级口径）', () => {
     const def = PETS[0];
     const members: TeamMember[] = [{ def, level: INITIAL_PET_LEVEL, star: 1 }];
     const self = computePetCombatAttribs(def.role, def.rarity, 1, INITIAL_PET_LEVEL);
+    const leader = resolveLeaderSkill(def);
+    const leaderDr = leader.effect.kind === 'damageReduction' ? leader.value : 0;
+    const leaderHeal = leader.effect.kind === 'healBonus' ? leader.value : 0;
     const agg = teamEffectAggregate(members);
-    expect(agg.damageReduction).toBeCloseTo(self.damageReduction, 4);
-    expect(agg.healBonus).toBeCloseTo(self.healBonus, 4);
+    expect(agg.damageReduction - leaderDr).toBeCloseTo(self.damageReduction, 4);
+    expect(agg.healBonus - leaderHeal).toBeCloseTo(self.healBonus, 4);
   });
 
   it('L0 签名被动 Lv.10 解锁：满级队 > Lv.1 队', () => {
     const tank = PETS.find((p) => p.role === 'tank') ?? PETS[0];
     const low: TeamMember[] = [{ def: tank, level: 1, star: 1 }];
     const high: TeamMember[] = [{ def: tank, level: 10, star: 1 }];
-    expect(teamEffectAggregate(low).damageReduction).toBe(0);
-    expect(teamEffectAggregate(high).damageReduction).toBeGreaterThan(0);
+    const lowDr = teamEffectAggregate(low).damageReduction;
+    const highDr = teamEffectAggregate(high).damageReduction;
+    // Lv.1 的减伤全部来自队长技，被动那份尚未解锁
+    const leader = resolveLeaderSkill(tank);
+    expect(lowDr).toBeCloseTo(leader.effect.kind === 'damageReduction' ? leader.value : 0, 4);
+    expect(highDr).toBeGreaterThan(lowDr);
   });
 
   it('多坦克减伤封顶', () => {

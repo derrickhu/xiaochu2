@@ -30,6 +30,7 @@ import {
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
+import { describeUnmet } from '@/balance/damageGates';
 import { STAGES } from '@/balance/stages';
 import { BoardModel, type MatchGroup } from '@/game/board/BoardModel';
 import { BoardView } from '@/game/board/BoardView';
@@ -435,10 +436,13 @@ export class BattleScene implements Scene {
     if (isStale()) return;
     try {
       const allGroups: MatchGroup[] = [];
+      // 波次计数写进每组：0 = 玩家亲手摆出的首消，之后都是下落天降，闸门只认前者
+      let waveIndex = 0;
       for (;;) {
         if (isStale()) return;
-        const groups = this._board.findMatches();
+        const groups = this._board.findMatches(waveIndex);
         if (groups.length === 0) break;
+        waveIndex++;
         for (const group of groups) {
           if (isStale()) return;
           allGroups.push(group);
@@ -536,6 +540,20 @@ export class BattleScene implements Scene {
       }
     }
 
+    // 闸门没过：先把「差多少」摆到玩家眼前，再播那一串 1 点伤害，
+    // 否则玩家只会看到伤害莫名归零，闸门就从谜题变成了惩罚
+    this._statusIcons.setGateShortfall(res.gateUnmet);
+    if (res.gateUnmet.length > 0) {
+      for (const unmet of res.gateUnmet) {
+        this._fx.spawnFloat(
+          describeUnmet(unmet),
+          Game.logicWidth / 2, this._layout.enemyCenterY + 40, 0xff8a65, 1.15,
+        );
+      }
+      await delay(UI.anim.attackGap);
+      if (isStale()) return false;
+    }
+
     let appliedDamage = 0;
     let waveAdvanced = false;
     const appliedAttacks: PetAttack[] = [];
@@ -566,6 +584,16 @@ export class BattleScene implements Scene {
     }
     await Promise.all(tasks);
     if (isStale()) return waveAdvanced;
+
+    // 不灭挡下致死伤害：必须显式告诉玩家为什么没死，否则会被当成掉血 bug
+    if (this._ctrl.undyingTriggered) {
+      this._ctrl.undyingTriggered = false;
+      this._fx.spawnFloat(
+        '不灭！留 1 血',
+        this._layout.enemyCenterX, this._layout.enemyCenterY - 40, 0xffd54f, 1.3,
+      );
+      this._hud.refreshEnemyHp();
+    }
 
     if (killed || this._ctrl.enemy.hp <= 0) {
       const battleEnded = await this._handleEnemyDefeat(isStale, {
@@ -778,6 +806,9 @@ export class BattleScene implements Scene {
 
     const result = this._ctrl.enemyAct();
     this._hud.refreshEnemyCd();
+    if (!ENEMY_SILENT_ACTIONS.has(result.action)) {
+      SfxManager.playEnemySkill();
+    }
     switch (result.action) {
       case 'attack':
       case 'chargedAttack': {
@@ -861,6 +892,32 @@ export class BattleScene implements Scene {
           }
         }
         break;
+      // ── 硬闸门：都不占普攻，但可能追打一次（口径同凝意） ──
+      case 'elementGate':
+      case 'comboGate':
+      case 'damageVoid':
+      case 'undying': {
+        await this._hud.playEnemyDebuff(this._fx, result, gateBannerText(result));
+        if (isStale()) return;
+        if (result.damage > 0 || result.absorbed > 0) {
+          await this._presentEnemyHeroDamage(result, true);
+          if (isStale()) return;
+          if (result.heroDead) {
+            await this._presentDefeatAfterHit();
+            return;
+          }
+        }
+        break;
+      }
+      case 'counterSeal': {
+        const sealed = result.sealedOrb ? this._board.sealByOrb(result.sealedOrb) : [];
+        this._boardView?.refreshOrbStates();
+        await this._hud.playEnemyDebuff(
+          this._fx, result,
+          `封印${result.absorbElementName ?? ''}珠 ${sealed.length} 颗！`,
+        );
+        break;
+      }
       case 'phaseShift': {
         await this._hud.playEnemyPhaseShift(this._fx, result.phaseLabel ?? '形态变化');
         if (isStale()) return;
@@ -1060,5 +1117,36 @@ export class BattleScene implements Scene {
 
     this._refreshSkillUi();
     this._busy = false;
+  }
+}
+
+/**
+ * 不算「放技能」的敌人行动：普攻已有 playEnemyAttack，空过本就该安静。
+ *
+ * 刻意用排除法而非枚举技能名单：新增敌人行动时默认带施法音，
+ * 漏一条的代价是整类技能全程静默（这类问题极难被察觉）。
+ */
+const ENEMY_SILENT_ACTIONS: ReadonlySet<EnemyActResult['action']> = new Set([
+  'idle',
+  'attack',
+  'chargedAttack',
+]);
+
+/**
+ * 闸门登场横幅文案。必须把「要做什么」讲清楚——闸门是谜题不是惩罚，
+ * 玩家看不懂条件就只剩挫败感。
+ */
+function gateBannerText(result: EnemyActResult): string {
+  switch (result.action) {
+    case 'elementGate':
+      return `五行阵盾！首消需 ${result.value ?? 0} 种属性 ×${result.turns ?? 0}`;
+    case 'comboGate':
+      return `连锁盾！首消需 ${result.value ?? 0} 连 ×${result.turns ?? 0}`;
+    case 'damageVoid':
+      return `锋锐无效！单次超 ${result.value ?? 0} 归零，5 连可穿透 ×${result.turns ?? 0}`;
+    case 'undying':
+      return '不灭！致死伤害会留 1 血';
+    default:
+      return result.skillName ?? '';
   }
 }

@@ -9,7 +9,8 @@ import type { PetRole } from '@/balance/petRoles';
 import { RARITIES, type Rarity } from '@/balance/rarity';
 import { resolvePetPassiveBundle } from '@/balance/passiveEffects';
 import { computePetCombatAttribs } from '@/balance/passiveEffects';
-import { teamEffectAggregate, type TeamMember } from '@/formulas/team';
+import { resolveLeaderSkill } from '@/balance/leaderSkill';
+import { teamBonds, teamEffectAggregate, type TeamMember } from '@/formulas/team';
 import { petSelfCombatProfile, teamStatMultiplier } from '@/formulas/passiveCombat';
 
 const ROLES: PetRole[] = ['attacker', 'healer', 'tank', 'support'];
@@ -49,7 +50,7 @@ describe('resolvePetPassiveBundle', () => {
 });
 
 describe('teamEffectAggregate：统一求和口径', () => {
-  it('★5 混合队 teamDamageMult = 1 + Σ', () => {
+  it('★5 混合队 teamDamageMult = 1 + Σ（被动 + 队长静态档 + 羁绊）', () => {
     const members: TeamMember[] = [
       { def: PETS.find((p) => p.role === 'attacker')!, level: INITIAL_PET_LEVEL, star: 5 },
       { def: PETS.find((p) => p.role === 'support')!, level: INITIAL_PET_LEVEL, star: 5 },
@@ -63,6 +64,11 @@ describe('teamEffectAggregate：统一求和口径', () => {
         if (e.kind === 'teamDamageBonus' && e.source === 'ladder' && e.unlocked) dmgSum += e.value;
       }
     }
+    // 增伤是单一求和口径：被动之外还有两路会落进同一个字段，测试要把它们一并列出，
+    // 否则以后再挂新的一路时这条断言只会「差了 0.04」，看不出差在哪
+    const leader = resolveLeaderSkill(members[0].def);
+    if (leader.effect.kind === 'teamDamage') dmgSum += leader.value;
+    dmgSum += teamBonds(members).damageBonus;
     expect(teamEffectAggregate(members).teamDamageMult).toBeCloseTo(1 + dmgSum, 4);
   });
 });
