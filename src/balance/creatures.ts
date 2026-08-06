@@ -59,7 +59,9 @@ const CORE_CREATURES: readonly CreatureDef[] = [
     // 怪物面 = 第 2 章 Boss 波 2/3：rank 按 powerBudget 护栏校准
     id: 'pet_004', name: '灵鹿医者', element: 'wood', rarity: 2, role: 'healer',
     skillId: PET_SKILL_IDS.woodBigHeal,
-    monster: monsterPair(6, { t2Skills: [E.serpentHeal] }),
+    // 只会自愈的 Boss 是道纯数值题：伤害够就赢，不够就磨。加上摧锋（削我方伤害）
+    // 之后才成立——它一边回血一边压你输出，玩家第一次被逼着攒爆发而不是平推。
+    monster: monsterPair(6, { t2Skills: [E.serpentHeal, E.atkDebuff] }),
   },
   // ── 水 ──
   {
@@ -92,9 +94,17 @@ const CORE_CREATURES: readonly CreatureDef[] = [
   {
     // 钥匙宠（Ch6 Boss 掉落）：加时对抗 Ch6 时间压缩
     // 怪物面 = 第 6 章 Boss：首教「时间压缩」机制
+    //
+    // v0.7 archetype = 伤害型（burst，对应本章 chargeHit 挑战）。
+    // 旧配方 [timeSqueeze, pandaGuard, pandaHeal] 是「减伤 + 自愈」——和第 3/5 章 Boss
+    // 撞成同一副面孔，玩家用同一套打法通吃。改为时压 + 蓄力 + 狂暴：
+    // 压缩转珠时间的同时逼你在预警回合内处理蓄力，低血狂暴让拖延战术反而更危险。
     id: 'pet_010', name: '厚土娘娘', element: 'earth', rarity: 3, role: 'healer',
     skillId: PET_SKILL_IDS.earthTime,
-    monster: monsterPair(5, { t1Skills: [E.timeSqueeze], t2Skills: [E.timeSqueeze, E.pandaGuard, E.pandaHeal] }),
+    monster: monsterPair(5, {
+      t1Skills: [E.timeSqueeze],
+      t2Skills: [E.timeSqueeze, E.lionCharge, E.enrage],
+    }),
   },
 
   // ══════════════════════════════════════════════════════════════
@@ -104,9 +114,17 @@ const CORE_CREATURES: readonly CreatureDef[] = [
   {
     // 钥匙宠（Ch5 Boss 掉落）：直伤 + 驱散，应对 Ch5 剧毒/禁疗
     // 怪物面 = 第 5 章 Boss：首教「剧毒」机制
+    //
+    // v0.7 archetype = 回复型（regen，对应本章 selfHeal 挑战）。
+    // 这是「无脑基线墙」的主力：本章闸门会周期性把伤害压到 1，而 Boss 每 4 回合
+    // 自愈 25% 血——不会攒爆发窗口的玩家在闸门期间掉的输出，Boss 自己就补回来了，
+    // 磨到回合上限也磨不死。会玩的人则用技能在闸门空窗期一口气打穿。
     id: 'pet_011', name: '金羽仙鹤', element: 'metal', rarity: 3, role: 'attacker',
     skillId: PET_SKILL_IDS.goldenCleanse,
-    monster: monsterPair(11, { t1Skills: [E.poisonTeam], t2Skills: [E.poisonTeam, E.bladeCharge] }),
+    monster: monsterPair(11, {
+      t1Skills: [E.poisonTeam],
+      t2Skills: [E.poisonTeam, E.serpentHealHeavy, E.bladeCharge],
+    }),
   },
   {
     id: 'pet_012', name: '潮汐魔鳐', element: 'metal', rarity: 2, role: 'support',
@@ -148,7 +166,9 @@ const CORE_CREATURES: readonly CreatureDef[] = [
       // 8942 伤害已是锚点队血池的 91%，再叠任何阶段攻击加成就变成必死一击
       // （实测一阶 1.2 倍即把蓄力推到 10729 > 9773，低手中手同样暴毙）。
       // 终章的身份是「封印」，压力交给封技 + 封珠 + 末段攻击阶跃，不做抛硬币的秒杀。
-      t2Skills: [E.skillSeal],
+      // v0.7 archetype = 伤害型（burst）：封技之外补一手狂暴，让「拖到 Boss 没招」
+      // 这条思路失效——血越低它越危险，收尾必须干净利落。
+      t2Skills: [E.skillSeal, E.enrage],
       t2Phases: [
         { hpThreshold: 0.6, label: '怒鳞', addSkillIds: [E.sealOrbs] },
         { hpThreshold: 0.25, label: '逆鳞', atkMult: 1.5 },
@@ -159,7 +179,9 @@ const CORE_CREATURES: readonly CreatureDef[] = [
     // 怪物面 = 第 1 章 Boss 波 2/3：rank 按 powerBudget 护栏（总量 ≈ 前关 3.5 倍）校准
     id: 'pet_017', name: '星辉灵鹿', element: 'wood', rarity: 2, role: 'attacker',
     skillId: PET_SKILL_IDS.starCross,
-    monster: monsterPair(9, { t2Skills: [E.lionCharge] }),
+    // 第 1 章 Boss 只会蓄力重击时，玩家学到的唯一一课是「攒够伤害就行」。
+    // 补一条残血狂暴：收尾拖沓会被反打，这是全流程第一次「必须打干净」的教学。
+    monster: monsterPair(9, { t2Skills: [E.lionCharge, E.enrage] }),
   },
   {
     id: 'pet_018', name: '混沌骨狐', element: 'wood', rarity: 4, role: 'healer',
@@ -203,9 +225,21 @@ const CORE_CREATURES: readonly CreatureDef[] = [
   {
     // 怪物面 = 第 4 章 Boss：首教「敌人中途封珠」；rank 按 powerBudget 护栏校准
     // atkScale 4.0：第 4 章是 2★→3★ 升星门槛章，蓄力斩须能击穿停留 2★ 的欠养成队（章墙契约）
+    //
+    // v0.7 archetype = 血厚型（bulwark），并且是 difficultyBudget.MINDLESS_WALL_CHAPTER
+    // 指定的第一道「必须开始动脑」的墙。锋锐无效让单发高伤直接归零——堆攻不但没用，
+    // 反而更吃亏，只能靠 5 连穿透或多段补刀；跨血线再加不灭，逼玩家留一手持续伤害。
+    // 前三章教的是「认五行、认心珠、认封珠」，这一关教的是「数值不是万能」。
     id: 'pet_025', name: '星河烛龙', element: 'fire', rarity: 3, role: 'support',
     skillId: PET_SKILL_IDS.fireBoost,
-    monster: monsterPair(4, { atkScale: 4.0, t1Skills: [E.sealOrbs], t2Skills: [E.sealOrbs, E.bladeCharge, E.pandaGuard] }),
+    monster: monsterPair(4, {
+      atkScale: 4.0,
+      t1Skills: [E.sealOrbs],
+      t2Skills: [E.sealOrbs, E.damageVoid, E.bladeCharge],
+      t2Phases: [
+        { hpThreshold: 0.4, label: '烛影不灭', addSkillIds: [E.undying] },
+      ],
+    }),
   },
   {
     id: 'pet_026', name: '天外魔君', element: 'fire', rarity: 4, role: 'attacker',
@@ -223,15 +257,26 @@ const CORE_CREATURES: readonly CreatureDef[] = [
     // 怪物面 = 第 3 章 Boss 波 2/3：rank 按 powerBudget 护栏校准
     // atkScale 旧值 6 按 v0.3 膨胀曲线配平；v0.4 玩家 HP 压平后 6 档会秒杀达标队。
     // 2.6 档校准：L17/2★ 首通队中手可过（掉血到 ~35%），低手需练级后再来
+    //
+    // v0.7 archetype = 防高型（fortress，对应本章 highDefense 挑战）。补上凝意：
+    // 高防 + 减伤已经要求破防或克制，凝意再让眩晕/延迟这类控制技整个失效，
+    // 「带个控制宠万事大吉」在这一关第一次行不通。
     id: 'pet_028', name: '归墟玄龟', element: 'earth', rarity: 3, role: 'tank',
     skillId: PET_SKILL_IDS.abyssBulwark,
-    monster: monsterPair(9, { atkScale: 2.6, t2Skills: [E.golemGuard, E.lionCharge] }),
+    monster: monsterPair(9, { atkScale: 2.6, t2Skills: [E.golemGuard, E.resolve, E.lionCharge] }),
   },
   {
     // 怪物面 = 第 7 章 Boss：首教「禁疗」；rank 按 powerBudget 护栏校准
+    //
+    // v0.7 archetype = 血厚型（bulwark）加重档。本章规则已是禁心（心珠不回血），
+    // Boss 再叠禁疗 + 锋锐无效 + 削攻：回复被彻底切断，输出上限被压住，
+    // 拖延战术在这里是死路，必须在有限回合内用多段与持续伤害凿穿。
     id: 'pet_029', name: '星轮机关兽', element: 'earth', rarity: 3, role: 'support',
     skillId: PET_SKILL_IDS.earthHeartConvert,
-    monster: monsterPair(5, { t1Skills: [E.healBlock], t2Skills: [E.healBlock, E.golemGuard, E.bladeCharge] }),
+    monster: monsterPair(5, {
+      t1Skills: [E.healBlock],
+      t2Skills: [E.healBlock, E.damageVoid, E.atkDebuff],
+    }),
   },
   {
     id: 'pet_030', name: '裂隙甲虫', element: 'earth', rarity: 4, role: 'tank',

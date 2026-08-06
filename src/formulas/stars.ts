@@ -1,12 +1,24 @@
 /**
+ * 三星线占二星线的比例。
+ *
+ * 数值没变（仍是 1/2），变的是被它折算的基数。
+ *
+ * 旧的 starTurnLimit 是一批手填常量，普遍两三倍于实际通关回合，于是 128 关**全部满三星**，
+ * 星级评价完全不携带信息——玩家无论打得好坏都看到三颗星，「随便打」的手感有一半来自这里。
+ * 现在 starTurnLimit 改为关卡 TTK 目标带的上限（见 powerBudget.starTurnLimitFor），
+ * 同一个比例折出来的三星线就落在了有意义的位置：实测高手拿三星约六成、中手约一成。
+ */
+const STAR3_RATIO = 0.5;
+
+/**
  * 关卡星级：仅按回合数判定（通关 1★，二星/三星为两档回合上限）。
  *
- * - 二星上限：stage.starTurnLimit（与选关/结算展示一致）
- * - 三星上限：二星上限的一半（向上取整，至少 1 回合）
+ * - 二星上限：stage.starTurnLimit（= TTK 目标带上限，与选关/结算展示一致）
+ * - 三星上限：二星上限 × STAR3_RATIO（向上取整，至少 1 回合）
  */
 export function starTurnThresholds(starTurnLimit: number): { star2: number; star3: number } {
   const star2 = starTurnLimit;
-  const star3 = Math.max(1, Math.ceil(starTurnLimit / 2));
+  const star3 = Math.max(1, Math.ceil(starTurnLimit * STAR3_RATIO));
   return { star2, star3 };
 }
 

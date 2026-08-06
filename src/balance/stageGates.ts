@@ -20,6 +20,7 @@
  */
 import type { EncounterRef } from './enemies';
 import type { StageDef } from './stages';
+import { starTurnLimitFor } from './powerBudget';
 
 /** 闸门载体怪：每一档闸门一张专属面孔，玩家看到就知道要换什么打法 */
 const GATE_MOB = {
@@ -87,27 +88,36 @@ const CHAPTER_GATE_PLAN: Readonly<Record<number, ChapterGatePlan>> = {
     fillers: { 2: g('element', 'gate_element'), 7: g('combo', 'gate_combo') },
     boss: g('element', 'gate_element'),
   },
+  /*
+   * Ch6 起 Boss 关引入**同源相斥**（v0.7 从 Ch11 提前）。
+   *
+   * 这是全表唯一直接惩罚「五色齐 + 总攻最高」的规则：属性 ≥4 敌人攻击 ×1.6，
+   * ≤2 敌人减伤 40%，甜点区正好是 3 色。放在 Ch11 才出现意味着前十章「带满五色」
+   * 永远是无脑最优解——编队页从头到尾没有一个需要权衡的决定。
+   * 提前到 Ch6（玩家已认全五行、手上也攒够了备选宠）之后，每个章末 Boss 都要重新问一次
+   * 「这一场我带哪三色」，这正是「动态搭配宠物体系」要的那个决策点。
+   */
   6: {
     fillers: { 3: g('combo', 'gate_combo'), 7: g('damageVoid', 'gate_damage_void') },
-    boss: g('damageVoid', 'gate_damage_void'),
+    boss: g('damageVoid', 'gate_damage_void', 'rule_comp_penalty'),
   },
 
   // ── Ch7-10 反数值堆叠 + 不灭：光靠堆攻会越堆越吃亏，开始要求操作与补刀 ──
   7: {
     fillers: { 2: g('damageVoid', 'gate_damage_void'), 7: g('undying', 'gate_undying') },
-    boss: g('undying', 'gate_undying'),
+    boss: g('undying', 'gate_undying', 'rule_comp_penalty'),
   },
   8: {
     fillers: { 3: g('undying', 'gate_undying'), 7: g('element', 'gate_element') },
-    boss: g('undying', 'gate_undying', 'gate_element'),
+    boss: g('undying', 'gate_undying', 'gate_element', 'rule_comp_penalty'),
   },
   9: {
     fillers: { 2: g('damageVoid', 'gate_damage_void'), 7: g('combo', 'gate_combo') },
-    boss: g('damageVoid', 'gate_damage_void', 'gate_combo'),
+    boss: g('damageVoid', 'gate_damage_void', 'gate_combo', 'rule_comp_penalty'),
   },
   10: {
     fillers: { 3: g('doubleGate', 'gate_element', 'gate_undying'), 7: g('damageVoid', 'gate_damage_void') },
-    boss: g('doubleGate', 'gate_element', 'gate_undying'),
+    boss: g('doubleGate', 'gate_element', 'gate_undying', 'rule_comp_penalty'),
   },
 
   // ── Ch11-14 封主色 + 双闸同场 + 同源相斥：正面打击「五色齐」这个恒定最优解 ──
@@ -115,9 +125,16 @@ const CHAPTER_GATE_PLAN: Readonly<Record<number, ChapterGatePlan>> = {
     fillers: { 2: g('counterSeal', 'gate_counter_seal'), 7: g('doubleGate', 'gate_element', 'gate_undying') },
     boss: g('counterSeal', 'gate_counter_seal', 'rule_comp_penalty'),
   },
+  /*
+   * Ch12 Boss 是 Ch6 之后唯一**不**挂同源相斥的章末 Boss。
+   * 本章首教「反击态」（出手越多反伤越重），解法是收窄属性、少而重地打；
+   * 而同源相斥对 ≤2 色给敌人 40% 减伤，恰好把这条解法堵死。
+   * 两条机制的最优解互相拆台，玩家怎么配都差不多——实测换队收益只有 24%，
+   * 是全 16 章唯一不达标的一关。这一关让它专心教反击态。
+   */
   12: {
     fillers: { 3: g('doubleGate', 'gate_element', 'gate_undying'), 7: g('counterSeal', 'gate_counter_seal') },
-    boss: g('doubleGate', 'gate_element', 'gate_undying', 'rule_comp_penalty'),
+    boss: g('doubleGate', 'gate_element', 'gate_undying'),
   },
   13: {
     fillers: { 2: g('damageVoid', 'gate_damage_void'), 7: g('counterSeal', 'gate_counter_seal') },
@@ -164,7 +181,7 @@ export function applyGateLayer(stage: StageDef): StageDef {
       // prepMob 恒在首位（见 buildChapterBossDrop 的 encounters 顺序）
       encounters: [stage.encounters[0], mob(GATE_MOB[entry.mob]), ...stage.encounters.slice(1)],
       mechanics: mergeMechanics(stage.mechanics, entry.mechanics),
-      starTurnLimit: stage.starTurnLimit + 4,
+      starTurnLimit: starTurnLimitFor('boss', true, stage.encounters.length + 1),
     };
   }
 
@@ -176,8 +193,9 @@ export function applyGateLayer(stage: StageDef): StageDef {
     dropTableId: eliteDropTableOf(stage.dropTableId),
     encounters: [...stage.encounters, mob(GATE_MOB[entry.mob])],
     mechanics: mergeMechanics(stage.mechanics, entry.mechanics),
-    // 闸门关多一波，回合上限跟着放宽，否则三星条件会变成「必须秒过闸门」
-    starTurnLimit: stage.starTurnLimit + 4,
+    // 闸门关多一波、且闸门本身按设计要吃掉若干回合，星线直接跟 TTK 目标带重算，
+    // 避免这里的 +4 和 powerBudget 的 GATED_TTK_EXTRA 各调各的
+    starTurnLimit: starTurnLimitFor('elite', true, stage.encounters.length + 1),
   };
 }
 

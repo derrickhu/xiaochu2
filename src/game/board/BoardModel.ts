@@ -47,8 +47,20 @@ export class BoardModel {
 
   private readonly _rng: () => number;
 
-  constructor(rng: () => number = Math.random) {
+  /**
+   * 掉落池：只生成本队覆盖的属性珠 + 心珠。
+   *
+   * 此前盘面恒定生成全部五色，队伍没覆盖的颜色就成了不可用的死珠。这等于给每支
+   * 窄队一个无条件的 40%+ 盘面惩罚，于是「五色齐」永远是唯一解，编队页没有真决策。
+   * 改成按队伍收窄掉落池后，三色队换来的是更高的有效珠密度与更容易起大组，
+   * 「铺宽换覆盖」与「收窄换密度」才第一次成为需要权衡的两条路。
+   */
+  private readonly _spawnPool: readonly OrbType[];
+
+  constructor(rng: () => number = Math.random, spawnPool: readonly OrbType[] = ORB_TYPES) {
     this._rng = rng;
+    // 至少留两色 + 心珠，否则盘面无法形成有效消除
+    this._spawnPool = spawnPool.length >= 3 ? spawnPool : ORB_TYPES;
     for (let r = 0; r < this.rows; r++) {
       const row: (OrbType | null)[] = [];
       const lockRow: boolean[] = [];
@@ -398,7 +410,7 @@ export class BoardModel {
   }
 
   private _randomOrb(): OrbType {
-    return ORB_TYPES[Math.floor(this._rng() * ORB_TYPES.length)];
+    return this._spawnPool[Math.floor(this._rng() * this._spawnPool.length)];
   }
 
   /** 初始盘面不允许出现现成 3 连（保证玩家必须主动转珠） */

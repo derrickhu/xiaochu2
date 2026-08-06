@@ -7,7 +7,7 @@
  *
  * 所有数值只走 formulas + balance，本层禁止 magic number。
  */
-import { COMBAT, ELEMENT_COUNTERS, type Element, type OrbType } from '@/balance/combat';
+import { COMBAT, ELEMENT_COUNTERS, ORB_TYPES, type Element, type OrbType } from '@/balance/combat';
 import {
   PET_MAP, DEFAULT_TEAM, INITIAL_PET_LEVEL, INITIAL_PET_STAR,
   type PetDef,
@@ -77,6 +77,8 @@ export class BattleController {
   readonly teamRcvTotal: number;
   /** 队伍属性覆盖（不在集合内的属性珠 = 无效珠，消除无伤害） */
   readonly teamElementSet: ReadonlySet<Element>;
+  /** 盘面掉落池：本队属性 + 心珠。窄队换来的是有效珠密度，而不是一盘死珠 */
+  readonly orbSpawnPool: readonly OrbType[];
 
   // ── 关卡机制（机制节奏表 stageMechanics.ts 解析） ──
   /** 开局封印珠数量（0 = 无） */
@@ -187,6 +189,7 @@ export class BattleController {
     this.heroHp = this.heroMaxHp;
     this.teamRcvTotal = teamRcv(members);
     this.teamElementSet = teamElements(members);
+    this.orbSpawnPool = [...ORB_TYPES.filter((o) => o !== 'heart' && this.teamElementSet.has(o as Element)), 'heart'];
     this._teamAtkTotal = this.team.reduce((sum, p) => sum + p.atk, 0);
 
     const teamFx = teamEffectAggregate(members);

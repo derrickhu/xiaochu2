@@ -51,6 +51,7 @@ export function spawnBattleEnemy(
     def_: stats.def,
     attackCountdown: GROWTH.enemy.initialAttackCountdown,
     skillCds: (def.skillIds ?? []).map((id) => skillForEnemy(id).cd),
+    skillRotation: 0,
     charging: null,
     dmgReduction: null,
     ...initialPhaseState(def, stats.atk),

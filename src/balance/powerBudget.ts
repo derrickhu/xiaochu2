@@ -9,7 +9,11 @@
  *
  * 调参守则：任何“加强敌人 / 加快产出”的需求先改这里的锚点，再让数据表跟随，
  * 禁止在 stages/enemies 里绕开预算直接堆数值（那正是 1-5 Boss 5000 血断崖的来源）。
+ *
+ * 唯一的对外依赖是 difficultyBudget 的 TTK 下限；那侧只 `import type` 回本文件，
+ * 运行期不成环。
  */
+import { TTK_FLOOR } from './difficultyBudget';
 
 /** ── 复利曲线（唯一真源；growth.ts / economy.ts 从此读取）── */
 export const POWER_CURVE = {
@@ -27,10 +31,36 @@ export const POWER_CURVE = {
    * v0.5：经济侧再收紧（产出/升级/刷关），目标约 4–5 天到第 7 章；敌人曲线本期不动。
    */
   enemy: {
-    chapterGrowthHp: 1.36,
-    /** 攻压曲线：铺垫关靠 ATK + 出手频率制造掉血感，不靠堆 HP 磨人 */
-    chapterGrowthAtk: 1.29,
-    chapterGrowthDef: 1.22,
+    /**
+     * v0.7：玩家纵向跨度从 ×100 压到 ×45（见 petRoles.ts / growth.ts），敌人 HP 曲线
+     * 必须同步下调，否则后期直接打不动。
+     *
+     * 定在 1.25（1.25^15 ≈ ×28）而非与玩家 ATK 的 ×45 等齐：本期同时抬了杂兵基础血量、
+     * 各章 difficultyBase，还让同色宠全员出手，这三项都已经在改变实际 TTK。
+     * 复利只负责「章与章之间的坡度」，绝对压力交给基值和机制——难度审计的 TTK 上限
+     * （后期 Boss 一度要打 40 回合）就是按等齐口径外推时顶穿的。
+     */
+    chapterGrowthHp: 1.22,
+    /**
+     * 攻压曲线：铺垫关靠 ATK + 出手频率制造掉血感，不靠堆 HP 磨人。
+     *
+     * v0.7 刻意**不**与 HP 等比下调（1.29→1.26 而非 1.22）：玩家 HP 跨度压到 ×50 后，
+     * 敌人 ATK/玩家 HP 的相对压迫从 0.41 抬到 0.64（约 ×1.5）。这是「中度难度」里
+     * 生存压力的主要来源——铺垫关会真的掉血，Boss 蓄力技必须处理，而不是站着换血。
+     */
+    chapterGrowthAtk: 1.26,
+    chapterGrowthDef: 1.20,
+    /**
+     * 全局血量基准（乘在所有敌人 HP 上，不分章节）。
+     *
+     * v0.8 新增。与 chapterGrowthHp 的分工：复利只管「章与章的坡度」，这个只管
+     * 「整体厚度」。此前没有这层，想整体加压就只能去动复利，结果前期没变化、
+     * 后期直接顶穿 TTK 上限——两件事被绑在一个旋钮上。
+     *
+     * 定在 1.45 是配合本期压平技巧曲线（COMBAT.matchCountMultiplier / comboTiers）
+     * 反推的：曲线压平后高手输出降约 35%，若血量不动，中手会被推到 TTK 上限之外。
+     */
+    hpScale: 1.58,
     /** 入场攻击倒计时（1 = 首个敌人回合更快出刀；满 interval 则过慢） */
     initialAttackCountdown: 1,
   },
@@ -243,11 +273,15 @@ export type TtkStageKind = 'normal' | 'elite' | 'boss';
 /**
  * v0.5：TTK 上限略放宽——「达标」改按真实首通阵容（非爆发队）验关后，
  * 中手清关会比旧爆发队口径多 2~4 回合，上限跟着挪，避免契约倒逼虚高战力。
+ *
+ * v0.7：min 不再在这里写死。它原本是个从未被断言过的死字段（normal 2 / boss 6），
+ * 两处各写一份必然漂移，所以统一从难度契约 difficultyBudget.TTK_FLOOR 取——
+ * 那边是「不许秒推」这条护栏的真源，这里只负责上限「不许磨人」。
  */
 export const STAGE_TTK: Readonly<Record<TtkStageKind, TtkBand>> = {
-  normal: { min: 2, max: 8 },
-  elite: { min: 3, max: 10 },
-  boss: { min: 6, max: 20 },
+  normal: { min: TTK_FLOOR.normal, max: 8 },
+  elite: { min: TTK_FLOOR.elite, max: 10 },
+  boss: { min: TTK_FLOOR.boss, max: 20 },
 };
 
 /** 取关卡类型的 TTK 目标（未知类型按普通关） */
@@ -265,10 +299,38 @@ export function stageTtk(kind: string): TtkBand {
  */
 export const GATED_TTK_EXTRA = 6;
 
-/** 关卡 TTK 目标，带闸门时上限放宽 GATED_TTK_EXTRA */
-export function stageTtkFor(kind: string, hasGate: boolean): TtkBand {
+/**
+ * 超出基准波数的每一波给的 TTK 上限加成。
+ *
+ * TTK 带是按「一场遭遇」写的，但后期 Boss 关实际是四波（铺垫杂兵 + 闸门怪 + Boss 两形态）。
+ * 不按波数折算的话，四波关会仅仅因为波多就判超标，逼着去砍本该有的关卡结构。
+ */
+export const BASE_WAVE_COUNT = 2;
+export const PER_EXTRA_WAVE_TTK_EXTRA = 4;
+
+/** 关卡 TTK 目标：带闸门放宽 GATED_TTK_EXTRA，多波按波数折算 */
+export function stageTtkFor(kind: string, hasGate: boolean, waveCount = BASE_WAVE_COUNT): TtkBand {
   const band = stageTtk(kind);
-  return hasGate ? { min: band.min, max: band.max + GATED_TTK_EXTRA } : band;
+  const extraWaves = Math.max(0, waveCount - BASE_WAVE_COUNT);
+  return {
+    min: band.min,
+    max: band.max + (hasGate ? GATED_TTK_EXTRA : 0) + extraWaves * PER_EXTRA_WAVE_TTK_EXTRA,
+  };
+}
+
+/**
+ * 三星线：从关卡自己的 TTK 目标带推出来，而不是逐关手写。
+ *
+ * v0.8 重定义。旧的 starTurnLimit 是一批手填常量（2-8 关填了 24 回合），
+ * 远高于实际通关回合，结果是**128 关全部满三星**——星级不再携带任何信息，
+ * 玩家无论打得好坏都看到三颗星，「随便打」的手感有一半来自这里。
+ *
+ * 现在二星线 = 目标带上限（正常水平该有的回合数），三星线由 formulas/stars.ts
+ * 按固定比例从二星线折出（打得好才够得到）。星线因此自动跟着波数、闸门与关卡类型走，
+ * 改难度时不会再出现「TTK 调了、星线忘了跟」这种两张表打架的情况。
+ */
+export function starTurnLimitFor(kind: string, hasGate: boolean, waveCount = BASE_WAVE_COUNT): number {
+  return stageTtkFor(kind, hasGate, waveCount).max;
 }
 
 /**

@@ -87,6 +87,16 @@ export function monsterPair(
   } = {},
 ): { tier1: CreatureMonsterTier; tier2: CreatureMonsterTier } {
   const atkScale = opts.atkScale ?? 1;
+  /*
+   * 初级形态默认继承高级形态的**第一手**技能（v0.7）。
+   *
+   * 以前不写 t1Skills 就等于「这只杂兵只会平A」，而前八章的铺垫关几乎清一色用初级形态，
+   * 结果是 128 关里 22 关纯拼数值：关卡之间毫无辨识度，玩家也学不到任何要在 Boss 关用上的东西。
+   * 用高级形态的主技做兜底，杂兵关就成了 Boss 机制的预告片——先在低压环境见一次，
+   * 到章末再连招遇到，这正是「可读的难度」该有的教学顺序。
+   */
+  const t1Skills = opts.t1Skills
+    ?? (opts.t2Skills && opts.t2Skills.length > 0 ? [opts.t2Skills[0]] : undefined);
   const t1Hp = Math.round(600 + rank * 70);
   const t1Atk = Math.round((118 + rank * 7) * atkScale);
   const t1Def = Math.round(8 + rank * 2);
@@ -96,7 +106,7 @@ export function monsterPair(
       baseAtk: t1Atk,
       baseDef: t1Def,
       attackInterval: opts.ai1 ?? 1,
-      skillIds: opts.t1Skills,
+      skillIds: t1Skills,
     },
     tier2: {
       baseHp: Math.round(t1Hp * 1.75),

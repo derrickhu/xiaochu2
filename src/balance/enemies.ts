@@ -83,27 +83,72 @@ export type MobDef = EnemyDef;
  * 核心 6 种在全章节循环复用；3 种章 Boss 魔物作收录关铺垫波。
  */
 export const MOBS: readonly MobDef[] = [
-  // ── 核心循环杂兵（6）── 泛称命名 + 无技能=杂兵 / 有技能=精英
-  { id: 'enemy_slime_wood', name: '木域软泥', element: 'wood', displayTier: 'mob', baseHp: 620, baseAtk: 155, baseDef: 12, attackInterval: 1 },
-  { id: 'enemy_bat_fire', name: '洞窟火蝠', element: 'fire', displayTier: 'mob', baseHp: 540, baseAtk: 195, baseDef: 8, attackInterval: 1 },
+  /*
+   * ── 核心循环杂兵（6）── 泛称命名，displayTier 区分杂兵 / 精英。
+   *
+   * v0.7：杂兵不再「零技能」。旧口径是「无技能=杂兵」，但这两只覆盖了前八章的绝大多数
+   * 铺垫关，直接导致 128 关里 22 关是纯数值关——敌人只会平A，玩家只要总攻够高就能秒推，
+   * 关与关之间没有任何可辨识的差别，自然也不会去想「这一关该带谁」。
+   * 现在各给一手**轻量且可读**的技能：毒教续航、蓄力教看预警。两者都不改变胜负，
+   * 只是让玩家在低压环境里先认识 Boss 关会连招用上的那套语汇。
+   *
+   * 同期上调第 1 章基础血量（杂兵约 +60%、精英约 +33%）。按锚点养成的中手过去
+   * 2 回合就能清掉铺垫关，一场战斗连「敌人出手 → 玩家调整」这个最小循环都跑不完，
+   * 机制加得再多也来不及触发。抬到 TTK_FLOOR 要求的 3/4 回合，机制才有生效的时间窗。
+   */
   {
+    id: 'enemy_slime_wood', name: '木域软泥', element: 'wood', displayTier: 'mob',
+    baseHp: 1000, baseAtk: 155, baseDef: 12, attackInterval: 1,
+    skillIds: [ENEMY_SKILL_IDS.poisonTeam],
+  },
+  {
+    id: 'enemy_bat_fire', name: '洞窟火蝠', element: 'fire', displayTier: 'mob',
+    baseHp: 870, baseAtk: 195, baseDef: 8, attackInterval: 1,
+    skillIds: [ENEMY_SKILL_IDS.enrage],
+  },
+  /*
+   * 轻档杂兵补位（v0.7 新增两只）。
+   *
+   * 铺垫关的第二波原本永远是软泥或火蝠，两只怪覆盖了近四成关卡——不管给它们配什么技能，
+   * 那一招都会立刻变成「到处都是」的换皮机制（机制多样性测试就是这么被顶穿的）。
+   * 加两张面孔把配方错开，顺带补上封珠与压时间这两种前期原本见不到的压力类型。
+   */
+  {
+    id: 'enemy_moss_sprite_wood', name: '苔纹木灵', element: 'wood', displayTier: 'mob',
+    baseHp: 900, baseAtk: 165, baseDef: 14, attackInterval: 1,
+    skillIds: [ENEMY_SKILL_IDS.sealOrbs],
+    image: enemyImageOf('enemy_slime_wood'),
+  },
+  {
+    id: 'enemy_cinder_imp_fire', name: '余烬小妖', element: 'fire', displayTier: 'mob',
+    baseHp: 820, baseAtk: 205, baseDef: 8, attackInterval: 1,
+    skillIds: [ENEMY_SKILL_IDS.timeSqueeze],
+    image: enemyImageOf('enemy_bat_fire'),
+  },
+  {
+    /*
+     * 高防 + 周期减伤本身就拖时间，血量给到 1750 即可，再高普通关会变成消耗战。
+     * DEF 也从 70 降到 52：防御按 1.20^(章-1) 复利放大，第 13 章会滚到 600+，
+     * 两层减伤叠在一起把「高防怪」变成了单纯的耐久检查，而不是一道要破防的题。
+     */
     id: 'enemy_golem_earth', name: '碎石傀儡', element: 'earth', displayTier: 'elite',
-    baseHp: 1500, baseAtk: 155, baseDef: 70, attackInterval: 2,
+    baseHp: 1750, baseAtk: 155, baseDef: 52, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.golemGuard],
   },
   {
     id: 'enemy_serpent_water', name: '寒潭小蛟', element: 'water', displayTier: 'elite',
-    baseHp: 1080, baseAtk: 205, baseDef: 22, attackInterval: 2,
+    baseHp: 1440, baseAtk: 205, baseDef: 22, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.serpentHeal],
   },
   {
+    // 蓄力重击的教学面孔；减伤交给碎石傀儡，这里不重复挂 golemGuard
     id: 'enemy_scorpion_metal', name: '铁壳毒蝎', element: 'metal', displayTier: 'elite',
-    baseHp: 1200, baseAtk: 195, baseDef: 55, attackInterval: 2,
-    skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.lionCharge],
+    baseHp: 1600, baseAtk: 195, baseDef: 55, attackInterval: 2,
+    skillIds: [ENEMY_SKILL_IDS.bladeCharge, ENEMY_SKILL_IDS.healBlock],
   },
   {
     id: 'enemy_toad_water', name: '湿苔毒蟾', element: 'water', displayTier: 'elite',
-    baseHp: 1100, baseAtk: 215, baseDef: 20, attackInterval: 2,
+    baseHp: 1680, baseAtk: 215, baseDef: 20, attackInterval: 2,
     skillIds: [ENEMY_SKILL_IDS.serpentHeal],
   },
   // ── 章 Boss 守关波（3）── 具名魔将/巨像，与铺垫杂兵拉开身份
@@ -151,8 +196,9 @@ export const MOBS: readonly MobDef[] = [
     image: enemyImageOf('enemy_serpent_water'),
   },
   {
+    // 后期铺垫关的常客，血量按精英档补齐（900 时第 14 章开场关会被 2 回合秒推）
     id: 'enemy_wither_bat_fire', name: '枯翼魔蝠', element: 'fire', displayTier: 'elite',
-    baseHp: 900, baseAtk: 205, baseDef: 10, attackInterval: 1,
+    baseHp: 1320, baseAtk: 205, baseDef: 10, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.atkDebuffHeavy, ENEMY_SKILL_IDS.poisonTeamHeavy],
     image: enemyImageOf('enemy_bat_fire'),
   },
@@ -168,7 +214,7 @@ export const MOBS: readonly MobDef[] = [
     // 不会在开场就打出「抛硬币」式秒杀（第 7/8 章调参教训）。
     id: 'enemy_crystal_warden_earth', name: '幽晶魔像', element: 'earth', displayTier: 'miniBoss',
     baseHp: 1400, baseAtk: 230, baseDef: 60, attackInterval: 2,
-    skillIds: [ENEMY_SKILL_IDS.golemGuard],
+    skillIds: [ENEMY_SKILL_IDS.damageVoid],
     image: enemyImageOf('enemy_crystal_boss_earth'),
     phases: [
       { hpThreshold: 0.5, label: '晶壳剥落', addSkillIds: [ENEMY_SKILL_IDS.chargeHeavy] },
@@ -183,6 +229,7 @@ export const MOBS: readonly MobDef[] = [
   {
     id: 'enemy_scorpion_swarm_metal', name: '铁鳞蝎兵', element: 'metal', displayTier: 'mob',
     baseHp: 700, baseAtk: 175, baseDef: 30, attackInterval: 1,
+    skillIds: [ENEMY_SKILL_IDS.bladeCharge],
     image: enemyImageOf('enemy_scorpion_metal'),
   },
   {
@@ -220,6 +267,7 @@ export const MOBS: readonly MobDef[] = [
   {
     id: 'enemy_pebble_earth', name: '碎砾小傀', element: 'earth', displayTier: 'mob',
     baseHp: 780, baseAtk: 145, baseDef: 40, attackInterval: 1,
+    skillIds: [ENEMY_SKILL_IDS.resolve],
     image: enemyImageOf('enemy_golem_earth'),
   },
 

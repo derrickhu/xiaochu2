@@ -158,7 +158,7 @@ export class BattleScene implements Scene {
         pet.skillCdLeft = Math.max(pet.skillCdLeft, tower.runCds[pet.def.id] ?? 0);
       }
     }
-    this._board = new BoardModel();
+    this._board = new BoardModel(Math.random, this._ctrl.orbSpawnPool);
     if (this._ctrl.sealColumnCount > 0) {
       this._board.sealColumns(this._ctrl.sealColumnCount);
     }

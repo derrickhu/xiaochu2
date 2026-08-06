@@ -229,7 +229,13 @@ export const SIGNATURE_ROSTER: readonly SignatureRosterRow[] = [
     id: 'pet_084', name: '赤霄凤将', element: 'fire', rarity: 3, role: 'support', rank: 17,
     skillId: 'pet_sig_fire_warhymn',
     // 第 14 章 resolveTank：凝意期间免控，控制链失效，只能靠破防与爆发硬拆
-    bossMonster: { rank: 12, t1Skills: [E.pandaGuard], t2Skills: [E.resolve, E.golemGuardHeavy, E.lionCharge] },
+    /*
+     * 减伤取常规档而非 Heavy：这一关的 archetype 是 fortress（免控 + 硬壳），
+     * 设计上的解法是破防与重力。而 golemGuardHeavy 的减伤是乘区，破防对它完全无效，
+     * 于是「研究对位」换来的收益被压到 26%——护栏判定为「换队没有意义」。
+     * 把墙的主体交还给 DEF，破防才真的是这一关的钥匙。
+     */
+    bossMonster: { rank: 12, t1Skills: [E.pandaGuard], t2Skills: [E.resolve, E.golemGuard, E.lionCharge] },
   },
   { id: 'pet_085', name: '流火天狐', element: 'fire', rarity: 3, role: 'support', rank: 17, skillId: 'pet_sig_fire_emberflow' },
   {
@@ -242,40 +248,62 @@ export const SIGNATURE_ROSTER: readonly SignatureRosterRow[] = [
   {
     id: 'pet_099', name: '破岳金刚象', element: 'earth', rarity: 3, role: 'attacker', rank: 17,
     skillId: 'pet_sig_earth_quake',
-    // 第 13 章 attackDown：削攻 + 禁疗双压，净化位第一次成为硬需求
-    bossMonster: { rank: 14, t1Skills: [E.lionCharge], t2Skills: [E.atkDebuffHeavy, E.healBlockHeavy, E.lionCharge] },
+    /*
+     * 第 13 章 attackDown：削攻 + 禁疗双压，净化位第一次成为硬需求。
+     * 禁疗取常规档而非 Heavy——本关的闸门怪（克属封印蟾）自带一层禁疗，
+     * 两层重档叠在一起就成了「进场即不可回血」，达标队会直接被耗死，
+     * 那不是「需要净化位」，是没有解法。
+     */
+    bossMonster: { rank: 14, t1Skills: [E.lionCharge], t2Skills: [E.atkDebuffHeavy, E.healBlock, E.lionCharge] },
   },
   { id: 'pet_100', name: '后土神麒', element: 'earth', rarity: 4, role: 'support', rank: 21, skillId: 'pet_sig_earth_genesis' },
 ];
 
 /**
- * 怪物面技能：按 role 取主技，金/水系蓄力用「蓄势斩」、其余用「烈焰蓄势」。
- * 高稀有多配一手减伤/自疗，做出「越高级越难缠」的手感。
+ * 怪物面技能：按 archetype 取专属技能组。
+ *
+ * v0.7 重做。旧版按 role 机械映射到 golemGuard / serpentHeal / pandaGuard，结果是
+ * 「防高型」「回复型」「血厚型」在机制上全是同两个技能换皮——golemGuard 一招就占了
+ * 128 关中的 64 关。玩家用同一套打法能通吃，自然不需要换阵容。
+ *
+ * 新版四组技能对应 difficultyBudget.ARCHETYPES，每组要求玩家做一件**其他组不需要**的事：
+ * - 防高型 fortress（坦克面）：减伤 + 凝意免控 → 必须破防/克制，控制流直接失效
+ * - 回复型 regen（治疗面）：自愈 + 吸主色 + 禁疗 → 必须备第二输出色并攒爆发窗口
+ * - 血厚型 bulwark（辅助面）：锋锐无效 + 不灭 + 毒 → 堆单发高伤反被无效，只能多段与补刀
+ * - 伤害型 burst（输出面）：蓄力 + 狂暴 → 必须在预警回合内减伤/护盾/打断
+ *
+ * 金/水系蓄力用「蓄势斩」、其余用「烈焰蓄势」，保留原有的属性风味。
  */
 function monsterSkills(element: Element, role: PetRole, rarity: number): {
   t1?: readonly string[];
   t2: readonly string[];
 } {
   const charge = element === 'metal' || element === 'water' ? E.bladeCharge : E.lionCharge;
-  const primary = role === 'tank'
-    ? E.golemGuard
-    : role === 'healer'
-      ? E.serpentHeal
-      : role === 'support'
-        ? E.pandaGuard
-        : charge;
 
-  if (rarity === 1) return { t2: [primary] };
-  if (rarity === 2) return { t2: [primary, role === 'attacker' ? E.golemGuard : charge] };
-  // SSR / UR：初级形态即带一手压力，高级形态三技齐出。
-  // 第三手要躲开 primary，否则 support（primary 已是 pandaGuard）会拿到两个同 id 技能，
-  // 白占一个技能位又让 CD 轮询看起来在重复放同一招。
-  const third = rarity >= 4
-    ? E.skillSeal
-    : primary === E.pandaGuard ? E.pandaHeal : E.pandaGuard;
+  /** [主技, 次技, 终技] —— 三档稀有度依次解锁 */
+  const group: readonly [string, string, string] = role === 'tank'
+    ? [E.golemGuard, E.resolve, E.atkDebuff]
+    : role === 'healer'
+      ? [E.serpentHeal, E.elementAbsorb, E.healBlock]
+      : role === 'support'
+        ? [E.damageVoid, E.undying, E.poisonTeam]
+        : [charge, E.enrage, E.skillSeal];
+
+  const [primary, secondary, tertiary] = group;
+
+  /*
+   * 初级形态一律带上主技（v0.7）。
+   *
+   * 旧版只有 SSR/UR 的初级形态有技能，而前八章的铺垫关几乎全用 R/SR 初级形态，
+   * 于是 128 关里有 22 关是「纯数值关」——敌人只会平A，玩家只要总攻够高就能秒推，
+   * 关卡之间没有任何可辨识的差别。让每只杂兵都至少会一招，机制密度就不必再去挤
+   * 每章只有 2 个名额的闸门预算，而闸门可以专心承担「必须换阵容」的重活。
+   */
+  if (rarity === 1) return { t1: [primary], t2: [primary] };
+  if (rarity === 2) return { t1: [primary], t2: [primary, secondary] };
   return {
     t1: [primary],
-    t2: [primary, charge, third],
+    t2: [primary, secondary, tertiary],
   };
 }
 

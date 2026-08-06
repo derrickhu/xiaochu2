@@ -58,23 +58,39 @@ export const COMBAT = {
   /** 最小消除数 */
   minMatch: 3,
 
-  /** 消除数倍率：3 连 ×1.0，4 连 ×1.5，5+ 连 ×2.0 */
-  matchCountMultiplier: { 3: 1.0, 4: 1.5, 5: 2.0 } as Readonly<Record<number, number>>,
+  /**
+   * 消除数倍率：3 连 ×1.0，4 连 ×1.25，5+ 连 ×1.5
+   *
+   * v0.8 从 1.0/1.5/2.0 压平。旧档下多消一颗珠直接 +50% 伤害，这个乘区又会和
+   * 「连击数更多」「出手组数更多」连乘，导致高手每回合输出是中手的 2.7 倍——
+   * 没有任何一档血量能同时让两者落进 3~8 回合的难度带，配平只能二选一。
+   */
+  matchCountMultiplier: { 3: 1.0, 4: 1.25, 5: 1.5 } as Readonly<Record<number, number>>,
 
   /**
    * Combo 倍率递减分段：[起始 Combo（含）, 每段增量]
-   * 2~6 每连 +20%，7~10 每连 +15%，11+ 每连 +8%
+   * 2~6 每连 +13%，7~10 每连 +10%，11+ 每连 +5%
+   *
+   * v0.8 从 20/15/8 压平，与 matchCountMultiplier 同一个目的：收窄技巧带宽。
+   * 操作好依然明显更强（这是消除游戏的核心乐趣，不能抹平），
+   * 但不再强到让关卡血量失去意义。
    */
   comboTiers: [
-    { from: 2, to: 6, perCombo: 0.20 },
-    { from: 7, to: 10, perCombo: 0.15 },
-    { from: 11, to: Infinity, perCombo: 0.08 },
+    { from: 2, to: 6, perCombo: 0.13 },
+    { from: 7, to: 10, perCombo: 0.10 },
+    { from: 11, to: Infinity, perCombo: 0.05 },
   ] as ReadonlyArray<{ from: number; to: number; perCombo: number }>,
 
-  /** 克制伤害倍率 */
-  counterMultiplier: 1.6,
-  /** 被克伤害倍率（v0.3 加重错属性惩罚 0.5→0.4） */
-  counteredMultiplier: 0.4,
+  /**
+   * 克制伤害倍率。
+   *
+   * v0.7 拉开分离度 1.6/0.4 → 1.75/0.32：五色均摊下的期望值几乎不变（1.0 → 1.01），
+   * 但「专注拖克制色」与「见珠就拖」的差距明显变大。配合封克制色（counterSeal）
+   * 与属性吸收，这个乘区才真正参与决策，而不是被五行齐全的队伍自动吃满。
+   */
+  counterMultiplier: 1.75,
+  /** 被克伤害倍率（v0.3 0.5→0.4；v0.7 0.4→0.32 继续加重错属性惩罚） */
+  counteredMultiplier: 0.32,
 
   /**
    * 暴击：

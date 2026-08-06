@@ -22,8 +22,15 @@ export const VOID_PIERCE_MULT = 1.5;
 
 /** 各闸门的默认配置，关卡与敌人技能都从这里取值，避免散落魔数 */
 export const GATE_TUNING = {
-  /** 五行阵盾：首消需覆盖的属性数 */
-  elementGate: { normal: 3, boss: 4, turns: 4 },
+  /*
+   * 五行阵盾：首消需覆盖的属性数。
+   *
+   * v0.7 把 Boss 档从 4 降到 3。原值与同源相斥（≥4 色敌人攻击 ×1.6）直接对撞：
+   * 后期 Boss 两条同时挂着，等于「必须带 4 色」又「带 4 色就挨打」，玩家怎么选都一样，
+   * 换阵容的收益恒为零。降到 3 之后两者合起来把答案钉在**恰好 3 色**上——
+   * 既过得了阵盾又踩中甜点区，这才是一道有解的题。
+   */
+  elementGate: { normal: 3, boss: 3, turns: 4 },
   /** 连锁盾：首消需达到的 combo，按章递增 */
   comboGate: { early: 4, mid: 6, late: 8, turns: 3 },
   /** 锋锐无效：阈值取敌人 maxHp 的比例 */

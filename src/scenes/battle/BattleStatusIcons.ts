@@ -85,9 +85,9 @@ export class BattleStatusIcons {
       align: 'center', wordWrap: true, wordWrapWidth: Game.logicWidth - 48,
     }));
     this._gateBar.anchor.set(0.5, 0);
-    this._gateBar.position.set(Game.logicWidth / 2, this._layout.enemyStatusIconY + ICON_SIZE);
     this._gateBar.visible = false;
     parent.addChild(this._gateBar);
+    this._syncGateBarPos();
 
     this._teamRow = new PIXI.Container();
     // 英雄血条正上方靠左（右侧留给 buff 状态文字行）
@@ -121,6 +121,14 @@ export class BattleStatusIcons {
     this._layoutRow(enemyList, this._enemyRow, 'enemy', false);
     this._layoutRow(teamList, this._teamRow, 'team', false);
     this._refreshGateBar();
+  }
+
+  private _syncGateBarPos(): void {
+    if (!this._gateBar || this._gateBar.destroyed) return;
+    this._gateBar.position.set(
+      Game.logicWidth / 2,
+      this._layout.enemyStatusIconY + ICON_SIZE,
+    );
   }
 
   /** 由 BattleScene 在回合结算后回填「还差多少」；空数组 = 本回合过了 */

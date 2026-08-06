@@ -22,6 +22,8 @@ export interface SimEnemy {
   /** 当前技能表（Boss 阶段可追加） */
   skillIds: string[];
   skillCds: number[];
+  /** 出招轮转指针（口径同 EnemyUnit） */
+  skillRotation: number;
   /** 已进入的 Boss 阶段数 */
   phaseIndex: number;
   charging: { mult: number; skillId: string; releaseVfx: SkillVfxId } | null;
@@ -41,6 +43,7 @@ export function spawnSimEnemy(stage: StageDef, waveIndex: number): SimEnemy {
     def_: stats.def,
     attackCountdown: GROWTH.enemy.initialAttackCountdown,
     skillCds: (def.skillIds ?? []).map((id) => skillForEnemy(id).cd),
+    skillRotation: 0,
     charging: null,
     dmgReduction: null,
     ...initialPhaseState(def, stats.atk),

@@ -18,8 +18,14 @@
 import { ELEMENTS, type Element } from './combat';
 import type { PetRole } from './petRoles';
 
-/** 特攻倍率。克制已有 1.6，这里取 2.2 —— 够让对位翻盘，又不至于让错位宠彻底没法用 */
-export const KILLER_MULT = 2.2;
+/**
+ * 特攻倍率。
+ *
+ * v0.7 从 2.2 抬到 2.6：纵向成长压平后，横向乘区必须够大才能改变玩家的最优解。
+ * 2.6 意味着一只对位的低星宠能压过高一个星级档的错位宠（星级档差约 ×1.2），
+ * 「翻背包找对的宠」第一次比「再练十级」划算。
+ */
+export const KILLER_MULT = 2.6;
 
 /** 单宠抗性配额；5 只同抗性凑满 100% 才免疫 */
 export const RESIST_PER_PET = 0.2;
@@ -45,11 +51,17 @@ export const ROLE_BOND: Readonly<Record<PetRole, string>> = {
   attacker: '锋锐', tank: '磐固', healer: '慈心', support: '玄枢',
 };
 
-/** 羁绊档位：2 只小成、3 只大成。只取每个标签的最高档，不叠加 */
-export const BOND_TIER_2 = 0.04;
-export const BOND_TIER_3 = 0.10;
+/**
+ * 羁绊档位：2 只小成、3 只大成。只取每个标签的最高档，不叠加。
+ *
+ * v0.7 整体翻倍（4%/10% → 8%/20%，上限 20% → 45%）。旧值下「凑羁绊」的收益
+ * 不到三级经验，玩家理性选择是无视它；抬到 45% 后，抱团编队与「五行齐全」之间
+ * 才构成真实取舍——而这正是「同源相斥」机制要撬动的那个决定。
+ */
+export const BOND_TIER_2 = 0.08;
+export const BOND_TIER_3 = 0.20;
 /** 羁绊总增伤上限：五宠最多凑 4 个标签达标，不封顶会直接盖过闸门的惩罚 */
-export const BOND_BONUS_CAP = 0.20;
+export const BOND_BONUS_CAP = 0.45;
 
 export interface PetTags {
   /** 对该属性的敌人伤害 ×KILLER_MULT */

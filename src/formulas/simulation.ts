@@ -14,7 +14,12 @@ import type { PetDef } from '@/balance/pets';
 import type { StageDef } from '@/balance/stages';
 import { STAGE_MAP } from '@/balance/stages';
 import { resolveMechanics } from '@/balance/stageMechanics';
-import { applyDamageVoid, GATE_FAIL_MULT } from '@/balance/damageGates';
+import {
+  applyDamageVoid,
+  evaluateCompPenalty,
+  GATE_FAIL_MULT,
+  NO_COMP_PENALTY,
+} from '@/balance/damageGates';
 import type { SkillDef } from '@/balance/skills';
 import { applyDamageReduction, calcHeal } from './damage';
 import { starsFromTurns } from './stars';
@@ -41,6 +46,7 @@ import {
   type SkillRuntimeContext,
 } from '@/game/battle/SkillEngine';
 import { enterBossPhase, pendingBossPhase } from '@/game/battle/bossPhase';
+import { pickEnemySkill, skillFollowsUpWithAttack } from '@/game/battle/battleEnemyIntent';
 import { orbGroupDamage } from './simulationDamage';
 import { spawnSimEnemy, type SimEnemy } from './simulationEnemy';
 import {
@@ -127,7 +133,10 @@ export function simulateBattle(
   const teamDmgReduction = teamFx.damageReduction;
   const teamHealBonus = teamFx.healBonus;
 
-  /** 每元素出手宠（首个该元素，口径同 BattleController.resolveTurn 的 findIndex） */
+  /** 该元素的全部出手宠（口径同 battleTurnResolution 的 attackers） */
+  const petsOf = (el: Element): SimPet[] => team.filter((p) => p.def.element === el);
+
+  /** 该元素的代表宠，供只需一只的近似计算（转珠技的追加伤害） */
   const firstPetOf = (el: Element): SimPet | undefined =>
     team.find((p) => p.def.element === el);
 
@@ -174,8 +183,25 @@ export function simulateBattle(
   // 关卡规则机制：禁心（心珠不回血）、禁用属性珠（消除无伤害）
   const mech = resolveMechanics(stage.mechanics);
   const bannedSet = new Set<Element>(mech.bannedElements);
+  /**
+   * 同源相斥（镜像 BattleController 第 218/419 行）。
+   *
+   * v0.7 补建模。此前模拟器完全忽略这条规则，而它恰恰是全项目唯一直接惩罚
+   * 「五色齐全」这个恒定最优解的机制——不建模就等于配平工具看不见玩家的编队决策，
+   * 「换阵容有没有收益」这个问题从工具层面就无法回答。
+   */
+  const compPenalty = mech.compPenalty
+    ? evaluateCompPenalty(covered.size)
+    : NO_COMP_PENALTY;
 
-  const groupsPerType = model.combo / 6;
+  /*
+   * 每种珠子平均分到的消除组数 = 总 combo / 盘面色数。
+   *
+   * 盘面只掉本队属性 + 心珠（见 BoardModel._spawnPool），所以分母是「覆盖色数 + 1」而非固定 6。
+   * 窄队因此不再是无条件劣势：色数少 → 每色分到的组更多、更容易起大组，
+   * 用盘面覆盖面换取单色密度，正是「换阵容」需要权衡的那个变量。
+   */
+  const groupsPerType = model.combo / (covered.size + 1);
 
   for (let turn = 1; turn <= TURN_CAP; turn++) {
     turnsUsed = turn;
@@ -185,7 +211,11 @@ export function simulateBattle(
       for (const p of team) if (p.skillCdLeft > 0) p.skillCdLeft--;
     }
 
-    enemyReduction = enemy.dmgReduction?.reduction ?? 0;
+    // 同源相斥的敌方减伤与技能减伤取「不叠乘、取更狠的一档」，避免属性过窄时被双重惩罚
+    enemyReduction = Math.max(
+      enemy.dmgReduction?.reduction ?? 0,
+      compPenalty.enemyReduction,
+    );
     buffMult = (st.dmgBuff?.mult ?? 1.0) * teamDamageMult * (st.atkDebuff?.mult ?? 1)
       * leaderComboMult * leaderBigMatchMult * leaderHpMult();
     dmgToEnemy = 0;
@@ -214,23 +244,26 @@ export function simulateBattle(
     const gateMult = gateTurnMult();
     for (const el of covered) {
       if (bannedSet.has(el)) continue; // 禁用属性珠：消除无伤害
-      const pet = firstPetOf(el);
-      if (!pet) continue;
+      // 同色宠全员出手（镜像 battleTurnResolution 的 attackers 循环）
+      const attackers = petsOf(el);
+      if (attackers.length === 0) continue;
       hitsThisTurn += groupsPerType;
       // 属性吸收：被吸那一色伤害打折（镜像 battleTurnResolution.elementAbsorbMult）
       const absorb = st.absorb && st.absorb.element === el ? st.absorb.mult : 1;
       // 专精令只抬持有者本色，故按元素分别乘（镜像 battleTurnResolution 的分组乘区）
       const leaderEl = leaderMods.elementMult?.element === el ? leaderMods.elementMult.mult : 1;
-      const killer = killerMult(pet.def, enemy.def.element);
-      const perGroup = orbGroupDamage(
-        pet.atk, el, enemy, effEnemyDef(), model, buffMult * leaderEl * killer, enemyReduction,
-        { critRate: pet.critRate, critDamage: pet.critDamage }, comboBonus,
-      ) * absorb * gateMult;
-      // 锋锐无效按「单次出手」判定，故先对单组求值再乘组数
-      const afterVoid = applyDamageVoid(
-        perGroup, model.matchCount, st.damageVoid?.threshold ?? 0,
-      ).damage;
-      dmgToEnemy += groupsPerType * afterVoid;
+      for (const pet of attackers) {
+        const killer = killerMult(pet.def, enemy.def.element);
+        const perGroup = orbGroupDamage(
+          pet.atk, el, enemy, effEnemyDef(), model, buffMult * leaderEl * killer, enemyReduction,
+          { critRate: pet.critRate, critDamage: pet.critDamage }, comboBonus,
+        ) * absorb * gateMult;
+        // 锋锐无效按「单次出手」判定，故先对单组求值再乘组数
+        const afterVoid = applyDamageVoid(
+          perGroup, model.matchCount, st.damageVoid?.threshold ?? 0,
+        ).damage;
+        dmgToEnemy += groupsPerType * afterVoid;
+      }
     }
     // 持续伤害（点燃）：每回合对敌人结算
     if (st.enemyDot) dmgToEnemy += st.enemyDot.amount;
@@ -267,7 +300,7 @@ export function simulateBattle(
     }
 
     // ── 敌人回合 ──
-    const hit = enemyAct();
+    const hit = enemyAct() * compPenalty.enemyAtkMult;
     if (hit > 0) {
       // 受击顺序（镜像 BattleController.applyEnemyDamage）：减伤 → 护盾 → 扣血
       const reduced = applyDamageReduction(hit, teamDmgReduction);
@@ -548,28 +581,28 @@ export function simulateBattle(
       return result.damageEvents[0]?.amount ?? 0;
     }
 
-    const skillIds = enemy.skillIds;
-    for (let i = 0; i < skillIds.length; i++) {
+    for (let i = 0; i < enemy.skillIds.length; i++) {
       if (enemy.skillCds[i] > 0) enemy.skillCds[i]--;
     }
-    for (let i = 0; i < skillIds.length; i++) {
-      if (enemy.skillCds[i] > 0) continue;
-      const skill = skillForEnemy(skillIds[i]);
-      if (enemy.dmgReduction && skill.effects.some((e) => e.kind === 'status' && e.status === 'enemyDamageReduction')) {
-        continue;
-      }
-      const result = runSkill(skill, { kind: 'enemy', atk: enemy.atk, element: enemy.def.element }, runtimeContext());
-      if (result) {
-        applySkillResult(result);
-        enemy.skillCds[i] = skill.cd;
-        const heroHit = result.damageEvents.find((e) => e.target === 'hero');
-        if (heroHit) return heroHit.amount;
-        if (result.statusEvents.some((e) => e.status === 'charge')) return 0;
-        enemy.attackCountdown--;
-        if (enemy.attackCountdown > 0) return 0;
-        enemy.attackCountdown = enemy.attackInterval;
-        return enemy.atk;
-      }
+    // 与实机共用选招与追击判定：模拟器自己写一套近似规则，审计出来的难度就不是真难度
+    const pick = pickEnemySkill(
+      enemy,
+      { kind: 'enemy', atk: enemy.atk, element: enemy.def.element },
+      runtimeContext(),
+      0,
+    );
+    if (pick) {
+      enemy.skillCds[pick.index] = pick.skill.cd;
+      enemy.skillRotation = (pick.index + 1) % enemy.skillIds.length;
+      if (pick.wasted) return 0;
+      applySkillResult(pick.result);
+      const heroHit = pick.result.damageEvents.find((e) => e.target === 'hero');
+      if (heroHit) return heroHit.amount;
+      if (!skillFollowsUpWithAttack(pick.result)) return 0;
+      enemy.attackCountdown--;
+      if (enemy.attackCountdown > 0) return 0;
+      enemy.attackCountdown = enemy.attackInterval;
+      return enemy.atk;
     }
 
     enemy.attackCountdown--;

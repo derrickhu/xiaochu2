@@ -124,12 +124,21 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
     }
     const element = group.orb as Element;
     if (opts.bannedElements.has(element)) continue;
-    const petIndex = opts.team.findIndex((p) => p.def.element === element);
-    if (petIndex < 0) continue;
-    const pet = opts.team[petIndex];
-    // 暴击为「个体属性」：用出手宠自身的暴击率掷骰、暴击伤害结算；必暴击 buff 强制暴击
-    const isCrit = opts.guaranteedCrit || firstAttackPending || opts.rng() < pet.critRate;
-    firstAttackPending = false;
+    /*
+     * 同属性的宠物**全部**参与这一组攻击（v0.7；旧实现是 findIndex 只取第一只）。
+     *
+     * 旧口径下同色第二只完全不出伤，等于规定了「五色各一只」是唯一不浪费席位的编队，
+     * 于是所谓「换阵容」永远只是在同一个位置上换一只更高星的宠——纵向养成的换皮而已。
+     * 全员出手之后，收窄属性才第一次有正收益（少一色，但那一色打两倍），
+     * 和「盘面只掉本队颜色」「同源相斥的三色甜点区」共同构成一组真实取舍：
+     *   五色 = 覆盖广、能过五行阵盾，但吃同源相斥的 ×1.6 敌攻；
+     *   三色 = 单色爆发翻倍、敌人不加攻，但过不了属性闸门。
+     */
+    const attackers = opts.team
+      .map((pet, petIndex) => ({ pet, petIndex }))
+      .filter(({ pet }) => pet.def.element === element);
+    if (attackers.length === 0) continue;
+
     // 专精令按属性、疾锋令按单组消除数生效，两者都是「这一组」的乘区而非整回合的
     const leaderElementMult = leader?.elementMult?.element === element
       ? leader.elementMult.mult
@@ -137,52 +146,61 @@ export function resolvePlayerTurnDamage(opts: ResolvePlayerTurnOptions): TurnRes
     const leaderBigMatchMult = leader?.bigMatch && group.cells.length >= leader.bigMatch.matchCount
       ? leader.bigMatch.mult
       : 1;
-    const raw = calcDamage({
-      atk: pet.atk,
-      matchCount: group.cells.length,
-      combo,
-      attackerElement: element,
-      defenderElement: opts.enemy.def.element,
-      defenderDef: opts.enemyDefEffective,
-      isCrit,
-      critDamage: pet.critDamage,
-      buffMult: opts.teamDamageMult
-        * opts.elementBuffMult(element)
-        * runMult
-        * leaderElementMult
-        * leaderBigMatchMult,
-      comboBonus: opts.leaderComboBonus,
-    })
-      * opts.elementTraitDamageMult(pet, opts.enemy.def.element)
-      // 特攻与克制同层但独立：对位宠靠这一乘区压过错位的高星宠
-      * killerMult(pet.def, opts.enemy.def.element);
-    // 属性吸收与减伤同层（都是敌方抗性），在增伤乘区之后结算；
-    // 闸门乘区最后压上，未满足时配合 Math.max(1) 就是「伤害降为 1」
-    let damage = Math.max(
-      1,
-      Math.floor(
-        raw
-        * (1 - (opts.enemy.dmgReduction?.reduction ?? 0))
-        * opts.elementAbsorbMult(element)
-        * verdict.turnMult,
-      ),
-    );
-    // 雷霆真伤不吃防御与抗性，但闸门未过时不给它开后门
-    if (verdict.turnMult > 0 && thunderPct > 0 && group.cells.length >= thunderMatch) {
-      damage += Math.floor((opts.teamAtkTotal ?? 0) * thunderPct);
+    // 雷霆真伤按「组」结算，不随出手宠数量翻倍，故只挂在这一组的第一只身上
+    let thunderPending = verdict.turnMult > 0 && thunderPct > 0 && group.cells.length >= thunderMatch;
+
+    for (const { pet, petIndex } of attackers) {
+      // 暴击为「个体属性」：用出手宠自身的暴击率掷骰、暴击伤害结算；必暴击 buff 强制暴击
+      const isCrit = opts.guaranteedCrit || firstAttackPending || opts.rng() < pet.critRate;
+      firstAttackPending = false;
+      const raw = calcDamage({
+        atk: pet.atk,
+        matchCount: group.cells.length,
+        combo,
+        attackerElement: element,
+        defenderElement: opts.enemy.def.element,
+        defenderDef: opts.enemyDefEffective,
+        isCrit,
+        critDamage: pet.critDamage,
+        buffMult: opts.teamDamageMult
+          * opts.elementBuffMult(element)
+          * runMult
+          * leaderElementMult
+          * leaderBigMatchMult,
+        comboBonus: opts.leaderComboBonus,
+      })
+        * opts.elementTraitDamageMult(pet, opts.enemy.def.element)
+        // 特攻与克制同层但独立：对位宠靠这一乘区压过错位的高星宠
+        * killerMult(pet.def, opts.enemy.def.element);
+      // 属性吸收与减伤同层（都是敌方抗性），在增伤乘区之后结算；
+      // 闸门乘区最后压上，未满足时配合 Math.max(1) 就是「伤害降为 1」
+      let damage = Math.max(
+        1,
+        Math.floor(
+          raw
+          * (1 - (opts.enemy.dmgReduction?.reduction ?? 0))
+          * opts.elementAbsorbMult(element)
+          * verdict.turnMult,
+        ),
+      );
+      // 雷霆真伤不吃防御与抗性，但闸门未过时不给它开后门
+      if (thunderPending) {
+        damage += Math.floor((opts.teamAtkTotal ?? 0) * thunderPct);
+        thunderPending = false;
+      }
+      // 锋锐无效：超过阈值的一击归零，5 连消除可穿透并拿额外增伤
+      const voidOutcome = applyDamageVoid(damage, group.cells.length, gates.voidThreshold);
+      damage = Math.max(1, voidOutcome.damage);
+      attacks.push({
+        petIndex,
+        element,
+        damage,
+        isCrit,
+        counter: opts.counterRelation(element, opts.enemy.def.element),
+        voided: voidOutcome.voided,
+        pierced: voidOutcome.pierced,
+      });
     }
-    // 锋锐无效：超过阈值的一击归零，5 连消除可穿透并拿额外增伤
-    const voidOutcome = applyDamageVoid(damage, group.cells.length, gates.voidThreshold);
-    damage = Math.max(1, voidOutcome.damage);
-    attacks.push({
-      petIndex,
-      element,
-      damage,
-      isCrit,
-      counter: opts.counterRelation(element, opts.enemy.def.element),
-      voided: voidOutcome.voided,
-      pierced: voidOutcome.pierced,
-    });
   }
 
   const heartHeal = (healOrbs > 0 && !opts.noHeartHeal)

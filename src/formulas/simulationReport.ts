@@ -1,4 +1,5 @@
 import { PET_MAP, type PetDef } from '@/balance/pets';
+import type { PlayerProfile } from '@/balance/difficultyBudget';
 import type { TeamMember } from './team';
 
 /** 玩家操作熟练度模型 */
@@ -19,7 +20,16 @@ export interface ComboModel {
   gateCompliance: number;
 }
 
-export const COMBO_MODELS: Readonly<Record<'low' | 'mid' | 'high', ComboModel>> = {
+/**
+ * 玩家画像。
+ *
+ * `mindless` 是 v0.7 新增的难度护栏基线：见珠就拖、从不放技能、完全不理会闸门提示。
+ * 它不是用来验证「能不能过」，而是用来验证**过不了**——难度契约要求它从
+ * difficultyBudget.MINDLESS_WALL_CHAPTER 起撞墙。旧体系缺的就是这一档，
+ * 于是「太简单」永远测不出来。
+ */
+export const COMBO_MODELS: Readonly<Record<PlayerProfile, ComboModel>> = {
+  mindless: { name: '无脑基线', combo: 3, matchCount: 3, useSkills: false, gateCompliance: 0 },
   low: { name: '低手3C', combo: 3, matchCount: 3, useSkills: false, gateCompliance: 0.3 },
   mid: { name: '中手5C', combo: 5, matchCount: 3, useSkills: true, gateCompliance: 0.7 },
   high: { name: '高手7C', combo: 7, matchCount: 4, useSkills: true, gateCompliance: 0.95 },
@@ -42,6 +52,7 @@ export interface SimResult {
 
 export interface StageReportRow {
   stageId: string;
+  mindless: SimResult;
   low: SimResult;
   mid: SimResult;
   high: SimResult;
@@ -73,6 +84,7 @@ export function simulateMatrixWith(
 ): StageReportRow[] {
   return stageIds.map((stageId) => ({
     stageId,
+    mindless: simulateBattle(members, stageId, COMBO_MODELS.mindless),
     low: simulateBattle(members, stageId, COMBO_MODELS.low),
     mid: simulateBattle(members, stageId, COMBO_MODELS.mid),
     high: simulateBattle(members, stageId, COMBO_MODELS.high),

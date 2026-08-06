@@ -66,12 +66,12 @@ export interface EnemyStats {
   def: number;
 }
 
-/** 敌人实际数值 = 模板基值 × 章节成长^(章节-1) × 关卡难度系数 */
+/** 敌人实际数值 = 模板基值 × 全局血量基准 × 章节成长^(章节-1) × 关卡难度系数 */
 export function enemyStats(enemy: EnemyDef, chapter: number, difficulty: number): EnemyStats {
   const g = GROWTH.enemy;
   const ch = chapter - 1;
   return {
-    hp: Math.floor(enemy.baseHp * Math.pow(g.chapterGrowthHp, ch) * difficulty),
+    hp: Math.floor(enemy.baseHp * g.hpScale * Math.pow(g.chapterGrowthHp, ch) * difficulty),
     atk: Math.floor(enemy.baseAtk * Math.pow(g.chapterGrowthAtk, ch) * difficulty),
     def: Math.floor(enemy.baseDef * Math.pow(g.chapterGrowthDef, ch) * difficulty),
   };

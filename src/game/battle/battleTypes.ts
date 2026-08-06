@@ -58,6 +58,8 @@ export interface EnemyUnit {
   skillIds: string[];
   /** 各技能剩余冷却（与 skillIds 一一对应） */
   skillCds: number[];
+  /** 出招轮转指针：下次从这个下标起找就绪技能，保证整套技能轮得到 */
+  skillRotation: number;
   /** 已进入的 Boss 阶段数：0 = 原始形态 */
   phaseIndex: number;
   /** 蓄力中（下个敌人回合打出 atk × mult 重击） */

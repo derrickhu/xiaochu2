@@ -6,6 +6,7 @@ import {
   type SkillResult,
   type SkillRuntimeContext,
 } from './SkillEngine';
+import { pickEnemySkill } from './battleEnemyIntent';
 import { enterBossPhase, pendingBossPhase } from './bossPhase';
 import { ELEMENT_NAME } from '@/balance/ui';
 import type { EnemyActResult, EnemyUnit } from './battleTypes';
@@ -73,18 +74,17 @@ export function runEnemyTurnAction(ctx: EnemyTurnContext): EnemyActResult {
     return { action: 'chargedAttack', ...hit, healed: 0 };
   }
 
-  const skillIds = enemy.skillIds;
-  for (let i = 0; i < skillIds.length; i++) {
+  for (let i = 0; i < enemy.skillIds.length; i++) {
     if (enemy.skillCds[i] > 0) enemy.skillCds[i]--;
   }
-  for (let i = 0; i < skillIds.length; i++) {
-    if (enemy.skillCds[i] > 0) continue;
-    const skill = skillForEnemy(skillIds[i]);
-    const fired = runSkill(skill, ctx.enemyCaster(), ctx.runtimeContext());
-    if (fired) {
-      enemy.skillCds[i] = skill.cd;
-      return applyEnemySkillResult(ctx, fired);
-    }
+  // 与 predictEnemyIntent 共用挑选逻辑，保证「预告的那一招」就是真正放出来的那一招
+  const pick = pickEnemySkill(enemy, ctx.enemyCaster(), ctx.runtimeContext(), 0);
+  if (pick) {
+    enemy.skillCds[pick.index] = pick.skill.cd;
+    enemy.skillRotation = (pick.index + 1) % enemy.skillIds.length;
+    // 白放的减伤：CD 照扣，但这一回合什么也没发生（预告会如实说「按兵不动」）
+    if (pick.wasted) return idle();
+    return applyEnemySkillResult(ctx, pick.result);
   }
 
   enemy.attackCountdown--;
@@ -110,13 +110,6 @@ function followUpBasicAttack(ctx: EnemyTurnContext, base: EnemyActResult): Enemy
 }
 
 function applyEnemySkillResult(ctx: EnemyTurnContext, result: SkillResult): EnemyActResult {
-  if (
-    result.statusEvents.some((e) => e.status === 'enemyDamageReduction' && e.stack === 'ignoreIfPresent')
-    && ctx.enemy.dmgReduction
-  ) {
-    return idle();
-  }
-
   const hit = result.damageEvents.find((e) => e.target === 'hero');
   if (hit) {
     const applied = ctx.applyEnemyDamage(hit.amount);
