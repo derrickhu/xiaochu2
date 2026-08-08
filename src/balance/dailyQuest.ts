@@ -28,10 +28,14 @@ export interface DailyQuestDef {
   reward: RewardBundle;
 }
 
+/**
+ * 灵宠币任务奖励锚定 ch1 刷关日产（DAILY_TARGET≈520）的约一半：
+ * 全窗日均约 270，避免任务单独撑起商店升星节奏。
+ */
 export const DAILY_QUEST_POOL: readonly DailyQuestDef[] = [
   {
     id: 'dq_clear3', name: '通关 3 个关卡', trigger: 'stageClear', target: 3,
-    reward: { coins: 200, exp: 200 },
+    reward: { coins: 80, exp: 200 },
   },
   {
     id: 'dq_combo8', name: '单场达成 8 连击', trigger: 'comboReach', target: 1, threshold: 8,
@@ -39,7 +43,7 @@ export const DAILY_QUEST_POOL: readonly DailyQuestDef[] = [
   },
   {
     id: 'dq_gacha1', name: '召唤 1 次', trigger: 'gachaPull', target: 1,
-    reward: { coins: 300 },
+    reward: { coins: 100 },
   },
   {
     id: 'dq_realm1', name: '完成 1 次五行秘境', trigger: 'realmClear', target: 1,
@@ -47,7 +51,7 @@ export const DAILY_QUEST_POOL: readonly DailyQuestDef[] = [
   },
   {
     id: 'dq_levelup1', name: '升级灵宠 1 次', trigger: 'petLevelUp', target: 1,
-    reward: { coins: 250 },
+    reward: { coins: 80 },
   },
   {
     id: 'dq_tower3', name: '通天塔攀爬 3 层', trigger: 'towerFloor', target: 3,
@@ -71,7 +75,7 @@ export const QUEST_ALL_CLEAR_ID = 'dq_all_clear';
  */
 export const QUEST_ALL_CLEAR_REWARD: RewardBundle = {
   lingyu: 50,
-  coins: 500,
+  coins: 120,
   universal: ECONOMY.universal.dailyAllClear,
   stamina: ECONOMY.stamina.checkinBonus,
 };

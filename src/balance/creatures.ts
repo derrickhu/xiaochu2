@@ -56,12 +56,15 @@ const CORE_CREATURES: readonly CreatureDef[] = [
     monster: monsterPair(6, { t2Skills: [E.lionCharge] }),
   },
   {
-    // 怪物面 = 第 2 章 Boss 波 2/3：rank 按 powerBudget 护栏校准
+    // 怪物面 = 第 2 章 Boss：封印珠关卡机制 + 本体自愈/削攻（初级预告 → 高级完整）
     id: 'pet_004', name: '灵鹿医者', element: 'wood', rarity: 2, role: 'healer',
     skillId: PET_SKILL_IDS.woodBigHeal,
-    // 只会自愈的 Boss 是道纯数值题：伤害够就赢，不够就磨。加上摧锋（削我方伤害）
-    // 之后才成立——它一边回血一边压你输出，玩家第一次被逼着攒爆发而不是平推。
-    monster: monsterPair(6, { t2Skills: [E.serpentHeal, E.atkDebuff] }),
+    // 自愈 + 削攻：一边回血一边压输出，逼攒爆发；初级先教自愈，高级叠摧锋。
+    // rank 11：去掉 prep 后本体扛满血量；轻自愈挡高手秒推，又不至于把中手磨爆。
+    monster: monsterPair(11, {
+      t1Skills: [E.serpentHeal],
+      t2Skills: [E.serpentHeal, E.atkDebuff, E.sealOrbs],
+    }),
   },
   // ── 水 ──
   {
@@ -101,9 +104,10 @@ const CORE_CREATURES: readonly CreatureDef[] = [
     // 压缩转珠时间的同时逼你在预警回合内处理蓄力，低血狂暴让拖延战术反而更危险。
     id: 'pet_010', name: '厚土娘娘', element: 'earth', rarity: 3, role: 'healer',
     skillId: PET_SKILL_IDS.earthTime,
-    monster: monsterPair(5, {
+    // rank 7 + 禁疗：无 prep 后仍要挡住无脑基线（Ch6 起挂同源相斥，但不能被磨穿）
+    monster: monsterPair(7, {
       t1Skills: [E.timeSqueeze],
-      t2Skills: [E.timeSqueeze, E.lionCharge, E.enrage],
+      t2Skills: [E.timeSqueeze, E.lionCharge, E.enrage, E.healBlock],
     }),
   },
 
@@ -176,12 +180,14 @@ const CORE_CREATURES: readonly CreatureDef[] = [
     }),
   },
   {
-    // 怪物面 = 第 1 章 Boss 波 2/3：rank 按 powerBudget 护栏（总量 ≈ 前关 3.5 倍）校准
+    // 怪物面 = 第 1 章 Boss：初级蓄力预告 → 高级蓄力 + 残血狂暴（无 prep 热身波）
     id: 'pet_017', name: '星辉灵鹿', element: 'wood', rarity: 2, role: 'attacker',
     skillId: PET_SKILL_IDS.starCross,
-    // 第 1 章 Boss 只会蓄力重击时，玩家学到的唯一一课是「攒够伤害就行」。
-    // 补一条残血狂暴：收尾拖沓会被反打，这是全流程第一次「必须打干净」的教学。
-    monster: monsterPair(9, { t2Skills: [E.lionCharge, E.enrage] }),
+    // 蓄力教会接招；残血狂暴惩罚拖沓收尾——第一章就要学会「打干净」。
+    monster: monsterPair(10, {
+      t1Skills: [E.lionCharge],
+      t2Skills: [E.lionCharge, E.enrage],
+    }),
   },
   {
     id: 'pet_018', name: '混沌骨狐', element: 'wood', rarity: 4, role: 'healer',
@@ -232,7 +238,8 @@ const CORE_CREATURES: readonly CreatureDef[] = [
     // 前三章教的是「认五行、认心珠、认封珠」，这一关教的是「数值不是万能」。
     id: 'pet_025', name: '星河烛龙', element: 'fire', rarity: 3, role: 'support',
     skillId: PET_SKILL_IDS.fireBoost,
-    monster: monsterPair(4, {
+    // rank 6：无 prep 后本体补足血量，保住 Boss TTK 下限
+    monster: monsterPair(6, {
       atkScale: 4.0,
       t1Skills: [E.sealOrbs],
       t2Skills: [E.sealOrbs, E.damageVoid, E.bladeCharge],
@@ -263,7 +270,12 @@ const CORE_CREATURES: readonly CreatureDef[] = [
     // 「带个控制宠万事大吉」在这一关第一次行不通。
     id: 'pet_028', name: '归墟玄龟', element: 'earth', rarity: 3, role: 'tank',
     skillId: PET_SKILL_IDS.abyssBulwark,
-    monster: monsterPair(9, { atkScale: 2.6, t2Skills: [E.golemGuard, E.resolve, E.lionCharge] }),
+    // 去掉 prep 后闸门直接夹在双形态之间；atkScale 从 2.6 略降，避免针对队被蓄力斩穿
+    monster: monsterPair(10, {
+      atkScale: 2.3,
+      t1Skills: [E.golemGuard],
+      t2Skills: [E.golemGuard, E.resolve, E.lionCharge],
+    }),
   },
   {
     // 怪物面 = 第 7 章 Boss：首教「禁疗」；rank 按 powerBudget 护栏校准

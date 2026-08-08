@@ -16,12 +16,9 @@ import { UI, ORB_COLOR } from '@/balance/ui';
 import {
   enemyDisplaySize,
   enemyDisplayTierOf,
-  enemyShowsTierRing,
   enemySpriteCenterY,
   enemySpriteScale,
   enemySpriteTint,
-  enemyTierRingRadius,
-  ENEMY_TIER_COLOR,
   formatEnemyBattleName,
 } from '@/balance/enemyDisplay';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
@@ -53,7 +50,6 @@ export class BattleHud {
   private _enemyNameBg!: PIXI.Graphics;
   private _waveText!: PIXI.Text;
   private _enemySprite!: PIXI.Sprite;
-  private _enemyTierRing!: PIXI.Graphics;
   private _enemyAreaTop = 0;
   private _enemyAreaBottom = 0;
   private _enemyContainer!: PIXI.Container;
@@ -305,8 +301,6 @@ export class BattleHud {
 
     this._enemyContainer = new PIXI.Container();
     this._enemyContainer.position.set(enemyCenterX, enemyCenterY);
-    this._enemyTierRing = new PIXI.Graphics();
-    this._enemyContainer.addChild(this._enemyTierRing);
     this._enemySprite = new PIXI.Sprite();
     this._enemySprite.anchor.set(0.5);
     this._enemyContainer.addChild(this._enemySprite);
@@ -323,7 +317,8 @@ export class BattleHud {
 
     this._enemyHpText = makeText('', {
       size: FONT_SIZE.sm, fill: COLORS.white, bold: true, anchor: 0.5,
-      strokeColor: 0x5a3a1a, strokeWidth: 5,
+      // 描边过粗时「/」会像血条上的斜划痕
+      strokeColor: 0x5a3a1a, strokeWidth: 3,
     });
     this._enemyHpText.position.set(w / 2, enemyHpBarY + ebh / 2);
     parent.addChild(this._enemyHpText);
@@ -406,7 +401,7 @@ export class BattleHud {
 
     this._heroHpText = makeText('', {
       size: FONT_SIZE.sm, fill: COLORS.white, bold: true, anchor: 0.5,
-      strokeColor: 0x2a4a1a, strokeWidth: 5,
+      strokeColor: 0x2a4a1a, strokeWidth: 3,
     });
     this._heroHpText.position.set(Game.logicWidth / 2, heroBarY + bh / 2);
     parent.addChild(this._heroHpText);
@@ -736,16 +731,6 @@ export class BattleHud {
       this._enemyContainer.position.set(enemyCenterX, this._layout.enemyCenterY);
     }
     this._syncEnemySideHudPos();
-    this._enemyTierRing.clear();
-    if (enemyShowsTierRing(tier)) {
-      const r = enemyTierRingRadius(displaySize);
-      const color = ENEMY_TIER_COLOR[tier];
-      this._enemyTierRing.lineStyle(tier === 'boss' ? 5 : 4, color, tier === 'boss' ? 0.75 : 0.55);
-      this._enemyTierRing.drawCircle(0, 0, r);
-      this._enemyTierRing.beginFill(color, tier === 'boss' ? 0.08 : 0.05);
-      this._enemyTierRing.drawCircle(0, 0, r);
-      this._enemyTierRing.endFill();
-    }
     if (!switchWave) this._enemyContainer.alpha = 1;
     const ratio = enemy.maxHp > 0 ? enemy.hp / enemy.maxHp : 0;
     TweenManager.cancelTarget(this._enemyHpDisp);

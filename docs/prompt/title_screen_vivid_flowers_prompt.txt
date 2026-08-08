@@ -1,0 +1,10 @@
+Same composition as the reference image: vertical 9:16 xianxia garden map background,
+winding light stone path S-curve from bottom to top-right pavilion, teal-roof pavilions,
+stone lanterns, tiered waterfalls, turquoise ponds with lily pads, misty green mountains,
+cream cloud frame at bottom. Soft painterly mobile-game style.
+
+CRITICAL CHANGE vs reference: make the red/pink flowers much more vivid and saturated —
+pathside small blossoms should be bright rose-crimson (not pale peach), water lotuses
+should be rich saturated pink-red with clear yellow centers. Keep greens, water, path,
+architecture, and overall layout identical. Do NOT add UI, text, labels, or characters
+beyond the tiny fox if present in reference. NO TEXT anywhere.

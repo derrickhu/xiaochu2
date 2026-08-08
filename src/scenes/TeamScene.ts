@@ -44,6 +44,11 @@ import {
 } from './teamPrepChrome';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
+import { skillForPet } from '@/game/battle/SkillEngine';
+import {
+  showSkillPreviewBubble,
+  type PetSkillPreviewHandle,
+} from './battle/PetSkillPreviewBubble';
 
 /** 战前编队：传入 stageId 时展示本关敌人，确认后进入战斗；缺省为自由编队 */
 export interface TeamEnterData {
@@ -82,6 +87,9 @@ export class TeamScene implements Scene {
   private _summaryW = 0;
   /** 战前编队页的敌情卡；换宠后要重算「必带对策」勾选 */
   private _intel: TeamEnemyIntelHandle | null = null;
+  /** 技能说明气泡置顶层（长按宠卡/槽位） */
+  private _previewLayer = new PIXI.Container();
+  private _skillPreview: PetSkillPreviewHandle | null = null;
 
   onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
@@ -125,6 +133,7 @@ export class TeamScene implements Scene {
 
   onExit(): void {
     this._enterSeq.cancel();
+    this._dismissSkillPreview();
     this._listChecks.clear();
     this._listItems.clear();
     this._prepStage = undefined;
@@ -142,6 +151,7 @@ export class TeamScene implements Scene {
     });
     this._slotArea = new PIXI.Container();
     this._overview = new PIXI.Container();
+    this._previewLayer = new PIXI.Container();
   }
 
   private _build(opts?: { animate?: boolean }): void {
@@ -150,14 +160,17 @@ export class TeamScene implements Scene {
     const h = Game.logicHeight;
     const prep = !!this._prepStage;
 
+    this._dismissSkillPreview();
     this._listScroll.detach();
     this._listChecks.clear();
     this._listItems.clear();
     this._summaryHost = null;
     this._listContent = null;
+    this._intel = null;
     this.container.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
     });
+    this._previewLayer = new PIXI.Container();
 
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
 
@@ -174,6 +187,9 @@ export class TeamScene implements Scene {
     } else {
       this._buildFreeLayout(w);
     }
+
+    // 技能气泡必须在所有 UI 之上
+    this.container.addChild(this._previewLayer);
 
     if (animate) {
       staggerIn([...this._listItems.values()], { stepDelay: 0.03, offsetY: 16, duration: 0.3 });
@@ -265,6 +281,7 @@ export class TeamScene implements Scene {
       items: this._listItems,
       scroll: this._listScroll,
       onToggle: (petId) => this._togglePet(petId),
+      onLongPress: (petId, item) => this._showPetSkillPreview(petId, item),
     });
 
     const footTop = listBottom;
@@ -352,6 +369,7 @@ export class TeamScene implements Scene {
       items: this._listItems,
       scroll: this._listScroll,
       onToggle: (petId) => this._togglePet(petId),
+      onLongPress: (petId, item) => this._showPetSkillPreview(petId, item),
     });
   }
 
@@ -456,8 +474,10 @@ export class TeamScene implements Scene {
         slot.interactiveChildren = false;
         slot.eventMode = 'static';
         slot.cursor = 'pointer';
-        // 槽位点击 = 换队长（下阵走下方列表的勾选，不与之抢同一个手势）
-        bindPointerTap(slot, () => this._onSlotTap(pet.id, i));
+        // 短按换队长；长按看主动技（下阵走下方列表勾选）
+        bindPointerTap(slot, () => this._onSlotTap(pet.id, i), {
+          onLongPress: () => this._showPetSkillPreview(pet.id, slot),
+        });
         if (this._prevTeam[i] !== petId) fadeIn(slot, { duration: 0.24 });
       } else {
         const empty = new PIXI.Graphics();
@@ -505,6 +525,36 @@ export class TeamScene implements Scene {
 
     this._prevTeam = [...team];
     this._prevChecked = new Set(team);
+  }
+
+  private _dismissSkillPreview(): void {
+    this._skillPreview?.dismiss();
+    this._skillPreview = null;
+  }
+
+  /** 长按宠卡/槽位：悬浮主动技说明（复用战斗气泡） */
+  private _showPetSkillPreview(petId: string, from: PIXI.Container): void {
+    const pet = PET_MAP.get(petId);
+    if (!pet || !from.parent) return;
+    this._dismissSkillPreview();
+
+    const halfH = from.hitArea instanceof PIXI.Rectangle
+      ? -from.hitArea.y
+      : Math.max(24, from.getLocalBounds().height / 2);
+    const tip = this._previewLayer.toLocal(from.toGlobal(new PIXI.Point(0, -halfH - 4)));
+
+    const skill = skillForPet(
+      pet,
+      PlayerData.petStar(petId),
+      PlayerData.petLevel(petId),
+    );
+    Platform.vibrateShort('light');
+    this._skillPreview = showSkillPreviewBubble(this._previewLayer, {
+      skill,
+      element: pet.element,
+      x: tip.x,
+      y: tip.y,
+    });
   }
 }
 

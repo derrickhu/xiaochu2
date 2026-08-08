@@ -8,6 +8,7 @@ import { TweenManager } from '@/core/TweenManager';
 import { computePetBarPetSize } from './BattleLayout';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
+import type { SkillDef } from '@/balance/skills';
 import type { TeamPet } from '@/game/battle/battleTypes';
 import { makeText } from '@/ui/text';
 import { makeSkillIcon } from '@/ui/SkillIcon';
@@ -66,18 +67,28 @@ export interface PetSkillPreviewHandle {
   dismiss: () => void;
 }
 
+/** 通用技能气泡入参（编队预览 / 战斗头像共用） */
+export interface SkillPreviewBubbleOpts {
+  skill: SkillDef;
+  element: Element;
+  /** 主动技剩余冷却；编队页不传则不显示冷却胶囊 */
+  skillCdLeft?: number;
+  /** 气泡箭头尖端锚点（layer 本地坐标） */
+  x: number;
+  y: number;
+}
+
 /** 在 layer 上显示技能气泡；再次调用前须 dismiss 旧实例 */
-export function showPetSkillPreview(
+export function showSkillPreviewBubble(
   layer: PIXI.Container,
-  pet: TeamPet,
-  slotX: number,
-  slotY: number,
+  opts: SkillPreviewBubbleOpts,
 ): PetSkillPreviewHandle {
-  const el = pet.def.element;
+  const el = opts.element;
   const accent = ORB_COLOR[el];
   const titleColor = TITLE_COLOR[el];
   const highlight = HIGHLIGHT_COLOR[el];
-  const skill = pet.skill;
+  const skill = opts.skill;
+  const skillCdLeft = opts.skillCdLeft ?? 0;
 
   const panelW = Math.min(PANEL_W, Game.logicWidth - 56);
   const innerW = panelW - PAD_X * 2;
@@ -118,8 +129,8 @@ export function showPetSkillPreview(
   y += 42;
 
   // 冷却胶囊（居中，浅底深字）
-  if (pet.skillCdLeft > 0) {
-    const status = buildStatusPill(`冷却中 · 剩 ${pet.skillCdLeft} 回合`);
+  if (skillCdLeft > 0) {
+    const status = buildStatusPill(`冷却中 · 剩 ${skillCdLeft} 回合`);
     status.position.set(panelW / 2, y + 14);
     content.addChild(status);
     y += 34;
@@ -158,10 +169,9 @@ export function showPetSkillPreview(
   root.addChild(content);
 
   const margin = UI.board.marginX;
-  let cx = slotX;
+  let cx = opts.x;
   cx = Math.max(margin + panelW / 2, Math.min(Game.logicWidth - margin - panelW / 2, cx));
-  const petSize = computePetBarPetSize(Game.logicWidth, 5);
-  root.position.set(cx, slotY - petSize / 2 - 4);
+  root.position.set(cx, opts.y);
 
   root.alpha = 0;
   root.scale.set(0.94);
@@ -187,6 +197,23 @@ export function showPetSkillPreview(
   });
 
   return { dismiss };
+}
+
+/** 战斗队伍栏：槽位中心 → 头顶锚点后弹出技能气泡 */
+export function showPetSkillPreview(
+  layer: PIXI.Container,
+  pet: TeamPet,
+  slotX: number,
+  slotY: number,
+): PetSkillPreviewHandle {
+  const petSize = computePetBarPetSize(Game.logicWidth, 5);
+  return showSkillPreviewBubble(layer, {
+    skill: pet.skill,
+    element: pet.def.element,
+    skillCdLeft: pet.skillCdLeft,
+    x: slotX,
+    y: slotY - petSize / 2 - 4,
+  });
 }
 
 /** 外金边 + 内天蓝粗边 + 奶油底（截图双层框） */

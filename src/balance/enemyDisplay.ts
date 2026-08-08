@@ -118,15 +118,6 @@ export function formatEnemyShortName(def: EnemyDef): string {
   return `${ENEMY_TIER_LABEL[tier]} ${def.name}`;
 }
 
-/** 是否在敌人脚下绘制档位环（守关 / Boss） */
-export function enemyShowsTierRing(tier: EnemyDisplayTier): boolean {
-  return tier === 'miniBoss' || tier === 'boss';
-}
-
-export function enemyTierRingRadius(displaySize: number): number {
-  return displaySize * 0.34;
-}
-
 /** 杂兵血条略窄，强化「小怪」感 */
 export function enemyHpBarWidthScale(tier: EnemyDisplayTier): number {
   switch (tier) {

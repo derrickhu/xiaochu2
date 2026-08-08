@@ -40,12 +40,13 @@ export const TOWER = {
   /**
    * 难度系数 = difficultyBase × difficultyGrowth^floor。
    *
-   * 旧版是 0.92 恒定，比主线基准还低。改成复利递增后：
-   * 第 1 层 0.86（比旧版还松，让玩家先进入状态）、第 20 层 1.08、
-   * 第 50 层 1.54、第 80 层 2.21 —— 天花板由玩家实力决定，而不是由内容量决定。
+   * v0.8：塔必须比主线硬。旧曲线 0.85×1.012^n 在 F28 只有 ~1.19，
+   * Lv1★1 高手单场 9 回合就能过——主线同档已不允许秒推，塔却比主线软。
+   * 提到 0.90×1.032^n 后：F1≈0.93（仍可进门）、F15≈1.43、F20≈2.11（守关）、
+   * F28≈2.17、F30≈2.89（守关）。具体深度由 difficultyBudget 的塔墙验收钉死。
    */
-  difficultyBase: 0.85,
-  difficultyGrowth: 1.012,
+  difficultyBase: 0.90,
+  difficultyGrowth: 1.032,
   /** 里程碑层（每 milestoneEvery 层）的守关加成 */
   milestoneDifficultyMult: 1.25,
   /** 三星回合上限（塔不看星，仅用于结算公式的星数输入） */
@@ -100,20 +101,21 @@ export const TOWER_MILESTONE_REWARD: RewardBundle = {
 /**
  * 塔内循环用的杂兵池，按属性轮换保证玩家不能只带一种属性。
  *
- * 取法是「按层号前移一位」，因此池长决定循环周期：6 条时每 6 层就回到同一对，
- * 扩到 10 条后要 10 层才重复，属性轮换也跟着变长。
+ * v0.8 去掉炽炎蝠群 / 藤蔓妖泥 / 铁鳞蝎兵这类低防软怪——旧池按层号取模时，
+ * 第 28 层正好落到「蝠群 + 藤泥」，合计血量只有相邻层的六成，形成「软段」，
+ * 1 级队在这里被放过去。塔的池子一律用精英档，软硬差压在 1.3 倍以内。
  */
 const TOWER_MOBS: readonly string[] = [
-  'enemy_slime_wood',
-  'enemy_bat_fire',
   'enemy_golem_earth',
   'enemy_serpent_water',
   'enemy_scorpion_metal',
   'enemy_toad_water',
-  'enemy_scorpion_swarm_metal',
-  'enemy_bat_swarm_fire',
-  'enemy_vine_slime_wood',
-  'enemy_pebble_earth',
+  'enemy_thorn_scorpion_metal',
+  'enemy_wither_bat_fire',
+  'enemy_golem_bulwark_earth',
+  'enemy_blunt_scorpion_metal',
+  'enemy_sealward_toad_water',
+  'enemy_devour_serpent_water',
 ];
 
 const TOWER_GUARDS: readonly string[] = [

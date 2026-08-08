@@ -571,7 +571,7 @@ export class ShopScene implements Scene {
     card.addChild(name);
 
     const sub = makeText(this._universalSubText(), {
-      size: SHOP_UI.subSize, fill: COLORS.textSub, bold: true, anchor: 0.5,
+      size: SHOP_UI.subSize, fill: COLORS.accentDeep, bold: true, anchor: 0.5,
     });
     sub.position.set(0, name.y + 24);
     card.addChild(sub);
@@ -642,7 +642,7 @@ export class ShopScene implements Scene {
     card.addChild(roleBadge);
 
     const sub = makeText(this._petSubText(pet), {
-      size: SHOP_UI.subSize, fill: COLORS.textSub, bold: true, anchor: 0.5,
+      size: SHOP_UI.subSize, fill: this._petSubFill(pet), bold: true, anchor: 0.5,
     });
     sub.position.set(0, roleBadge.y + roleBadge.height + 8);
     card.addChild(sub);
@@ -665,13 +665,25 @@ export class ShopScene implements Scene {
     return card;
   }
 
-  /** 商品卡副文案：购买可得数量（持有量在点卡详情里看，避免被当成「买多少」） */
+  /** 商品卡副文案：持有量 + 购买包（便于估算还差几包升星） */
   private _universalSubText(): string {
-    return `碎片 ×${ECONOMY.shop.universalPackSize}`;
+    return `持有 ${PlayerData.universalShards} · ×${ECONOMY.shop.universalPackSize}`;
   }
 
-  private _petSubText(_pet: PetDef): string {
-    return `碎片 ×${ECONOMY.shop.packSize}`;
+  private _petSubText(pet: PetDef): string {
+    const shards = PlayerData.petShards(pet.id);
+    const need = PlayerData.starUpCost(pet.id);
+    const pack = ECONOMY.shop.packSize;
+    if (need === null) return `持有 ${shards} · 满星`;
+    return `持有 ${shards}/${need} · ×${pack}`;
+  }
+
+  /** 够升星时副文案提色，一眼能看出「可以不用再囤」 */
+  private _petSubFill(pet: PetDef): number {
+    const plan = PlayerData.starUpPlan(pet.id);
+    if (!plan) return COLORS.textSub;
+    if (plan.shards >= plan.cost) return COLORS.accentDeep;
+    return COLORS.textSub;
   }
 
   private _refreshAllBuyEnabled(): void {
@@ -710,7 +722,10 @@ export class ShopScene implements Scene {
     Platform.vibrateShort('light');
     SfxManager.playShopPurchase();
     Platform.showToast(`${pet?.name ?? '灵宠'} +${ref.packSize} 碎片`);
-    if (pet) ref.sub.text = this._petSubText(pet);
+    if (pet) {
+      ref.sub.text = this._petSubText(pet);
+      ref.sub.style.fill = this._petSubFill(pet);
+    }
     this._refreshCoins();
     this._refreshAllBuyEnabled();
     this._playBuyFx(petId);

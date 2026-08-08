@@ -26,7 +26,7 @@ import { bindPointerTap } from '@/utils/bindPointerTap';
 import { buildTitleScreenWorld } from './chapterMapView';
 import { attachChapterMapEditor } from './chapterMapEditor';
 import { ensurePetAvatars, titleHomePetAvatarEntries } from '@/config/assetPreload';
-import { chapterRegionBg, UI_IMAGES } from '@/config/Assets';
+import { UI_IMAGES } from '@/config/Assets';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
 
@@ -92,20 +92,8 @@ export class TitleScene implements Scene {
     this._chapter = enter?.chapter ?? this._latestUnlockedChapter();
     if (SceneManager.current?.name !== 'title') return;
     this._rebuild();
-    // 区域背景在 pkg-scene（走 CDN），拉到后重建一次；第 1 区在主包内，preload 直接命中
-    void this._ensureRegionBg();
     void ensurePetAvatars(titleHomePetAvatarEntries(this._chapter));
     void Game.warmScenePresent();
-  }
-
-  /** 拉取当前章所属区域的地图背景；命中新图后重建，未出图则保持首屏图不动 */
-  private async _ensureRegionBg(): Promise<void> {
-    const path = chapterRegionBg(this._chapter);
-    if (TextureCache.get(path)) return;
-    await TextureCache.preload([path]);
-    if (SceneManager.current?.name !== 'title') return;
-    if (!TextureCache.get(path)) return;
-    this._rebuild();
   }
 
   private _rebuild(): void {

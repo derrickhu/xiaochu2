@@ -163,11 +163,10 @@ const mob = (id: string): EncounterRef => ({ kind: 'mob', id });
  *
  * 闸门怪以**追加一波**的方式进场，而不是替换既有波次：替换会让 archetype
  * （高防傀儡关、自疗蛟关……）失去它本来要教的东西，一关同时换两件事，
- * 玩家就归因不到任何一件上。代价是这些关变长，故一并升为精英档，奖励跟上。
+ * 玩家就归因不到任何一件上。铺垫关 type 保持 normal，精英难度交给 eliteMode。
  *
- * Boss 关同样是追加，位置插在 prepMob 之后、Boss 本体之前：热身波仍然承担
- * 它原本的 archetype 教学（高防傀儡、自疗蛟……），闸门怪紧随其后，
- * 让玩家在打 Boss 本体前先看清这一场的闸门长什么样。
+ * Boss 关同样是追加：插在初级形态之后、高级形态（收录波）之前。
+ * 玩家先见一次 Boss 预告技能，再过闸门，最后打完整形态。
  */
 export function applyGateLayer(stage: StageDef): StageDef {
   const plan = CHAPTER_GATE_PLAN[stage.chapter];
@@ -176,10 +175,13 @@ export function applyGateLayer(stage: StageDef): StageDef {
   if (stage.isBoss) {
     if (!plan.boss) return stage;
     const entry = plan.boss;
+    const last = stage.encounters[stage.encounters.length - 1];
+    const head = stage.encounters.slice(0, -1);
     return {
       ...stage,
-      // prepMob 恒在首位（见 buildChapterBossDrop 的 encounters 顺序）
-      encounters: [stage.encounters[0], mob(GATE_MOB[entry.mob]), ...stage.encounters.slice(1)],
+      encounters: last
+        ? [...head, mob(GATE_MOB[entry.mob]), last]
+        : [mob(GATE_MOB[entry.mob]), ...stage.encounters],
       mechanics: mergeMechanics(stage.mechanics, entry.mechanics),
       starTurnLimit: starTurnLimitFor('boss', true, stage.encounters.length + 1),
     };
@@ -187,15 +189,14 @@ export function applyGateLayer(stage: StageDef): StageDef {
 
   const entry = plan.fillers[stage.index];
   if (!entry) return stage;
+  // 闸门只加机制与波次，不改 type：铺垫关保持 normal，精英难度交给 eliteMode。
   return {
     ...stage,
-    type: 'elite',
-    dropTableId: eliteDropTableOf(stage.dropTableId),
     encounters: [...stage.encounters, mob(GATE_MOB[entry.mob])],
     mechanics: mergeMechanics(stage.mechanics, entry.mechanics),
     // 闸门关多一波、且闸门本身按设计要吃掉若干回合，星线直接跟 TTK 目标带重算，
     // 避免这里的 +4 和 powerBudget 的 GATED_TTK_EXTRA 各调各的
-    starTurnLimit: starTurnLimitFor('elite', true, stage.encounters.length + 1),
+    starTurnLimit: starTurnLimitFor('normal', true, stage.encounters.length + 1),
   };
 }
 
@@ -207,13 +208,3 @@ function mergeMechanics(
   for (const id of add) if (!out.includes(id)) out.push(id);
   return out;
 }
-
-/** 普通档掉落表升精英档；没有对应精英表时原样保留 */
-function eliteDropTableOf(id: string): string {
-  const upgraded = id.replace(/_normal$/, '_elite');
-  return ELITE_DROP_TABLES.has(upgraded) ? upgraded : id;
-}
-
-const ELITE_DROP_TABLES = new Set([
-  'dt_cave_elite', 'dt_peak_elite', 'dt_trial_elite',
-]);

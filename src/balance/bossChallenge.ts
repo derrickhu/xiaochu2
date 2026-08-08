@@ -1,7 +1,11 @@
 /**
  * 章末 Boss「可玩挑战」 archetype — 遭遇配方 + 盘面/规则机制（非空标签）。
  *
- * 扩展约定：每章 Boss 只首教 1 种 kind；禁止主线章末叠加多机制（见 highAttack 留作第 9 章+）。
+ * 扩展约定：
+ * - 每章 Boss 只首教 1 种完整挑战；挑战载体是 Boss 本体技能（tier1 预告 / tier2 完整），
+ *   不再靠 prep 热身波堆波次。
+ * - 铺垫关可提前用「轻量预告」（本章即将首教、或已学挑战），让章内就有搭配节奏，
+ *   而不是前半本只刷多波软怪。
  */
 import type { Element } from './combat';
 import { type EncounterRef, resolveEncounter } from './enemies';
@@ -30,7 +34,8 @@ export type BossChallengeKind =
   | 'finalTrial';
 
 export const BOSS_CHALLENGE_LABEL: Readonly<Record<BossChallengeKind, string>> = {
-  multiWave: '多波耐力',
+  // Ch1 Boss 首教「蓄力+狂暴」；同 kind 的铺垫配方仍是轻量双波，作节奏填充
+  multiWave: '蓄力狂暴',
   boardSeal: '封印珠',
   boardRock: '顽石封印',
   highDefense: '高防减伤',
@@ -81,12 +86,8 @@ export interface ChallengeRecipe {
 /**
  * 同一种挑战的怪物组合变体。
  *
- * 一种挑战只对应一组固定怪，是「关卡重复」的直接来源：第 2 章 7 个铺垫关全部只能用
- * multiWave（boardSeal 要等本章 Boss 才首教），于是玩家连打 7 关看到的是同两只怪、
- * 只有血量在涨。变体让「已学挑战」这条约束不再等同于「同一份遭遇」。
- *
- * 各变体的重量必须彼此接近（见 challengeWeight）：TTK 难度带是按挑战种类给的，
- * 变体之间差太多就等于同一条护栏在量两件不同的东西。
+ * 同一种挑战可换怪物组合，避免「已学挑战」退化成「同一份遭遇」。
+ * 各变体重量须接近（见 challengeWeight），否则同一条 TTK 护栏在量两件不同的东西。
  */
 const ENCOUNTER_VARIANTS: Partial<Record<BossChallengeKind, readonly (readonly EncounterRef[])[]>> = {
   multiWave: [
@@ -150,8 +151,8 @@ function baseRecipeForChallenge(kind: BossChallengeKind): ChallengeRecipe {
     case 'multiWave':
       return {
         encounters: [mob('enemy_slime_wood'), mob('enemy_bat_fire')],
-        hintTags: ['多波'],
-        hintText: '多波敌人：注意保留血量与技能',
+        hintTags: ['双波', '狂暴'],
+        hintText: '双波敌人，火蝠会狂暴：留好治疗与技能',
       };
     /*
      * 以下单怪档一律补一波轻兵（v0.7）。
@@ -316,9 +317,13 @@ export function challengeStageType(kind: BossChallengeKind): StageType {
   return challengeWeight(kind) >= ELITE_WEIGHT_THRESHOLD ? 'elite' : 'normal';
 }
 
-/** Boss 关：prepMob + 可选 mechanics（收录三波由 buildChapterCaptureBoss 负责） */
+/**
+ * Boss 关机制/提示配置。
+ *
+ * 遭遇固定为收录宠的初级形态 → 高级形态（两波），挑战靠 Boss 技能与 stage mechanics，
+ * 不再插 prep 热身怪凑波次。
+ */
 export interface BossChallengeConfig {
-  prepMob: string;
   mechanics?: readonly string[];
   hintTags?: readonly string[];
   hintText?: string;
@@ -331,54 +336,46 @@ export function bossChallengeConfig(
   switch (kind) {
     case 'multiWave':
       return {
-        prepMob: 'enemy_bamboo_tyrant_wood',
-        hintTags: ['首领', '多波', '收录'],
-        hintText: '三波试炼：击败魔将后迎战星辉灵鹿高级形态即可收录',
+        hintTags: ['首领', '蓄力', '狂暴', '收录'],
+        hintText: '星辉灵鹿会蓄力重击，残血还会狂暴：护盾/治疗接住后尽快收干净即可收录',
       };
     case 'boardSeal':
       return {
-        prepMob: 'enemy_crystal_boss_earth',
         mechanics: ['orb_sealed'],
-        hintTags: ['首领', '封印珠', '收录'],
-        hintText: '封印珠干扰盘面，击败灵鹿医者高级形态即可收录',
+        hintTags: ['首领', '封印珠', '自疗', '收录'],
+        hintText: '封印珠干扰盘面，灵鹿医者会自愈并削攻：先拆封再攒爆发，击败高级形态即可收录',
       };
     case 'highDefense':
       return {
-        prepMob: 'enemy_crystal_boss_earth',
-        hintTags: ['首领', '高防减伤', '收录'],
-        hintText: '幽晶巨像高防减伤：克制 + 爆发，击败深渊水母高级形态收录',
+        hintTags: ['首领', '高防减伤', '免控', '收录'],
+        hintText: '归墟玄龟高防减伤且凝意免控：克制 + 破防硬拆，击败高级形态即可收录',
       };
     case 'boardRock':
       return {
-        prepMob: 'enemy_golem_earth',
         mechanics: ['orb_rock', 'enemy_seal_cast'],
         hintTags: ['首领', '顽石封印', '战中封珠', '收录'],
-        hintText: 'Boss 战中会封印珠子：推荐带归墟玄龟（第3章收录）护盾扛压，击败玄影天鹏高级形态收录其净化技',
+        hintText: '顽石更密，Boss 战中还会封珠：推荐带归墟玄龟护盾扛压，击败高级形态收录',
       };
     case 'selfHeal':
       return {
-        prepMob: 'enemy_serpent_water',
         mechanics: ['enemy_poison'],
-        hintTags: ['首领', '剧毒', '收录'],
-        hintText: 'Boss 会下毒持续掉血：推荐带玄影天鹏（第4章收录）净化解毒，击败金羽仙鹤高级形态收录',
+        hintTags: ['首领', '剧毒', '自疗', '收录'],
+        hintText: 'Boss 会下毒并自愈：推荐带净化宠解毒，爆发抢血线后收录',
       };
     case 'chargeHit':
       return {
-        prepMob: 'enemy_scorpion_metal',
         mechanics: ['enemy_time_squeeze'],
-        hintTags: ['首领', '时间压缩', '收录'],
-        hintText: 'Boss 会压缩转珠时间：稳住节奏速战，击败厚土娘娘高级形态收录其加时技',
+        hintTags: ['首领', '时间压缩', '蓄力', '收录'],
+        hintText: '转珠时间被压缩，同时蓄力重击：护盾接招、稳住节奏速战收录',
       };
     case 'noHeart':
       return {
-        prepMob: 'enemy_thunderlord_boss_wood',
         mechanics: ['rule_no_heal', 'enemy_heal_block'],
         hintTags: ['首领', '禁心', '禁疗', '收录'],
-        hintText: '禁心+禁疗双重压制：推荐带归墟玄龟/护盾宠减少掉血，击败裂隙甲虫高级形态收录',
+        hintText: '禁心+禁疗双重压制：靠护盾与多段输出凿穿，击败高级形态即可收录',
       };
     case 'highAttack':
       return {
-        prepMob: 'enemy_bat_fire',
         hintTags: ['首领', '高攻', '收录'],
         hintText: '高攻快攻 Boss：治疗护盾到位后收录',
       };
@@ -386,57 +383,49 @@ export function bossChallengeConfig(
       const el = ctx?.ruleBanElement ?? 'metal';
       const hint = banHint(el);
       return {
-        prepMob: 'enemy_bat_fire',
         mechanics: [...banMechanics(el), 'enemy_skill_seal_enrage'],
         hintTags: ['首领', ...hint.tags, '技能封印', '狂暴', '收录'],
-        hintText: `${hint.text}；Boss 会封印技能且低血狂暴，推荐高爆发速杀，击败天外魔君高级形态收录其重力技`,
+        hintText: `${hint.text}；Boss 会封印技能且低血狂暴，高爆发速杀后收录`,
       };
     }
     case 'phaseShift':
       return {
-        prepMob: 'enemy_crystal_warden_earth',
         mechanics: ['enemy_phase'],
         hintTags: ['首领', '形态转换', '收录'],
         hintText: 'Boss 跨血线会转形态并换招：血条分段处留一手爆发',
       };
     case 'elementAbsorb':
       return {
-        prepMob: 'enemy_devour_serpent_water',
         mechanics: ['enemy_absorb'],
         hintTags: ['首领', '属性吸收', '收录'],
         hintText: 'Boss 会吸收克制它的属性：带第二种输出色轮换',
       };
     case 'counterStrike':
       return {
-        prepMob: 'enemy_thorn_scorpion_metal',
         mechanics: ['enemy_counter'],
         hintTags: ['首领', '反击态', '收录'],
         hintText: 'Boss 反击态下出手越多反伤越重：少而重地打',
       };
     case 'attackDown':
       return {
-        prepMob: 'enemy_wither_bat_fire',
         mechanics: ['enemy_atk_down'],
         hintTags: ['首领', '削攻', '收录'],
         hintText: 'Boss 会削弱我方伤害：带净化技解除后再爆发',
       };
     case 'lockedColumn':
       return {
-        prepMob: 'enemy_bind_slime_wood',
         mechanics: ['orb_locked_col'],
         hintTags: ['首领', '锁列', '收录'],
         hintText: '开局锁一整列：先拆封再铺 Combo',
       };
     case 'resolveTank':
       return {
-        prepMob: 'enemy_golem_bulwark_earth',
         mechanics: ['enemy_resolve_guard'],
         hintTags: ['首领', '免控坚壁', '收录'],
         hintText: 'Boss 凝意期间免疫控制：靠破防与爆发硬拆',
       };
     case 'finalTrial':
       return {
-        prepMob: 'enemy_crystal_warden_earth',
         mechanics: ['enemy_final_trial', 'orb_locked_col'],
         hintTags: ['首领', '终局试炼', '锁列', '收录'],
         hintText: '终局试炼：转形态 + 锁列同场，克制/爆发/续航全要到位',
@@ -454,35 +443,46 @@ export function stageMatchesChallenge(
   const mobIds = encounters.filter((e) => e.kind === 'mob').map((e) => e.id);
   switch (kind) {
     case 'multiWave':
+      // Boss 关已改为双形态两波；铺垫关仍要求至少两波
       return encounters.length >= 2;
     case 'boardSeal':
       return mech.has('orb_sealed');
     case 'boardRock':
       return mech.has('orb_rock');
     case 'highDefense':
-      return mobIds.some((id) => id === 'enemy_golem_earth' || id === 'enemy_crystal_boss_earth');
+      // 铺垫靠傀儡；Boss 关靠收录宠自身减伤/免控，不再依赖 prep 巨像
+      return mobIds.some((id) => id === 'enemy_golem_earth' || id === 'enemy_crystal_boss_earth')
+        || encounters.some((e) => e.kind === 'creature');
     case 'highAttack':
-      return mobIds.some((id) => id === 'enemy_bat_fire');
+      return mobIds.some((id) => id === 'enemy_bat_fire' || id === 'enemy_cinder_imp_fire')
+        || encounters.some((e) => e.kind === 'creature');
     case 'selfHeal':
-      return mobIds.some((id) => id === 'enemy_serpent_water');
+      return mobIds.some((id) => id === 'enemy_serpent_water')
+        || encounters.some((e) => e.kind === 'creature');
     case 'chargeHit':
-      return mobIds.some((id) => id === 'enemy_scorpion_metal');
+      return mobIds.some((id) => id === 'enemy_scorpion_metal')
+        || encounters.some((e) => e.kind === 'creature');
     case 'noHeart':
       return mech.has('rule_no_heal');
     case 'banElement':
       return [...mech].some((m) => m.startsWith('rule_ban_'));
     case 'phaseShift':
-      return mobIds.some((id) => id === 'enemy_crystal_warden_earth');
+      return mobIds.some((id) => id === 'enemy_crystal_warden_earth')
+        || mech.has('enemy_phase');
     case 'elementAbsorb':
-      return mobIds.some((id) => id === 'enemy_devour_serpent_water');
+      return mobIds.some((id) => id === 'enemy_devour_serpent_water')
+        || mech.has('enemy_absorb');
     case 'counterStrike':
-      return mobIds.some((id) => id === 'enemy_thorn_scorpion_metal');
+      return mobIds.some((id) => id === 'enemy_thorn_scorpion_metal')
+        || mech.has('enemy_counter');
     case 'attackDown':
-      return mobIds.some((id) => id === 'enemy_wither_bat_fire');
+      return mobIds.some((id) => id === 'enemy_wither_bat_fire')
+        || mech.has('enemy_atk_down');
     case 'lockedColumn':
       return mech.has('orb_locked_col');
     case 'resolveTank':
-      return mobIds.some((id) => id === 'enemy_golem_bulwark_earth');
+      return mobIds.some((id) => id === 'enemy_golem_bulwark_earth')
+        || mech.has('enemy_resolve_guard');
     case 'finalTrial':
       return mech.has('enemy_final_trial');
     default:

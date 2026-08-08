@@ -13,6 +13,11 @@ export interface Scene {
   onEnter?(data?: unknown): void;
   onExit?(): void;
   update?(dt: number): void;
+  /**
+   * 若场景支持「暂存切出」（如灵宠图鉴进详情不销毁），
+   * 在切到无关场景时由 SceneManager 调用以释放内存。
+   */
+  discardParked?: () => void;
 }
 
 class SceneManagerClass {
@@ -71,6 +76,12 @@ class SceneManagerClass {
       TweenManager.cancelTarget(this._currentScene.container);
       this._currentScene.onExit?.();
       Game.stage.removeChild(this._currentScene.container);
+    }
+
+    // 图鉴等「暂存」场景：切到无关页时丢掉停泊树，避免长期占内存
+    if (name !== 'codex' && name !== 'petDetail') {
+      const parked = this._scenes.get('codex');
+      if (parked && parked !== nextScene) parked.discardParked?.();
     }
 
     // 安全重置：确保 stage.pivot 归零（防止 HapticSystem 等系统残留偏移）

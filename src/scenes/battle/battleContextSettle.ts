@@ -4,7 +4,7 @@
  * 主线的结算口径（星数存档、首通灵玉、Boss 直掉）不适用于副玩法，
  * 这里给出各自的发奖与进度推进，返回给结算浮层展示的提示行。
  */
-import { REALM_MAP, realmTier } from '@/balance/secretRealm';
+import { REALM_MAP, resolveRealmTier } from '@/balance/secretRealm';
 import { isMilestoneFloor, TOWER, TOWER_MILESTONE_REWARD } from '@/balance/tower';
 import { TOWER_FLOOR_KINDS } from '@/balance/towerPath';
 import { formatReward } from '@/balance/rewards';
@@ -60,7 +60,7 @@ export function settleContextVictory(
 function settleRealmVictory(realmId: string, tier: number, _rng: () => number): string[] {
   const realm = REALM_MAP.get(realmId);
   if (!realm) return [];
-  const t = realmTier(tier);
+  const t = resolveRealmTier(tier, PlayerData.clearedChapters);
   const reward = { lingyu: t.lingyu, coins: t.coins };
   grantReward(reward);
 

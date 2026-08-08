@@ -45,11 +45,10 @@ export function baseStageIdOf(stageId: string): string {
 }
 
 /**
- * 该关是否有精英变体：只有主线普通关做精英化。
+ * 该关是否有精英变体：主线铺垫关一律走「普通本体 + 精英模式」。
  *
- * 精英关本身不再套一层（避免 1.35² 的复合难度），Boss 关不做精英
- * （Boss 承担首教机制，改数值会破坏「首教一种挑战」的节奏），
- * 秘境/活动/塔各有自己的循环，不需要再叠一条。
+ * 不再把部分铺垫关写成 type=elite（那种关既没有普通档，也锁死了本模式），
+ * 精英难度只通过本变体提供。Boss / 已是精英变体 / 秘境塔等不套。
  */
 export function hasEliteVariant(stage: StageDef): boolean {
   return stage.type === 'normal' && !stage.isBoss && !isEliteStageId(stage.id);

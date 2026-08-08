@@ -279,7 +279,12 @@ export type TtkStageKind = 'normal' | 'elite' | 'boss';
  * 那边是「不许秒推」这条护栏的真源，这里只负责上限「不许磨人」。
  */
 export const STAGE_TTK: Readonly<Record<TtkStageKind, TtkBand>> = {
-  normal: { min: TTK_FLOOR.normal, max: 8 },
+  /*
+   * 主线铺垫关一律 type=normal（精英难度交给 eliteMode），
+   * 因此普通带上限承接原先「重配方精英关」的 10 回合，避免重机制关被误判磨人。
+   * elite 带仍给精英模式变体与其它入口用。
+   */
+  normal: { min: TTK_FLOOR.normal, max: 10 },
   elite: { min: TTK_FLOOR.elite, max: 10 },
   boss: { min: TTK_FLOOR.boss, max: 20 },
 };

@@ -56,10 +56,12 @@ export interface TeamPetListOpts {
   items: Map<string, PIXI.Container>;
   scroll: ScrollListController;
   onToggle: (petId: string) => void;
+  /** 长按卡片：查看主动技说明（滚动中不触发） */
+  onLongPress?: (petId: string, item: PIXI.Container) => void;
 }
 
 export function buildTeamPetList(opts: TeamPetListOpts): PIXI.Container | null {
-  const { container, startY, listBottom, compact, checks, items, scroll, onToggle } = opts;
+  const { container, startY, listBottom, compact, checks, items, scroll, onToggle, onLongPress } = opts;
   const w = Game.logicWidth;
   const cols = 2;
   const cardW = compact ? PREP_CARD_W : FREE_CARD_W;
@@ -82,10 +84,14 @@ export function buildTeamPetList(opts: TeamPetListOpts): PIXI.Container | null {
     if (!pet) return;
     const lv = PlayerData.petLevel(petId);
     const star = PlayerData.petStar(petId);
-    const item = buildListItem(pet, lv, star, scrollTex, scroll, onToggle, !!compact, cardW, cardH, scrollable ? {
-      viewportTop: startY,
-      viewportBottom: listBottom!,
-    } : undefined);
+    const item = buildListItem(
+      pet, lv, star, scrollTex, scroll, onToggle, !!compact, cardW, cardH,
+      scrollable ? {
+        viewportTop: startY,
+        viewportBottom: listBottom!,
+      } : undefined,
+      onLongPress,
+    );
 
     const col = i % cols;
     const row = Math.floor(i / cols);
@@ -221,6 +227,7 @@ function buildListItem(
   cardW: number,
   cardH: number,
   viewport?: { viewportTop: number; viewportBottom: number },
+  onLongPress?: (petId: string, item: PIXI.Container) => void,
 ): PIXI.Container {
   const item = new PIXI.Container();
   const avatarSize = FREE_AVATAR;
@@ -314,6 +321,12 @@ function buildListItem(
     blockTap: () => scroll.moved,
     pointGuard: viewport
       ? (dx, dy) => dy >= viewport.viewportTop && dy <= viewport.viewportBottom
+      : undefined,
+    onLongPress: onLongPress
+      ? () => {
+        if (scroll.moved) return;
+        onLongPress(pet.id, item);
+      }
       : undefined,
   });
 

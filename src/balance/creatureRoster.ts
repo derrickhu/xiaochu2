@@ -235,7 +235,12 @@ export const SIGNATURE_ROSTER: readonly SignatureRosterRow[] = [
      * 于是「研究对位」换来的收益被压到 26%——护栏判定为「换队没有意义」。
      * 把墙的主体交还给 DEF，破防才真的是这一关的钥匙。
      */
-    bossMonster: { rank: 12, t1Skills: [E.pandaGuard], t2Skills: [E.resolve, E.golemGuard, E.lionCharge] },
+    /*
+     * 无 prep 后要塞身份全靠本体。破防/重力针对队要显著快于通用队：
+     * 堆 DEF（高 rank）+ 凝意免控 + 常规减伤；不挂 Heavy 减伤（破防对乘区无效）。
+     * 攻击侧用削攻拖通用队，而不是蓄力斩秒人。
+     */
+    bossMonster: { rank: 16, t1Skills: [E.golemGuard], t2Skills: [E.resolve, E.golemGuard, E.atkDebuff] },
   },
   { id: 'pet_085', name: '流火天狐', element: 'fire', rarity: 3, role: 'support', rank: 17, skillId: 'pet_sig_fire_emberflow' },
   {

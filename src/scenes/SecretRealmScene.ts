@@ -14,7 +14,8 @@ import { ELEMENT_NAME, ORB_COLOR, UI } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
 import {
   buildRealmStage, openRealmsOn, REALM_TIERS, REALMS, SECRET_REALM,
-  realmCounterElement, type RealmDef, type RealmTierDef,
+  realmCounterElement, resolveRealmTier, realmTierUnlockHint,
+  type RealmDef, type RealmTierDef,
 } from '@/balance/secretRealm';
 import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
@@ -108,6 +109,11 @@ export class SecretRealmScene implements Scene {
     }
   }
 
+  /** 按当前通关进度解析选中档（高阶会动态抬难度/奖励） */
+  private _activeTier(): RealmTierDef {
+    return resolveRealmTier(this._selectedTier, PlayerData.clearedChapters);
+  }
+
   private _build(): void {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
@@ -157,7 +163,7 @@ export class SecretRealmScene implements Scene {
     const openList = openRealmsOn();
     const openIds = new Set(openList.map((r) => r.id));
     const isOpen = openIds.has(realm.id);
-    const tier = REALM_TIERS.find((t) => t.tier === this._selectedTier) ?? REALM_TIERS[0];
+    const tier = this._activeTier();
 
     const contentTop = Game.safeTop + 12;
     const contentBottom = h - BOTTOM_NAV_RESERVE - 4;
@@ -447,12 +453,23 @@ export class SecretRealmScene implements Scene {
     this._diamond(panel, panelW / 2 - tw / 2 - 22, ly, 0xb08a52);
     this._diamond(panel, panelW / 2 + tw / 2 + 22, ly, 0xb08a52);
 
+    // 高阶动态档：标明当前等效章，避免玩家以为永远停在 8 章
+    let slotsTop = pad + 40;
+    if (tier.dynamicScale) {
+      const scaleHint = makeText(`难度·第${tier.scaleChapter}章`, {
+        size: FONT_SIZE.xxs, fill: 0x8a5a32, bold: true, anchor: 0.5,
+      });
+      scaleHint.position.set(panelW / 2, pad + 36);
+      panel.addChild(scaleHint);
+      slotsTop = pad + 52;
+    }
+
     const slot = 52;
     const gap = 12;
     const total = slot * 2 + gap;
     const leftX = (panelW - total) / 2 + slot / 2;
     const rightX = leftX + slot + gap;
-    const cy = pad + 40 + (panelH - tip - pad - 40) * 0.38;
+    const cy = slotsTop + (panelH - tip - slotsTop) * 0.38;
     this._mountRewardSlot(panel, UI_IMAGES.iconLingyu, '灵玉', `×${tier.lingyu}`, leftX, cy, slot);
     this._mountRewardSlot(panel, UI_IMAGES.iconCoin, '灵宠币', `×${tier.coins}`, rightX, cy, slot);
   }
@@ -601,9 +618,10 @@ export class SecretRealmScene implements Scene {
     const total = REALM_TIERS.length * btnW + (REALM_TIERS.length - 1) * gap;
     let x = (w - total) / 2 + btnW / 2;
 
-    for (const tier of REALM_TIERS) {
-      const unlocked = PlayerData.isChapterUnlocked(tier.unlockChapter);
-      const selected = tier.tier === this._selectedTier;
+    for (const base of REALM_TIERS) {
+      const unlocked = PlayerData.isChapterUnlocked(base.unlockChapter);
+      const selected = base.tier === this._selectedTier;
+      const resolved = resolveRealmTier(base.tier, PlayerData.clearedChapters);
       const pill = new PIXI.Container();
       pill.position.set(x, y + btnH / 2);
       this._body!.addChild(pill);
@@ -617,7 +635,11 @@ export class SecretRealmScene implements Scene {
         unlocked ? 1 : 0.55,
       );
 
-      const label = unlocked ? tier.name : `${tier.name}·${tier.unlockChapter}章`;
+      // 未解锁也显示门槛章；高阶已解锁时标当前等效章
+      let label = base.name;
+      if (!unlocked) label = `${base.name}·${base.unlockChapter}章`;
+      else if (base.dynamicScale) label = `${base.name}·${resolved.scaleChapter}`;
+
       pill.addChild(makeText(label, {
         size: FONT_SIZE.sm,
         fill: selected ? 0x6b3e12 : (unlocked ? 0x2f6a5a : COLORS.textDisabled),
@@ -625,17 +647,20 @@ export class SecretRealmScene implements Scene {
         role: 'title',
       }));
 
-      pill.eventMode = unlocked ? 'static' : 'none';
-      pill.cursor = unlocked ? 'pointer' : 'default';
+      // 锁定档也可点：toast 说明何时解锁（避免「点了没反应」）
+      pill.eventMode = 'static';
+      pill.cursor = 'pointer';
       pill.hitArea = new PIXI.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH);
-      if (unlocked) {
-        pressFeedback(pill);
-        bindPointerTap(pill, () => {
-          if (this._selectedTier === tier.tier) return;
-          this._selectedTier = tier.tier;
-          this._refreshBody();
-        });
-      }
+      pressFeedback(pill);
+      bindPointerTap(pill, () => {
+        if (!unlocked) {
+          Platform.showToast(realmTierUnlockHint(base));
+          return;
+        }
+        if (this._selectedTier === base.tier) return;
+        this._selectedTier = base.tier;
+        this._refreshBody();
+      });
       x += btnW + gap;
     }
     return y + btnH;
@@ -643,9 +668,8 @@ export class SecretRealmScene implements Scene {
 
   private _buildCta(w: number, y: number, realm: RealmDef, isOpen: boolean): void {
     const runsOk = PlayerData.realmRunsLeft > 0;
-    const unlocked = PlayerData.isChapterUnlocked(
-      (REALM_TIERS.find((t) => t.tier === this._selectedTier) ?? REALM_TIERS[0]).unlockChapter,
-    );
+    const tierBase = REALM_TIERS.find((t) => t.tier === this._selectedTier) ?? REALM_TIERS[0];
+    const unlocked = PlayerData.isChapterUnlocked(tierBase.unlockChapter);
     const canEnter = isOpen && runsOk && unlocked;
     // 次数用尽是「已经想玩」的最强信号，此时才出广告位（IAA，日 2 次）
     const adRun = isOpen && unlocked && !runsOk && adUsesLeft('realm_extra_run') > 0;
@@ -660,16 +684,19 @@ export class SecretRealmScene implements Scene {
       title,
       width: CTA_BTN_W,
       height: CTA_BTN_H,
-      enabled: canEnter || adRun,
+      // 未解锁也保持可点，用来 toast 解锁条件
+      enabled: canEnter || adRun || !unlocked,
       onTap: () => {
+        if (!unlocked) {
+          Platform.showToast(realmTierUnlockHint(tierBase));
+          return;
+        }
         if (adRun) {
           void this._watchExtraRun();
           return;
         }
-        this._enterRealm(
-          realm,
-          REALM_TIERS.find((t) => t.tier === this._selectedTier) ?? REALM_TIERS[0],
-        );
+        if (!canEnter) return;
+        this._enterRealm(realm, this._activeTier());
       },
     });
     btn.position.set(w / 2, y + CTA_BTN_H / 2);
@@ -806,12 +833,13 @@ export class SecretRealmScene implements Scene {
       Platform.showToast('该秘境今日未开放');
       return;
     }
-    const stage = buildRealmStage(realm, tier.tier);
+    const stage = buildRealmStage(realm, tier.tier, PlayerData.clearedChapters);
     const context: BattleContext = { kind: 'realm', realmId: realm.id, tier: tier.tier };
     analytics.track('secret_realm_start', {
       realm_id: realm.id,
       element: realm.element,
       tier: tier.tier,
+      scale_chapter: tier.scaleChapter,
       runs_left: PlayerData.realmRunsLeft,
     });
     Platform.vibrateShort('medium');

@@ -139,27 +139,15 @@ export const BACKGROUND_IMAGES = {
 } as const;
 
 /**
- * 章节地图区域背景：16 章按 4 章一区分成 4 大区。
- *
- * 第 1 区沿用主包内的 title_screen（首屏也用它，必须留在主包）；
- * 第 2~4 区的图落 pkg-scene（已配 CDN，不占微信主包体积），出图前 fallback 到第 1 区。
+ * 章节地图背景：全章共用一张 title_screen（主包内）。
+ * 玩家反馈分区换图没必要，路径两侧对比度靠单图压暗解决，不再按章拉 CDN 分区底图。
  */
-export const CHAPTER_REGION_COUNT = 4;
-export const CHAPTER_REGION_BG: readonly string[] = [
-  BACKGROUND_IMAGES.titleScreen,
-  `${PKG.scene}/images/bg/chapter_region_2.jpg`,
-  `${PKG.scene}/images/bg/chapter_region_3.jpg`,
-  `${PKG.scene}/images/bg/chapter_region_4.jpg`,
-];
-
-/** 章号 → 区域背景路径（每 4 章换一张；越界钳到末区） */
-export function chapterRegionBg(chapter: number): string {
-  const idx = Math.min(
-    CHAPTER_REGION_BG.length - 1,
-    Math.max(0, Math.ceil(chapter / CHAPTER_REGION_COUNT) - 1),
-  );
-  return CHAPTER_REGION_BG[idx];
+export function chapterMapBg(_chapter?: number): string {
+  return BACKGROUND_IMAGES.titleScreen;
 }
+
+/** @deprecated 使用 chapterMapBg；保留别名避免外部引用断裂 */
+export const chapterRegionBg = chapterMapBg;
 
 /** 战斗背景（pkg-scene） */
 export const BATTLE_BG_IMAGES: Readonly<Record<Element, string>> = {

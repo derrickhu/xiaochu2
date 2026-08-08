@@ -107,10 +107,16 @@ export function showEnemyDetailDialog(
   content.addChild(meta);
   y += 28;
 
-  // HP / ATK / DEF
+  // HP / ATK / DEF（破防时展示现防 + 原防/比例，对齐原型 A）
+  const baseDef = Math.round(enemy.def_);
+  const defBreakPct = enemyDefenseBreakPct(ctrl);
+  const effDef = defBreakPct > 0 ? Math.floor(baseDef * (1 - defBreakPct)) : baseDef;
+  const defText = defBreakPct > 0
+    ? `DEF：${effDef}（原${baseDef} · 破防-${Math.round(defBreakPct * 100)}%）`
+    : `DEF：${baseDef}`;
   const stats = makeText(
     `HP：${Math.round(enemy.hp)} / ${Math.round(enemy.maxHp)}　`
-    + `ATK：${Math.round(enemy.atk)}　DEF：${Math.round(enemy.def_)}`,
+    + `ATK：${Math.round(enemy.atk)}　${defText}`,
     { size: FONT_SIZE.xs, fill: BODY, bold: true, anchor: [0, 0], wordWrapWidth: innerW },
   );
   stats.position.set(0, y);
@@ -198,7 +204,7 @@ export function showEnemyDetailDialog(
   // 敌方状态（statuses + 立绘侧蓄力/减伤兜底）
   const enemyLines: StatusLine[] = ctrl.statuses
     .filter((s) => s.owner === 'enemy')
-    .map((s) => statusLine(s));
+    .map((s) => statusLine(s, { baseDef, effDef, defBreakPct }));
   if (
     enemy.dmgReduction
     && enemy.dmgReduction.turnsLeft > 0
@@ -226,7 +232,7 @@ export function showEnemyDetailDialog(
   if (teamStatuses.length > 0) {
     y = appendStatusSection(
       content, y, '己方状态：', 0x2e6da4,
-      teamStatuses.map((s) => statusLine(s)),
+      teamStatuses.map((s) => statusLine(s, {})),
       innerW,
     );
   }
@@ -300,9 +306,23 @@ interface StatusLine {
   bad: boolean;
 }
 
-function statusLine(s: StatusInstance): StatusLine {
+interface StatusLineCtx {
+  baseDef?: number;
+  effDef?: number;
+  defBreakPct?: number;
+}
+
+/** 与 BattleController._enemyDefEffective 破防口径一致：status + 灵机修饰，封顶 90% */
+function enemyDefenseBreakPct(ctrl: BattleController): number {
+  const fromStatus = ctrl.statuses
+    .find((s) => s.owner === 'enemy' && s.kind === 'enemyDefenseBreak')?.value ?? 0;
+  return Math.min(0.9, fromStatus + ctrl.runMods.enemyDefBreak);
+}
+
+function statusLine(s: StatusInstance, ctx: StatusLineCtx): StatusLine {
   const base = STATUS_LABEL[s.kind] ?? s.kind;
   let label = base;
+  let turns: number | undefined = s.turnsLeft;
   if (s.kind === 'enemyDamageReduction') {
     label = `减伤 ${Math.round(s.value * 100)}%`;
   } else if (s.kind === 'enrage') {
@@ -313,12 +333,21 @@ function statusLine(s: StatusInstance): StatusLine {
     label = `护盾 ${Math.round(s.value)}`;
   } else if (s.kind === 'elementAbsorb' && s.element) {
     label = `吸收${ELEMENT_NAME[s.element]}`;
+  } else if (s.kind === 'enemyDefenseBreak') {
+    // 原型 A：破防 -40%（3回合）· 防65→39 —— 回合写进 label，避免外层再拼一次
+    const pct = Math.round((ctx.defBreakPct ?? s.value) * 100);
+    const from = ctx.baseDef ?? 0;
+    const to = ctx.effDef ?? Math.floor(from * (1 - s.value));
+    const left = s.turnsLeft ?? 0;
+    const dur = left > 0 && left < 99 ? `（${left}回合）` : '';
+    label = `破防 -${pct}%${dur} · 防${from}→${to}`;
+    turns = undefined;
   }
   const bad = s.owner === 'team'
     ? (s.kind === 'dot' || s.kind === 'timeSqueeze' || s.kind === 'healBlock'
       || s.kind === 'skillSeal' || s.kind === 'atkDebuff')
     : (s.kind === 'dot' || s.kind === 'stun' || s.kind === 'enemyDefenseBreak');
-  return { label, turns: s.turnsLeft, bad };
+  return { label, turns, bad };
 }
 
 function appendStatusSection(

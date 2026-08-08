@@ -20,7 +20,7 @@ import type { StageDef } from '@/balance/stages';
 import { CHAPTER_REWARD_PET } from '@/balance/stages';
 import { PET_MAP } from '@/balance/pets';
 import { PlayerData } from '@/game/PlayerData';
-import { BACKGROUND_IMAGES, chapterRegionBg, MAP_UI_IMAGES } from '@/config/Assets';
+import { BACKGROUND_IMAGES, chapterMapBg, MAP_UI_IMAGES } from '@/config/Assets';
 import { getPetAvatarTexture, loadPetAvatarTexture } from '@/config/petAvatarTexture';
 import { COLORS, FONT_SIZE, makeText, makeStarRow } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
@@ -463,9 +463,8 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
   world.position.set(fit.offsetX, fit.offsetY);
   root.addChild(world);
 
-  // 按 4 章一区换背景；区域图未到位（或走 CDN 尚未拉到）时回落首屏图，不留白
-  const bgTex = TextureCache.get(chapterRegionBg(opts.chapter))
-    ?? TextureCache.get(BACKGROUND_IMAGES.titleScreen)
+  // 全章共用一张主包底图；未命中时回落 home，不留白
+  const bgTex = TextureCache.get(chapterMapBg(opts.chapter))
     ?? TextureCache.get(BACKGROUND_IMAGES.home);
   if (bgTex) {
     layoutDesignBackground(world, bgTex, designW, designH);

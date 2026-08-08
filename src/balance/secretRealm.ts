@@ -5,20 +5,27 @@
  * 逼玩家为当日属性组一支克制队 —— 让 ELEMENT_COUNTERS 与 30 只灵宠真正被用上，
  * 而不是一套万能队打到底。
  *
+ * 难度 UI 固定三档（初/中/高）：初、中锚定不变；高阶随已通关章数在
+ * [HIGH_SCALE_MIN, MAIN_CHAPTER_COUNT] 内抬难度与奖励，以后加主线章节只需改
+ * MAIN_CHAPTER_COUNT，不必再加平铺按钮。
+ *
  * 全部复用既有资产：关卡类型走 stageTypes 的 dailyResource（经验丰厚），
  * 通关额外发灵玉 + 灵宠币（不发碎片），敌人走 enemies 的五行杂兵模板。
  */
 import { counterElementOf, type Element } from './combat';
 import type { EncounterRef } from './enemies';
-import { registerExtraStage, type StageDef } from './stages';
+import { MAIN_CHAPTER_COUNT, registerExtraStage, type StageDef } from './stages';
 
 export interface RealmTierDef {
   /** 1 起 */
   tier: number;
   name: string;
-  /** 解锁需通关的章节数（= 已通该章 Boss） */
+  /**
+   * 解锁门槛：`PlayerData.isChapterUnlocked(unlockChapter)`
+   * （该章第 1 关可进 ≈ 通关上一章 Boss / 进入该章）
+   */
   unlockChapter: number;
-  /** 数值缩放用的等效章节 */
+  /** 数值缩放用的等效章节（高阶经 resolveRealmTier 后可能高于表内基值） */
   scaleChapter: number;
   /** enemyStats 难度系数 */
   difficulty: number;
@@ -28,6 +35,8 @@ export interface RealmTierDef {
   lingyu: number;
   /** 通关灵宠币 */
   coins: number;
+  /** 高阶：随通关章动态抬档 */
+  dynamicScale?: boolean;
 }
 
 export interface RealmDef {
@@ -39,8 +48,7 @@ export interface RealmDef {
   hint: string;
   /**
    * 三波敌人（杂兵 → 精英 → 守关）。
-   * 三波必须是三只不同的怪：同怪三连会把「组克制队」这个卖点压成同一场打三遍，
-   * 由 secretRealm.test.ts 的契约兜住。
+   * 三波必须是三只不同的怪：同怪三连会把「组克制队」这个卖点压成同一场打三遍。
    */
   waveMobs: readonly [string, string, string];
 }
@@ -52,6 +60,15 @@ export const SECRET_REALM = {
   weekendDays: [0, 6] as readonly number[],
   /** 掉落表：经验大头（货币在结算额外发） */
   dropTableId: 'dt_daily_exp',
+  /** 高阶动态缩放：下限（刚解锁时） */
+  highScaleMin: 8,
+  /** 高阶在最终章时的通关奖励 / 难度（相对表内基值插值） */
+  highScaleMaxReward: {
+    lingyu: 48,
+    coins: 1100,
+    difficulty: 1.25,
+    starTurnLimit: 20,
+  },
 } as const;
 
 export const REALM_TIERS: readonly RealmTierDef[] = [
@@ -66,6 +83,7 @@ export const REALM_TIERS: readonly RealmTierDef[] = [
   {
     tier: 3, name: '高阶', unlockChapter: 6, scaleChapter: 8,
     difficulty: 1.15, starTurnLimit: 16, lingyu: 24, coins: 520,
+    dynamicScale: true,
   },
 ];
 
@@ -134,8 +152,47 @@ export function realmCounterElement(realm: RealmDef): Element {
   return counterElementOf(realm.element);
 }
 
+/** 表内静态档（不含高阶动态抬档） */
 export function realmTier(tier: number): RealmTierDef {
   return REALM_TIERS.find((t) => t.tier === tier) ?? REALM_TIERS[0];
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+/**
+ * 解析当前应使用的档位数值。
+ * 初/中原样；高阶按已通关章数在 [highScaleMin, MAIN_CHAPTER_COUNT] 插值。
+ */
+export function resolveRealmTier(tier: number, clearedChapters: number): RealmTierDef {
+  const base = realmTier(tier);
+  if (!base.dynamicScale) return base;
+
+  const minScale = SECRET_REALM.highScaleMin;
+  const maxScale = MAIN_CHAPTER_COUNT;
+  const scale = clamp(Math.floor(clearedChapters), minScale, maxScale);
+  const span = Math.max(1, maxScale - minScale);
+  const t = (scale - minScale) / span;
+  const maxR = SECRET_REALM.highScaleMaxReward;
+
+  return {
+    ...base,
+    scaleChapter: scale,
+    lingyu: Math.round(lerp(base.lingyu, maxR.lingyu, t)),
+    coins: Math.round(lerp(base.coins, maxR.coins, t)),
+    difficulty: Math.round(lerp(base.difficulty, maxR.difficulty, t) * 100) / 100,
+    starTurnLimit: Math.round(lerp(base.starTurnLimit, maxR.starTurnLimit, t)),
+  };
+}
+
+/** 未解锁难度点击提示 */
+export function realmTierUnlockHint(tier: RealmTierDef): string {
+  return `进入第${tier.unlockChapter}章后解锁「${tier.name}」`;
 }
 
 export function realmStageId(realmId: string, tier: number): string {
@@ -146,9 +203,14 @@ export function realmStageId(realmId: string, tier: number): string {
  * 构造并注册一档秘境关卡。
  * 秘境关卡不进 STAGES，只进 STAGE_MAP，因此不会污染章节地图与经分关卡序号。
  */
-export function buildRealmStage(realm: RealmDef, tier: number): StageDef {
-  const t = realmTier(tier);
+export function buildRealmStage(
+  realm: RealmDef,
+  tier: number,
+  clearedChapters: number = SECRET_REALM.highScaleMin,
+): StageDef {
+  const t = resolveRealmTier(tier, clearedChapters);
   const encounters: EncounterRef[] = realm.waveMobs.map((id) => ({ kind: 'mob', id }));
+  const scaleTag = t.dynamicScale ? `·${t.scaleChapter}章` : '';
   return registerExtraStage({
     id: realmStageId(realm.id, t.tier),
     // chapter 只作数值缩放输入，不代表主线章节
@@ -162,6 +224,6 @@ export function buildRealmStage(realm: RealmDef, tier: number): StageDef {
     difficulty: t.difficulty,
     starTurnLimit: t.starTurnLimit,
     hintText: realm.hint,
-    displayLabel: `${realm.name}·${t.name}`,
+    displayLabel: `${realm.name}·${t.name}${scaleTag}`,
   });
 }

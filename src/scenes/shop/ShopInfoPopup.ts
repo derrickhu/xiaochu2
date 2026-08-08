@@ -342,12 +342,13 @@ export class ShopInfoPopup extends PIXI.Container {
     desc.position.set(left, skillName.y + 28);
     panel.addChild(desc);
 
-    const status = makeText(
-      `当前碎片 ${shards} · ${owned ? '已拥有' : '未拥有'}`,
-      {
-        size: FONT_SIZE.xs, fill: MOCK.status, bold: true, anchor: 0.5,
-      },
-    );
+    const starNeed = owned ? PlayerData.starUpCost(pet.id) : null;
+    const shardLine = starNeed === null
+      ? (owned ? `当前碎片 ${shards} · 已满星` : `当前碎片 ${shards} · 未拥有`)
+      : `当前碎片 ${shards}/${starNeed} · 升星所需`;
+    const status = makeText(shardLine, {
+      size: FONT_SIZE.xs, fill: MOCK.status, bold: true, anchor: 0.5,
+    });
     status.position.set(0, PANEL_H / 2 - 118);
     panel.addChild(status);
 

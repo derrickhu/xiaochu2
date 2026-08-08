@@ -8,8 +8,14 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
-import { CODEX_SHELL_IMAGES, codexPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
+import {
+  CODEX_SHELL_IMAGES,
+  codexPetAvatarEntries,
+  ensurePetAvatars,
+  petDetailPreloadImages,
+} from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
+import type { ScrollListConfig } from '@/ui/ScrollList';
 import { UI } from '@/balance/ui';
 import { ECONOMY } from '@/balance/economy';
 import { PETS, PET_MAP, PET_ROLE_NAME, type PetDef } from '@/balance/pets';
@@ -82,10 +88,25 @@ export class CodexScene implements Scene {
   private _filter: CodexFilter = 'all';
   private _listTop = 280;
   private _rewardOverlay: PIXI.Container | null = null;
+  /**
+   * 进详情时暂存整页（约 100 卡），避免真机同帧销毁+重建导致「卡住」。
+   * 仅 `_parkForDetail` 路径启用；底栏切走仍走完整销毁。
+   */
+  private _parkForDetail = false;
+  private _parked = false;
+  private _parkFingerprint = '';
+  private _parkContentY = 0;
+  private _scrollCfg: ScrollListConfig | null = null;
 
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
+    // 从详情返回：树还在，尽量秒开；养成有变才轻量重建
+    if (this._parked) {
+      this._resumeFromPark();
+      void Game.warmScenePresent();
+      return;
+    }
     // 不再进页静默发奖；待领显示「领」钮，点领或弹层领取
     this._filter = 'all';
     const token = this._enterSeq.next();
@@ -106,17 +127,81 @@ export class CodexScene implements Scene {
     if (SceneManager.current?.name !== 'codex') return;
     this._buildShell();
     this._buildPetList({ animate: false });
+    // 后台预热第一只已拥有宠的详情壳/秀场，减轻「点第一个就卡」
+    const firstOwned = PlayerData.ownedPets[0];
+    if (firstOwned) {
+      void ensureAssets(petDetailPreloadImages(firstOwned)).catch(() => {});
+    }
   }
 
   onExit(): void {
     this._enterSeq.cancel();
+    if (this._parkForDetail) {
+      this._parkForDetail = false;
+      this._parked = true;
+      this._parkFingerprint = this._listFingerprint();
+      this._parkContentY = this._content && !this._content.destroyed
+        ? this._content.y
+        : this._listTop;
+      this._scroll.detach();
+      this._closeRewardPanel();
+      return;
+    }
+    this._disposeTree();
+  }
+
+  /** SceneManager：切到非图鉴/详情时丢掉暂存树 */
+  discardParked(): void {
+    if (!this._parked && !this._parkForDetail) return;
+    this._parkForDetail = false;
+    this._parked = false;
+    this._disposeTree();
+  }
+
+  private _disposeTree(): void {
     this._scroll.detach();
+    this._scrollCfg = null;
     this._content = null;
     this._listMask = null;
     this._rewardOverlay = null;
+    this._parkFingerprint = '';
     this.container.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
     });
+  }
+
+  private _resumeFromPark(): void {
+    this._parked = false;
+    this.container.interactiveChildren = true;
+    this.container.eventMode = 'passive';
+    const fingerprint = this._listFingerprint();
+    if (fingerprint === this._parkFingerprint
+      && this._content
+      && !this._content.destroyed
+      && this.container.children.length > 0) {
+      // 养成未变：只挂回滚动，保留滚动位置
+      if (this._scrollCfg) {
+        this._scroll.attach(this._scrollCfg);
+        this._content.y = this._parkContentY;
+      }
+      return;
+    }
+    // 升级/升星/碎片有变：重建一趟（仍跳过 hydrate 二次重建）
+    const savedY = this._parkContentY;
+    this._rebuild();
+    if (this._content && !this._content.destroyed && this._scrollCfg) {
+      const min = this._scrollCfg.scrollMin;
+      const max = this._scrollCfg.listTop;
+      this._content.y = Math.max(min, Math.min(max, savedY));
+    }
+  }
+
+  /** 拥有/等级/星/碎片/货币/筛选 — 任一变都要刷新列表或顶栏 */
+  private _listFingerprint(): string {
+    const pets = PlayerData.ownedPets
+      .map((id) => `${id}:${PlayerData.petLevel(id)}:${PlayerData.petStar(id)}:${PlayerData.petShards(id)}`)
+      .join(',');
+    return `${this._filter}|${PlayerData.coins}|${PlayerData.lingyu}|${pets}`;
   }
 
   private _rebuild(): void {
@@ -458,14 +543,18 @@ export class CodexScene implements Scene {
       this.container.addChild(mask);
       this._listMask = mask;
       content.mask = mask;
-      this._scroll.attach({
+      const cfg: ScrollListConfig = {
         content: () => this._content,
         viewportTop: startY,
         viewportH,
         scrollMin,
         listTop: startY,
         moveThreshold: 2,
-      });
+      };
+      this._scrollCfg = cfg;
+      this._scroll.attach(cfg);
+    } else {
+      this._scrollCfg = null;
     }
   }
 
@@ -621,7 +710,12 @@ export class CodexScene implements Scene {
 
   private _onPetTap(pet: PetDef, state: CodexState): void {
     if (state === 'owned') {
+      // 暂存图鉴树，避免真机同帧拆 100 卡；并抢先拉详情立绘
+      this._parkForDetail = true;
+      void ensureAssets(petDetailPreloadImages(pet.id)).catch(() => {});
       SceneManager.switchTo('petDetail', { petId: pet.id } satisfies PetDetailEnterData);
+      // switchTo 失败时勿留下 park 标记，否则下次底栏切走会误暂存
+      if (SceneManager.current?.name === 'codex') this._parkForDetail = false;
       return;
     }
     if (pet.id === PlayerData.nextRecruit()) {

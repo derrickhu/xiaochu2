@@ -16,7 +16,6 @@ import {
   bossChallengeConfig,
   bossChallengeLabel,
   CHAPTER_BOSS_CHALLENGE,
-  challengeStageType,
   recipeForChallenge,
 } from './bossChallenge';
 import { applyGateLayer } from './stageGates';
@@ -104,7 +103,8 @@ function buildChapterBossDrop(opts: {
   const c = CREATURE_MAP.get(opts.creatureId);
   if (!c) throw new Error(`Boss 掉落未知生物: ${opts.creatureId}`);
   const cfg = bossChallengeConfig(opts.challenge, { ruleBanElement: opts.element });
-  const waves = 3;
+  // 初级形态预告技能 → 高级形态完整挑战；不再插 prep 热身波凑三波
+  const waves = 2;
   return {
     id: opts.id,
     chapter: opts.chapter,
@@ -114,7 +114,6 @@ function buildChapterBossDrop(opts: {
     type: 'boss',
     dropTableId: opts.dropTableId,
     encounters: [
-      mob(cfg.prepMob),
       creature(opts.creatureId, 'tier1'),
       creature(opts.creatureId, 'tier2', true),
     ],
@@ -178,7 +177,11 @@ function withDerivedStarLimit(stage: Omit<StageDef, 'starTurnLimit'>): StageDef 
   };
 }
 
-// ── 第一章（8 关）：铺垫无新挑战 · Boss 教多波 + 收录星辉灵鹿（SR 输出） ──
+/*
+ * ── 第一章（8 关）──
+ * 前段认盘面与克制 → 中后段预告攻压/战中封珠 → Boss 教蓄力+狂暴并收录星辉灵鹿。
+ * 铺垫一律 normal（精英模式另开）；完整「封印珠」盘面留给第 2 章首教。
+ */
 const CHAPTER_1: readonly StageDef[] = ([
   {
     id: 'stage_1_1', chapter: 1, index: 1, name: '青苔林边', element: 'wood',
@@ -196,31 +199,31 @@ const CHAPTER_1: readonly StageDef[] = ([
     id: 'stage_1_3', chapter: 1, index: 3, name: '焰蝠洞口', element: 'fire',
     type: 'normal', dropTableId: 'dt_forest_fire',
     encounters: [mob('enemy_bat_fire')], difficulty: 1.15,
-    hintTags: ['火属性'], hintText: '火怪攻击偏高，带水宠克制',
+    hintTags: ['高攻'], hintText: '火蝠攻击偏高：带水宠克制，留意回血',
   },
   {
     id: 'stage_1_4', chapter: 1, index: 4, name: '荆棘丛林', element: 'wood',
     type: 'normal', dropTableId: 'dt_forest_wood',
-    encounters: [mob('enemy_slime_wood'), mob('enemy_slime_wood')], difficulty: 1.2,
-    hintTags: ['木属性'], hintText: '稳扎稳打，为章末试炼留技能',
+    encounters: [mob('enemy_slime_wood'), mob('enemy_moss_sprite_wood')], difficulty: 1.2,
+    hintTags: ['战中封珠'], hintText: '木灵会封珠：先消相邻珠解封，再输出',
   },
   {
     id: 'stage_1_5', chapter: 1, index: 5, name: '溪边练手', element: 'wood',
     type: 'normal', dropTableId: 'dt_forest_wood',
-    encounters: [mob('enemy_slime_wood'), mob('enemy_bat_fire')], difficulty: 1.22,
-    hintTags: ['巩固'], hintText: '多练习消除，熟悉心珠回血',
+    encounters: [mob('enemy_bat_fire'), mob('enemy_cinder_imp_fire')], difficulty: 1.22,
+    hintTags: ['高攻', '压时'], hintText: '双火压血线：备好治疗，转珠别拖',
   },
   {
     id: 'stage_1_6', chapter: 1, index: 6, name: '翠影谷', element: 'wood',
-    type: 'elite', dropTableId: 'dt_forest_wood',
-    encounters: [mob('enemy_slime_wood'), mob('enemy_slime_wood'), mob('enemy_bat_fire')], difficulty: 1.25,
-    hintTags: ['三波'], hintText: '波次变多，注意保留技能',
+    type: 'normal', dropTableId: 'dt_forest_wood',
+    encounters: [mob('enemy_moss_sprite_wood'), mob('enemy_bat_fire')], difficulty: 1.25,
+    hintTags: ['封珠', '狂暴'], hintText: '封珠 + 火蝠狂暴：解封要快，残血别磨',
   },
   {
     id: 'stage_1_7', chapter: 1, index: 7, name: '林海尽头', element: 'fire',
-    type: 'elite', dropTableId: 'dt_forest_fire',
-    encounters: [mob('enemy_bat_fire'), mob('enemy_slime_wood')], difficulty: 1.28,
-    hintTags: ['过渡'], hintText: '章末试炼将至，带齐克制属性',
+    type: 'normal', dropTableId: 'dt_forest_fire',
+    encounters: [mob('enemy_cinder_imp_fire'), mob('enemy_moss_sprite_wood')], difficulty: 1.28,
+    hintTags: ['蓄力预告'], hintText: '首领战将见蓄力重击：护盾/治疗留一手',
   },
   buildChapterBossDrop({
     id: 'stage_1_8', chapter: 1, index: 8, name: '星辉试炼', element: 'wood',
@@ -231,10 +234,7 @@ const CHAPTER_1: readonly StageDef[] = ([
 
 /*
  * ── 第二章（8 关）──
- *
- * 铺垫关只能用 multiWave（封印珠要等本章 Boss 才首教），但**不等于只能用同一份怪组**：
- * 这里逐关指定 variant，7 关走完能见到 5 种不同的怪物组合。此前七关同两只怪、
- * 只有血量在涨，玩家读到的信息就是「这游戏不用动脑」。
+ * 章中预告封印珠，Boss 给完整版（盘面封印 + 本体自愈/削攻）。
  */
 const CHAPTER_2: readonly StageDef[] = [
   fillerStage({
@@ -247,10 +247,11 @@ const CHAPTER_2: readonly StageDef[] = [
     type: 'normal', dropTableId: 'dt_cave_normal', difficulty: 1.05,
     challenge: 'multiWave', variant: 1,
   }),
+  // 章中预告封印珠（Boss 给完整版）；铺垫保持 normal，精英模式另开
   fillerStage({
     id: 'stage_2_3', chapter: 2, index: 3, name: '晶甲巢穴', element: 'metal',
-    type: 'elite', dropTableId: 'dt_cave_elite', difficulty: 1.1,
-    challenge: 'multiWave', variant: 4,
+    type: 'normal', dropTableId: 'dt_cave_normal', difficulty: 1.1,
+    challenge: 'boardSeal', variant: 0,
   }),
   fillerStage({
     id: 'stage_2_4', chapter: 2, index: 4, name: '毒雾深渊', element: 'water',
@@ -259,18 +260,18 @@ const CHAPTER_2: readonly StageDef[] = [
   }),
   fillerStage({
     id: 'stage_2_5', chapter: 2, index: 5, name: '幽光裂隙', element: 'fire',
-    type: 'elite', dropTableId: 'dt_cave_elite', difficulty: 1.2,
-    challenge: 'multiWave', variant: 3,
+    type: 'normal', dropTableId: 'dt_cave_normal', difficulty: 1.2,
+    challenge: 'boardSeal', variant: 1,
   }),
   fillerStage({
     id: 'stage_2_6', chapter: 2, index: 6, name: '晶髓浅滩', element: 'metal',
     type: 'normal', dropTableId: 'dt_cave_normal', difficulty: 1.22,
-    challenge: 'multiWave', variant: 1,
+    challenge: 'multiWave', variant: 3,
   }),
   fillerStage({
     id: 'stage_2_7', chapter: 2, index: 7, name: '溶洞尽头', element: 'water',
-    type: 'elite', dropTableId: 'dt_cave_elite', difficulty: 1.25,
-    challenge: 'multiWave', variant: 4,
+    type: 'normal', dropTableId: 'dt_cave_normal', difficulty: 1.25,
+    challenge: 'boardSeal', variant: 2,
   }),
   buildChapterBossDrop({
     id: 'stage_2_8', chapter: 2, index: 8, name: '灵鹿试炼', element: 'wood',
@@ -288,7 +289,7 @@ const CHAPTER_3: readonly StageDef[] = [
   }),
   fillerStage({
     id: 'stage_3_2', chapter: 3, index: 2, name: '雷鸣回廊', element: 'metal',
-    type: 'elite', dropTableId: 'dt_peak_elite', difficulty: 1.1,
+    type: 'normal', dropTableId: 'dt_peak_normal', difficulty: 1.1,
     challenge: 'boardSeal', variant: 0,
   }),
   fillerStage({
@@ -298,24 +299,23 @@ const CHAPTER_3: readonly StageDef[] = [
   }),
   fillerStage({
     id: 'stage_3_4', chapter: 3, index: 4, name: '绝风险道', element: 'fire',
-    type: 'elite', dropTableId: 'dt_peak_elite', difficulty: 1.25,
+    type: 'normal', dropTableId: 'dt_peak_normal', difficulty: 1.25,
     challenge: 'boardSeal', variant: 1,
   }),
-  // multiWave 是普通档配方（见 challengeStageType），塞进精英位会够不到精英的 TTK 下限
   fillerStage({
     id: 'stage_3_5', chapter: 3, index: 5, name: '焚天台', element: 'fire',
     type: 'normal', dropTableId: 'dt_peak_normal', difficulty: 1.3,
     challenge: 'multiWave', variant: 4,
   }),
-  // 反之 boardSeal 是精英档配方，此前挂在普通位，中手要打 10 回合、顶穿普通关上限
   fillerStage({
     id: 'stage_3_6', chapter: 3, index: 6, name: '风雷栈道', element: 'metal',
-    type: 'elite', dropTableId: 'dt_peak_elite', difficulty: 1.32,
+    type: 'normal', dropTableId: 'dt_peak_normal', difficulty: 1.32,
     challenge: 'boardSeal', variant: 2,
   }),
+  // 章末前预告高防，Boss 给完整免控版
   fillerStage({
     id: 'stage_3_7', chapter: 3, index: 7, name: '绝巅前厅', element: 'fire',
-    type: 'elite', dropTableId: 'dt_peak_elite', difficulty: 1.35,
+    type: 'normal', dropTableId: 'dt_peak_normal', difficulty: 1.35,
     challenge: 'highDefense', variant: 0,
   }),
   buildChapterBossDrop({
@@ -334,12 +334,10 @@ interface TrialChapterDef {
   bossDropPetId: string;
   bossChallenge: BossChallengeKind;
   /**
-   * 长度 = stageCount - 1，仅已学挑战。
+   * 长度 = stageCount - 1。可含本章即将首教的轻量预告。
    *
-   * 末位（index = stageCount - 1）是「临门验队关」：必须挑够重的 archetype
-   * （boardRock / highDefense 的傀儡系，或 noHeart 的双波），否则 Boss 首波会相对
-   * 前一关形成断崖，撞 BUDGET_GUARDRAIL.bossFirstWaveMaxRatio。
-   * 单波轻怪（boardSeal 的毒蝎、multiWave 的史莱姆）不要放末位。
+   * 末位是「临门验队关」：须挑够重的 archetype，否则 Boss 首波相对前一关断崖。
+   * 铺垫关 type 一律 normal；精英难度由进关「精英模式」提供。
    */
   fillerChallenges: readonly BossChallengeKind[];
   fillerNames: readonly string[];
@@ -358,28 +356,30 @@ const TRIAL_CHAPTERS: readonly TrialChapterDef[] = [
   {
     chapter: 4, name: '炽土试炼', stageCount: 8, difficultyBase: 1.22,
     bossDropPetId: 'pet_025', bossChallenge: 'boardRock',
-    fillerChallenges: ['multiWave', 'boardSeal', 'highDefense', 'multiWave', 'boardSeal', 'multiWave', 'highDefense'],
-    fillerNames: ['炽土前哨', '熔岩小径', '岩傀儡阵', '焦土深谷', '封印残阵', '炎纹廊道', '炽石祭坛'],
+    // 6 号位预告顽石；末位高防验队
+    fillerChallenges: ['multiWave', 'boardSeal', 'highDefense', 'multiWave', 'boardSeal', 'boardRock', 'highDefense'],
+    fillerNames: ['炽土前哨', '熔岩小径', '岩傀儡阵', '焦土深谷', '封印残阵', '顽石廊道', '炽石祭坛'],
   },
   {
     chapter: 5, name: '灵兽秘境', stageCount: 8, difficultyBase: 1.24,
     bossDropPetId: 'pet_011', bossChallenge: 'selfHeal',
-    fillerChallenges: ['boardRock', 'highDefense', 'boardSeal', 'multiWave', 'boardSeal', 'highDefense', 'boardRock'],
-    fillerNames: ['秘境入口', '顽石迷阵', '巨像守卫', '灵泉浅滩', '熔岩岔路', '古阵核心', '秘境深廊'],
+    // 4 号位预告自疗；末位顽石验队
+    fillerChallenges: ['boardRock', 'highDefense', 'boardSeal', 'selfHeal', 'boardSeal', 'highDefense', 'boardRock'],
+    fillerNames: ['秘境入口', '顽石迷阵', '巨像守卫', '自愈灵泉', '熔岩岔路', '古阵核心', '秘境深廊'],
   },
   {
     chapter: 6, name: '归墟深渊', stageCount: 8, difficultyBase: 1.25,
     bossDropPetId: 'pet_010', bossChallenge: 'chargeHit',
-    fillerChallenges: ['selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'selfHeal', 'multiWave', 'boardRock'],
-    fillerNames: ['深渊上层', '寒潭回响', '晶甲巢穴', '自疗深池', '蓄力试场', '归墟裂隙', '深渊前厅'],
+    // 5 号位预告蓄力；末位顽石验队
+    fillerChallenges: ['selfHeal', 'boardRock', 'highDefense', 'boardSeal', 'chargeHit', 'selfHeal', 'boardRock'],
+    fillerNames: ['深渊上层', '寒潭回响', '晶甲巢穴', '封印深池', '蓄力试场', '归墟裂隙', '深渊前厅'],
   },
   {
     chapter: 7, name: '星轨之野', stageCount: 8, difficultyBase: 1.26,
     bossDropPetId: 'pet_029', bossChallenge: 'noHeart',
-    // 开场关排轻档挑战（selfHeal 是普通重量，chargeHit 是精英重量）：
-    // 章内难度是 base + 0.05×序号，精英配方落在 0 号位就够不到精英的 TTK 下限
-    fillerChallenges: ['selfHeal', 'chargeHit', 'boardRock', 'highDefense', 'boardSeal', 'chargeHit', 'selfHeal'],
-    fillerNames: ['星轨外环', '蓄力星门', '自愈绿洲', '顽石星带', '巨像轨道', '禁心前庭', '星轨内环'],
+    // 6 号位预告禁心；末位蓄力验队
+    fillerChallenges: ['selfHeal', 'chargeHit', 'boardRock', 'highDefense', 'boardSeal', 'noHeart', 'chargeHit'],
+    fillerNames: ['星轨外环', '蓄力星门', '顽石星带', '巨像轨道', '封印星廊', '禁心前庭', '星轨内环'],
   },
   {
     chapter: 8, name: '虚空之巅', stageCount: 8, difficultyBase: 1.27,
@@ -462,20 +462,14 @@ function buildTrialChapter(def: TrialChapterDef): StageDef[] {
 
   def.fillerChallenges.forEach((ch, i) => {
     const index = i + 1;
-    /*
-     * 关卡类型跟着配方的实际重量走（见 challengeStageType），末位的临门验队关
-     * 一律算精英——它按设计要挑最重的 archetype，奖励档也该对上。
-     */
-    const isLast = index === def.fillerChallenges.length;
-    const elite = isLast || challengeStageType(ch) === 'elite';
     stages.push(fillerStage({
       id: `stage_${def.chapter}_${index}`,
       chapter: def.chapter,
       index,
       name: def.fillerNames[i] ?? `历练 ${index}`,
       element: c.element,
-      type: elite ? 'elite' : 'normal',
-      dropTableId: elite ? 'dt_trial_elite' : 'dt_trial_normal',
+      type: 'normal',
+      dropTableId: 'dt_trial_normal',
       difficulty: def.difficultyBase + i * 0.05,
       challenge: ch,
       // 章号参与取模，让同一挑战在不同章也换组，而不是每章都从第一个变体开始
