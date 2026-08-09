@@ -123,6 +123,34 @@ function resolveNodeKind(unlocked: boolean, stars: number, active: boolean): Nod
   return 'cleared';
 }
 
+/** 锁定关卡台面锁标：体量对齐关卡序号，不依赖额外贴图 */
+function makeNodeLockIcon(): PIXI.Container {
+  const c = new PIXI.Container();
+  // 先画浅底，保证灰石柱上轮廓清楚
+  const back = new PIXI.Graphics();
+  back.beginFill(0xfff6e8, 0.92);
+  back.drawRoundedRect(-9, -12, 18, 20, 4);
+  back.endFill();
+  c.addChild(back);
+
+  const g = new PIXI.Graphics();
+  // 锁梁
+  g.lineStyle(2.4, 0x4a4038, 1);
+  g.drawRoundedRect(-5, -10, 10, 8, 3.5);
+  // 锁身
+  g.lineStyle(0);
+  g.beginFill(0x4a4038, 1);
+  g.drawRoundedRect(-6.5, -3.5, 13, 10, 2.5);
+  g.endFill();
+  // 锁孔
+  g.beginFill(0xfff6e8, 1);
+  g.drawCircle(0, 0.2, 1.5);
+  g.drawRect(-1, 0.2, 2, 3.2);
+  g.endFill();
+  c.addChild(g);
+  return c;
+}
+
 function buildStageNode(
   stage: StageDef,
   pos: MapPoint,
@@ -161,7 +189,7 @@ function buildStageNode(
     wrap.addChild(fallback);
   }
 
-  // 台面关卡序号（对齐 home_hub_v4 圆台上数字）
+  // 台面：已解锁显示关卡序号；未解锁放锁标（业界地图锁定态主信号）
   if (opts.unlocked) {
     const num = makeText(String(stage.index), {
       size: 18,
@@ -173,6 +201,10 @@ function buildStageNode(
     });
     num.position.set(0, -NODE_H * 0.42);
     wrap.addChild(num);
+  } else {
+    const lock = makeNodeLockIcon();
+    lock.position.set(0, -NODE_H * 0.42);
+    wrap.addChild(lock);
   }
 
   // 主星 = 普通难度（解锁链只认这套）
@@ -190,15 +222,18 @@ function buildStageNode(
     wrap.addChild(starLine);
   }
 
-  const label = opts.unlocked ? `${stage.index}. ${stage.name}` : '未解锁';
-  const nameText = makeText(label, {
-    size: FONT_SIZE.xxs,
-    fill: opts.unlocked ? 0xffffff : COLORS.textDisabled,
-    strokeColor: opts.unlocked ? 0x2a3444 : undefined,
-    strokeWidth: 3,
-    bold: true,
-    anchor: 0.5,
-  });
+  // 文案层级：解锁 = 亮白主信息；锁定 = 深墨次信息（浅描边保可读，绝不同色同描边）
+  const nameText = makeText(
+    opts.unlocked ? `${stage.index}. ${stage.name}` : '未解锁',
+    {
+      size: FONT_SIZE.xxs,
+      fill: opts.unlocked ? 0xffffff : 0x3a3228,
+      strokeColor: opts.unlocked ? 0x2a3444 : 0xfff6e8,
+      strokeWidth: opts.unlocked ? 3 : 2,
+      bold: true,
+      anchor: 0.5,
+    },
+  );
   nameText.position.set(0, 14);
   wrap.addChild(nameText);
 

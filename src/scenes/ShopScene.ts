@@ -17,6 +17,7 @@ import { UI } from '@/balance/ui';
 import { PETS, type PetDef } from '@/balance/pets';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
+import { reportQuest } from '@/game/dailyQuestTracker';
 import {
   BACKGROUND_IMAGES, UI_IMAGES, UI_SHOP_IMAGES, UI_FX_IMAGES,
 } from '@/config/Assets';
@@ -707,6 +708,7 @@ export class ShopScene implements Scene {
     this._refreshCoins();
     this._refreshAllBuyEnabled();
     this._playBuyFx('universal');
+    reportQuest('shopBuy');
   }
 
   private _onBuyPet(petId: string): void {
@@ -729,6 +731,7 @@ export class ShopScene implements Scene {
     this._refreshCoins();
     this._refreshAllBuyEnabled();
     this._playBuyFx(petId);
+    reportQuest('shopBuy');
   }
 
   private _playBuyFx(key: string): void {

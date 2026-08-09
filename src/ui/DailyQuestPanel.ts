@@ -1,7 +1,7 @@
 /**
- * 每日任务弹窗（对齐 docs/ui/daily_quest_ui_prototype.png）
+ * 每日任务弹窗
  *
- * 布局：标题匾 → 今日进度+一键领取 → 4 行任务卡 → 全清横幅 → 底提示。
+ * 布局：标题匾 → 活跃度条+4 宝箱 → 可拖任务列表 → 底提示。
  * CTA 三态：领取 / 前往 / 已领取；领取带资源飞顶栏。
  */
 import * as PIXI from 'pixi.js';
@@ -13,8 +13,11 @@ import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
 import { SfxManager } from '@/core/SfxManager';
 import {
-  QUEST_ALL_CLEAR_ID, QUEST_ALL_CLEAR_REWARD,
-  type DailyQuestDef, type QuestTrigger,
+  DAILY_ACTIVITY_CAP,
+  DAILY_ACTIVITY_CHESTS,
+  type ActivityChestDef,
+  type DailyQuestDef,
+  type QuestTrigger,
 } from '@/balance/dailyQuest';
 import { formatReward, type RewardBundle } from '@/balance/rewards';
 import { PlayerData } from '@/game/PlayerData';
@@ -23,7 +26,7 @@ import { adUsesLeft, watchAd } from '@/game/adGate';
 import { tryRequestSubscribe } from '@/game/subscribeGate';
 import { AD_REWARD_MULT } from '@/balance/monetization';
 import {
-  canClaimAllClear, hasClaimableQuest, isQuestDone, todayQuests,
+  canClaimActivityChest, hasClaimableQuest, isQuestDone, reportQuest, todayActivity, todayQuests,
 } from '@/game/dailyQuestTracker';
 import { analytics } from '@/analytics';
 import { UI_IMAGES } from '@/config/Assets';
@@ -32,36 +35,43 @@ import {
   COLORS, FONT_SIZE,
   makeActionButton, makeCloseButton, makePanel, makeText, makeModalTitlePlaque, pulse,
 } from '@/ui';
+import { ScrollListController } from '@/ui/ScrollList';
 import {
   playClaimBurst, playRewardFly, rewardFlyIcons,
 } from './ResourceFlyFx';
 
 const PANEL_W = 680;
-const PANEL_H = 800;
+const PANEL_H = 860;
 const ROW_H = 96;
 const ROW_GAP = 8;
 const INNER_W = PANEL_W - 56;
+const ACTIVITY_H = 118;
+const LIST_BOTTOM_PAD = 36;
 
 /** 翻倍已用哨兵：与任务 id 同存 questClaimed，跨日随日循环一起清 */
 const questDoubleMark = (questId: string): string => `${questId}#x2`;
 
 const QUEST_ICON: Readonly<Record<QuestTrigger, string>> = {
+  login: UI_IMAGES.railDaily,
   stageClear: UI_IMAGES.navHome,
+  staminaSpend: UI_IMAGES.iconStamina,
   comboReach: UI_IMAGES.iconStatAtk,
   gachaPull: UI_IMAGES.iconRecruit,
   realmClear: UI_IMAGES.navRealm,
   petLevelUp: UI_IMAGES.navPet,
-  petStarUp: UI_IMAGES.navPet,
+  shopBuy: UI_IMAGES.navShop,
   towerFloor: UI_IMAGES.railTower,
 };
 
 const GO_SCENE: Readonly<Record<QuestTrigger, string>> = {
+  login: 'title',
   stageClear: 'title',
+  staminaSpend: 'title',
   comboReach: 'title',
   gachaPull: 'gacha',
   realmClear: 'realm',
   petLevelUp: 'codex',
-  petStarUp: 'codex',
+  shopBuy: 'shop',
   towerFloor: 'tower',
 };
 
@@ -69,6 +79,10 @@ export class DailyQuestPanel extends PIXI.Container {
   private _dim!: PIXI.Graphics;
   private _content!: PIXI.Container;
   private _body!: PIXI.Container;
+  private _listHost: PIXI.Container | null = null;
+  private _listContent: PIXI.Container | null = null;
+  private _listMask: PIXI.Graphics | null = null;
+  private readonly _scroll = new ScrollListController();
   private _fxLayer!: PIXI.Container;
   private _isOpen = false;
   private _busy = false;
@@ -88,6 +102,7 @@ export class DailyQuestPanel extends PIXI.Container {
     this._isOpen = true;
     this._busy = false;
     this.visible = true;
+    reportQuest('login');
     this._refresh();
     this.alpha = 0;
     TweenManager.to({ target: this, props: { alpha: 1 }, duration: 0.2, ease: Ease.easeOutQuad });
@@ -99,7 +114,7 @@ export class DailyQuestPanel extends PIXI.Container {
       UI_IMAGES.iconLingyu, UI_IMAGES.iconCoin, UI_IMAGES.iconExp,
       UI_IMAGES.iconShard, UI_IMAGES.iconTicket, UI_IMAGES.iconStamina,
       UI_IMAGES.btnPlateSuccess, UI_IMAGES.btnPlateCream, UI_IMAGES.modalTitlePlaque,
-      UI_IMAGES.navHome, UI_IMAGES.navRealm, UI_IMAGES.navPet,
+      UI_IMAGES.navHome, UI_IMAGES.navRealm, UI_IMAGES.navPet, UI_IMAGES.navShop,
       UI_IMAGES.iconRecruit, UI_IMAGES.railTower, UI_IMAGES.iconStatAtk,
       UI_IMAGES.railDaily, UI_IMAGES.questChest,
     ];
@@ -113,6 +128,7 @@ export class DailyQuestPanel extends PIXI.Container {
   close(): void {
     if (!this._isOpen || this._busy) return;
     this._isOpen = false;
+    this._scroll.detach();
     TweenManager.to({
       target: this,
       props: { alpha: 0 },
@@ -167,78 +183,180 @@ export class DailyQuestPanel extends PIXI.Container {
     this.addChild(this._fxLayer);
   }
 
-  private _refresh(): void {
-    this._body.removeChildren().forEach((c) => c.destroy({ children: true }));
-
-    const quests = todayQuests();
-    const doneCount = quests.filter((q) => isQuestDone(q)).length;
-
-    let y = -PANEL_H / 2 + 118;
-    y = this._buildProgressHeader(y, doneCount, quests.length) + 14;
-
-    quests.forEach((quest) => {
-      const row = this._makeQuestRow(quest);
-      row.position.set(0, y + ROW_H / 2);
-      this._body.addChild(row);
-      y += ROW_H + ROW_GAP;
-    });
-
-    y += 8;
-    const bannerH = 128;
-    const banner = this._makeAllClearBanner(bannerH);
-    banner.position.set(0, y + bannerH / 2);
-    this._body.addChild(banner);
-    y += bannerH + 14;
-
-    const tip = makeText('完成任务后记得领奖哦', {
-      size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: 0.5,
-    });
-    tip.position.set(0, y);
-    this._body.addChild(tip);
+  private _clearListLayer(): void {
+    this._scroll.detach();
+    if (this._listHost) {
+      this._listHost.removeChildren().forEach((c) => c.destroy({ children: true }));
+      this._listHost.parent?.removeChild(this._listHost);
+      if (!this._listHost.destroyed) this._listHost.destroy({ children: true });
+    }
+    this._listHost = null;
+    this._listContent = null;
+    this._listMask = null;
   }
 
-  private _buildProgressHeader(y: number, done: number, total: number): number {
-    const barH = 48;
+  private _refresh(): void {
+    this._body.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this._clearListLayer();
+
+    const quests = todayQuests();
+    const activity = todayActivity();
+
+    let y = -PANEL_H / 2 + 118;
+    y = this._buildActivityHeader(y, activity) + 12;
+
+    const tipY = PANEL_H / 2 - 28;
+    const tip = makeText('完成任务攒活跃，开宝箱领大奖', {
+      size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: 0.5,
+    });
+    tip.position.set(0, tipY);
+    this._body.addChild(tip);
+
+    // 列表视口：屏幕坐标，便于 ScrollList 与 mask 对齐
+    const w = Game.logicWidth;
+    const h = Game.logicHeight;
+    const listLocalTop = y;
+    const listScreenTop = h / 2 + listLocalTop;
+    const listScreenBottom = h / 2 + tipY - LIST_BOTTOM_PAD;
+    const viewportH = Math.max(120, listScreenBottom - listScreenTop);
+
+    const host = new PIXI.Container();
+    this.addChild(host);
+    this._listHost = host;
+
+    const mask = new PIXI.Graphics();
+    mask.beginFill(0xffffff);
+    mask.drawRoundedRect(w / 2 - INNER_W / 2, listScreenTop, INNER_W, viewportH, 12);
+    mask.endFill();
+    host.addChild(mask);
+    this._listMask = mask;
+
+    const list = new PIXI.Container();
+    list.position.set(w / 2, listScreenTop);
+    host.addChild(list);
+    list.mask = mask;
+    this._listContent = list;
+
+    let rowY = ROW_H / 2;
+    quests.forEach((quest) => {
+      const row = this._makeQuestRow(quest);
+      row.position.set(0, rowY);
+      list.addChild(row);
+      rowY += ROW_H + ROW_GAP;
+    });
+    const contentH = rowY - ROW_GAP / 2;
+    const scrollMin = Math.min(
+      listScreenTop,
+      listScreenTop - Math.max(0, contentH - viewportH),
+    );
+
+    this._scroll.attach({
+      content: () => this._listContent,
+      viewportTop: listScreenTop,
+      viewportH,
+      scrollMin,
+      listTop: listScreenTop,
+      moveThreshold: 6,
+    });
+    // 列表后加，保证飞奖励层仍在最上
+    this.setChildIndex(this._fxLayer, this.children.length - 1);
+  }
+
+  private _buildActivityHeader(y: number, activity: number): number {
     const bar = makePanel({
-      width: INNER_W, height: barH, radius: barH / 2, centered: true,
+      width: INNER_W, height: ACTIVITY_H, radius: 18, centered: true,
       bg: 0xfff8ec, border: COLORS.panelBorderSoft, borderWidth: 2,
     });
-    bar.position.set(0, y + barH / 2);
+    bar.position.set(0, y + ACTIVITY_H / 2);
     this._body.addChild(bar);
 
-    const label = makeText(`今日进度 ${done}/${total}`, {
+    const shown = Math.min(DAILY_ACTIVITY_CAP, activity);
+    const label = makeText(`活跃度 ${shown}/${DAILY_ACTIVITY_CAP}`, {
       size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
     });
-    label.position.set(-INNER_W / 2 + 20, y + barH / 2);
+    label.position.set(-INNER_W / 2 + 18, y + 22);
     this._body.addChild(label);
-
-    // 圆点进度
-    const dotsX = -INNER_W / 2 + 200;
-    const dotsY = y + barH / 2;
-    for (let i = 0; i < total; i++) {
-      const g = new PIXI.Graphics();
-      const filled = i < done;
-      g.beginFill(filled ? 0x5cbf4a : 0xfffaf0, 1);
-      g.lineStyle(2, filled ? 0x3d8a32 : COLORS.panelBorderSoft, 1);
-      g.drawCircle(dotsX + i * 22, dotsY, 7);
-      g.endFill();
-      this._body.addChild(g);
-    }
 
     const canBatch = hasClaimableQuest();
     const claimAll = makeActionButton({
       title: '一键领取',
-      width: 168,
-      height: 44,
+      width: 140,
+      height: 40,
       variant: canBatch ? 'success' : 'cream',
       enabled: canBatch && !this._busy,
       fontSize: FONT_SIZE.xs,
       onTap: () => void this._claimAll(),
     });
-    claimAll.position.set(INNER_W / 2 - 96, y + barH / 2);
+    // 右缘留白，避免贴边/出框
+    claimAll.position.set(INNER_W / 2 - 88, y + 22);
     this._body.addChild(claimAll);
 
-    return y + barH;
+    // 进度轨内缩：宝箱圆半径约 26，两端需给足边距，100 档才不会出框
+    const trackPad = 40;
+    const trackW = INNER_W - trackPad * 2;
+    const trackX = -trackW / 2;
+    const trackY = y + 72;
+    const trackH = 14;
+    const track = new PIXI.Graphics();
+    track.beginFill(COLORS.trackBg, 1);
+    track.drawRoundedRect(trackX, trackY - trackH / 2, trackW, trackH, trackH / 2);
+    track.endFill();
+    const ratio = Math.max(0, Math.min(1, shown / DAILY_ACTIVITY_CAP));
+    if (ratio > 0.001) {
+      track.beginFill(0x6dbf7a, 1);
+      track.drawRoundedRect(
+        trackX, trackY - trackH / 2,
+        Math.max(trackW * ratio, trackH), trackH, trackH / 2,
+      );
+      track.endFill();
+    }
+    this._body.addChild(track);
+
+    for (const chest of DAILY_ACTIVITY_CHESTS) {
+      const cx = trackX + trackW * (chest.need / DAILY_ACTIVITY_CAP);
+      this._body.addChild(this._makeChestNode(chest, cx, trackY));
+    }
+
+    return y + ACTIVITY_H;
+  }
+
+  private _makeChestNode(chest: ActivityChestDef, x: number, y: number): PIXI.Container {
+    const claimed = PlayerData.isQuestClaimed(chest.id);
+    const claimable = canClaimActivityChest(chest);
+    const node = new PIXI.Container();
+    node.position.set(x, y);
+
+    const ring = new PIXI.Graphics();
+    ring.beginFill(claimed ? 0xf0e6d4 : claimable ? 0xfff0c8 : 0xfffdf6, 1);
+    ring.lineStyle(2.5, claimable ? 0xe8a33d : COLORS.panelBorderSoft, 1);
+    ring.drawCircle(0, 0, 24);
+    ring.endFill();
+    node.addChild(ring);
+
+    this._mountSprite(node, UI_IMAGES.questChest, 0, -2, 36, claimed ? 0.4 : 1);
+
+    const need = makeText(`${chest.need}`, {
+      size: 12,
+      fill: claimed ? COLORS.textDisabled : COLORS.textSub,
+      bold: true, anchor: 0.5,
+    });
+    need.position.set(0, 22);
+    node.addChild(need);
+
+    if (claimable) {
+      node.eventMode = 'static';
+      node.cursor = 'pointer';
+      node.hitArea = new PIXI.Circle(0, 0, 26);
+      node.on('pointertap', () => void this._claimChest(chest));
+    } else if (claimed) {
+      const stamp = makeText('已领', {
+        size: 11, fill: 0x3d7a36, bold: true, anchor: 0.5,
+      });
+      stamp.position.set(0, -18);
+      node.addChild(stamp);
+    }
+
+    return node;
   }
 
   private _makeQuestRow(quest: DailyQuestDef): PIXI.Container {
@@ -256,7 +374,6 @@ export class DailyQuestPanel extends PIXI.Container {
       borderWidth: claimable ? 2.5 : 2,
     }));
 
-    // 左：类型图标圆框
     const iconX = -INNER_W / 2 + 48;
     const ring = new PIXI.Graphics();
     ring.beginFill(0xfffdf6, 1);
@@ -266,7 +383,6 @@ export class DailyQuestPanel extends PIXI.Container {
     row.addChild(ring);
     this._mountSprite(row, QUEST_ICON[quest.trigger], iconX, 0, 48, claimed ? 0.45 : 1);
 
-    // 中：任务名 + 进度条 + 奖励图标
     const textX = -INNER_W / 2 + 96;
     const name = makeText(quest.name, {
       size: FONT_SIZE.sm,
@@ -299,9 +415,16 @@ export class DailyQuestPanel extends PIXI.Container {
     prog.position.set(textX + barW + 8, barY);
     row.addChild(prog);
 
+    const act = makeText(`+${quest.activity}活跃`, {
+      size: 12,
+      fill: claimed ? COLORS.textDisabled : 0xb07a2a,
+      bold: true, anchor: [0, 0.5],
+    });
+    act.position.set(textX + 200, 30);
+    row.addChild(act);
+
     this._mountRewardIcons(row, quest.reward, textX, 30, claimed ? 0.45 : 1);
 
-    // 右：CTA
     if (claimed) {
       const dbl = this._makeDoubleChip(quest.id, quest.reward);
       row.addChild(dbl ?? this._makeClaimedStamp(INNER_W / 2 - 78, 0));
@@ -335,83 +458,6 @@ export class DailyQuestPanel extends PIXI.Container {
     return row;
   }
 
-  private _makeAllClearBanner(h: number): PIXI.Container {
-    const claimed = PlayerData.isQuestClaimed(QUEST_ALL_CLEAR_ID);
-    const claimable = canClaimAllClear();
-    const banner = new PIXI.Container();
-    const alpha = claimed ? 0.5 : 1;
-
-    banner.addChild(makePanel({
-      width: INNER_W, height: h, radius: 18, centered: true,
-      bg: claimed ? 0xf0e6d4 : 0xfff0c8,
-      bgAlpha: 0.98,
-      border: claimable || !claimed ? 0xe8a33d : COLORS.panelBorderSoft,
-      borderWidth: claimable ? 3 : 2.5,
-    }));
-
-    // 裁剪层：奖励文案绝不画出金框
-    const content = new PIXI.Container();
-    banner.addChild(content);
-    const mask = new PIXI.Graphics();
-    mask.beginFill(0xffffff);
-    mask.drawRoundedRect(-INNER_W / 2 + 4, -h / 2 + 4, INNER_W - 8, h - 8, 14);
-    mask.endFill();
-    banner.addChild(mask);
-    content.mask = mask;
-
-    const title = makeText(claimable ? '全部完成 · 可领取' : '全部完成 · 额外奖励', {
-      size: FONT_SIZE.sm,
-      fill: claimed ? COLORS.textDisabled : 0x5a3210,
-      bold: true, anchor: 0.5,
-      role: 'title',
-    });
-    title.position.set(0, -h / 2 + 28);
-    content.addChild(title);
-
-    // 各资源：图标在上、文案在下，整体居中落在框内
-    const r = QUEST_ALL_CLEAR_REWARD;
-    const slots: Array<{ path: string; label: string }> = [];
-    if (r.lingyu) slots.push({ path: UI_IMAGES.iconLingyu, label: `灵玉 ×${r.lingyu}` });
-    if (r.coins) slots.push({ path: UI_IMAGES.iconCoin, label: `灵宠币 ×${r.coins}` });
-    if (r.universal) slots.push({ path: UI_IMAGES.iconShard, label: `通用碎片 ×${r.universal}` });
-    if (r.stamina) slots.push({ path: UI_IMAGES.iconStamina, label: `体力 ×${r.stamina}` });
-
-    // 槽位从 2 涨到 4，间距同步收窄，否则会挤出横幅
-    const gap = slots.length >= 4 ? 132 : 180;
-    const startX = -((slots.length - 1) * gap) / 2;
-    const iconY = 6;
-    const labelY = 42;
-    slots.forEach((s, i) => {
-      const x = startX + i * gap;
-      this._mountSprite(content, s.path, x, iconY, 48, alpha);
-      const t = makeText(s.label, {
-        size: FONT_SIZE.xs,
-        fill: claimed ? COLORS.textDisabled : 0x6a3a14,
-        bold: true, anchor: 0.5,
-      });
-      t.position.set(x, labelY);
-      content.addChild(t);
-    });
-
-    if (claimed) {
-      const dbl = this._makeDoubleChip(QUEST_ALL_CLEAR_ID, QUEST_ALL_CLEAR_REWARD);
-      banner.addChild(dbl ?? this._makeClaimedStamp(0, 8));
-      if (dbl) dbl.position.set(INNER_W / 2 - 78, 8);
-    } else if (claimable) {
-      banner.eventMode = 'static';
-      banner.cursor = 'pointer';
-      banner.hitArea = new PIXI.Rectangle(-INNER_W / 2, -h / 2, INNER_W, h);
-      banner.on('pointertap', () => void this._claimAllClear());
-    }
-
-    return banner;
-  }
-
-  /**
-   * 已领取的任务位换成翻倍广告位（IAA，日 3 次）。
-   * 「哪条已翻过」用 `${questId}#x2` 哨兵写进 questClaimed —— 该账本本来就按日重置，
-   * 不必为翻倍再加一份存档字段；广告日限只管总次数，管不了同一条任务被翻两次。
-   */
   private _makeDoubleChip(questId: string, reward: RewardBundle): PIXI.Container | null {
     if (adUsesLeft('quest_double') <= 0) return null;
     if (PlayerData.isQuestClaimed(questDoubleMark(questId))) return null;
@@ -438,7 +484,6 @@ export class DailyQuestPanel extends PIXI.Container {
       Platform.showToast(`奖励翻倍 · ${formatReward(reward)}`, 'success');
       EventBus.emit('home:refresh');
     } finally {
-      // 必须先清 busy 再刷 UI，否则新建广告钮会带着 enabled:false
       this._busy = false;
       if (this._isOpen) this._refresh();
     }
@@ -473,9 +518,11 @@ export class DailyQuestPanel extends PIXI.Container {
     if (reward.exp) items.push({ path: UI_IMAGES.iconExp, amount: reward.exp });
     if (reward.tickets) items.push({ path: UI_IMAGES.iconTicket, amount: reward.tickets });
     if (reward.shards) items.push({ path: UI_IMAGES.iconShard, amount: reward.shards });
+    if (reward.universal) items.push({ path: UI_IMAGES.iconShard, amount: reward.universal });
+    if (reward.stamina) items.push({ path: UI_IMAGES.iconStamina, amount: reward.stamina });
 
     let cx = x;
-    for (const it of items.slice(0, 3)) {
+    for (const it of items.slice(0, 2)) {
       this._mountSprite(parent, it.path, cx + 12, y, 26, alpha);
       const t = makeText(`×${it.amount}`, {
         size: 14,
@@ -521,8 +568,10 @@ export class DailyQuestPanel extends PIXI.Container {
   private _goTo(trigger: QuestTrigger): void {
     const scene = GO_SCENE[trigger];
     this._isOpen = false;
+    this._scroll.detach();
     this.visible = false;
     this.alpha = 0;
+    if (scene === 'title' || SceneManager.current?.name === scene) return;
     SceneManager.switchTo(scene);
   }
 
@@ -546,19 +595,19 @@ export class DailyQuestPanel extends PIXI.Container {
     }
   }
 
-  private async _claimAllClear(): Promise<void> {
-    if (this._busy || !canClaimAllClear()) return;
+  private async _claimChest(chest: ActivityChestDef): Promise<void> {
+    if (this._busy || !canClaimActivityChest(chest)) return;
     this._busy = true;
     try {
-      if (!PlayerData.markQuestClaimed(QUEST_ALL_CLEAR_ID)) return;
-      grantReward(QUEST_ALL_CLEAR_REWARD);
+      if (!PlayerData.markQuestClaimed(chest.id)) return;
+      grantReward(chest.reward);
       SfxManager.playChestOpen();
-      analytics.trackDailyQuestClaim(QUEST_ALL_CLEAR_ID, {
-        questName: '全部完成',
-        reward: formatReward(QUEST_ALL_CLEAR_REWARD),
+      analytics.trackDailyQuestClaim(chest.id, {
+        questName: `活跃宝箱 ${chest.need}`,
+        reward: formatReward(chest.reward),
       });
-      await this._playClaimFx(QUEST_ALL_CLEAR_REWARD);
-      Platform.showToast(`领取成功 · ${formatReward(QUEST_ALL_CLEAR_REWARD)}`, 'success');
+      await this._playClaimFx(chest.reward);
+      Platform.showToast(`领取成功 · ${formatReward(chest.reward)}`, 'success');
       EventBus.emit('home:refresh');
     } finally {
       this._busy = false;
@@ -581,20 +630,24 @@ export class DailyQuestPanel extends PIXI.Container {
           reward: formatReward(quest.reward),
         });
       }
-      if (canClaimAllClear()) {
-        if (PlayerData.markQuestClaimed(QUEST_ALL_CLEAR_ID)) {
-          grantReward(QUEST_ALL_CLEAR_REWARD);
-          claimed.push(QUEST_ALL_CLEAR_REWARD);
-          analytics.trackDailyQuestClaim(QUEST_ALL_CLEAR_ID, {
-            questName: '全部完成',
-            reward: formatReward(QUEST_ALL_CLEAR_REWARD),
-          });
-        }
+      // 领完任务后再扫宝箱（活跃度随领取上涨）
+      for (const chest of DAILY_ACTIVITY_CHESTS) {
+        if (!canClaimActivityChest(chest)) continue;
+        if (!PlayerData.markQuestClaimed(chest.id)) continue;
+        grantReward(chest.reward);
+        claimed.push(chest.reward);
+        analytics.trackDailyQuestClaim(chest.id, {
+          questName: `活跃宝箱 ${chest.need}`,
+          reward: formatReward(chest.reward),
+        });
       }
 
       if (claimed.length === 0) return;
 
       const merged = mergeRewards(claimed);
+      if (claimed.some((r) => r.universal || r.stamina || (r.lingyu ?? 0) >= 40)) {
+        SfxManager.playChestOpen();
+      }
       await this._playClaimFx(merged);
       Platform.showToast(`领取成功 · ${formatReward(merged)}`, 'success');
       EventBus.emit('home:refresh');
@@ -614,7 +667,6 @@ export class DailyQuestPanel extends PIXI.Container {
     playClaimBurst(this._fxLayer, from.x, from.y);
     const flySec = playRewardFly(this._fxLayer, reward, from);
     pulse(this._body, { peak: 1.015, duration: 0.24 });
-    // 无图标可飞时也稍等一下
     const wait = Math.max(0.28, flySec * 0.55, rewardFlyIcons(reward).length ? 0.35 : 0.2);
     await waitSec(wait);
   }
@@ -628,6 +680,8 @@ function mergeRewards(list: RewardBundle[]): RewardBundle {
     if (r.exp) out.exp = (out.exp ?? 0) + r.exp;
     if (r.tickets) out.tickets = (out.tickets ?? 0) + r.tickets;
     if (r.shards) out.shards = (out.shards ?? 0) + r.shards;
+    if (r.universal) out.universal = (out.universal ?? 0) + r.universal;
+    if (r.stamina) out.stamina = (out.stamina ?? 0) + r.stamina;
   }
   return out;
 }

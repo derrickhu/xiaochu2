@@ -160,6 +160,40 @@ export class BattleStatusIcons {
     this._icons.clear();
   }
 
+  /** 状态图标世界坐标（DoT 飘字从「毒」图标冒出，而不是和普攻大红字抢中路） */
+  iconAnchor(owner: StatusOwner, kind: StatusKind): { x: number; y: number } | null {
+    const entry = this._icons.get(`${owner}:${kind}`);
+    if (!entry || !displayAlive(entry.container)) return null;
+    const row = owner === 'enemy' ? this._enemyRow : this._teamRow;
+    if (!displayAlive(row)) return null;
+    return {
+      x: row.x + entry.container.x,
+      y: row.y + entry.container.y,
+    };
+  }
+
+  /** tick 时图标轻弹一下，把视线从普攻数字引到状态源 */
+  pulseIcon(owner: StatusOwner, kind: StatusKind): void {
+    const entry = this._icons.get(`${owner}:${kind}`);
+    if (!entry || !displayAlive(entry.container)) return;
+    const scale = readScale(entry.container);
+    if (!scale) return;
+    cancelDisplayTweens(entry.container);
+    TweenManager.cancelTarget(scale);
+    scale.set(1);
+    TweenManager.to({
+      target: scale, props: { x: 1.28, y: 1.28 },
+      duration: 0.1, ease: Ease.easeOutQuad,
+      onComplete: () => {
+        if (!displayAlive(entry.container)) return;
+        TweenManager.to({
+          target: scale, props: { x: 1, y: 1 },
+          duration: 0.16, ease: Ease.easeOutBack,
+        });
+      },
+    });
+  }
+
   private _syncEnemyRowPos(): void {
     if (!this._enemyRow) return;
     this._enemyRow.position.set(

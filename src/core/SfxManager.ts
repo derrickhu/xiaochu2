@@ -293,6 +293,49 @@ class SfxManagerClass {
     this._play(AUDIO.skill, 0.6);
   }
 
+  /*
+   * ── 技能专属命中层 ──
+   *
+   * 瞬发直伤此前与消珠普攻共用 playAttack + playPetDmgHit，两者听感完全一样，
+   * 于是「攒了五回合的核爆」和「顺手消一组珠」在耳朵里没有分别。下面几条不引入新素材，
+   * 靠已有片段的音高与叠法拉开差异：核爆压低成一记闷轰，多段技逐段爬音阶，
+   * 增益走上扬和弦。素材到位后可整体替换，调用点不用动。
+   */
+
+  /** 瞬发直伤命中：重击额外铺一层低频轰 + 尾音 */
+  playSkillImpact(heavy: boolean): void {
+    if (!this.enabled) return;
+    this._playEx(AUDIO.skill, heavy ? 0.85 : 0.55, heavy ? 0.72 : 0.98);
+    if (!heavy) return;
+    this._playEx(AUDIO.boss, 0.5, 0.6);
+    setTimeout(() => {
+      if (this.enabled) this._playEx(AUDIO.levelup, 0.38, 1.35);
+    }, 70);
+  }
+
+  /** 多段技第 index 段（0 基）：逐段爬音阶，最后一段落回主音收尾 */
+  playSkillMultiHit(index: number, total: number): void {
+    if (!this.enabled) return;
+    const last = index >= total - 1;
+    const pitch = SCALE[Math.min(index, SCALE.length - 1)];
+    this._playEx(AUDIO.attack, last ? 0.62 : 0.42, pitch);
+    if (last) this._playEx(AUDIO.skill, 0.6, 0.85);
+  }
+
+  /** 增益 / 治疗 / 护盾类技能：上扬和弦，与直伤的下沉感区分 */
+  playSkillBuff(): void {
+    if (!this.enabled) return;
+    this._playEx(AUDIO.levelup, 0.5, 1.1);
+    this._playComboEx(0.3, SCALE[4]);
+  }
+
+  /** 转珠 / 净化类：扫过盘面的沙沙声 */
+  playSkillBoardWave(): void {
+    if (!this.enabled) return;
+    this._playEx(AUDIO.rolling, 0.6, 1.15);
+    this._playEx(AUDIO.eliminate, 0.28, 1.5);
+  }
+
   playEnemySkill(): void {
     if (!this.enabled) return;
     this._play(AUDIO.enemySkill, 0.6);

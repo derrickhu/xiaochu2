@@ -300,12 +300,64 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
     lifeFrames: 102,
     fadeStart: 78,
   },
+  /*
+   * 中毒 / 灼烧 tick：副信息，不能和普攻大红字抢戏。
+   * 色相/字号保持克制；停留对齐普攻量级——旧 hold 28 帧（约 0.5s）读完数字就没了。
+   */
+  heroDot: {
+    startScale: 0.72,
+    peakScale: 1.12,
+    settleScale: 1.0,
+    popFrames: 4,
+    settleFrames: 10,
+    startYOffset: 6,
+    riseFrames: 12,
+    riseDist: 36,
+    returnFrames: 0,
+    returnTo: 0,
+    reboundFrames: 0,
+    reboundTo: 0,
+    holdFrames: 56,
+    driftFrames: 12,
+    driftDist: 2,
+    lifeFrames: 110,
+    fadeStart: 86,
+  },
+  /**
+   * 状态施加公告（「中毒！每回合 -77」）：必须读完才淡。
+   * 旧路径走 spawnFloat（UI.anim.damageFloat = 0.6s 边飘边淡），大字一闪而过等于没提示。
+   */
+  heroStatusAnnounce: {
+    startScale: 0.7,
+    peakScale: 1.2,
+    settleScale: 1.06,
+    popFrames: 5,
+    settleFrames: 12,
+    startYOffset: 8,
+    riseFrames: 10,
+    riseDist: 28,
+    returnFrames: 0,
+    returnTo: 0,
+    reboundFrames: 0,
+    reboundTo: 0,
+    holdFrames: 72,
+    driftFrames: 14,
+    driftDist: 2,
+    lifeFrames: 130,
+    fadeStart: 100,
+  },
 };
 
-/** xiao_chu FLOAT_CFG 宠物伤害缩放 / 延迟 */
+/**
+ * xiao_chu FLOAT_CFG 宠物伤害缩放 / 延迟
+ *
+ * 技能主段从 1.04 提到 1.3：旧值比平 A 的 1.06 还小，一次 CD 攒五六回合换来的核爆，
+ * 飘出来的数字反而比顺手消一组珠更不起眼——「放技能像又平 A 了一次」有一半是这里造成的。
+ * 多段技的后续命中另走 minorScale，避免连打五下把屏幕糊满大字。
+ */
 export const PET_FLOAT_CFG = {
   normalAtk: { slotYRatio: 0.6, scale: 1.06, delayStep: 3 },
-  skill: { slotYRatio: 0.6, scale: 1.04 },
+  skill: { slotYRatio: 0.6, scale: 1.3, minorScale: 1.02 },
   multiHit: { upperYRatio: 0.5, lowerYRatio: 0.78, xStep: 8, scale: 1.03 },
 } as const;
 
@@ -313,7 +365,13 @@ export type PetDmgStyleKey = 'slotDamageMain' | 'slotDamageCrit' | 'slotDamageMi
 
 export type EnemyDmgStyleKey = 'enemyHitMain' | 'enemyHitCrit';
 
-export type HeroHitDmgStyleKey = 'heroHitDamage' | 'heroHitDamageHeavy' | 'heroHitShield' | 'heroHeal';
+export type HeroHitDmgStyleKey =
+  | 'heroHitDamage'
+  | 'heroHitDamageHeavy'
+  | 'heroHitShield'
+  | 'heroHeal'
+  | 'heroDot'
+  | 'heroStatusAnnounce';
 
 export type DmgMotionKey = keyof typeof DMG_MOTION;
 

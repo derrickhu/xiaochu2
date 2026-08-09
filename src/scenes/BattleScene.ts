@@ -279,6 +279,8 @@ export class BattleScene implements Scene {
     this._statusIcons.build(this.container);
     // 宠物槽（含就绪上拖箭头）须在血条之上，否则箭头会被 HP 框挡住
     this._petBar.raiseSlotsLayer(this.container);
+    // HP 数字再抬一层：箭头可以伸进血条带，但不能盖住可读数字
+    this._hud.raiseHpReadouts(this.container);
     // 技能说明气泡再置顶
     this._petBar.raisePreviewLayer(this.container);
 
@@ -535,7 +537,9 @@ export class BattleScene implements Scene {
       const healed = this._ctrl.applyHeal(res.heal);
       if (healed > 0) {
         this._hud.refreshHeroHp();
-        this._fx.spawnHeroHealFloat(healed, Game.logicWidth / 2, this._layout.heroBarY - 24);
+        this._fx.spawnHeroHealFloat(
+          healed, this._layout.heroAnnounceX, this._layout.heroAnnounceY,
+        );
         SfxManager.playHeal();
         await delay(UI.anim.attackGap);
         if (isStale()) return false;
@@ -872,13 +876,23 @@ export class BattleScene implements Scene {
         break;
       }
       case 'poison':
-        await this._hud.playEnemyDebuff(this._fx, result, `中毒 ${result.value ?? 0}/回合 ×${result.turns ?? 0}`);
+        // 施加 ≠ 结算；文案压短 + 可换行，避免裁出屏外
+        await this._hud.playEnemyDebuff(
+          this._fx, result,
+          `中毒！\n-${result.value ?? 0}/回合 ×${result.turns ?? 0}`,
+        );
         break;
       case 'timeSqueeze':
-        await this._hud.playEnemyDebuff(this._fx, result, `转珠时间 -${result.value ?? 0} 秒 ×${result.turns ?? 0}`);
+        await this._hud.playEnemyDebuff(
+          this._fx, result,
+          `转珠缩短\n-${result.value ?? 0}秒 ×${result.turns ?? 0}`,
+        );
         break;
       case 'healBlock':
-        await this._hud.playEnemyDebuff(this._fx, result, `禁疗！回复减半 ×${result.turns ?? 0}`);
+        await this._hud.playEnemyDebuff(
+          this._fx, result,
+          `禁疗！\n回复减半 ×${result.turns ?? 0}`,
+        );
         break;
       case 'enrage':
         await this._hud.playEnemyEnrage(this._fx, result.value ?? 1);
@@ -965,14 +979,23 @@ export class BattleScene implements Scene {
 
     if (isStale()) return;
 
-    for (const tick of result.dotTicks ?? []) {
+    const dots = result.dotTicks ?? [];
+    if (dots.length > 0) {
+      // 普攻大红字先落地停半拍，再让 DoT 从状态图标冒出——两行同时顶峰时读不出主次
+      await delay(0.18);
+      this._refreshSkillUi();
+    }
+    for (const tick of dots) {
       if (isStale()) return;
       if (tick.amount <= 0) continue;
       SfxManager.playDotTick();
       if (tick.owner === 'enemy') {
         await this._hud.playEnemyDotTick(this._fx, tick.amount);
       } else {
-        await this._hud.playHeroDotTick(this._fx, tick.amount);
+        this._statusIcons.pulseIcon('team', 'dot');
+        await this._hud.playHeroDotTick(
+          this._fx, tick.amount, this._statusIcons.iconAnchor('team', 'dot'),
+        );
       }
     }
     if (isStale()) return;

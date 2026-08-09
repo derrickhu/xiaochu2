@@ -216,8 +216,6 @@ export function simulateBattle(
       enemy.dmgReduction?.reduction ?? 0,
       compPenalty.enemyReduction,
     );
-    buffMult = (st.dmgBuff?.mult ?? 1.0) * teamDamageMult * (st.atkDebuff?.mult ?? 1)
-      * leaderComboMult * leaderBigMatchMult * leaderHpMult();
     dmgToEnemy = 0;
     healThisTurn = passiveRegenPerTurn;
 
@@ -238,6 +236,16 @@ export function simulateBattle(
         p.skillCdLeft = p.skill.cd;
       }
     }
+
+    /*
+     * 增伤乘区必须在主动技之后取值。
+     *
+     * 实战是「先放技能，再拖珠」，本回合放的增伤 buff 会作用在本回合的消珠上
+     * （BattleController 在 resolvePlayerTurnDamage 时才读 dmgBuff）。旧实现在技能循环
+     * 之前就把 buffMult 定死了，等于让每个增伤技都晚一回合生效，系统性低估增伤技约一半价值。
+     */
+    buffMult = (st.dmgBuff?.mult ?? 1.0) * teamDamageMult * (st.atkDebuff?.mult ?? 1)
+      * leaderComboMult * leaderBigMatchMult * leaderHpMult();
 
     // ── 转珠消除：覆盖元素造伤，心珠回血 ──
     let hitsThisTurn = 0;

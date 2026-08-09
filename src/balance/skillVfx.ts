@@ -73,3 +73,29 @@ export const SKILL_VFX: readonly SkillVfxDef[] = [
 
 export const SKILL_VFX_MAP: ReadonlyMap<SkillVfxId, SkillVfxDef> =
   new Map(SKILL_VFX.map((vfx) => [vfx.id, vfx]));
+
+export type SkillImpactTier = 'light' | 'heavy';
+
+/**
+ * 瞬发直伤命中的「停拍 + 镜头微推」。
+ *
+ * 技能和平 A 走的是同一套命中反馈（闪白 + 击退 + 粒子），所以无论倍率调多高，
+ * 屏幕上看到的都只是「数字大了点」。这里补上格斗游戏那套惯用手法：命中瞬间把敌人推近，
+ * 停一拍再弹回。停拍是全部手感的来源——画面卡住的那几十毫秒，玩家才「感觉到」打中了。
+ *
+ * hold 卡得很紧：120ms 以上就会从「打击感」变成「掉帧」，而技能一场要放十几次。
+ */
+export const SKILL_IMPACT: Readonly<Record<SkillImpactTier, {
+  /** 敌人立绘推近的倍率，代替真镜头推近（战斗根容器由震屏独占，不宜再叠变换） */
+  punchScale: number;
+  punchIn: number;
+  /** 停拍时长 */
+  hold: number;
+  settle: number;
+}>> = {
+  light: { punchScale: 1.06, punchIn: 0.05, hold: 0.03, settle: 0.14 },
+  heavy: { punchScale: 1.16, punchIn: 0.05, hold: 0.09, settle: 0.2 },
+};
+
+/** 单次伤害占敌人最大血量的比例达到多少才按重击演出 */
+export const SKILL_IMPACT_HEAVY_HP_RATIO = 0.18;

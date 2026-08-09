@@ -45,6 +45,15 @@ export interface BattleLayout {
   enemyStatusIconY: number;
   /** 我方持续状态图标行中心 Y（英雄血条正上方） */
   teamStatusIconY: number;
+  /**
+   * 短数字飘字（治疗 +N / 护盾）：贴敌血条右侧外，不盖中央 HP。
+   * 状态施加长文案另走 statusAnnounce，勿复用此点——贴右边会裁出屏。
+   */
+  heroAnnounceX: number;
+  heroAnnounceY: number;
+  /** 状态施加公告（中毒/禁疗…）：屏幕水平居中，落在两血条空隙 */
+  statusAnnounceX: number;
+  statusAnnounceY: number;
   enemyCenterX: number;
   enemyCenterY: number;
   heroBarY: number;
@@ -95,10 +104,20 @@ export function computeBattleLayout(): BattleLayout {
   /** 与 BattleStatusIcons.ICON_SIZE 对齐 */
   const statusIconSize = 34;
   const statusIconGap = 6;
-  // 侧挂后中间不再堆倒计时/克制行，血条贴近英雄条，立绘区增高
-  const enemyHpBarY = heroBarY - 16 - enemyHpBarHeight;
-  // 我方状态图标：血条顶上方留足半高 + 间距，避免压住 HP 数字
-  const teamStatusIconY = heroBarY - statusIconGap - statusIconSize / 2;
+  /*
+   * 敌我血条间距必须够塞下一行状态图标（34px）+ 余量。
+   * 旧值 16px 时图标中心落在 heroBarY-23，半高 17px 直接吃进敌血条下沿，
+   * 中毒飘字再锚在 heroBarY-28，等于叠在敌血条「153 / 780」上——截图里那团就是这个。
+   */
+  const enemyHeroBarGap = statusIconSize + statusIconGap * 2 + 8;
+  const enemyHpBarY = heroBarY - enemyHeroBarGap - enemyHpBarHeight;
+  // 我方状态图标：落在两血条之间的空隙正中
+  const teamStatusIconY = heroBarY - enemyHeroBarGap / 2;
+  // 短数字：敌血条右缘外侧。状态长文案：居中 + 空隙，避免贴右裁切
+  const heroAnnounceX = Game.logicWidth / 2 + enemyBarW / 2 + statusIconSize;
+  const heroAnnounceY = heroBarY + heroHpBarHeight / 2;
+  const statusAnnounceX = Game.logicWidth / 2;
+  const statusAnnounceY = teamStatusIconY;
 
   // 顶栏与全站统一：关卡匾/返回钮对齐胶囊收起区中心（safeHeaderCenterY）
   const headerY = Game.safeHeaderCenterY;
@@ -143,6 +162,10 @@ export function computeBattleLayout(): BattleLayout {
     enemyStatusIconX,
     enemyStatusIconY,
     teamStatusIconY,
+    heroAnnounceX,
+    heroAnnounceY,
+    statusAnnounceX,
+    statusAnnounceY,
     enemyCenterX: Game.logicWidth / 2,
     enemyCenterY,
     heroBarY,

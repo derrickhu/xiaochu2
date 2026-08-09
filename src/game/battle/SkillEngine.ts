@@ -12,7 +12,7 @@ import { getRaritySkillPower } from '@/balance/rarity';
 import { skillMasteryRank, masteryEffectMult } from '@/balance/skillGrowth';
 import { applyResist, type ResistKind, type ResistQuota } from '@/balance/petTags';
 import type { StatusKind, StatusStackPolicy } from './BattleStatus';
-import { defenseReduction, expectedCritFactor } from '@/formulas/damage';
+import { defenseReduction, expectedCritFactor, skillElementMultiplier } from '@/formulas/damage';
 
 export interface SkillCaster {
   kind: 'pet' | 'enemy';
@@ -371,13 +371,39 @@ type EffectHandler<K extends SkillEffectDef['kind'] = SkillEffectDef['kind']> = 
   c: EffectContext,
 ) => boolean;
 
+/**
+ * 瞬发直伤是否吃五行克制。
+ *
+ * 消珠有「消除数 × Combo × 克制」三层乘区，技能原本一层都不吃，于是无论怎么调倍率，
+ * 放技的手感都只是「又一次平 A」。让瞬发直伤接上克制这一层，放技才第一次和编队产生关系。
+ *
+ * 三类不吃：敌人技（英雄无属性）、全队齐射（teamAtk 是混属性齐射）、持续伤害。
+ * 后两者因此成为「不挑颜色的保底输出」，与「挑对颜色就爆炸」的瞬发直伤形成分工。
+ */
+function counterMultFor(
+  source: 'casterAtk' | 'teamAtk' | 'enemyAtk',
+  caster: SkillCaster,
+  ctx: SkillRuntimeContext,
+  element: Element | undefined,
+  applyCounter: boolean | undefined,
+): number {
+  if (caster.kind !== 'pet' || source === 'teamAtk' || applyCounter === false) return 1;
+  return skillElementMultiplier(element ?? caster.element, ctx.enemy.element);
+}
+
 /** 单段直伤结算（damage / multiHit 共用） */
 function resolveHitAmount(
   source: 'casterAtk' | 'teamAtk' | 'enemyAtk',
   multiplier: number,
   caster: SkillCaster,
   ctx: SkillRuntimeContext,
-  opts: { applyDefense?: boolean; applyDmgBuff?: boolean; applyEnemyReduction?: boolean },
+  opts: {
+    applyDefense?: boolean;
+    applyDmgBuff?: boolean;
+    applyEnemyReduction?: boolean;
+    applyCounter?: boolean;
+    element?: Element;
+  },
 ): number {
   const raw = damageSourceValue(source, caster, ctx) * multiplier;
   // 宠物施法的直伤/多段技按「施法宠自身」暴击的期望值放大（确定性，与模拟器镜像）；敌人技不暴击。
@@ -386,6 +412,7 @@ function resolveHitAmount(
     : 1;
   const reduced = raw
     * critFactor
+    * counterMultFor(source, caster, ctx, opts.element, opts.applyCounter)
     * (opts.applyDefense === false ? 1 : (1 - defenseReduction(ctx.enemy.def_)))
     * (opts.applyDmgBuff === false ? 1 : ctx.teamDamageBuffMult)
     * (opts.applyEnemyReduction === false ? 1 : (1 - ctx.enemyDamageReduction));

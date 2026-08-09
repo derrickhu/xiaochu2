@@ -304,8 +304,17 @@ function bestCounterRun(stage: StageDef): SimResult {
     if (better(best, r) === r) { best = r; bestTeam = team; }
   }
 
-  // 候补池按「对位相关度」剪枝：全池 100 只 × 5 位 × 多轮会把审计拖到分钟级，
-  // 而与本场无关的宠换上去必然更差，跑它们只是白费算力。
+  /*
+   * 候补池按「对位相关度」剪枝：全池 100 只 × 5 位 × 多轮会把审计拖到分钟级，
+   * 而与本场无关的宠换上去必然更差，跑它们只是白费算力。
+   *
+   * 稀有度按 3 倍计权，是因为它是本作最强的战力轴：一只 SSR 顶得上好几只 R。
+   * 早期版本让稀有度裸权重 1、同色扣 4，结果同色 SSR 被排到一堆 R1 后面挤出候补池——
+   * 第 14 章 Boss 是火，全池最强的辅助星河烛龙恰好也是火，于是「针对队」连试都没试过它，
+   * 而通用队白拿。测出来的低换队收益是**搜索被剪坏了**，不是游戏真的不需要换队。
+   * 同色扣分也随之收敛到 -3：同色只是丢掉消珠的克制乘区，辅助宠的增益本来就不看颜色，
+   * 真实玩家不会因为「跟 Boss 同色」就把手上最强的奶妈辅助雪藏。
+   */
   const wanted = COUNTER_SKILL_KINDS[archetypeOfStage(stage)];
   const counterEl = counterElementOf(stage.element);
   const shortlist = [...availablePool(chapter)]
@@ -314,8 +323,8 @@ function bestCounterRun(stage: StageDef): SimResult {
         (petTagsOf(d).killerElement === stage.element ? 8 : 0)
         + (hasAnyEffectKind(d, wanted) ? 6 : 0)
         + (d.element === counterEl ? 4 : 0)
-        + (d.element === stage.element ? -4 : 0)
-        + d.rarity;
+        + (d.element === stage.element ? -3 : 0)
+        + d.rarity * 3;
       return s(b) - s(a) || a.id.localeCompare(b.id);
     })
     .slice(0, HILL_CLIMB_SHORTLIST);

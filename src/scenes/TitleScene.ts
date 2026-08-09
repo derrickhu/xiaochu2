@@ -10,6 +10,7 @@ import { SceneManager, type Scene } from '@/core/SceneManager';
 import { UI } from '@/balance/ui';
 import { CHAPTERS, CHAPTER_NAME, STAGE_MAP, stagesOfChapter } from '@/balance/stages';
 import { PlayerData } from '@/game/PlayerData';
+import { reportQuest } from '@/game/dailyQuestTracker';
 import {
   makeCurrencyLabel, makeChapterNavArrow, NAV_ARROW_SIZE,
   makeChapterTitlePlaque, namePlaqueOuterHalf,
@@ -92,6 +93,7 @@ export class TitleScene implements Scene {
     this._chapter = enter?.chapter ?? this._latestUnlockedChapter();
     if (SceneManager.current?.name !== 'title') return;
     this._rebuild();
+    reportQuest('login');
     void ensurePetAvatars(titleHomePetAvatarEntries(this._chapter));
     void Game.warmScenePresent();
   }

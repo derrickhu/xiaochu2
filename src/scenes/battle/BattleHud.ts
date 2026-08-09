@@ -22,6 +22,7 @@ import {
   formatEnemyBattleName,
 } from '@/balance/enemyDisplay';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
+import { SKILL_IMPACT, type SkillImpactTier } from '@/balance/skillVfx';
 import { enemyImage, UI_BATTLE_IMAGES } from '@/config/Assets';
 import { makeElementOrb } from '@/ui';
 import { formatStageBattleHeader } from '@/balance/stages';
@@ -473,8 +474,24 @@ export class BattleHud {
       size: FONT_SIZE.xs, fill: COLORS.accentDeep, bold: true, anchor: [1, 0.5],
       strokeColor: COLORS.panelBg, strokeWidth: 3,
     });
-    this._statusText.position.set(Game.logicWidth - UI.board.marginX, this._layout.heroBarY - 20);
+    // 与 heroAnnounce 同侧靠右，落在两血条空隙，避免压敌血条数字
+    this._statusText.position.set(
+      Game.logicWidth - UI.board.marginX,
+      this._layout.teamStatusIconY,
+    );
     parent.addChild(this._statusText);
+  }
+
+  /**
+   * 血条数字抬到就绪箭头之上。
+   * raiseSlotsLayer 会把宠物槽（含上伸双箭头）叠到血条框上面，数字若不跟着抬，
+   * 「711 / 1717」会被箭头戳穿——和中毒飘字是同一类层级问题。
+   */
+  raiseHpReadouts(parent: PIXI.Container): void {
+    if (displayAlive(this._enemyHpText)) parent.addChild(this._enemyHpText);
+    if (displayAlive(this._heroHpText)) parent.addChild(this._heroHpText);
+    if (displayAlive(this._shieldBadge)) parent.addChild(this._shieldBadge);
+    if (displayAlive(this._statusText)) parent.addChild(this._statusText);
   }
 
   /** 纯 Graphics 竖向渐隐（避免依赖 canvas 渐变，兼容小游戏端） */
@@ -972,6 +989,37 @@ export class BattleHud {
     }
   }
 
+  /**
+   * 技能命中停拍：敌人立绘推近 → 停一拍 → 弹回（参数与理由见 SKILL_IMPACT）。
+   *
+   * 只做推近与停顿，闪白/击退/粒子仍由紧邻的 playEnemyHit 负责，避免同一帧两套反馈打架。
+   * 不 cancel 容器 tween：击退动的是 position、这里动的是 scale，互不干扰，
+   * 硬 cancel 反而会把击退停在半路，让敌人歪着不回位。
+   */
+  async playSkillImpact(fx: BattleFx, tier: SkillImpactTier): Promise<void> {
+    const cfg = SKILL_IMPACT[tier];
+    if (tier === 'heavy') {
+      fx.shakeHeavy();
+      Platform.vibrateShort('heavy');
+    }
+    const c = this._enemyContainer;
+    if (!displayAlive(c)) {
+      await delay(cfg.hold);
+      return;
+    }
+    await tweenScale(c, { x: cfg.punchScale, y: cfg.punchScale }, {
+      duration: cfg.punchIn, ease: Ease.easeOutQuad,
+    });
+    await delay(cfg.hold);
+    await tweenScale(c, { x: 1, y: 1 }, {
+      duration: cfg.settle, ease: Ease.easeOutBack,
+    }, {
+      onFallback: () => {
+        resetScale(c, 1);
+      },
+    });
+  }
+
   /** 技能直伤命中：仅立绘闪白，避免与弹道叠粒子/震屏 */
   playEnemyHitLight(): void {
     if (displayAlive(this._enemySprite)) {
@@ -1163,7 +1211,7 @@ export class BattleHud {
    * 敌人侧技能名 + 紫色施法粒子 → 英雄区 debuff 飘字 + 暗紫闪屏
    */
   async playEnemyDebuff(fx: BattleFx, result: EnemyActResult, text: string): Promise<void> {
-    const { enemyCenterX, enemyCenterY, heroBarY } = this._layout;
+    const { enemyCenterX, enemyCenterY } = this._layout;
     if (result.skillName) {
       fx.spawnFloat(result.skillName, enemyCenterX, enemyCenterY - 60, 0xc06cf0, 1.25);
     }
@@ -1176,12 +1224,15 @@ export class BattleHud {
     const debuffTail = Platform.isMinigame && !Platform.isDevtools ? 0.22 : 0.4;
     await delay(debuffGap);
     fx.flash(0x7a3cb8, 0.24, 0.3);
-    fx.spawnFloat(text, Game.logicWidth / 2, heroBarY - 28, 0xc06cf0, 1.2);
+    const { statusAnnounceX, statusAnnounceY } = this._layout;
+    // 居中公告：旧锚点贴右侧，长句「中毒！每回合 -77（3回合）」直接裁出屏
+    fx.spawnStatusAnnounceFloat(text, statusAnnounceX, statusAnnounceY, 0xc06cf0);
     fx.burst({
-      x: Game.logicWidth / 2, y: heroBarY,
+      x: statusAnnounceX, y: statusAnnounceY,
       color: 0xc06cf0, count: 10, speed: 260, size: 13, life: 0.45,
     });
-    await delay(debuffTail);
+    // 至少让大字停稳再进入下一拍；真机也不再压成 0.22s
+    await delay(Math.max(debuffTail, 0.85));
   }
 
   /** 眩晕跳过回合：头顶旋转星星 + 「眩晕中」飘字（真机用 delay 避免 rotation tween 挂死） */
@@ -1243,18 +1294,29 @@ export class BattleHud {
     if (!sprite.destroyed) sprite.tint = 0xffffff;
   }
 
-  /** 我方 DoT tick（中毒）：英雄血条紫色飘字 + burst + 血条刷新 */
-  async playHeroDotTick(fx: BattleFx, amount: number): Promise<void> {
-    const { heroBarY } = this._layout;
-    const x = Game.logicWidth / 2;
-    fx.spawnHeroHitFloat(`中毒 -${amount}`, x, heroBarY - 28, 'damage');
+  /**
+   * 我方中毒 tick。
+   *
+   * 和普攻 `-155` 必须一眼能分：色（紫）/ 字号（小）/ 锚点（毒图标）全不同。
+   * 旧实现用 hit 大红字写「中毒 -77」贴在公告位，和这一刀并排时玩家读成「打了两下」。
+   */
+  async playHeroDotTick(
+    fx: BattleFx,
+    amount: number,
+    fromIcon?: { x: number; y: number } | null,
+  ): Promise<void> {
+    const fallbackX = UI.board.marginX + 40;
+    const fallbackY = this._layout.teamStatusIconY;
+    const x = fromIcon?.x ?? fallbackX;
+    const y = fromIcon?.y ?? fallbackY;
+    fx.spawnHeroDotFloat(amount, x, y - 8);
     fx.burst({
-      x, y: heroBarY,
-      color: 0xc06cf0, count: 8, speed: 220, size: 12, life: 0.4,
+      x, y,
+      color: 0xc06cf0, count: 6, speed: 160, gravity: -80, size: 10, life: 0.35,
     });
     Platform.vibrateShort('light');
     this.refreshHeroHp();
-    await delay(0.32);
+    await delay(0.28);
   }
 
   /** 重力技命中：敌人立绘被压扁下沉再弹回（配合暗色闪屏与重震由调用方触发） */

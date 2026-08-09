@@ -44,13 +44,13 @@ import { SIGNATURE_SKILLS } from './signatures';
 
 export const SKILLS: readonly SkillDef[] = [
   // ── 宠物技能（蓝图生成，去重） ──
-  makeConvert({ id: PET_SKILL_IDS.transmuteMetal, name: '点金术', to: 'metal', count: 6, cd: 7 }),
+  makeConvert({ id: PET_SKILL_IDS.transmuteMetal, name: '点金术', to: 'metal', count: 7, cd: 7 }),
   makeHeal({ id: PET_SKILL_IDS.woodHeal, name: '青藤抚愈', healPct: 0.3, cd: 5, flavor: '青藤缠绕治愈' }),
-  makeTeamNuke({ id: PET_SKILL_IDS.woodVolley, name: '万藤齐发', multiplier: 1.4, cd: 7, flavor: '号令全队齐射' }),
+  makeTeamNuke({ id: PET_SKILL_IDS.woodVolley, name: '万藤齐发', multiplier: 1.55, cd: 7, flavor: '号令全队齐射' }),
   makeShield({ id: PET_SKILL_IDS.waterShield, name: '水幕屏障', shieldPct: 0.25, cd: 6, flavor: '展开水幕' }),
   makeNuke({ id: PET_SKILL_IDS.waterPierce, name: '玄水突刺', element: 'water', multiplier: 6, cd: 4, flavor: '化作水龙突刺' }),
   makeNuke({ id: PET_SKILL_IDS.fireBurst, name: '燎原爆', element: 'fire', multiplier: 7, cd: 5, flavor: '引燃燎原之火' }),
-  makeDamageBuff({ id: PET_SKILL_IDS.fireBoost, name: '战意鼓舞', mult: 1.5, turns: 2, cd: 6, flavor: '战凰长鸣鼓舞全队' }),
+  makeDamageBuff({ id: PET_SKILL_IDS.fireBoost, name: '战意鼓舞', mult: 1.7, turns: 2, cd: 6, flavor: '战凰长鸣鼓舞全队' }),
   makeShield({ id: PET_SKILL_IDS.earthShield, name: '岩甲庇护', shieldPct: 0.3, cd: 7, flavor: '岩甲护体' }),
   makeConvert({ id: PET_SKILL_IDS.earthHeartConvert, name: '大地恩泽', to: 'heart', count: 5, cd: 6, flavor: '大地赐福' }),
 
@@ -86,16 +86,16 @@ export const SKILLS: readonly SkillDef[] = [
     id: PET_SKILL_IDS.voidResonance, name: '虚空共鸣', category: 'buff', target: 'team', cd: 6,
     tags: ['属性增伤', '转珠'], flavor: '魔眼凝视深渊',
     segments: [
-      { kind: 'elementBuff', element: 'water', mult: 1.5, turns: 2 },
-      { kind: 'convert', to: 'water', count: 4 },
+      { kind: 'elementBuff', element: 'water', mult: 1.7, turns: 2 },
+      { kind: 'convert', to: 'water', count: 5 },
     ],
   }),
   makeComposite({
     id: PET_SKILL_IDS.fireBoost, name: '战意鼓舞', category: 'buff', target: 'team', cd: 6,
     tags: ['增伤', '转珠'], flavor: '战凰长鸣鼓舞全队',
     segments: [
-      { kind: 'damageBuff', mult: 1.5, turns: 2 },
-      { kind: 'convert', to: 'fire', count: 4 },
+      { kind: 'damageBuff', mult: 1.7, turns: 2 },
+      { kind: 'convert', to: 'fire', count: 5 },
     ],
   }),
   makeComposite({
@@ -111,8 +111,8 @@ export const SKILLS: readonly SkillDef[] = [
     tags: ['暴击', '增伤', '转珠'], flavor: '蝉翼雷纹共鸣',
     segments: [
       { kind: 'guaranteedCrit', turns: 2 },
-      { kind: 'damageBuff', mult: 1.3, turns: 2 },
-      { kind: 'convert', to: 'metal', count: 4 },
+      { kind: 'damageBuff', mult: 1.45, turns: 2 },
+      { kind: 'convert', to: 'metal', count: 5 },
     ],
   }),
   makeComposite({

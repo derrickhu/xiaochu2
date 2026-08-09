@@ -14,8 +14,20 @@
  * - nuke：R 5.0（手写 pet_024 为 7.0 是 R 上界）→ SR 6.5（×1.12 = 7.28 ≥ 7.0）→ UR 6.0（×1.48 = 8.88）
  * - multiNuke：R 2.2×3 = 6.6 → SR 2.6×3 = 7.8（×1.12 = 8.74）→ UR 12~17.5
  * - dot：R 1.8×3 = 5.4 → SR 2.2×3 = 6.6（×1.12 = 7.39）→ UR 3.0×4 = 12
- * - teamNuke：SR 1.4（×1.12 = 1.57）→ SSR 1.4（×1.28 = 1.79）
+ * - teamNuke：SR 1.55（×1.12 = 1.74）→ SSR 1.55（×1.28 = 1.98）
  * 改这里的数值前先确认不会与手写宠的同类目档位倒挂。
+ *
+ * ## v0.9 技能手感调整
+ * 直伤倍率与 CD 一律不动 —— 试过「倍率 ×1.2、CD ×1.4」的集中化，难度门禁两头都炸：
+ * 短 Boss 关因为只放得起一次技能而秒推，长关因为放技次数变少而磨人。
+ * 手感改到乘区结构上：SkillEngine 让瞬发直伤吃五行克制（见 COMBAT.skillCounterMultiplier），
+ * 带对色放技 ×1.5，五色均摊期望仍是 1.0，TTK 预算不动。
+ *
+ * 这里只补两类吃不到克制的：
+ * - damageBuff / elementBuff：幅度抬约 20%，持续仍是 2 回合。
+ *   压到 1 回合的「爆发集中」版本试过并回退了 —— 多波关里一旦在击杀波次的那回合放出去就整个浪费，
+ *   中手在 stage_11_3 直接多打一回合、撞穿 TTK 上限。
+ * - teamNuke / convert：小幅补偿，保住「不挑颜色的稳定输出」这个生态位。
  */
 import type { SkillDef } from './types';
 import {
@@ -47,17 +59,17 @@ const MATRIX_TUNING: Readonly<Record<MatrixBlueprint, Partial<Record<1 | 2, Reco
   nuke: { 1: { multiplier: 5, cd: 5 }, 2: { multiplier: 6.5, cd: 5 } },
   multiHit: { 1: { multiplier: 2.2, hits: 3, cd: 5 }, 2: { multiplier: 2.6, hits: 3, cd: 6 } },
   dot: { 1: { multiplier: 1.8, turns: 3, cd: 5 }, 2: { multiplier: 2.2, turns: 3, cd: 5 } },
-  teamNuke: { 2: { multiplier: 1.4, cd: 7 } },
+  teamNuke: { 2: { multiplier: 1.55, cd: 7 } },
   // ── 续航 / 功能类目 ──
   heal: { 1: { healPct: 0.3, cd: 5 }, 2: { healPct: 0.4, cd: 6 } },
   shield: { 1: { shieldPct: 0.25, cd: 6 }, 2: { shieldPct: 0.3, cd: 6 } },
-  convert: { 1: { count: 5, cd: 6 } },
+  convert: { 1: { count: 6, cd: 6 } },
   defenseBreak: { 1: { pct: 0.35, turns: 3, cd: 5 } },
   stun: { 2: { turns: 1, damage: 4.5, cd: 6 } },
   delayAttack: { 2: { turns: 1, damage: 3, cd: 6 } },
   gravity: { 2: { pct: 0.18, cd: 8 } },
-  damageBuff: { 2: { mult: 1.4, turns: 2, cd: 6 } },
-  elementBuff: { 2: { mult: 1.4, turns: 2, cd: 6 } },
+  damageBuff: { 2: { mult: 1.55, turns: 2, cd: 6 } },
+  elementBuff: { 2: { mult: 1.6, turns: 2, cd: 6 } },
   extraTime: { 2: { seconds: 2, turns: 3, cd: 6 } },
 };
 

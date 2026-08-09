@@ -15,6 +15,7 @@ import {
 import type { Element } from '@/balance/combat';
 import { getStarProfile } from '@/balance/growth';
 import { ECONOMY } from '@/balance/economy';
+import { dailyQuestsOf } from '@/balance/dailyQuest';
 import { recruitPrice, starUpShardCost } from '@/formulas/economyOutput';
 import { petExpToNext } from '@/formulas/growth';
 import {
@@ -1195,6 +1196,13 @@ class PlayerDataClass {
     // 从满瓶掉下来的那一刻才开始计恢复，否则会白送一段离线额度
     if (st.value >= this.staminaMax) st.lastRegenMs = Date.now();
     st.value -= cost;
+    // 日常「消耗体力」：直接累加进度，避免与 dailyQuestTracker 循环依赖
+    const daily = this._daily();
+    for (const quest of dailyQuestsOf(localDateKey())) {
+      if (quest.trigger !== 'staminaSpend') continue;
+      if (daily.questClaimed.includes(quest.id)) continue;
+      daily.questProgress[quest.id] = (daily.questProgress[quest.id] ?? 0) + cost;
+    }
     this._save();
     return true;
   }

@@ -37,6 +37,13 @@ export function elementMultiplier(attacker: Element, defender: Element): number 
   return 1.0;
 }
 
+/** 技能瞬发直伤的属性克制倍率（档位比消珠收敛，理由见 COMBAT.skillCounterMultiplier） */
+export function skillElementMultiplier(attacker: Element, defender: Element): number {
+  if (ELEMENT_COUNTERS[attacker] === defender) return COMBAT.skillCounterMultiplier;
+  if (ELEMENT_COUNTERS[defender] === attacker) return COMBAT.skillCounteredMultiplier;
+  return 1.0;
+}
+
 /** 防御减伤：减伤比 = def / (def + defenseScale) */
 export function defenseReduction(def: number): number {
   if (def <= 0) return 0;

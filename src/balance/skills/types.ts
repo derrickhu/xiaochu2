@@ -79,6 +79,7 @@ export type SkillEffectDef =
       applyDefense?: boolean;
       applyDmgBuff?: boolean;
       applyEnemyReduction?: boolean;
+      /** 缺省吃五行克制（宠物瞬发直伤）；teamAtk 齐射与敌人技恒不吃 */
       applyCounter?: boolean;
     }
   | {
@@ -127,6 +128,7 @@ export type SkillEffectDef =
       applyDefense?: boolean;
       applyDmgBuff?: boolean;
       applyEnemyReduction?: boolean;
+      applyCounter?: boolean;
     }
   | {
       kind: 'dot';

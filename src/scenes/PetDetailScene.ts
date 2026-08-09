@@ -1291,7 +1291,6 @@ export class PetDetailScene implements Scene {
     }
     Platform.vibrateShort('medium');
     SfxManager.playPetStarUp();
-    reportQuest('petStarUp');
     this._build();
     this._playGrowthFeedback(before, true);
     if (this._starRow) pulse(this._starRow, { peak: 1.22 });

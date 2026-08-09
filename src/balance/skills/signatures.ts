@@ -90,8 +90,8 @@ export const SIGNATURE_SKILLS: readonly SkillDef[] = [
     id: 'pet_sig_fire_warhymn', name: '赤霄战诀', category: 'buff', target: 'team', cd: 7,
     tags: ['属性增伤', '转珠'], flavor: '凤将高唱赤霄战诀',
     segments: [
-      { kind: 'elementBuff', element: 'fire', mult: 1.5, turns: 2 },
-      { kind: 'convert', to: 'fire', count: 4 },
+      { kind: 'elementBuff', element: 'fire', mult: 1.7, turns: 2 },
+      { kind: 'convert', to: 'fire', count: 5 },
     ],
   }),
   makeComposite({
@@ -125,9 +125,9 @@ export const SIGNATURE_SKILLS: readonly SkillDef[] = [
     id: 'pet_sig_earth_genesis', name: '后土同尘', category: 'buff', target: 'team', cd: 8,
     tags: ['增伤', '护盾', '转珠'], flavor: '神麒踏尘与大地同息',
     segments: [
-      { kind: 'damageBuff', mult: 1.55, turns: 2 },
+      { kind: 'damageBuff', mult: 1.75, turns: 2 },
       { kind: 'shield', pct: 0.3 },
-      { kind: 'convert', to: 'earth', count: 5 },
+      { kind: 'convert', to: 'earth', count: 6 },
     ],
   }),
 ];

@@ -151,6 +151,9 @@ export class BattleFx {
         t.visible = true;
         t.alpha = 1;
         t.style.dropShadow = false;
+        // 公告飘字会开 wordWrap；回收后必须关掉，否则数字飘字也会被折行
+        t.style.wordWrap = false;
+        t.style.breakWords = false;
         setScaleSafe(t, 1);
       },
       onRelease: (t) => {
@@ -323,6 +326,41 @@ export class BattleFx {
   }
 
   /**
+   * 状态施加公告（中毒 / 禁疗 / 封珠…）：大字 + 长停留，persistUntilDone。
+   * 居中 + 自动换行，宽文案不会裁出屏外（曾把「中毒！每回合 -77（3回合）」贴在右侧）。
+   */
+  spawnStatusAnnounceFloat(text: string, x: number, y: number, color: number): void {
+    if (!text) return;
+    const motion = DMG_MOTION.heroStatusAnnounce;
+    const t = this._petDmgPool.get();
+    t.text = text;
+    t.anchor.set(0.5);
+    t.style.fontSize = 28;
+    t.style.fill = color;
+    t.style.stroke = 0x101010;
+    t.style.strokeThickness = 6;
+    t.style.fontWeight = '800';
+    t.style.fontFamily = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
+    t.style.align = 'center';
+    t.style.wordWrap = true;
+    t.style.wordWrapWidth = Math.max(240, Game.logicWidth - 80);
+    t.style.breakWords = true;
+    this._floatLayer.addChild(t);
+    this._petDmgRuntimes.push({
+      ...createPetDamageFloatRuntime({
+        text: t,
+        baseX: x,
+        baseY: y,
+        baseScale: 1.08,
+        styleKey: 'heroStatusAnnounce',
+        motion,
+      }),
+      scopeId: this._scopeId,
+      persistUntilDone: true,
+    });
+  }
+
+  /**
    * 英雄受击数字（扣血 / 盾挡）：帧动画 + 停留段，persistUntilDone 避免下回合转珠被 clearTransient 清掉。
    */
   spawnHeroHitFloat(
@@ -355,6 +393,38 @@ export class BattleFx {
         baseY: y,
         baseScale,
         styleKey: motionKey,
+        motion,
+      }),
+      scopeId: this._scopeId,
+      persistUntilDone: true,
+    });
+  }
+
+  /**
+   * 英雄中毒 tick：紫色小号「毒 -N」，从状态图标冒出。
+   * 刻意不用 hit 的大红字——和普攻 `-155` 并排时，玩家分不清谁是这一刀、谁是持续掉血。
+   */
+  spawnHeroDotFloat(amount: number, x: number, y: number): void {
+    if (amount <= 0) return;
+    const motion = DMG_MOTION.heroDot;
+    const t = this._petDmgPool.get();
+    t.text = `毒 -${amount}`;
+    t.anchor.set(0.5);
+    t.style.fontSize = 24;
+    t.style.fill = 0xc06cf0;
+    t.style.stroke = 0x2a1040;
+    t.style.strokeThickness = 5;
+    t.style.fontWeight = '800';
+    t.style.fontFamily = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
+    t.style.align = 'center';
+    this._floatLayer.addChild(t);
+    this._petDmgRuntimes.push({
+      ...createPetDamageFloatRuntime({
+        text: t,
+        baseX: x,
+        baseY: y,
+        baseScale: 0.95,
+        styleKey: 'heroDot',
         motion,
       }),
       scopeId: this._scopeId,
@@ -568,7 +638,9 @@ export class BattleFx {
       ? resolveEnemyDmgStyleKey(isCrit && !minor, minor)
       : resolvePetDmgStyleKey(isCrit && !minor, minor);
     const motion = DMG_MOTION[styleKey];
-    const baseScale = skill ? PET_FLOAT_CFG.skill.scale : PET_FLOAT_CFG.normalAtk.scale;
+    const baseScale = skill
+      ? (minor ? PET_FLOAT_CFG.skill.minorScale : PET_FLOAT_CFG.skill.scale)
+      : PET_FLOAT_CFG.normalAtk.scale;
     const isCounter = counter === 1 && !minor;
 
     const t = this._petDmgPool.get();

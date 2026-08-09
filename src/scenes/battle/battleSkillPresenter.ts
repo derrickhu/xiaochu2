@@ -8,7 +8,11 @@
  * （最后一波敌人被击败），编排者据此保留 busy 状态、跳过收尾刷新。
  */
 import { ORB_COLOR } from '@/balance/ui';
-import { SKILL_VFX_MAP } from '@/balance/skillVfx';
+import {
+  SKILL_IMPACT_HEAVY_HP_RATIO,
+  SKILL_VFX_MAP,
+  type SkillImpactTier,
+} from '@/balance/skillVfx';
 import { UI } from '@/balance/ui';
 import { Game } from '@/core/Game';
 import { Platform } from '@/core/PlatformService';
@@ -36,13 +40,28 @@ export interface SkillCastDeps {
   handleEnemyDefeat: () => Promise<boolean>;
 }
 
+interface SkillDamageOpts {
+  isCrit?: boolean;
+  orderIdx?: number;
+  minor?: boolean;
+  hitCount?: number;
+  /** 五行克制关系，1 时飘字带「克」标记（瞬发直伤专用，齐射与重力不吃克制） */
+  counter?: 1 | 0 | -1;
+}
+
+/** 本次命中该不该停拍：够狠才停，小段命中停拍会变成掉帧 */
+function impactTierOf(damage: number, enemyMaxHp: number): SkillImpactTier {
+  const ratio = enemyMaxHp > 0 ? damage / enemyMaxHp : 0;
+  return ratio >= SKILL_IMPACT_HEAVY_HP_RATIO ? 'heavy' : 'light';
+}
+
 /** 技能直伤飘字：打在敌人身上，与消珠命中共用 enemyHit 样式（槽位飘字会被棋盘挡住） */
 function spawnSkillDamage(
   fx: BattleFx,
   layout: BattleLayout,
   element: Element,
   damage: number,
-  opts?: { isCrit?: boolean; orderIdx?: number; minor?: boolean; hitCount?: number },
+  opts?: SkillDamageOpts,
 ): void {
   if (damage <= 0) return;
   fx.spawnEnemyHitDamage({
@@ -51,6 +70,7 @@ function spawnSkillDamage(
     element,
     damage,
     isCrit: opts?.isCrit ?? false,
+    counter: opts?.counter ?? 0,
     orderIdx: opts?.orderIdx ?? 0,
     hitCount: opts?.hitCount ?? 1,
     minor: opts?.minor,
@@ -71,26 +91,42 @@ function fireSkillBlade(
   return fx.fireElementBladeVolley(slot.x, slot.y - 60, toX, toY, element);
 }
 
-/** 技能直伤反馈：飘字 + 命中音效 + 受击演出（对齐消珠命中） */
-function presentSkillEnemyDamage(
-  deps: Pick<SkillCastDeps, 'fx' | 'hud' | 'layout'>,
+/**
+ * 技能直伤反馈：飘字 + 命中音效 + 受击演出 + 停拍。
+ *
+ * 与消珠命中的区别全在这里：技能多铺一层专属音（SfxManager.playSkillImpact）、
+ * 飘字走加大的 skill 档、命中后停一拍把敌人推近。三样缺一样，放技就又变回「平 A」。
+ */
+async function presentSkillEnemyDamage(
+  deps: Pick<SkillCastDeps, 'ctrl' | 'fx' | 'hud' | 'layout'>,
   element: Element,
   damage: number,
-  opts?: { isCrit?: boolean; orderIdx?: number; minor?: boolean; hitCount?: number },
-): void {
+  opts?: SkillDamageOpts & { silent?: boolean; noImpact?: boolean },
+): Promise<void> {
   if (damage <= 0) return;
   deps.hud.playEnemyHit(deps.fx, element, damage, opts?.isCrit ?? false);
-  SfxManager.playAttack();
-  SfxManager.playPetDmgHit(opts?.isCrit ?? false);
+  const tier = impactTierOf(damage, deps.ctrl.enemy.maxHp);
+  if (!opts?.silent) {
+    SfxManager.playAttack();
+    SfxManager.playSkillImpact(tier === 'heavy');
+  }
   spawnSkillDamage(deps.fx, deps.layout, element, damage, opts);
+  // 多段技的中间段不停拍：每段都停会把一套连打拖成慢动作
+  if (opts?.minor || opts?.noImpact) return;
+  await deps.hud.playSkillImpact(deps.fx, tier);
 }
 
 /** 返回 true 表示战斗已结束（最后一波敌人被击败）。 */
 export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): Promise<boolean> {
   const { ctrl, fx, hud, petBar, board, boardView, layout } = deps;
-  const { enemyCenterX, enemyCenterY, boardX, boardY, heroBarY } = layout;
+  const {
+    enemyCenterX, enemyCenterY, boardX, boardY, heroBarY,
+    heroAnnounceX, heroAnnounceY,
+  } = layout;
 
   const pet = ctrl.team[petIndex];
+  // 瞬发直伤已接入五行克制（见 SkillEngine.counterMultFor），飘字要让玩家看见这一层
+  const counterOf = (el: Element): 1 | 0 | -1 => ctrl.counterRelationOf(el);
   const color = ORB_COLOR[pet.def.element];
   const result = ctrl.castSkill(petIndex);
   deps.refreshSkillUi();
@@ -107,7 +143,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       const damage = result.damage ?? 0;
       const el = result.element ?? pet.def.element;
       await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
-      presentSkillEnemyDamage(deps, el, damage);
+      await presentSkillEnemyDamage(deps, el, damage, { counter: counterOf(el) });
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
       break;
@@ -118,7 +154,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       await Promise.all(ctrl.team.map((member, i) =>
         fireSkillBlade(fx, petBar, i, enemyCenterX, enemyCenterY, member.def.element),
       ));
-      presentSkillEnemyDamage(deps, pet.def.element, damage);
+      await presentSkillEnemyDamage(deps, pet.def.element, damage);
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
       break;
@@ -128,12 +164,21 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       const total = result.damage ?? 0;
       const hits = result.damageEvents.filter((e) => e.target === 'enemy').length || 1;
       const el = result.element ?? pet.def.element;
+      /*
+       * 多段技的节奏：前面几段快速连出（小字、爬升音阶、不停拍），最后一段当收尾——
+       * 大飘字 + 停拍。段段都停会把连打拖成慢动作，段段都不停又只是「同一下响了五遍」。
+       * 主段因此从第一下改到最后一下：连打的重音在收尾，不在起手。
+       */
       for (let i = 0; i < hits; i++) {
+        const last = i === hits - 1;
         await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
-        presentSkillEnemyDamage(deps, el, Math.round(total / hits), {
+        SfxManager.playSkillMultiHit(i, hits);
+        await presentSkillEnemyDamage(deps, el, Math.round(total / hits), {
           orderIdx: i,
-          minor: i > 0,
+          minor: !last,
           hitCount: hits,
+          counter: counterOf(el),
+          silent: true,
         });
       }
       hud.refreshEnemyHp();
@@ -145,7 +190,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       const initial = result.damage ?? 0;
       await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
       if (initial > 0) {
-        presentSkillEnemyDamage(deps, el, initial);
+        await presentSkillEnemyDamage(deps, el, initial, { counter: counterOf(el) });
       }
       fx.spawnFloat(
         `灼烧 ${result.value ?? 0}/回合 ×${result.turns ?? 0}`,
@@ -164,7 +209,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       if (damage > 0) {
         const el = result.element ?? pet.def.element;
         await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
-        presentSkillEnemyDamage(deps, el, damage);
+        await presentSkillEnemyDamage(deps, el, damage, { counter: counterOf(el) });
       }
       // 敌人凝意时控制段落空：必须给出「免疫」反馈，否则玩家以为技能白放了却看不出原因
       if (result.immuneControl) {
@@ -193,8 +238,9 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
     }
     case 'healBurst': {
       hud.refreshHeroHp();
+      SfxManager.playSkillBuff();
       fx.spawnAuraRing(Game.logicWidth / 2, heroBarY, 0x8be78b);
-      fx.spawnHeroHealFloat(result.healed ?? 0, Game.logicWidth / 2, heroBarY - 24);
+      fx.spawnHeroHealFloat(result.healed ?? 0, heroAnnounceX, heroAnnounceY);
       fx.burst({
         x: Game.logicWidth / 2, y: heroBarY,
         color: 0x8be78b, count: 12, speed: 280, gravity: -200, size: 14, life: 0.6,
@@ -202,8 +248,9 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       break;
     }
     case 'shieldBurst': {
+      SfxManager.playSkillBuff();
       fx.spawnAuraRing(Game.logicWidth / 2, heroBarY, 0x8fd4ff);
-      fx.spawnFloat(`护盾 ${result.value ?? 0}`, Game.logicWidth / 2, heroBarY - 24, 0x8fd4ff, 1.2);
+      fx.spawnFloat(`护盾 ${result.value ?? 0}`, heroAnnounceX, heroAnnounceY, 0x8fd4ff, 1.2);
       fx.burst({
         x: Game.logicWidth / 2, y: heroBarY,
         color: 0x8fd4ff, count: 12, speed: 280, gravity: -200, size: 14, life: 0.6,
@@ -223,7 +270,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         if (damage > 0) {
           const el = result.element ?? pet.def.element;
           await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
-          presentSkillEnemyDamage(deps, el, damage);
+          await presentSkillEnemyDamage(deps, el, damage, { counter: counterOf(el) });
           hud.refreshEnemyHp();
           if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
         }
@@ -236,8 +283,9 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         hud.refreshEnemyCd();
         break;
       }
+      SfxManager.playSkillBuff();
       fx.spawnAuraRing(Game.logicWidth / 2, heroBarY, 0xffb74d);
-      fx.spawnFloat(label, Game.logicWidth / 2, heroBarY - 24, 0xffb74d, 1.1);
+      fx.spawnFloat(label, heroAnnounceX, heroAnnounceY, 0xffb74d, 1.1);
       break;
     }
     case 'gravityCrush': {
@@ -246,8 +294,9 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       fx.flash(0x2d1b4e, 0.3, 0.5);
       fx.shakeHeavy();
       Platform.vibrateLong();
+      // 重力自带压扁弹回，再叠一次推近会变成莫名其妙的二段抖
       await hud.playEnemyGravityCrush(fx);
-      presentSkillEnemyDamage(deps, pet.def.element, damage);
+      await presentSkillEnemyDamage(deps, pet.def.element, damage, { noImpact: true });
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
       break;
@@ -265,7 +314,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       }
       fx.spawnFloat(
         `全队技能冷却 -${result.teamCdDelta ?? 0}`,
-        Game.logicWidth / 2, heroBarY - 24, 0xffd54f, 1.2,
+        heroAnnounceX, heroAnnounceY, 0xffd54f, 1.2,
       );
       deps.refreshSkillUi();
       break;
@@ -285,15 +334,16 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         }
         boardView.refreshOrbStates();
       }
+      SfxManager.playSkillBoardWave();
       fx.flash(0xfff8e1, 0.28, 0.35);
       fx.spawnAuraRing(Game.logicWidth / 2, boardY + UI.board.cellSize * 2.5, 0xfff8e1);
-      fx.spawnFloat('净化！', Game.logicWidth / 2, heroBarY - 24, 0xfff8e1, 1.25);
+      fx.spawnFloat('净化！', heroAnnounceX, heroAnnounceY, 0xfff8e1, 1.25);
       break;
     }
     case 'timeExtend': {
       fx.spawnFloat(
         `转珠时间 +${result.value ?? 0} 秒（${result.turns ?? 0} 回合）`,
-        Game.logicWidth / 2, heroBarY - 24, 0xffe082, 1.15,
+        heroAnnounceX, heroAnnounceY, 0xffe082, 1.15,
       );
       fx.burst({
         x: Game.logicWidth / 2, y: heroBarY,
@@ -313,6 +363,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
           : result.shape === 'cross'
             ? board.convertCross(to)
             : board.convertRandom(to, result.count ?? 0, convertReq?.from);
+      SfxManager.playSkillBoardWave();
       for (const { r, c } of cells) {
         const cell = UI.board.cellSize;
         fx.burst({

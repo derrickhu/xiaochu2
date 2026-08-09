@@ -1,19 +1,20 @@
 /**
  * 日常任务进度上报
  *
- * 业务侧只调 reportQuest(trigger, value)，由这里过滤出「今天真正在架上的任务」
- * 再累加进度 —— 池里没被选中的任务不该悄悄涨进度，否则次日轮换会凭空出现已完成项。
+ * 业务侧只调 reportQuest(trigger, value)，由这里累加今日在架任务进度。
  */
 import { localDateKey } from '@/core/SidebarService';
 import {
+  activityFromClaimed,
+  DAILY_ACTIVITY_CHESTS,
   dailyQuestsOf,
-  QUEST_ALL_CLEAR_ID,
+  type ActivityChestDef,
   type DailyQuestDef,
   type QuestTrigger,
 } from '@/balance/dailyQuest';
 import { PlayerData } from './PlayerData';
 
-/** 今日在架的 4 条任务 */
+/** 今日在架任务（固定 8 条） */
 export function todayQuests(dateKey = localDateKey()): readonly DailyQuestDef[] {
   return dailyQuestsOf(dateKey);
 }
@@ -26,7 +27,6 @@ export function reportQuest(trigger: QuestTrigger, value = 1): void {
   for (const quest of todayQuests()) {
     if (quest.trigger !== trigger) continue;
     if (quest.threshold !== undefined) {
-      // 阈值型（如单场 8 Combo）：达标才算 1 次，不累计差值
       if (value >= quest.threshold) PlayerData.addQuestProgress(quest.id, 1);
       continue;
     }
@@ -38,14 +38,25 @@ export function isQuestDone(quest: DailyQuestDef): boolean {
   return PlayerData.questProgress(quest.id) >= quest.target;
 }
 
-/** 4 条全部领奖后，全清奖励才可领 */
-export function canClaimAllClear(): boolean {
-  if (PlayerData.isQuestClaimed(QUEST_ALL_CLEAR_ID)) return false;
-  return todayQuests().every((q) => PlayerData.isQuestClaimed(q.id));
+/** 今日已领任务贡献的活跃度 */
+export function todayActivity(): number {
+  return activityFromClaimed(PlayerData.daily.questClaimed);
 }
 
-/** 左栏红点：有任意可领奖项 */
+export function canClaimActivityChest(chest: ActivityChestDef): boolean {
+  if (PlayerData.isQuestClaimed(chest.id)) return false;
+  return todayActivity() >= chest.need;
+}
+
+/** @deprecated 兼容旧全清：等同 100 活跃宝箱可领 */
+export function canClaimAllClear(): boolean {
+  const last = DAILY_ACTIVITY_CHESTS[DAILY_ACTIVITY_CHESTS.length - 1];
+  return canClaimActivityChest(last);
+}
+
+/** 左栏红点：有任意可领任务或宝箱 */
 export function hasClaimableQuest(): boolean {
   const anyQuest = todayQuests().some((q) => isQuestDone(q) && !PlayerData.isQuestClaimed(q.id));
-  return anyQuest || canClaimAllClear();
+  if (anyQuest) return true;
+  return DAILY_ACTIVITY_CHESTS.some((c) => canClaimActivityChest(c));
 }

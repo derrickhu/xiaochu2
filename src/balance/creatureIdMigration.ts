@@ -37,9 +37,15 @@ export const CREATURE_ID_MIGRATION: Readonly<Record<string, string>> = {
 
 const NEW_ID_SET = new Set(Object.values(CREATURE_ID_MIGRATION));
 
-/** 旧 ID → 新 ID；已是 pet_XXX 则原样返回 */
+/** 现行 pet_数字 ID（含量产 pet_031+）；迁移表 values 只覆盖到 pet_030，不能当全集 */
+const CURRENT_PET_ID = /^pet_\d+$/;
+
+/**
+ * 旧 ID → 新 ID；已是现行 pet_XXX 则原样返回。
+ * 未知旧 id 返回 null（读档时丢弃），切勿把合法量产宠当成未知旧 id。
+ */
 export function migrateCreatureId(id: string): string | null {
-  if (NEW_ID_SET.has(id)) return id;
+  if (CURRENT_PET_ID.test(id) || NEW_ID_SET.has(id)) return id;
   return CREATURE_ID_MIGRATION[id] ?? null;
 }
 
