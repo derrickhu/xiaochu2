@@ -18,6 +18,10 @@ dist/
 .vscode/
 .idea/
 
+# Agent / Cursor 本机技能缓存（CloudBase 等会装到项目下；全局副本在 ~/.claude/skills）
+.agents/
+skills-lock.json
+
 # Environment
 .env
 .env.local
@@ -38,6 +42,9 @@ logs/
 
 # 本地临时产物（布局示意稿、切图中间层、调试导出等，勿进仓库）
 tmp/
+scripts/_dump_*.ts
+scripts/_probe_*.ts
+scripts/_stage_difficulty_data.json
 
 # 全量书法字体源（子集在 minigame/subpackages/pkg-shop/fonts/）
 fonts_tmp/
