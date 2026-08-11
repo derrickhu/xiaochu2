@@ -34,9 +34,9 @@ export interface BattleLayout {
   enemyTagX: number;
   /** 克制/抵抗侧挂列中心 Y（与怪心对齐，refreshEnemy 会再贴） */
   enemyTagY: number;
-  /** 攻击倒计时侧挂中心 X（怪右侧） */
+  /** 技能/蓄力倒计时侧挂中心 X（怪右侧） */
   enemyCdX: number;
-  /** 攻击倒计时侧挂中心 Y */
+  /** 技能/蓄力倒计时侧挂中心 Y */
   enemyCdY: number;
   enemyHpBarY: number;
   /** 敌人持续状态图标：首枚中心 X（名匾右侧；由 HUD 按名匾实宽刷新） */

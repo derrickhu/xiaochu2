@@ -27,6 +27,7 @@ import { enemyImage, UI_BATTLE_IMAGES } from '@/config/Assets';
 import { makeElementOrb } from '@/ui';
 import { formatStageBattleHeader } from '@/balance/stages';
 import type { BattleController, EnemyActResult } from '@/game/battle/BattleController';
+import { nextEnemySkillCountdown } from '@/game/battle/battleEnemyIntent';
 import { phaseHpMarkers } from '@/game/battle/bossPhase';
 import type { BoardView } from '@/game/board/BoardView';
 import { delay } from './battleWidgets';
@@ -60,7 +61,7 @@ export class BattleHud {
   private _enemyHpFrame!: PIXI.Sprite | null;
   private _enemyHpText!: PIXI.Text;
   private _enemyElementRow!: PIXI.Container;
-  /** 攻击倒计时：圆形底框 + 文案（怪右侧侧挂） */
+  /** 技能/蓄力倒计时：圆形底框 + 文案（怪右侧侧挂） */
   private _enemyCdBadge!: PIXI.Container;
   private _enemyCdText!: PIXI.Text;
   private _heroHpFill!: PIXI.Graphics;
@@ -842,7 +843,10 @@ export class BattleHud {
     this._animateHp(this._enemyHpDisp, ratio);
   }
 
-  /** 敌人攻击倒计时徽章：蓄力预告（红字）优先于普攻倒计时，附加减伤状态 */
+  /**
+   * 敌人侧挂倒计时：蓄力 > 下次技能 >（仅慢攻怪）普攻间隔。
+   * 间隔=1 的普攻每回合都打，报「N 回合后攻击」没有决策价值，故不显示。
+   */
   refreshEnemyCd(): void {
     const enemy = this._ctrl.enemy;
     if (!displayAlive(this._enemyCdBadge)) return;
@@ -851,7 +855,6 @@ export class BattleHud {
       this._enemyCdText.text = '';
       return;
     }
-    this._enemyCdBadge.visible = true;
     const lines: string[] = [];
     if (enemy.charging) {
       lines.push('蓄力中', `×${enemy.charging.mult}`);
@@ -866,12 +869,25 @@ export class BattleHud {
         });
       }
     } else {
-      lines.push(`${enemy.attackCountdown}回合后`, '攻击');
+      const nextSkill = nextEnemySkillCountdown(enemy);
+      if (nextSkill) {
+        if (nextSkill.turns <= 0) lines.push('即将', '放技能');
+        else lines.push(`${nextSkill.turns}回合后`, '技能');
+      } else if (enemy.attackInterval > 1) {
+        // 无技能的慢攻怪：间隔本身才是威胁节奏
+        lines.push(`${enemy.attackCountdown}回合后`, '攻击');
+      }
       this._enemyCdText.style.fill = COLORS.battleTagText;
     }
     if (enemy.dmgReduction) {
       lines.push(`减伤${Math.round(enemy.dmgReduction.reduction * 100)}%`);
     }
+    if (lines.length === 0) {
+      this._enemyCdBadge.visible = false;
+      this._enemyCdText.text = '';
+      return;
+    }
+    this._enemyCdBadge.visible = true;
     this._enemyCdText.text = lines.join('\n');
   }
 
@@ -1235,46 +1251,19 @@ export class BattleHud {
     await delay(Math.max(debuffTail, 0.85));
   }
 
-  /** 眩晕跳过回合：头顶旋转星星 + 「眩晕中」飘字（真机用 delay 避免 rotation tween 挂死） */
+  /**
+   * 眩晕跳过回合反馈：飘字 + 星爆。
+   * 头顶转圈由 EnemyStunHalo 常驻承担（整段眩晕期间可见）；这里只补「这回合它跳过了」的瞬时确认。
+   */
   async playEnemyStunned(fx: BattleFx): Promise<void> {
     const { enemyCenterX, enemyCenterY } = this._layout;
     const headY = enemyCenterY - UI.battle.enemySize / 2 - 16;
     fx.spawnFloat('眩晕中', enemyCenterX, headY - 34, 0xffd54f, 1.2);
     fx.burst({
       x: enemyCenterX, y: headY,
-      color: 0xffd54f, count: 8, speed: 160, gravity: -100, size: 12, life: 0.5,
+      color: 0xffd54f, count: 10, speed: 180, gravity: -100, size: 13, life: 0.55,
     });
-    if (Platform.isMinigame && !Platform.isDevtools) {
-      await delay(0.42);
-      return;
-    }
-
-    const ring = new PIXI.Container();
-    ring.position.set(enemyCenterX, headY);
-    const radius = 34;
-    for (let i = 0; i < 3; i++) {
-      const star = applyTextResolution(
-        new PIXI.Text('✦', { fontSize: 26, fill: 0xffd54f, fontWeight: 'bold' }),
-      );
-      star.anchor.set(0.5);
-      const a = (i / 3) * Math.PI * 2;
-      star.position.set(Math.cos(a) * radius, Math.sin(a) * radius * 0.4);
-      ring.addChild(star);
-    }
-    fx.addFloatChild(ring);
-    fx.burst({
-      x: enemyCenterX, y: headY,
-      color: 0xffd54f, count: 8, speed: 160, gravity: -100, size: 12, life: 0.5,
-    });
-    await guardedTween({
-      target: ring, props: { rotation: Math.PI * 3, alpha: 0 },
-      duration: 0.85, ease: Ease.easeOutQuad,
-    }, {
-      onFallback: () => {
-        ring.alpha = 0;
-      },
-    });
-    if (!ring.destroyed) ring.destroy({ children: true });
+    await delay(0.55);
   }
 
   /** 敌人 DoT tick：属性色飘字「灼烧 -N」+ 小 burst + 立绘 tint 脉冲 + 血条刷新 */

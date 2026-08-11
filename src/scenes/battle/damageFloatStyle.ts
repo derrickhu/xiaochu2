@@ -28,14 +28,14 @@ const DMG_FONT = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif
 /** xiao_chu RENDER_CFG.dmgFloat.styles */
 export const DMG_RENDER_STYLES: Readonly<Record<string, DmgRenderStyle>> = {
   slotDamageMain: {
-    fontSize: 21,
-    stroke: 5,
+    fontSize: 24,
+    stroke: 5.5,
     fontWeight: 900,
     fontFamily: DMG_FONT,
   },
   slotDamageCrit: {
-    fontSize: 29,
-    stroke: 6.8,
+    fontSize: 32,
+    stroke: 7.2,
     fontWeight: 900,
     fontFamily: DMG_FONT,
   },
@@ -145,23 +145,27 @@ export const DMG_MOTION: Readonly<Record<string, DmgMotionPreset>> = {
    * 比单段命中停得久，便于读数；不 await，故不卡转珠。
    */
   turnTotalSummary: {
-    startScale: 0.7,
-    peakScale: 1.32,
-    settleScale: 1.08,
-    popFrames: 5,
-    settleFrames: 14,
-    startYOffset: 10,
-    riseFrames: 11,
-    riseDist: 44,
-    returnFrames: 10,
-    returnTo: -6,
-    reboundFrames: 9,
-    reboundTo: 3,
-    holdFrames: 72,
+    startScale: 0.55,
+    peakScale: 1.55,
+    settleScale: 1.12,
+    popFrames: 6,
+    settleFrames: 16,
+    startYOffset: 12,
+    riseFrames: 12,
+    riseDist: 52,
+    returnFrames: 11,
+    returnTo: -7,
+    reboundFrames: 10,
+    reboundTo: 3.5,
+    holdFrames: 78,
     driftFrames: 14,
     driftDist: 4,
-    lifeFrames: 168,
-    fadeStart: 138,
+    lifeFrames: 176,
+    fadeStart: 144,
+    shakeDur: 14,
+    shakeAmp: 4.2,
+    jitterFrames: 18,
+    jitterAmp: 2.8,
   },
   slotDamageMinor: {
     startScale: 0.8,
@@ -453,7 +457,13 @@ export function applyDmgRenderStyle(
   text: PIXI.Text,
   styleKey: PetDmgStyleKey | EnemyDmgStyleKey,
   colorKind?: DamageFloatColorKind,
-  opts?: { counter?: boolean },
+  opts?: {
+    counter?: boolean;
+    /** 出手属性：单段命中 / 槽位 recap 按五行上色 */
+    element?: Element;
+    /** 总伤分档：决定 total 色与字号倍率 */
+    totalTier?: TurnTotalTier;
+  },
 ): void {
   const renderKey: PetDmgStyleKey = styleKey === 'enemyHitMain'
     ? 'slotDamageMain'
@@ -461,18 +471,42 @@ export function applyDmgRenderStyle(
       ? 'slotDamageCrit'
       : styleKey;
   const semantic = resolveDamageFloatColor(styleKey, colorKind);
-  const colors = UI.damageFloat[semantic];
   const S = dmgFloatScale();
   const RS = DMG_RENDER_STYLES[renderKey];
   text.style.fontFamily = RS.fontFamily;
-  text.style.fontSize = RS.fontSize * S;
   text.style.fontWeight = '900' as PIXI.TextStyleFontWeight;
-  // 微信真机 Canvas Text 渐变 fill 会崩，用纯色；dropShadow 在真机会出现块状底色
-  text.style.fill = colors.fill;
-  text.style.stroke = colors.stroke;
-  text.style.strokeThickness = RS.stroke * S * (opts?.counter ? UI.damageFloat.counterStrokeMul : 1);
+  // 微信真机 CanvasText 渐变 fill 会崩，用纯色；dropShadow 在真机会出现块状底色
   text.style.dropShadow = false;
   text.style.align = 'center';
+
+  if (semantic === 'total' || semantic === 'totalCaption') {
+    const tier = opts?.totalTier ?? 'normal';
+    const tierStyle = UI.damageFloat.totalByTier[tier];
+    text.style.fill = semantic === 'totalCaption' ? tierStyle.caption : tierStyle.fill;
+    text.style.stroke = tierStyle.stroke;
+    // 标题「总伤害」不跟数字同倍率疯长，否则大档会和数字叠成一团
+    const captionMul = 0.95 + (tierStyle.sizeMul - 1) * 0.15;
+    text.style.fontSize = RS.fontSize * S
+      * (semantic === 'totalCaption' ? captionMul : tierStyle.sizeMul);
+    text.style.strokeThickness = RS.stroke * S * (semantic === 'total' ? 1.15 : 1);
+    return;
+  }
+
+  const elColors = opts?.element ? UI.damageFloat.byElement[opts.element] : null;
+  if (semantic === 'crit' && elColors) {
+    // 暴击：近白高光 + 属性描边，既炸又还能认色
+    text.style.fill = UI.damageFloat.crit.fill;
+    text.style.stroke = elColors.stroke;
+  } else if ((semantic === 'normal' || !colorKind) && elColors) {
+    text.style.fill = elColors.fill;
+    text.style.stroke = elColors.stroke;
+  } else {
+    const colors = UI.damageFloat[semantic];
+    text.style.fill = colors.fill;
+    text.style.stroke = colors.stroke;
+  }
+  text.style.fontSize = RS.fontSize * S;
+  text.style.strokeThickness = RS.stroke * S * (opts?.counter ? UI.damageFloat.counterStrokeMul : 1);
 }
 
 function lerp(a: number, b: number, p: number): number {

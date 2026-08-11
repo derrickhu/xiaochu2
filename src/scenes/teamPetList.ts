@@ -20,6 +20,7 @@ import {
   makePetStatsLine,
   makeRoleBadge,
   attachRarityBadge,
+  makeRarityBadge,
   makeRarityCardBorder,
   makeShardBadge,
   makeText,
@@ -166,7 +167,7 @@ export function addTeamPrepSlotPet(
   level: number,
   star: number,
 ): void {
-  const border = 0xe0c896;
+  const border = getRarity(pet.rarity).color;
   const radius = 12;
   // 底仅作缺图兜底；立绘铺满整卡，高度与背景板一致
   parent.addChild(makePanel({
@@ -198,6 +199,15 @@ export function addTeamPrepSlotPet(
   const orb = makeElementOrb(pet.element, orbSize);
   orb.position.set(-slotW / 2 + orbSize / 2 + orbPad, -slotH / 2 + orbSize / 2 + orbPad);
   parent.addChild(orb);
+
+  // 稀有度角标：右上，避开左上属性珠与底部 Lv/星/队长标
+  const rarityBadge = makeRarityBadge({
+    tier: pet.rarity,
+    height: Math.max(18, Math.round(slotW * 0.28)),
+  });
+  const rb = rarityBadge.getLocalBounds();
+  rarityBadge.position.set(slotW / 2 - rb.width - 4, -slotH / 2 + 4);
+  parent.addChild(rarityBadge);
 
   const lvText = makeText(`Lv.${level}`, {
     size: 15, fill: COLORS.btnText, bold: true, anchor: [0, 1],
@@ -235,14 +245,23 @@ function buildListItem(
   const portraitW = compact ? cardH : avatarSize;
 
   if (compact) {
+    // 稀有度描边：扫一眼就能区分 R / SR / SSR，不再整排同色金框
     item.addChild(makePanel({
       width: cardW, height: cardH, radius: 14,
       bg: PREP_CARD_BG, bgAlpha: 0.98,
-      border: PREP_CARD_BORDER, borderWidth: 2,
+      border: getRarity(pet.rarity).color, borderWidth: 2.5,
       centered: true,
     }));
     // 左侧立绘：高度与背景板一致（铺满卡高）
     addPrepListPortrait(item, pet, -cardW / 2, cardH, PlayerData.petStar(pet.id));
+    // 角标贴立绘右上：左上是属性珠、卡右上是「上」，互不抢位
+    const rarityBadge = makeRarityBadge({
+      tier: pet.rarity,
+      height: Math.max(20, Math.round(portraitW * 0.26)),
+    });
+    const rb = rarityBadge.getLocalBounds();
+    rarityBadge.position.set(-cardW / 2 + portraitW - rb.width - 3, -cardH / 2 + 3);
+    item.addChild(rarityBadge);
   } else if (scrollTex) {
     const sx = cardW / CARD_TEX_W;
     const sy = cardH / CARD_TEX_H;

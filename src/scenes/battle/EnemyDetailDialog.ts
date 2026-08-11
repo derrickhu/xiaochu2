@@ -14,6 +14,7 @@ import { ELEMENT_NAME } from '@/balance/ui';
 import { counterElementOf, resistedElementOf } from '@/balance/combat';
 import type { StatusInstance, StatusKind } from '@/game/battle/BattleStatus';
 import type { BattleController } from '@/game/battle/BattleController';
+import { nextEnemySkillCountdown } from '@/game/battle/battleEnemyIntent';
 import { skillForEnemy } from '@/game/battle/SkillEngine';
 import { makePanel } from '@/ui/Panel';
 import { makeText } from '@/ui/text';
@@ -123,13 +124,23 @@ export function showEnemyDetailDialog(
   content.addChild(stats);
   y += stats.height + 6;
 
-  // 攻击节奏
-  const cdLeft = Math.max(0, enemy.attackCountdown);
-  const rhythm = enemy.charging
-    ? '蓄力中：下回合重击'
-    : cdLeft <= 0
+  // 行动节奏：优先报下次技能；普攻间隔=1 时不再强调「N 回合后攻击」
+  const nextSkill = nextEnemySkillCountdown(enemy);
+  let rhythm: string;
+  if (enemy.charging) {
+    rhythm = '蓄力中：下回合重击';
+  } else if (nextSkill) {
+    rhythm = nextSkill.turns <= 0
+      ? `下回合将放技能 · ${nextSkill.name}`
+      : `${nextSkill.turns} 回合后放技能 · ${nextSkill.name}`;
+  } else if (enemy.attackInterval > 1) {
+    const cdLeft = Math.max(0, enemy.attackCountdown);
+    rhythm = cdLeft <= 0
       ? `攻击间隔 ${enemy.attackInterval} 回合 · 本回合将行动`
       : `攻击间隔 ${enemy.attackInterval} 回合 · ${cdLeft} 回合后攻击`;
+  } else {
+    rhythm = '每回合普攻';
+  }
   const rhythmText = makeText(rhythm, {
     size: FONT_SIZE.xs, fill: SUB, bold: true, anchor: [0, 0],
   });

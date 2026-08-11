@@ -516,12 +516,12 @@ export class BattleFx {
 
     const tier = resolveTurnTotalTier(total, combo, hitCount, enemyMaxHp);
     const isHighTier = tier === 'mega' || tier === 'high';
-    const styleKey = (isHighTier ? 'enemyHitCrit' : 'enemyHitMain') as 'enemyHitCrit' | 'enemyHitMain';
+    const styleKey = (isHighTier || tier === 'mid' ? 'enemyHitCrit' : 'enemyHitMain') as 'enemyHitCrit' | 'enemyHitMain';
     const motion = DMG_MOTION.turnTotalSummary;
-    const baseScale = PET_FLOAT_CFG.normalAtk.scale;
+    // 分档再叠一层 scale：字号在 applyDmgRenderStyle 里已按 sizeMul 放大，这里负责「弹出感」
+    const tierPop = { normal: 1.08, mid: 1.2, high: 1.35, mega: 1.48 }[tier];
+    const baseScale = PET_FLOAT_CFG.normalAtk.scale * tierPop;
     const S = dmgFloatScale();
-    const caption = '总伤害';
-    const captionY = y - 40 * S;
 
     return new Promise((resolve) => {
       let pending = 2 + petSummaries.length;
@@ -535,18 +535,25 @@ export class BattleFx {
       }
 
       const captionText = this._petDmgPool.get();
-      captionText.text = caption;
-      applyDmgRenderStyle(captionText, 'slotDamageMinor', 'totalCaption');
-      captionText.style.fontSize = (captionText.style.fontSize as number) * 1.45;
+      captionText.text = '总伤害';
+      applyDmgRenderStyle(captionText, 'slotDamageMinor', 'totalCaption', { totalTier: tier });
       this._floatLayer.addChild(captionText);
 
       const numText = this._petDmgPool.get();
       numText.text = formatDmgNumber(total);
-      applyDmgRenderStyle(numText, styleKey, 'total');
-      numText.style.fontSize = (numText.style.fontSize as number) * 1.08;
+      applyDmgRenderStyle(numText, styleKey, 'total', { totalTier: tier });
       this._floatLayer.addChild(numText);
 
-      if (isHighTier) this.shakeLight();
+      // 标题贴数字上方一点点：只留小缝不重叠，并夹在关卡匾下沿以下
+      const numFont = numText.style.fontSize as number;
+      const settle = baseScale * motion.settleScale;
+      const tightY = y - (numFont * settle * 0.38 + 8 * S);
+      const bannerBottom = Game.safeHeaderCenterY + UI.battle.stageBannerH / 2 + 8;
+      const captionY = Math.max(bannerBottom, tightY);
+
+      if (tier === 'mega') this.shakeHeavy();
+      else if (isHighTier) this.shakeMedium();
+      else if (tier === 'mid') this.shakeLight();
 
       const floatOpts = { baseX: x, baseScale, styleKey, motion };
       this._petDmgRuntimes.push({
@@ -602,7 +609,7 @@ export class BattleFx {
     const baseScale = PET_FLOAT_CFG.normalAtk.scale * 1.04;
     const t = this._petDmgPool.get();
     t.text = buildPetDmgLabel(pet.element, pet.damage);
-    applyDmgRenderStyle(t, styleKey);
+    applyDmgRenderStyle(t, styleKey, undefined, { element: pet.element });
     this._floatLayer.addChild(t);
     this._petDmgRuntimes.push({
       ...createPetDamageFloatRuntime({
@@ -645,9 +652,9 @@ export class BattleFx {
 
     const t = this._petDmgPool.get();
     t.text = buildPetDmgLabel(element, damage);
-    applyDmgRenderStyle(t, styleKey, undefined, { counter: isCounter });
+    applyDmgRenderStyle(t, styleKey, undefined, { counter: isCounter, element });
     if (onEnemy && !minor) {
-      t.style.fontSize = (t.style.fontSize as number) * 1.08;
+      t.style.fontSize = (t.style.fontSize as number) * 1.12;
     }
     this._floatLayer.addChild(t);
 

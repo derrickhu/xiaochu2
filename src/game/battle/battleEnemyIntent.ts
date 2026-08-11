@@ -2,11 +2,13 @@
  * 敌人出招挑选与推演（v0.7）
  *
  * 战斗 UI **不再**常驻「下回合打多少血」——把普攻伤害数字甩给玩家等于替他算完生存题。
- * 本文件仍保留两件实打实的事：
- * 1. `pickEnemySkill`：实机与模拟器共用的固定轮转选招（可读节奏靠循环本身，不靠 HUD 报数）
- * 2. `predictEnemyIntent`：测试用推演，保证「轮转挑出来的」就是「真正打出来的」
+ * 侧挂徽章报的是「几回合后放技能」（普攻间隔=1 时「N 回合后攻击」毫无决策价值）。
+ * 本文件仍保留：
+ * 1. `pickEnemySkill`：实机与模拟器共用的固定轮转选招
+ * 2. `nextEnemySkillCountdown`：侧挂徽章 / 详情页读下次技能倒计时
+ * 3. `predictEnemyIntent`：测试用推演，保证「轮转挑出来的」就是「真正打出来的」
  *
- * 蓄力预警仍走侧挂倒计时徽章（「蓄力中」），那是动作本身的 telegraph，不是伤害计算器。
+ * 蓄力预警仍走侧挂（「蓄力中」），那是动作本身的 telegraph。
  */
 import { runSkill, skillForEnemy, type SkillCaster, type SkillResult, type SkillRuntimeContext } from './SkillEngine';
 import { pendingBossPhase } from './bossPhase';
@@ -35,6 +37,29 @@ export interface EnemySkillPick {
  *
  * @param cdOffset 0 = 结算当回合（CD 已扣）；1 = 预测下回合（CD 尚未扣）
  */
+/**
+ * 距离下次放技能还要几个敌人回合。
+ * `turns === 0` = 下个敌人回合就会放（与回合开始先扣 CD 再选招的口径一致）。
+ * 无技能表时返回 null。
+ */
+export function nextEnemySkillCountdown(enemy: EnemyUnit): {
+  turns: number;
+  skillId: string;
+  name: string;
+} | null {
+  const n = enemy.skillIds.length;
+  if (n === 0) return null;
+  let best: { turns: number; skillId: string; name: string } | null = null;
+  for (let k = 0; k < n; k++) {
+    const i = (enemy.skillRotation + k) % n;
+    const turns = Math.max(0, enemy.skillCds[i]);
+    if (best && turns >= best.turns) continue;
+    const skill = skillForEnemy(enemy.skillIds[i]);
+    best = { turns, skillId: skill.id, name: skill.name };
+  }
+  return best;
+}
+
 export function pickEnemySkill(
   enemy: EnemyUnit,
   caster: SkillCaster,

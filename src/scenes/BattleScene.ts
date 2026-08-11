@@ -52,6 +52,7 @@ import {
   type EnemyDetailHandle,
 } from './battle/EnemyDetailDialog';
 import { presentSkillCast, type SkillCastDeps } from './battle/battleSkillPresenter';
+import { EnemyStunHalo } from './battle/EnemyStunHalo';
 import { showTowerBlessPicker } from './battle/TowerBlessPicker';
 import { analytics } from '@/analytics';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
@@ -110,6 +111,7 @@ export class BattleScene implements Scene {
   private _fx!: BattleFx;
   private _hud!: BattleHud;
   private _statusIcons!: BattleStatusIcons;
+  private _stunHalo!: EnemyStunHalo;
   private _petBar!: BattlePetBar;
   private _overlay!: BattleResultOverlay;
   private _enemyDetailLayer!: PIXI.Container;
@@ -175,6 +177,7 @@ export class BattleScene implements Scene {
     this._fx = new BattleFx();
     this._hud = new BattleHud(this._ctrl, this._layout);
     this._statusIcons = new BattleStatusIcons(this._ctrl, this._layout);
+    this._stunHalo = new EnemyStunHalo();
     this._petBar = new BattlePetBar(this._ctrl, this._layout);
     this._overlay = new BattleResultOverlay();
 
@@ -239,6 +242,7 @@ export class BattleScene implements Scene {
     this._boardView?.destroy();
     this._boardView = null;
     this._statusIcons?.destroy();
+    this._stunHalo?.destroy();
     this._petBar?.teardownInput();
     this._fx?.destroy();
     this._blessLayer = null;
@@ -280,6 +284,9 @@ export class BattleScene implements Scene {
     this._hud.buildHeroBar(this.container);
     this._hud.buildStatus(this.container);
     this._statusIcons.build(this.container);
+    // 眩晕头顶环：压在立绘之上、棋盘之下；常驻可见性比名旁「晕」图标更醒目
+    this._stunHalo.build(this.container);
+    this._stunHalo.sync(this._ctrl, this._layout);
     // 宠物槽（含就绪上拖箭头）须在血条之上，否则箭头会被 HP 框挡住
     this._petBar.raiseSlotsLayer(this.container);
     // HP 数字再抬一层：箭头可以伸进血条带，但不能盖住可读数字
@@ -363,6 +370,7 @@ export class BattleScene implements Scene {
     this._boardView?.update(dt);
     this._fx.update(dt);
     this._petBar.update(dt);
+    this._stunHalo.update(dt);
     this._hud.redrawDragBar(this._boardView);
     this._hud.redrawHpBars();
     this._hud.updateCombo(dt);
@@ -373,6 +381,7 @@ export class BattleScene implements Scene {
     this._petBar.refreshSkillCharge();
     this._hud.refreshStatus();
     this._statusIcons.refresh();
+    this._stunHalo.sync(this._ctrl, this._layout);
   }
 
   /** 屏幕下半 cream 柔化，突出棋盘/宠物栏，章节上半仍清晰可见 */
@@ -974,6 +983,7 @@ export class BattleScene implements Scene {
       }
       default:
         if (result.stunnedSkip) {
+          this._stunHalo.pulseSkip();
           await this._hud.playEnemyStunned(this._fx);
         } else {
           await delay(0.2);

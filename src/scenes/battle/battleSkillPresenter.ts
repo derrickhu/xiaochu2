@@ -7,13 +7,12 @@
  * 纯演出编排：依赖通过 deps 注入，自身不持有状态。返回 true 表示战斗已在演出中结束
  * （最后一波敌人被击败），编排者据此保留 busy 状态、跳过收尾刷新。
  */
-import { ORB_COLOR } from '@/balance/ui';
+import { ORB_COLOR, UI } from '@/balance/ui';
 import {
   SKILL_IMPACT_HEAVY_HP_RATIO,
   SKILL_VFX_MAP,
   type SkillImpactTier,
 } from '@/balance/skillVfx';
-import { UI } from '@/balance/ui';
 import { Game } from '@/core/Game';
 import { Platform } from '@/core/PlatformService';
 import { SfxManager } from '@/core/SfxManager';
@@ -215,11 +214,14 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       if (result.immuneControl) {
         fx.spawnFloat('免疫控制！', enemyCenterX, enemyCenterY - 76, 0xb0bec5, 1.2);
       } else {
-        fx.spawnFloat(`眩晕 ${result.turns ?? 0} 回合`, enemyCenterX, enemyCenterY - 76, 0xfff176, 1.2);
+        // 瞬时飘字确认「控上了」；常驻转圈由 EnemyStunHalo 在 refreshSkillUi 后亮起
+        const headY = enemyCenterY - UI.battle.enemySize / 2 - 8;
+        fx.spawnFloat(`眩晕 ${result.turns ?? 0} 回合`, enemyCenterX, headY - 40, 0xfff176, 1.25);
         fx.burst({
-          x: enemyCenterX, y: enemyCenterY - 50,
-          color: 0xfff176, count: 10, speed: 160, gravity: -60, size: 12, life: 0.7,
+          x: enemyCenterX, y: headY,
+          color: 0xfff176, count: 14, speed: 200, gravity: -80, size: 14, life: 0.75,
         });
+        fx.shakeLight();
       }
       hud.refreshEnemyHp();
       if (result.enemyDead && await deps.handleEnemyDefeat()) return true;

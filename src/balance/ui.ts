@@ -196,22 +196,44 @@ export const UI = {
   },
 
   /**
-   * 战斗伤害飘字语义色（与五行/珠子色解耦）
+   * 战斗伤害飘字色（微信真机 Canvas 不支持渐变 fill / dropShadow，只用纯色 + 描边）。
    *
-   * - normal：单段普通命中（含 minor 多段、槽位飘字）
-   * - crit：暴击单段（字号/动效另配，颜色独立）
-   * - total：回合总伤害数字
-   * - totalCaption：总伤害说明文案
-   * - counterMark：克制标记「克」（数字仍用 normal + 加粗描边，不另设主色）
+   * - byElement：单段命中按出手属性上色，玩家才能把「这一刀」归因到哪只宠/哪色珠
+   * - crit：近白高光 fill + 属性描边（见 applyDmgRenderStyle）
+   * - totalByTier：回合总伤按爆发档升温放大；total / totalCaption 作缺省回落
+   * - counterMark：克制标记「克」
    */
   damageFloat: {
+    /** 无属性上下文时的兜底 */
     normal: { fill: '#fff8ca', stroke: '#101010' },
-    crit: { fill: '#fffef0', stroke: '#120d08' },
+    crit: { fill: '#fffef5', stroke: '#120d08' },
     total: { fill: '#ffd84c', stroke: '#101010' },
     totalCaption: { fill: '#ffe082', stroke: '#101010' },
     counterMark: { fill: '#ffe14d', stroke: '#101010' },
-    /** 克制命中时 normal 描边倍率（仅描边，不改 fill） */
+    /** 克制命中时描边倍率（仅描边，不改 fill） */
     counterStrokeMul: 1.2,
+    /**
+     * 五行命中主色：比珠子 ORB_COLOR 更亮一档，深描边保证棋盘上可读。
+     * 金偏亮黄、木偏荧光绿、水偏电光青、火偏热橙红、土偏暖琥珀。
+     */
+    byElement: {
+      metal: { fill: '#ffe566', stroke: '#3d2800' },
+      wood: { fill: '#6dff5a', stroke: '#0a2a0c' },
+      water: { fill: '#5ec8ff', stroke: '#061a38' },
+      fire: { fill: '#ff6a3c', stroke: '#3a0c08' },
+      earth: { fill: '#f0b06a', stroke: '#2a1608' },
+    } as Readonly<Record<Element, { fill: string; stroke: string }>>,
+    /**
+     * 总伤分档：sizeMul 叠在 render style 字号上。
+     * mega 用近白金高光——比单纯大红更有「爆了」的感觉，且不和火属性单段撞色。
+     */
+    totalByTier: {
+      normal: { fill: '#ffd84c', stroke: '#101010', caption: '#ffe082', sizeMul: 1.55 },
+      mid: { fill: '#ffbf2e', stroke: '#1a0c00', caption: '#ffd060', sizeMul: 1.8 },
+      high: { fill: '#ff8a2b', stroke: '#1a0800', caption: '#ffb040', sizeMul: 2.15 },
+      // mega 仍明显更大，但不再用 2.7——会把「总伤害」标题顶穿
+      mega: { fill: '#fff2a8', stroke: '#4a1800', caption: '#ffcc66', sizeMul: 2.4 },
+    },
   },
 
   /** ── Combo 反馈分级（次数下限 → 字号/颜色） ── */
