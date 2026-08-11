@@ -1,9 +1,10 @@
 /**
  * 图鉴竖卡：对齐 codex_panel_proto_v3_ring_entry
- * 已拥有：立绘 + 稀有度 + 属性珠 + 名 + 定位胶囊 + 星
+ * 已拥有：立绘 + 稀有度 + 属性珠 + Lv + 名 + 定位胶囊 + 星
  * 未获得：剪影 + 未获得 + 定位胶囊 + 空星（招募下一只保留价格条）
  *
  * 信息带在立绘下方：名 → 定位 → 星，定位不压在宠身上。
+ * 等级叠在立绘左下（与编队槽位同口径），三列窄卡放不下「Lv + 五星」同行。
  */
 import * as PIXI from 'pixi.js';
 import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
@@ -16,6 +17,7 @@ import {
   attachRarityBadge,
   makeRoleBadge,
   makeStarRow,
+  makeLevelLabel,
   makeText,
   makeElementOrb,
 } from '@/ui';
@@ -216,6 +218,16 @@ export function buildOwnedCodexCard(
 
   addCodexAvatar(item, pet.id, star, g.avatarLeft, g.avatarTop, g.avatarSize);
   attachRarityBadge(item, pet.rarity, 0, 0, g.avatarSize, { variant: 'codex' });
+
+  const lv = PlayerData.petLevel(pet.id);
+  const lvLabel = makeLevelLabel({
+    level: lv,
+    size: Math.round(12 * S),
+    variant: 'card',
+    anchor: [0, 1],
+  });
+  lvLabel.position.set(g.avatarLeft + 2 * S, g.avatarTop + g.avatarSize - 1 * S);
+  item.addChild(lvLabel);
 
   const displayName = pet.name.length > 5 ? `${pet.name.slice(0, 5)}…` : pet.name;
   const nameText = makeText(displayName, {
