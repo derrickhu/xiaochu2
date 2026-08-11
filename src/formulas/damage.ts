@@ -44,6 +44,16 @@ export function skillElementMultiplier(attacker: Element, defender: Element): nu
   return 1.0;
 }
 
+/**
+ * 技能直伤的「连锁余韵」乘区：按上一回合首消 Combo 归一化到中位基准（见 COMBAT.skillComboBaseline）。
+ * lastCombo 为 0（开局首回合还没消过珠）时按基准处理，即 ×1.0，不惩罚先手放技。
+ */
+export function skillComboFactor(lastCombo: number): number {
+  if (lastCombo <= 0) return 1;
+  const factor = comboMultiplier(lastCombo) / comboMultiplier(COMBAT.skillComboBaseline);
+  return Math.min(COMBAT.skillComboFactorMax, Math.max(COMBAT.skillComboFactorMin, factor));
+}
+
 /** 防御减伤：减伤比 = def / (def + defenseScale) */
 export function defenseReduction(def: number): number {
   if (def <= 0) return 0;

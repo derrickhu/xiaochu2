@@ -6,8 +6,10 @@ import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { TweenManager } from '@/core/TweenManager';
 import { computePetBarPetSize } from './BattleLayout';
-import { UI, ORB_COLOR } from '@/balance/ui';
+import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
+import { chargeMaxForCd } from '@/balance/skillCharge';
+import { skillComboFactor, skillElementMultiplier } from '@/formulas/damage';
 import type { SkillDef } from '@/balance/skills';
 import type { TeamPet } from '@/game/battle/battleTypes';
 import { makeText } from '@/ui/text';
@@ -71,11 +73,36 @@ export interface PetSkillPreviewHandle {
 export interface SkillPreviewBubbleOpts {
   skill: SkillDef;
   element: Element;
-  /** 主动技剩余冷却；编队页不传则不显示冷却胶囊 */
-  skillCdLeft?: number;
+  /** 当前充能进度；编队页不传则只显示满充所需，不显示进度胶囊 */
+  charge?: { current: number; max: number };
+  /**
+   * 战斗中的乘区上下文。带上才显示「连锁余韵 / 克制」两枚乘区胶囊 ——
+   * 这两条是玩家唯一能主动操纵的技能强度来源，不摆在气泡里就等于不存在。
+   * 编队页没有盘面与敌人，故不传。
+   */
+  battle?: { lastCombo: number; enemyElement: Element };
   /** 气泡箭头尖端锚点（layer 本地坐标） */
   x: number;
   y: number;
+}
+
+/** 直伤类效果（吃连锁与克制乘区的那些）；无则不显示乘区行 */
+function directDamageEffect(skill: SkillDef): {
+  element?: Element;
+  teamWide: boolean;
+  countered: boolean;
+} | null {
+  for (const effect of skill.effects) {
+    if (effect.kind !== 'damage' && effect.kind !== 'multiHit' && effect.kind !== 'dot') continue;
+    const teamWide = effect.source === 'teamAtk';
+    return {
+      element: effect.kind === 'dot' ? undefined : effect.element,
+      teamWide,
+      // 齐射与持续伤害是「不挑颜色的保底输出」，按设计吃不到克制（见 SkillEngine.counterMultFor）
+      countered: !teamWide && effect.kind !== 'dot' && effect.applyCounter !== false,
+    };
+  }
+  return null;
 }
 
 /** 在 layer 上显示技能气泡；再次调用前须 dismiss 旧实例 */
@@ -88,7 +115,7 @@ export function showSkillPreviewBubble(
   const titleColor = TITLE_COLOR[el];
   const highlight = HIGHLIGHT_COLOR[el];
   const skill = opts.skill;
-  const skillCdLeft = opts.skillCdLeft ?? 0;
+  const charge = opts.charge;
 
   const panelW = Math.min(PANEL_W, Game.logicWidth - 56);
   const innerW = panelW - PAD_X * 2;
@@ -116,7 +143,7 @@ export function showSkillPreviewBubble(
   nameText.position.set(40, 0);
   header.addChild(nameText);
 
-  const cdBadge = buildCdBadge(skill.cd);
+  const cdBadge = buildChargeCostBadge(chargeMaxForCd(skill.cd));
   cdBadge.position.set(40 + nameText.width + 8, 0);
   header.addChild(cdBadge);
 
@@ -128,14 +155,29 @@ export function showSkillPreviewBubble(
   content.addChild(header);
   y += 42;
 
-  // 冷却胶囊（居中，浅底深字）
-  if (skillCdLeft > 0) {
-    const status = buildStatusPill(`冷却中 · 剩 ${skillCdLeft} 回合`);
+  // 充能胶囊（居中，浅底深字）：告诉玩家还差多少，以及消本色最快
+  if (charge && charge.current < charge.max) {
+    const pct = Math.floor((charge.current / Math.max(1, charge.max)) * 100);
+    const status = buildStatusPill(`充能 ${pct}% · 消${ELEMENT_NAME[el]}珠加速`);
+    status.position.set(panelW / 2, y + 14);
+    content.addChild(status);
+    y += 34;
+  } else if (charge) {
+    const status = buildStatusPill('充能完成 · 上滑释放');
     status.position.set(panelW / 2, y + 14);
     content.addChild(status);
     y += 34;
   } else {
     y += 4;
+  }
+
+  // 乘区行：上回合连锁 → 本发放大多少，以及对这只敌人是克制还是被克
+  const dmg = opts.battle ? directDamageEffect(skill) : null;
+  if (opts.battle && dmg) {
+    const row = buildFactorRow(opts.battle, dmg, el, innerW);
+    row.position.set(panelW / 2, y + 12);
+    content.addChild(row);
+    y += 32;
   }
 
   // 菱形分割线
@@ -205,12 +247,14 @@ export function showPetSkillPreview(
   pet: TeamPet,
   slotX: number,
   slotY: number,
+  battle?: { lastCombo: number; enemyElement: Element },
 ): PetSkillPreviewHandle {
   const petSize = computePetBarPetSize(Game.logicWidth, 5);
   return showSkillPreviewBubble(layer, {
     skill: pet.skill,
     element: pet.def.element,
-    skillCdLeft: pet.skillCdLeft,
+    charge: { current: pet.charge, max: pet.chargeMax },
+    battle,
     x: slotX,
     y: slotY - petSize / 2 - 4,
   });
@@ -268,9 +312,10 @@ function buildElementIcon(el: Element, accent: number): PIXI.Container {
   return c;
 }
 
-function buildCdBadge(cd: number): PIXI.Container {
+/** 满充所需充能值（取代旧的「CD N」角标） */
+function buildChargeCostBadge(cost: number): PIXI.Container {
   const c = new PIXI.Container();
-  const label = makeText(`CD ${cd}`, {
+  const label = makeText(`充能 ${cost}`, {
     size: 16,
     fill: COLORS.white,
     bold: true,
@@ -286,6 +331,67 @@ function buildCdBadge(cd: number): PIXI.Container {
   c.addChild(g);
   c.addChild(label);
   c.pivot.set(-bw / 2, 0);
+  return c;
+}
+
+/**
+ * 「连锁余韵 ×N」＋「克制 ×N」两枚并排小胶囊。
+ * 数值直接取战斗公式，不在这里另写一套口径，免得展示与结算对不上。
+ */
+function buildFactorRow(
+  battle: { lastCombo: number; enemyElement: Element },
+  dmg: { element?: Element; teamWide: boolean; countered: boolean },
+  petElement: Element,
+  maxW: number,
+): PIXI.Container {
+  const row = new PIXI.Container();
+  const pills: PIXI.Container[] = [];
+
+  const comboF = skillComboFactor(battle.lastCombo);
+  pills.push(buildFactorPill(
+    battle.lastCombo > 0 ? `连锁 ${battle.lastCombo} ×${comboF.toFixed(2)}` : `连锁 — ×1.00`,
+    comboF > 1.001 ? FACTOR_UP : comboF < 0.999 ? FACTOR_DOWN : FACTOR_FLAT,
+  ));
+
+  if (dmg.countered) {
+    const counterF = skillElementMultiplier(dmg.element ?? petElement, battle.enemyElement);
+    const label = counterF > 1 ? '克制' : counterF < 1 ? '被克' : '平属';
+    pills.push(buildFactorPill(
+      `${label} ×${counterF.toFixed(2)}`,
+      counterF > 1 ? FACTOR_UP : counterF < 1 ? FACTOR_DOWN : FACTOR_FLAT,
+    ));
+  } else {
+    pills.push(buildFactorPill('不吃克制', FACTOR_FLAT));
+  }
+
+  const gap = 8;
+  const total = pills.reduce((sum, p) => sum + p.width, 0) + gap * (pills.length - 1);
+  const scale = total > maxW ? maxW / total : 1;
+  let x = -(total * scale) / 2;
+  for (const p of pills) {
+    p.scale.set(scale);
+    p.position.set(x + (p.width * scale) / 2, 0);
+    row.addChild(p);
+    x += p.width * scale + gap * scale;
+  }
+  return row;
+}
+
+const FACTOR_UP = { fill: 0xd8f0d0, text: 0x2b6b30 } as const;
+const FACTOR_DOWN = { fill: 0xf5d6d0, text: 0x9a3527 } as const;
+const FACTOR_FLAT = { fill: 0xe6e0d0, text: 0x5a4a33 } as const;
+
+function buildFactorPill(text: string, tone: { fill: number; text: number }): PIXI.Container {
+  const c = new PIXI.Container();
+  const label = makeText(text, { size: 16, fill: tone.text, bold: true, anchor: 0.5 });
+  const bw = label.width + 20;
+  const bh = 26;
+  const g = new PIXI.Graphics();
+  g.beginFill(tone.fill, 0.95);
+  g.drawRoundedRect(-bw / 2, -bh / 2, bw, bh, bh / 2);
+  g.endFill();
+  c.addChild(g);
+  c.addChild(label);
   return c;
 }
 

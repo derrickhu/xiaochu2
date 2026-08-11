@@ -23,8 +23,10 @@ export interface TeamPet {
   critRate: number;
   /** 个体额外暴击伤害（叠加在 COMBAT.critBase 上） */
   critDamage: number;
-  /** 主动技剩余冷却（0 = 就绪） */
-  skillCdLeft: number;
+  /** 主动技充能上限（由 skill.cd 换算，见 balance/skillCharge） */
+  chargeMax: number;
+  /** 当前充能，达到 chargeMax 即就绪；消珠累加（本色为主要来源） */
+  charge: number;
 }
 
 /** 技能释放结果（场景据此播放演出） */

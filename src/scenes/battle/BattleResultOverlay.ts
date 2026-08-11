@@ -159,13 +159,13 @@ export class BattleResultOverlay {
       PlayerData.addExp(granted.exp);
       PlayerData.addCoins(granted.coins);
       PlayerData.addUniversalShards(granted.universal);
-      const skillCds: Record<string, number> = {};
+      const skillCharges: Record<string, number> = {};
       for (const pet of ctrl.team) {
-        if (pet.skillCdLeft > 0) skillCds[pet.def.id] = pet.skillCdLeft;
+        skillCharges[pet.def.id] = pet.charge;
       }
       extraLines.push(...settleContextVictory(context, {
         hpPctLeft: ctrl.heroHp / Math.max(1, ctrl.heroMaxHp),
-        skillCds,
+        skillCharges,
       }));
     } else {
       const repeat = PlayerData.isRepeatClear(ctrl.stage.id);

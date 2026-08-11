@@ -100,10 +100,31 @@ export const COMBAT = {
    * 直接套 1.75 / 0.32 会让高手在第 4 章 Boss 打出 7 回合，跌破 boss 秒推下限 8 ——
    * 技能是「一次性一大口」，同样的乘区放在它身上，方差比逐回合摊开的消珠大得多。
    *
-   * 五色均摊下期望仍是 (1.5 + 0.5 + 3) / 5 = 1.0，因此 TTK 预算不受影响。
+   * 五色均摊下期望仍是 (1.8 + 0.2 + 3) / 5 = 1.0，因此 TTK 预算不受影响。
+   *
+   * v1.0 从 1.5 / 0.5 拉到 1.8 / 0.2：分离度 3 倍 → 9 倍，比消珠的 1.75 / 0.32 还狠。
+   * 理由是「带哪只宠打这只 Boss」必须是一个有答案的问题——技能是玩家唯一能主动
+   * 择时、择色投放的乘区，若克制与被克只差 3 倍，最优解永远是「谁充满了放谁」，
+   * 编队就退化成了看充能条。和为 2.0 是硬约束（保住五色均摊期望 1.0 的 TTK 预算）。
    */
-  skillCounterMultiplier: 1.5,
-  skillCounteredMultiplier: 0.5,
+  skillCounterMultiplier: 1.8,
+  skillCounteredMultiplier: 0.2,
+
+  /**
+   * 技能直伤吃的「连锁余韵」乘区（v1.0）：直伤按**上一回合首消 Combo** 放大。
+   *
+   * 技能不消耗回合、在拖珠前释放，因此本回合 Combo 在结算瞬间还不存在，只能看上一回合。
+   * 这反而是想要的策略：先铺一个大连，下回合大招才打得重，而不是「充满就无脑放」。
+   * 口径跟随闸门与连锋令 —— 只认首消（waveIndex 0），天降凑出来的连不算数。
+   *
+   * factor = comboMultiplier(lastCombo) / comboMultiplier(skillComboBaseline)，再夹到上下限。
+   * baseline 取中手模型的 5 连，故中位 TTK 不动，只把技巧带宽摊到技能上。
+   * 上下限是难度门禁逼出来的：不夹的话高手 8 连 ×1.22、低手 3 连 ×0.83 会把
+   * ttkFloor / ttkCeiling 两头顶穿（技能是一次性一大口，方差比逐回合摊开的消珠大）。
+   */
+  skillComboBaseline: 5,
+  skillComboFactorMin: 0.8,
+  skillComboFactorMax: 1.45,
 
   /**
    * 暴击：

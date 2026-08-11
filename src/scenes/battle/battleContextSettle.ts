@@ -40,8 +40,8 @@ export function contextDropScale(context: BattleContext): ContextDropScale {
 export interface ContextSettleInput {
   /** 战斗结束时英雄剩余血量比例（通天塔跨层继承用） */
   hpPctLeft: number;
-  /** 战斗结束时各宠剩余技能 CD（通天塔跨层继承用） */
-  skillCds?: Record<string, number>;
+  /** 战斗结束时各宠剩余技能充能（通天塔跨层继承用） */
+  skillCharges?: Record<string, number>;
   rng?: () => number;
 }
 
@@ -54,7 +54,7 @@ export function settleContextVictory(
   if (context.kind === 'realm') {
     return settleRealmVictory(context.realmId, context.tier, rng);
   }
-  return settleTowerVictory(context.floor, input.hpPctLeft, input.skillCds ?? {});
+  return settleTowerVictory(context.floor, input.hpPctLeft, input.skillCharges ?? {});
 }
 
 function settleRealmVictory(realmId: string, tier: number, _rng: () => number): string[] {
@@ -78,7 +78,7 @@ function settleRealmVictory(realmId: string, tier: number, _rng: () => number): 
 function settleTowerVictory(
   floor: number,
   hpPctLeft: number,
-  skillCds: Record<string, number>,
+  skillCharges: Record<string, number>,
 ): string[] {
   const lines: string[] = [];
   // 塔币要在 towerAdvance 刷新 bestFloor 之前结算，否则突破奖励恒为 0
@@ -91,7 +91,7 @@ function settleTowerVictory(
 
   // 战斗层只回一小口血，守关层多给一些：HP 是塔里最稀缺的资源
   const carry = Math.min(1, hpPctLeft + PlayerData.towerHealPct(floor));
-  if (PlayerData.towerAdvance(floor, carry, skillCds)) {
+  if (PlayerData.towerAdvance(floor, carry, skillCharges)) {
     lines.push(`历史最高层刷新 · 第 ${floor} 层`);
   }
 

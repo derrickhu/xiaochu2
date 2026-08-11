@@ -63,8 +63,8 @@ export interface TowerState {
   runFloor: number;
   /** 续战 HP 比例（0~1，1 = 满血起手） */
   runHpPct: number;
-  /** 续战技能 CD 快照：petId → 剩余回合，缺失视为就绪 */
-  runCds: Record<string, number>;
+  /** 续战技能充能快照：petId → 剩余充能，缺失视为按默认开局充能起手 */
+  runCharges: Record<string, number>;
   /** 本轮已战败，需消耗重置次数才能继续 */
   runEnded: boolean;
   /** resetDate / resetsUsed 所属日期 */
@@ -179,7 +179,7 @@ export function emptyTowerState(): TowerState {
     bestFloor: 0,
     runFloor: 1,
     runHpPct: 1,
-    runCds: {},
+    runCharges: {},
     runEnded: false,
     resetDate: '',
     resetsUsed: 0,
@@ -333,10 +333,10 @@ function sanitizeTower(raw: unknown): TowerState {
     ? Math.min(1, Math.max(0, t.runHpPct))
     : 1;
   out.runEnded = t.runEnded === true;
-  if (t.runCds && typeof t.runCds === 'object') {
-    for (const [id, v] of Object.entries(t.runCds as Record<string, unknown>)) {
-      if (typeof v === 'number' && Number.isFinite(v) && v > 0) {
-        out.runCds[id] = Math.floor(v);
+  if (t.runCharges && typeof t.runCharges === 'object') {
+    for (const [id, v] of Object.entries(t.runCharges as Record<string, unknown>)) {
+      if (typeof v === 'number' && Number.isFinite(v) && v >= 0) {
+        out.runCharges[id] = Math.floor(v);
       }
     }
   }

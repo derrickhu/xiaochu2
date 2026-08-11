@@ -801,13 +801,17 @@ class PlayerDataClass {
    * 爬塔推进：记录下一层与续战血量比例（塔的核心差异点 —— HP 不回满）。
    * @returns 是否刷新了历史最高层
    */
-  towerAdvance(clearedFloor: number, nextHpPct: number, cds: Record<string, number> = {}): boolean {
+  towerAdvance(
+    clearedFloor: number,
+    nextHpPct: number,
+    charges: Record<string, number> = {},
+  ): boolean {
     const t = this._data.tower;
     const isBest = clearedFloor > t.bestFloor;
     if (isBest) t.bestFloor = clearedFloor;
     t.runFloor = clearedFloor + 1;
     t.runHpPct = Math.min(1, Math.max(TOWER.minCarryHpPct, nextHpPct));
-    t.runCds = cds;
+    t.runCharges = charges;
     this._save();
     return isBest;
   }
@@ -834,7 +838,7 @@ class PlayerDataClass {
     t.resetsUsed++;
     t.runFloor = checkpointFloorOf(t.runFloor, fx.checkpointEvery);
     t.runHpPct = 1;
-    t.runCds = {};
+    t.runCharges = {};
     t.runEnded = false;
     t.runBlesses = {};
     t.runReachedFloor = 0;
@@ -878,7 +882,7 @@ class PlayerDataClass {
     const t = this._data.tower;
     t.runFloor = target;
     t.runHpPct = 1;
-    t.runCds = {};
+    t.runCharges = {};
     t.runEnded = false;
     t.runBlesses = {};
     t.runPaths = [];

@@ -334,6 +334,12 @@ interface TrialChapterDef {
   bossDropPetId: string;
   bossChallenge: BossChallengeKind;
   /**
+   * 只作用于章末 Boss 的难度补正，铺垫关不受影响。
+   * 用于挑战型本身对高手偏轻的章节 —— 抬 difficultyBase 会把 7 关铺垫一起拖重，
+   * 还会把章节爬坡曲线弄成倒挂（第 4 章反而高于第 5 章）。
+   */
+  bossDifficultyDelta?: number;
+  /**
    * 长度 = stageCount - 1。可含本章即将首教的轻量预告。
    *
    * 末位是「临门验队关」：须挑够重的 archetype，否则 Boss 首波相对前一关断崖。
@@ -356,6 +362,9 @@ const TRIAL_CHAPTERS: readonly TrialChapterDef[] = [
   {
     chapter: 4, name: '炽土试炼', stageCount: 8, difficultyBase: 1.22,
     bossDropPetId: 'pet_025', bossChallenge: 'boardRock',
+    // boardRock 对高手偏轻：v1.0 技能吃连锁余韵后，这关高手 7 回合跌破 boss 下限 8，
+    // 且它本就是 16 个 Boss 里最快的一关。只补 Boss 不动铺垫，保住章内 +0.05/关 的爬坡。
+    bossDifficultyDelta: 0.04,
     // 6 号位预告顽石；末位高防验队
     fillerChallenges: ['multiWave', 'boardSeal', 'highDefense', 'multiWave', 'boardSeal', 'boardRock', 'highDefense'],
     fillerNames: ['炽土前哨', '熔岩小径', '岩傀儡阵', '焦土深谷', '封印残阵', '顽石廊道', '炽石祭坛'],
@@ -487,7 +496,7 @@ function buildTrialChapter(def: TrialChapterDef): StageDef[] {
     creatureId: def.bossDropPetId,
     // Boss 难度只比末位铺垫关高一档（+0.05×章关数）；总量断崖由 powerBudget 护栏兜底
     // v0.4.2 曾试 *0.06，第 7 章 noHeart Boss 中手 6 回合暴毙，回退 *0.05
-    difficulty: def.difficultyBase + def.stageCount * 0.05,
+    difficulty: def.difficultyBase + def.stageCount * 0.05 + (def.bossDifficultyDelta ?? 0),
     challenge: def.bossChallenge,
   }));
 

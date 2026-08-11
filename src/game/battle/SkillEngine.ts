@@ -12,7 +12,12 @@ import { getRaritySkillPower } from '@/balance/rarity';
 import { skillMasteryRank, masteryEffectMult } from '@/balance/skillGrowth';
 import { applyResist, type ResistKind, type ResistQuota } from '@/balance/petTags';
 import type { StatusKind, StatusStackPolicy } from './BattleStatus';
-import { defenseReduction, expectedCritFactor, skillElementMultiplier } from '@/formulas/damage';
+import {
+  defenseReduction,
+  expectedCritFactor,
+  skillComboFactor,
+  skillElementMultiplier,
+} from '@/formulas/damage';
 
 export interface SkillCaster {
   kind: 'pet' | 'enemy';
@@ -57,6 +62,11 @@ export interface SkillRuntimeContext {
    * 整个哑火（返回 false，不占技能位也不出提示），而不是先上一个 0 回合的状态。
    */
   teamResists?: ResistQuota;
+  /**
+   * 上一回合的首消 Combo（「连锁余韵」乘区用，见 COMBAT.skillComboBaseline）。
+   * 缺省 / 0 视为基准档（×1.0），因此不传的调用点行为不变。
+   */
+  lastCombo?: number;
   /** 随机源（敌方技能封印选目标）；默认 Math.random */
   rng?: () => number;
 }
@@ -391,6 +401,18 @@ function counterMultFor(
   return skillElementMultiplier(element ?? caster.element, ctx.enemy.element);
 }
 
+/**
+ * 「连锁余韵」乘区：宠物的伤害类技能按上一回合首消 Combo 放大。
+ *
+ * 与克制乘区分工明确 —— 克制考的是「带哪只宠来打这只 Boss」（编队决策），
+ * 连锁考的是「这一手拖得好不好」（操作决策）。因此连锁对所有宠物伤害一视同仁
+ * （含 teamAtk 齐射与持续伤害），不像克制那样留保底类目，规则才讲得清。
+ * 敌人技与重力（按 HP 百分比）不吃。
+ */
+function petComboFactor(caster: SkillCaster, ctx: SkillRuntimeContext): number {
+  return caster.kind === 'pet' ? skillComboFactor(ctx.lastCombo ?? 0) : 1;
+}
+
 /** 单段直伤结算（damage / multiHit 共用） */
 function resolveHitAmount(
   source: 'casterAtk' | 'teamAtk' | 'enemyAtk',
@@ -412,6 +434,7 @@ function resolveHitAmount(
     : 1;
   const reduced = raw
     * critFactor
+    * petComboFactor(caster, ctx)
     * counterMultFor(source, caster, ctx, opts.element, opts.applyCounter)
     * (opts.applyDefense === false ? 1 : (1 - defenseReduction(ctx.enemy.def_)))
     * (opts.applyDmgBuff === false ? 1 : ctx.teamDamageBuffMult)
@@ -442,7 +465,9 @@ const EFFECT_HANDLERS: { [K in SkillEffectDef['kind']]: EffectHandler<K> } = {
   },
 
   dot: (effect, { vfx, caster, ctx, result }) => {
-    const perTurn = Math.max(1, Math.floor(damageSourceValue(effect.source, caster, ctx) * effect.multiplier));
+    const perTurn = Math.max(1, Math.floor(
+      damageSourceValue(effect.source, caster, ctx) * effect.multiplier * petComboFactor(caster, ctx),
+    ));
     result.statusEvents.push({
       target: caster.kind === 'enemy' ? 'team' : 'enemy',
       status: 'dot',

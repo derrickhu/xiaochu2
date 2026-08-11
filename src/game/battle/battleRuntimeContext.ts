@@ -21,6 +21,8 @@ export function makeSkillRuntimeContext(params: {
   enemyUndying?: boolean;
   /** 我方伤害削弱乘区（敌方削攻 debuff） */
   teamAtkDebuffMult?: number;
+  /** 上一回合首消 Combo（技能直伤的连锁余韵乘区） */
+  lastCombo?: number;
   /** 随机源（敌方技能封印选目标） */
   rng?: () => number;
 }): SkillRuntimeContext {
@@ -47,6 +49,7 @@ export function makeSkillRuntimeContext(params: {
     teamSize: params.team.length,
     // 抗性配额直接从上阵表算，不走参数：任何调用点忘了传都会静默丢失免疫
     teamResists: resolveResists(params.team.map((p) => p.def.tags.resist)),
+    lastCombo: params.lastCombo ?? 0,
     rng: params.rng,
   };
 }

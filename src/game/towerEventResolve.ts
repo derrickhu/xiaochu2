@@ -17,7 +17,7 @@ import { analytics } from '@/analytics';
  */
 function advanceAfterNonCombat(floor: number, hpPct: number): void {
   PlayerData.towerSettleCoins(floor);
-  PlayerData.towerAdvance(floor, hpPct, PlayerData.tower.runCds);
+  PlayerData.towerAdvance(floor, hpPct, PlayerData.tower.runCharges);
   reportQuest('towerFloor');
 }
 

@@ -21,6 +21,9 @@ import {
   type CompPenalty,
 } from '@/balance/damageGates';
 import { ECONOMY } from '@/balance/economy';
+import {
+  chargeForTurns, chargeMaxForCd, startChargeFor, turnChargeGain,
+} from '@/balance/skillCharge';
 import { stageDrops } from '@/formulas/economyOutput';
 import {
   teamMaxHp, teamRcv, teamElements, petAtkInTeam, teamEffectAggregate, petSelfCombatProfile,
@@ -132,6 +135,12 @@ export class BattleController {
   /** 复仇栈：每受一次敌人攻击 +1，玩家回合结算后清零 */
   private _revengeStacks = 0;
 
+  /**
+   * 上一回合的首消 Combo，供技能直伤的「连锁余韵」乘区取用。
+   * 0 = 开局尚未消珠，按基准档算（不惩罚先手放技）。
+   */
+  private _lastCombo = 0;
+
   private _statuses = new BattleStatusStore();
 
   /** 本关解析后的各波遭遇（战斗模板 + 收录元信息） */
@@ -167,10 +176,10 @@ export class BattleController {
       .filter((def): def is PetDef => !!def)
       .map((def) => ({ def, ...levelStarOf(def.id) }));
 
-    // 灵机的开局冷却减免（速咏 + 势如破竹）叠在初始 CD 上，至少留 1 回合
-    const startCdCut = runMods.skillCdReduce + runMods.floorStartCdReduce;
+    // 灵机「势如破竹」直接换成开局多给的充能；速咏走 chargeMax 折扣（见下）
     this.team = members.map((m) => {
       const profile = petSelfCombatProfile(m.def, m.star, m.level);
+      const chargeMax = this._chargeMaxOf(skillCdForPet(m.def, m.star, m.level));
       return {
         def: m.def,
         level: m.level,
@@ -179,10 +188,8 @@ export class BattleController {
         atk: Math.floor(petAtkInTeam(members, m) * runMods.atkMult),
         critRate: profile.critRate + runMods.critRateAdd,
         critDamage: profile.critDamage + runMods.critDamageAdd,
-        skillCdLeft: Math.max(
-          0,
-          skillCdForPet(m.def, m.star, m.level) - startCdCut,
-        ),
+        chargeMax,
+        charge: startChargeFor(chargeMax, runMods.floorStartCdReduce),
       };
     });
     this.heroMaxHp = Math.floor(teamMaxHp(members) * runMods.hpMult);
@@ -321,7 +328,15 @@ export class BattleController {
     });
     // 复仇是「受击攒、下回合放」，本回合用掉即清
     this._revengeStacks = 0;
+    this._awardSkillCharge(groups);
+    // 只认首消：天降凑出来的连不算数，口径与闸门 / 连锋令一致
+    this._lastCombo = groups.filter((g) => (g.waveIndex ?? 0) === 0).length;
     return resolution;
+  }
+
+  /** 上一回合首消 Combo（技能气泡展示「连锁余韵」倍率用） */
+  get lastCombo(): number {
+    return this._lastCombo;
   }
 
   /**
@@ -497,21 +512,46 @@ export class BattleController {
   /** ── enemyTurn → playerTurn ── */
   beginPlayerTurn(): void {
     this.state = 'playerTurn';
-    // 新回合开始：全队技能 CD -1
-    for (const pet of this.team) {
-      if (pet.skillCdLeft > 0) pet.skillCdLeft--;
-    }
   }
 
   // ════════════ 宠物主动技 ════════════
 
-  /** 技能是否可释放（玩家回合 + CD 就绪 + 未被技能封印） */
+  /** 速咏（skillCdReduce）在充能口径下 = 上限打折，至少留 1 回合的量 */
+  private _chargeMaxOf(cd: number): number {
+    return chargeMaxForCd(Math.max(1, cd - this.runMods.skillCdReduce));
+  }
+
+  /** 技能是否可释放（玩家回合 + 充能满 + 未被技能封印） */
   canCastSkill(petIndex: number): boolean {
     const pet = this.team[petIndex];
     return !!pet
       && this.state === 'playerTurn'
-      && pet.skillCdLeft <= 0
+      && pet.charge >= pet.chargeMax
       && this._statuses.sealedPetIndex() !== petIndex;
+  }
+
+  /** 给某只宠加充能（封顶在 chargeMax，多余不留存） */
+  addPetCharge(petIndex: number, amount: number): void {
+    const pet = this.team[petIndex];
+    if (!pet || amount <= 0) return;
+    pet.charge = Math.min(pet.chargeMax, pet.charge + amount);
+  }
+
+  /**
+   * 本回合消珠为全队充能：本色为主、其他珠涓流（口径见 balance/skillCharge）。
+   * 被本关禁用的属性珠是无效珠，不参与充能。
+   */
+  private _awardSkillCharge(groups: MatchGroup[]): void {
+    this.team.forEach((pet, index) => {
+      let sameOrbs = 0;
+      let otherOrbs = 0;
+      for (const group of groups) {
+        if (group.orb !== 'heart' && this.bannedElements.has(group.orb as Element)) continue;
+        if (group.orb === pet.def.element) sameOrbs += group.cells.length;
+        else otherOrbs += group.cells.length;
+      }
+      this.addPetCharge(index, turnChargeGain(sameOrbs, otherOrbs));
+    });
   }
 
   /**
@@ -524,8 +564,7 @@ export class BattleController {
     }
     const pet = this.team[petIndex];
     const skill = pet.skill;
-    // 速咏压缩的是「每次进 CD 的长度」，至少留 1 回合，否则技能可无限连放
-    pet.skillCdLeft = Math.max(1, skill.cd - this.runMods.skillCdReduce);
+    pet.charge = 0;
 
     const result = runSkill(skill, makePetCaster(this.team, petIndex), this._runtimeContext());
     if (!result) throw new Error(`技能未触发: ${skill.id}`);
@@ -549,10 +588,11 @@ export class BattleController {
       setEnemyCharge: (charge) => { this.enemy.charging = charge; },
       syncEnemyStatusMirrors: () => this._syncEnemyStatusMirrors(),
       reducePetCds: (amount, exceptIndex) => {
+        // 「全队冷却 -N 回合」在充能口径下 = 补 N 回合的期望充能
+        const gain = chargeForTurns(amount);
         for (let i = 0; i < this.team.length; i++) {
           if (i === exceptIndex) continue;
-          const pet = this.team[i];
-          if (pet.skillCdLeft > 0) pet.skillCdLeft = Math.max(0, pet.skillCdLeft - amount);
+          this.addPetCharge(i, gain);
         }
       },
       cleanseTeamDebuffs: () => this._statuses.cleanseTeamDebuffs(),
@@ -586,6 +626,7 @@ export class BattleController {
       enemyResolute: this._statuses.isResolute(),
       enemyUndying: this._statuses.undyingThreshold() > 0,
       teamAtkDebuffMult: this._statuses.teamAtkDebuffMult(),
+      lastCombo: this._lastCombo,
       rng: this._rng,
     });
   }

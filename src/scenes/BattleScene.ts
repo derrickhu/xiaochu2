@@ -149,13 +149,16 @@ export class BattleScene implements Scene {
     if (this._context?.kind === 'realm') {
       PlayerData.consumeRealmRun();
     }
-    // 通天塔：HP 与技能 CD 跨层继承，不回满 —— 塔从「单场爆发」变成「资源损耗战」的关键
+    // 通天塔：HP 与技能充能跨层继承，不回满 —— 塔从「单场爆发」变成「资源损耗战」的关键。
+    // 取 min 而非直接覆盖：上一层攒到的充能带得走，但跨层不会比默认开局充能更宽裕，
+    // 口径与旧 CD 版的 max(剩余CD) 一致 —— 跨层只会更紧，不会白送一次就绪技。
     if (this._context?.kind === 'tower') {
       const tower = PlayerData.tower;
       const pct = Math.max(TOWER.minCarryHpPct, tower.runHpPct);
       this._ctrl.heroHp = Math.max(1, Math.floor(this._ctrl.heroMaxHp * pct));
       for (const pet of this._ctrl.team) {
-        pet.skillCdLeft = Math.max(pet.skillCdLeft, tower.runCds[pet.def.id] ?? 0);
+        const carried = tower.runCharges[pet.def.id];
+        if (typeof carried === 'number') pet.charge = Math.min(pet.charge, carried);
       }
     }
     this._board = new BoardModel(Math.random, this._ctrl.orbSpawnPool);
@@ -367,7 +370,7 @@ export class BattleScene implements Scene {
 
   /** 刷新槽位技能 CD + buff 状态行 + 状态图标行（队伍栏 + HUD 协同） */
   private _refreshSkillUi(): void {
-    this._petBar.refreshCooldowns();
+    this._petBar.refreshSkillCharge();
     this._hud.refreshStatus();
     this._statusIcons.refresh();
   }

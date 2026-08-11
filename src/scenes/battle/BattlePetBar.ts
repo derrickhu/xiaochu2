@@ -21,6 +21,7 @@ import {
 } from '@/game/battle/PetSkillReadyFx';
 import { makeText, makePanel, makeStarRow, COLORS, attachPetFrameOrb } from '@/ui';
 import type { BattleController } from '@/game/battle/BattleController';
+import type { TeamPet } from '@/game/battle/battleTypes';
 import type { BattleLayout } from './BattleLayout';
 import { showPetSkillPreview, TAP_SLOP, type PetSkillPreviewHandle } from './PetSkillPreviewBubble';
 import { bindCanvasPointerMove, type CanvasPointerMoveHandle } from '@/minigame/canvasInteraction';
@@ -34,11 +35,25 @@ interface PetBarHooks {
   isBusy: () => boolean;
 }
 
+/** 充能条尺寸（槽位底边横条） */
+const CHARGE_BAR_H = 9;
+const CHARGE_BAR_INSET = 8;
+/** 满充能时的金色 */
+const CHARGE_FULL_COLOR = 0xffd76a;
+/** 充能条缓动速度（每秒逼近目标的比例系数） */
+const CHARGE_BAR_LERP = 7;
+
+function chargeRatioOf(pet: TeamPet): number {
+  if (pet.chargeMax <= 0) return 1;
+  return Math.max(0, Math.min(1, pet.charge / pet.chargeMax));
+}
+
 export class BattlePetBar {
   private _slots: PIXI.Container[] = [];
   private _petSize = 0;
-  private _slotCdBadge: PIXI.Graphics[] = [];
-  private _slotCdText: PIXI.Text[] = [];
+  private _slotChargeBar: PIXI.Graphics[] = [];
+  /** 条上正在显示的充能比例：向真实值缓动，让「消珠→条在涨」看得见 */
+  private _slotChargeShown: number[] = [];
   private _slotReadyFx: PetSkillReadyFxView[] = [];
   private _slotWasReady: boolean[] = [];
   private _slotBaseY: number[] = [];
@@ -85,8 +100,8 @@ export class BattlePetBar {
       })).position.set(w / 2, petBarPanelY);
     }
 
-    this._slotCdBadge = [];
-    this._slotCdText = [];
+    this._slotChargeBar = [];
+    this._slotChargeShown = [];
     this._slotReadyFx = [];
     this._slotWasReady = [];
     this._slotBaseY = [];
@@ -134,7 +149,7 @@ export class BattlePetBar {
       // 棋盘同源属性珠叠在相框左上角（相框 PNG 已去掉旧内嵌角标）
       attachPetFrameOrb(slot, pet.def.element, frameSize);
 
-      // Lv 角标：右下，对齐 mockup（白字 + 深棕描边）
+      // Lv 角标：右下，对齐 mockup（白字 + 深棕描边）；上移让出底部充能条
       const lvSize = Math.max(16, Math.round(petSize * 0.18));
       const lvText = makeText(`Lv.${pet.level}`, {
         size: lvSize,
@@ -144,7 +159,7 @@ export class BattlePetBar {
         strokeColor: COLORS.textMain,
         strokeWidth: Math.max(4, Math.round(lvSize * 0.22)),
       });
-      lvText.position.set(petSize / 2 - 2, petSize / 2 - 1);
+      lvText.position.set(petSize / 2 - 2, petSize / 2 - CHARGE_BAR_H - 6);
       slot.addChild(lvText);
 
       // Q 版星级：与详情页共用 makeStarRow(sprite)
@@ -159,35 +174,18 @@ export class BattlePetBar {
       starRow.position.set(0, petSize / 2 + starSize / 2 + 2);
       slot.addChild(starRow);
 
-      // 技能 CD 回合圆标：右上角（对齐 mockup_v2 深棕圆 + 白字）
-      const cdR = Math.max(14, Math.round(petSize * UI.battle.petCdBadgeRatio / 2));
-      const cdBadge = new PIXI.Graphics();
-      cdBadge.beginFill(COLORS.battleCdBadgeBg, 1);
-      cdBadge.lineStyle(2.5, COLORS.battleCdBadgeRing, 1);
-      cdBadge.drawCircle(0, 0, cdR);
-      cdBadge.endFill();
-      cdBadge.position.set(petSize / 2 - 2, -petSize / 2 + 2);
-      slot.addChild(cdBadge);
-      this._slotCdBadge.push(cdBadge);
-
-      const cdFont = Math.max(16, Math.round(cdR * 1.35));
-      const cdText = makeText(pet.skillCdLeft > 0 ? String(pet.skillCdLeft) : '', {
-        size: cdFont,
-        fill: COLORS.white,
-        bold: true,
-        anchor: 0.5,
-        strokeColor: COLORS.battleCdBadgeBg,
-        strokeWidth: Math.max(3, Math.round(cdFont * 0.18)),
-      });
-      cdText.position.set(0, 0);
-      cdBadge.addChild(cdText);
-      this._slotCdText.push(cdText);
-      cdBadge.visible = pet.skillCdLeft > 0;
+      // 技能充能条：槽位底边（取代旧的 CD 回合圆标，见 balance/skillCharge）
+      const chargeBar = new PIXI.Graphics();
+      slot.addChild(chargeBar);
+      this._slotChargeBar.push(chargeBar);
+      const ratio = chargeRatioOf(pet);
+      this._slotChargeShown.push(ratio);
+      this._drawChargeBar(chargeBar, ratio, color);
 
       const readyFx = createPetSkillReadyFx(petSize, color);
       slot.addChild(readyFx.root);
       this._slotReadyFx.push(readyFx);
-      this._slotWasReady.push(pet.skillCdLeft <= 0);
+      this._slotWasReady.push(ratio >= 1);
 
       if (this._ctrl.bannedElements.has(pet.def.element)) {
         const banMask = new PIXI.Graphics();
@@ -241,20 +239,10 @@ export class BattlePetBar {
     return this._slots[index];
   }
 
-  /** 刷新宠物槽技能 CD 圆标与就绪动效 */
-  refreshCooldowns(): void {
+  /** 刷新充能就绪动效；条本身由 update 缓动到位，这里不直接写显示值 */
+  refreshSkillCharge(): void {
     this._ctrl.team.forEach((pet, i) => {
-      const ready = pet.skillCdLeft <= 0;
-      const badge = this._slotCdBadge[i];
-      const cdText = this._slotCdText[i];
-      if (badge && cdText) {
-        if (ready) {
-          badge.visible = false;
-        } else {
-          badge.visible = true;
-          cdText.text = String(pet.skillCdLeft);
-        }
-      }
+      const ready = chargeRatioOf(pet) >= 1;
       if (ready && !this._slotWasReady[i]) {
         triggerPetSkillReadyFlash(this._slotReadyFx[i]);
       }
@@ -262,14 +250,51 @@ export class BattlePetBar {
     });
   }
 
+  /** 充能条：底边横条，本色跳一截 = 这一回合喂到了这只宠 */
+  private _drawChargeBar(g: PIXI.Graphics, ratio: number, color: number): void {
+    if (g.destroyed) return;
+    const petSize = this._petSize;
+    const w = petSize - CHARGE_BAR_INSET * 2;
+    const h = CHARGE_BAR_H;
+    const x = -w / 2;
+    const y = petSize / 2 - h - 3;
+    const full = ratio >= 1;
+    g.clear();
+    g.beginFill(COLORS.battleCdBadgeBg, 0.9);
+    g.drawRoundedRect(x, y, w, h, h / 2);
+    g.endFill();
+    if (ratio > 0.001) {
+      g.beginFill(full ? CHARGE_FULL_COLOR : color, 1);
+      g.drawRoundedRect(x, y, Math.max(w * ratio, h), h, h / 2);
+      g.endFill();
+    }
+    g.lineStyle(1.5, full ? CHARGE_FULL_COLOR : COLORS.battleCdBadgeRing, full ? 1 : 0.85);
+    g.drawRoundedRect(x, y, w, h, h / 2);
+  }
+
   /** 技能就绪槽：粗光边 +「技能」匾 + 双箭头 + 闪点（对齐 skill_ready_v1） */
   update(dt: number): void {
     const petSize = this._petSize;
     const canAct = !this._hooks.isBusy() && this._ctrl.state === 'playerTurn';
 
+    // 充能条缓动：一次消除后条子「涨上去」而不是瞬移，这是这套系统的主要反馈
+    this._ctrl.team.forEach((pet, i) => {
+      const bar = this._slotChargeBar[i];
+      if (!bar || bar.destroyed) return;
+      const target = chargeRatioOf(pet);
+      const shown = this._slotChargeShown[i];
+      const next = Math.abs(target - shown) < 0.004
+        ? target
+        : shown + (target - shown) * Math.min(1, dt * CHARGE_BAR_LERP);
+      if (next !== shown) {
+        this._slotChargeShown[i] = next;
+        this._drawChargeBar(bar, next, ORB_COLOR[pet.def.element]);
+      }
+    });
+
     this._ctrl.team.forEach((pet, i) => {
       const fx = this._slotReadyFx[i];
-      if (pet.skillCdLeft > 0) {
+      if (chargeRatioOf(pet) < 1) {
         fx.root.visible = false;
         return;
       }
@@ -455,6 +480,9 @@ export class BattlePetBar {
     if (!this._previewLayer) return;
     const pet = this._ctrl.team[petIndex];
     const slot = this._slots[petIndex];
-    this._skillPreview = showPetSkillPreview(this._previewLayer, pet, slot.x, slot.y);
+    this._skillPreview = showPetSkillPreview(this._previewLayer, pet, slot.x, slot.y, {
+      lastCombo: this._ctrl.lastCombo,
+      enemyElement: this._ctrl.enemy.def.element,
+    });
   }
 }

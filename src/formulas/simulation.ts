@@ -21,6 +21,9 @@ import {
   NO_COMP_PENALTY,
 } from '@/balance/damageGates';
 import type { SkillDef } from '@/balance/skills';
+import {
+  chargeForTurns, chargeMaxForCd, startChargeFor, turnChargeGain,
+} from '@/balance/skillCharge';
 import { applyDamageReduction, calcHeal } from './damage';
 import { starsFromTurns } from './stars';
 import {
@@ -74,7 +77,9 @@ interface SimPet {
   critRate: number;
   /** 个体额外暴击伤害 */
   critDamage: number;
-  skillCdLeft: number;
+  /** 主动技充能上限（镜像 TeamPet.chargeMax） */
+  chargeMax: number;
+  charge: number;
 }
 
 /** 超过该回合仍未通关，按卡关处理；避免弱队无限磨死自疗怪 */
@@ -95,13 +100,15 @@ export function simulateBattle(
 
   const team: SimPet[] = members.map((m) => {
     const profile = petSelfCombatProfile(m.def, m.star, m.level);
+    const chargeMax = chargeMaxForCd(skillCdForPet(m.def, m.star, m.level));
     return {
       def: m.def,
       skill: skillForPet(m.def, m.star, m.level),
       atk: petAtkInTeam(members, m),
       critRate: profile.critRate,
       critDamage: profile.critDamage,
-      skillCdLeft: skillCdForPet(m.def, m.star, m.level),
+      chargeMax,
+      charge: startChargeFor(chargeMax),
     };
   });
   const heroMaxHp = teamMaxHp(members);
@@ -203,13 +210,26 @@ export function simulateBattle(
    */
   const groupsPerType = model.combo / (covered.size + 1);
 
+  /**
+   * 每回合每种珠的期望消除颗数（充能口径与 battleTurnResolution 同源）。
+   * 盘面只掉本队属性 + 心珠，故分母是 covered.size + 1。
+   */
+  const orbsPerType = groupsPerType * model.matchCount;
+  /** 能充能的属性（被禁属性是无效珠，镜像 BattleController._awardSkillCharge） */
+  const chargeableEls = [...covered].filter((el) => !bannedSet.has(el));
+  /** 某只宠每回合的期望充能：本色为主 + 其余珠（含心珠）涓流，与实机共用 turnChargeGain */
+  const chargePerTurnOf = (el: Element): number => {
+    const sameOrbs = bannedSet.has(el) ? 0 : orbsPerType;
+    // +1 = 心珠：它永远在掉落池里，也算涓流来源
+    const otherTypes = chargeableEls.filter((e) => e !== el).length + 1;
+    return turnChargeGain(sameOrbs, otherTypes * orbsPerType);
+  };
+
+  /** 上一回合 Combo（技能的连锁余韵乘区）；首回合为 0 = 基准档 */
+  let lastCombo = 0;
+
   for (let turn = 1; turn <= TURN_CAP; turn++) {
     turnsUsed = turn;
-
-    // ── 玩家回合：技能 CD 推进（首回合不减，对齐 beginPlayerTurn 时序）──
-    if (turn > 1) {
-      for (const p of team) if (p.skillCdLeft > 0) p.skillCdLeft--;
-    }
 
     // 同源相斥的敌方减伤与技能减伤取「不叠乘、取更狠的一档」，避免属性过窄时被双重惩罚
     enemyReduction = Math.max(
@@ -222,7 +242,7 @@ export function simulateBattle(
     // ── 主动技（中/高手）──
     if (model.useSkills) {
       for (const p of team) {
-        if (p.skillCdLeft > 0) continue;
+        if (p.charge < p.chargeMax) continue;
         if (p.skill.effects.some((e) => e.kind === 'heal' && e.source !== 'enemyMaxHp') && heroHp >= heroMaxHp * 0.85) {
           continue;
         }
@@ -233,7 +253,7 @@ export function simulateBattle(
         );
         if (!skillResult) continue;
         applySkillResult(skillResult);
-        p.skillCdLeft = p.skill.cd;
+        p.charge = 0;
       }
     }
 
@@ -273,6 +293,12 @@ export function simulateBattle(
         dmgToEnemy += groupsPerType * afterVoid;
       }
     }
+    // 消珠充能：与实机同序（先放技、再消珠、消完才充能），否则技能会早一回合就绪
+    for (const p of team) {
+      p.charge = Math.min(p.chargeMax, p.charge + chargePerTurnOf(p.def.element));
+    }
+    // 连锁余韵：本回合消完珠才计入，下回合的技能才吃得到（镜像 BattleController._lastCombo）
+    lastCombo = model.combo;
     // 持续伤害（点燃）：每回合对敌人结算
     if (st.enemyDot) dmgToEnemy += st.enemyDot.amount;
     const heartOrbs = mech.noHeartHeal ? 0 : groupsPerType * model.matchCount;
@@ -439,6 +465,7 @@ export function simulateBattle(
       enemyUndying: st.undying,
       teamSize: team.length,
       teamResists: resists,
+      lastCombo,
       // 模拟器确定性：技能封印固定选第 0 只
       rng: () => 0,
     };
@@ -517,10 +544,11 @@ export function simulateBattle(
       // 模拟器按期望消珠建模（不掷暴击、不模拟拖珠时长与单宠 CD 封锁），暂不镜像。
     }
 
-    // haste：全队 CD 减少（施法者此刻 CD 为 0，天然不受影响）
+    // haste：全队「冷却 -N 回合」= 补 N 回合的期望充能（镜像 reducePetCds）
     if (result.teamCdDelta && result.teamCdDelta > 0) {
+      const gain = chargeForTurns(result.teamCdDelta);
       for (const p of team) {
-        if (p.skillCdLeft > 0) p.skillCdLeft = Math.max(0, p.skillCdLeft - result.teamCdDelta);
+        p.charge = Math.min(p.chargeMax, p.charge + gain);
       }
     }
     // purify：清除我方 debuff（镜像 cleanseTeamDebuffs）

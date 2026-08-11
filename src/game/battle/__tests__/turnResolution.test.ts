@@ -25,7 +25,8 @@ function petOf(element: Element): TeamPet {
     atk: petAtk(def, 30, 3),
     critRate: 0,
     critDamage: 1.5,
-    skillCdLeft: 0,
+    chargeMax: 100,
+    charge: 100,
   } as TeamPet;
 }
 
