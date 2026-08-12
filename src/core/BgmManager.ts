@@ -10,6 +10,13 @@ import { Platform } from './PlatformService';
 
 type CombatKind = 'battle' | 'boss';
 
+/**
+ * 战斗曲相对主 BGM 的音量倍率。
+ * 原先 battle=1.0 / boss=1.2 会盖住连击升调；压低后 SFX 层次更清楚。
+ */
+const BATTLE_BGM_MULT = 0.55;
+const BOSS_BGM_MULT = 0.7;
+
 class BgmManagerClass {
   private _ctx: WechatMinigame.InnerAudioContext | null = null;
   private _combatCtx: WechatMinigame.InnerAudioContext | null = null;
@@ -19,6 +26,12 @@ class BgmManagerClass {
   private _volume = 0.28;
   private _mainLogical = AUDIO.mainBgm;
   private _duckTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private _combatMult(kind: CombatKind | null = this._combatKind): number {
+    if (kind === 'boss') return BOSS_BGM_MULT;
+    if (kind === 'battle') return BATTLE_BGM_MULT;
+    return 1;
+  }
 
   /** 播放主 BGM（已在播则忽略） */
   playMain(): void {
@@ -47,14 +60,14 @@ class BgmManagerClass {
     });
   }
 
-  /** 常规战斗 BGM：暂停主 BGM，播战斗曲 */
+  /** 常规战斗 BGM：暂停主 BGM，播战斗曲（音量低于主曲，给连击/打击让路） */
   playBattle(): void {
-    this._playCombat('battle', AUDIO.battleBgm, 1.0);
+    this._playCombat('battle', AUDIO.battleBgm, BATTLE_BGM_MULT);
   }
 
-  /** Boss 战 BGM：暂停主 BGM，播 Boss 曲（略抬音量） */
+  /** Boss 战 BGM：略高于常规战斗，仍明显低于旧版 1.2 */
   playBoss(): void {
-    this._playCombat('boss', AUDIO.bossBgm, 1.2);
+    this._playCombat('boss', AUDIO.bossBgm, BOSS_BGM_MULT);
   }
 
   /** 战斗结束：销毁战斗曲，恢复主 BGM */
@@ -100,8 +113,7 @@ class BgmManagerClass {
     this._volume = Math.max(0, Math.min(1, volume));
     if (this._ctx) this._ctx.volume = this._volume;
     if (this._combatCtx) {
-      const mult = this._combatKind === 'boss' ? 1.2 : 1.0;
-      this._combatCtx.volume = Math.min(1, this._volume * mult);
+      this._combatCtx.volume = Math.min(1, this._volume * this._combatMult());
     }
   }
 
@@ -144,11 +156,10 @@ class BgmManagerClass {
   }
 
   private _restoreDuckedVolume(): void {
-    const combatMult = this._combatKind === 'boss' ? 1.2 : 1.0;
     try {
       if (this._ctx) this._ctx.volume = this._volume;
       if (this._combatCtx) {
-        this._combatCtx.volume = Math.min(1, this._volume * combatMult);
+        this._combatCtx.volume = Math.min(1, this._volume * this._combatMult());
       }
     } catch (_) { /* ignore */ }
   }

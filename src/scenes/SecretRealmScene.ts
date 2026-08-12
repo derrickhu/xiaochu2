@@ -131,7 +131,7 @@ export class SecretRealmScene implements Scene {
     headerBand.endFill();
     this.container.addChild(headerBand);
 
-    const back = makeBackButton({ onTap: () => SceneManager.switchTo('title') });
+    const back = makeBackButton({ onTap: () => SceneManager.switchTo('title', PlayerData.titleEnter()) });
     back.position.set(72, Game.safeHeaderCenterY);
     this.container.addChild(back);
 

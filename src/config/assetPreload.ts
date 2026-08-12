@@ -23,6 +23,7 @@ import {
   UI_BATTLE_IMAGES,
   RARITY_PET_CARD_IMAGES,
   RARITY_BADGE_IMAGES,
+  COMBO_TEXT_PATHS,
   battleBgImage,
   enemyImage,
   petAvatarLoadPaths,
@@ -190,6 +191,8 @@ export function battlePreloadImages(stageId: string, teamPetIds: readonly string
     ...Object.values(ORB_IMAGES),
     ...Object.values(PET_FRAME_IMAGES),
     ...Object.values(UI_BATTLE_IMAGES),
+    // 连击「连击」+ 数字全档色（不在 UI_BATTLE_IMAGES 常量字段里，需显式并入）
+    ...COMBO_TEXT_PATHS,
     UI_PANEL_IMAGES.battleVictory,
     UI_PANEL_IMAGES.battleVictoryPeek,
     UI_PANEL_IMAGES.battleDefeatMascot,

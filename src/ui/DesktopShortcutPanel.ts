@@ -28,7 +28,8 @@ export class DesktopShortcutPanel extends PIXI.Container {
 
   open(): void {
     // 开发者工具可预览 UI；真机仍要求宿主支持 addShortcut
-    if ((!DesktopShortcutService.isAvailable && !Platform.isDevtools) || this._isOpen) return;
+    if ((!DesktopShortcutService.isAvailable && !Platform.isDevtools) || (this._isOpen && this.visible)) return;
+    TweenManager.cancelTarget(this);
     this._isOpen = true;
     this.visible = true;
     this._refresh();
@@ -39,12 +40,13 @@ export class DesktopShortcutPanel extends PIXI.Container {
   close(): void {
     if (!this._isOpen) return;
     this._isOpen = false;
+    TweenManager.cancelTarget(this);
     TweenManager.to({
       target: this,
       props: { alpha: 0 },
       duration: 0.15,
       ease: Ease.easeInQuad,
-      onComplete: () => { this.visible = false; },
+      onComplete: () => { if (!this._isOpen) this.visible = false; },
     });
   }
 

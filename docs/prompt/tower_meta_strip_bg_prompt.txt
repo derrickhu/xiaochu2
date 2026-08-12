@@ -1,0 +1,4 @@
+Standalone UI asset only: horizontal parchment status bar for mobile xianxia game.
+Soft cream #f7f3e9 fill, warm gold-brown #b08a52 border, fully rounded capsule/pill ends.
+CRITICAL: exactly THREE clear vertical divider lines splitting into FOUR equal cells.
+Empty cells — NO TEXT, no icons, no labels, no watermark. Transparent outside the bar.

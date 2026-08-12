@@ -1,0 +1,38 @@
+UI mockup — 「通天塔」轻改版：ONLY recolor for 五行, KEEP current game art style.
+
+PRIMARY STYLE REFERENCE = attached current game screenshot.
+- MUST match that soft cream-mint Q xianxia look exactly
+- Soft painterly, friendly, bright daylight / soft sky, pastel cultivation mobile game
+- Same UI chrome language: cream plaques, jade back tassel, soft gold edges, cloud bottom nav
+- Same overall composition and density
+
+DO NOT change art style into dark cosmic night, heavy purple nebula, grim mature xuanhuan, or photoreal.
+
+WHAT TO CHANGE (minimal):
+1) TOWER PAGODA only — keep same cute soft Q pagoda structure / proportions / soft shading as current screenshot,
+   but recolor floors to gently read as 五行 (subtle, harmonious, not rainbow neon):
+   · lower: warm earth amber / cream stone
+   · then soft fire coral-rose eaves accent
+   · then soft water cyan-teal roof glaze
+   · then wood jade-green eaves
+   · upper: metal pale gold / silver-white finial & top eaves
+   Optional: a VERY light translucent five-color spirit ring behind mid-tower (pastel gold/green/blue/coral/ochre), soft and thin — not a huge dark mandala
+2) BACKGROUND — same soft floating-island / mint cloud / yellow tulip / bright sky family as current screen; may polish slightly but stay same style
+3) UI panels stay cream parchment / soft gold like current; Chinese labels OK
+
+LAYOUT (same as current):
+- Top: jade back | cream plaque 「通天塔」 | GM / menu
+- Center: tower hero
+- Small left 「传承」
+- Right status card 「第1层」 HP etc.
+- Milestone strip
+- CTA 「挑战第1层」
+- Bottom 5-tab cloud nav with 通天塔 active (keep cute icon style)
+
+AVOID:
+- night sky / purple galaxy / heavy mandala takeover
+- dark UI, neon, cyber
+- making the whole game look like a different product
+
+9:16 mobile full screen. Chinese labels. No phone frame. No watermark.
+Use reference image for style + layout fidelity.

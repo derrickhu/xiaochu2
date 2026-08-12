@@ -25,6 +25,7 @@ import type { BattleContext } from '@/game/battleContext';
 import { checkStaminaFor } from '@/game/staminaGate';
 import { stageStaminaCost } from '@/game/staminaService';
 import type { BattleEnterData } from './BattleScene';
+import { titleBackData } from './TitleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
   makeActionButton, makeBackButton, makeCoverBackground, makePanel, makeText,
@@ -109,7 +110,7 @@ export class TeamScene implements Scene {
     // 自由编队入口已拆除：无关卡上下文时退回来源页
     if (!this._prepStage) {
       Platform.showToast('请从关卡进入编队');
-      SceneManager.switchTo(this._backScene);
+      this._goBack();
       return;
     }
     const token = this._enterSeq.next();
@@ -129,6 +130,15 @@ export class TeamScene implements Scene {
     if (!this._enterSeq.stillValid(token)) return;
     if (SceneManager.current?.name !== 'team') return;
     this._build({ animate: false });
+  }
+
+  /** 回主页时带上刚才那一章，避免 TitleScene 落到进度章 */
+  private _goBack(): void {
+    if (this._backScene === 'title') {
+      SceneManager.switchTo('title', titleBackData());
+      return;
+    }
+    SceneManager.switchTo(this._backScene);
   }
 
   onExit(): void {
@@ -175,7 +185,7 @@ export class TeamScene implements Scene {
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
 
     const back = makeBackButton({
-      onTap: () => SceneManager.switchTo(this._backScene),
+      onTap: () => this._goBack(),
     });
     back.position.set(80, Game.safeHeaderCenterY);
     this.container.addChild(back);

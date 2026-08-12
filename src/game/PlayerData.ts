@@ -561,6 +561,57 @@ class PlayerDataClass {
   }
 
   /**
+   * 主页落点章（最近主线对战 / 章节切换）。
+   * 0 或已锁章视为无效，调用方应回退到最新已解锁章。
+   */
+  get homeChapter(): number {
+    const ch = this._data.homeChapter;
+    return ch > 0 && this.isChapterUnlocked(ch) ? ch : 0;
+  }
+
+  /** 记住主页章节；未解锁或非法值忽略 */
+  setHomeChapter(chapter: number): void {
+    if (!Number.isFinite(chapter)) return;
+    const ch = Math.floor(chapter);
+    if (ch <= 0 || !this.isChapterUnlocked(ch)) return;
+    if (this._data.homeChapter === ch) return;
+    this._data.homeChapter = ch;
+    this._save();
+  }
+
+  /**
+   * 最近点进编队 / 开打的主线关。空串表示只记了章（切章浏览）。
+   */
+  get homeStageId(): string {
+    const id = this._data.homeStageId;
+    if (!id) return '';
+    return STAGES.some((s) => s.id === id) ? id : '';
+  }
+
+  /** 记住主线关，同时记下所在章 */
+  setHomeStage(stageId: string): void {
+    const stage = STAGES.find((s) => s.id === stageId);
+    if (!stage || !this.isChapterUnlocked(stage.chapter)) return;
+    if (this._data.homeStageId === stage.id && this._data.homeChapter === stage.chapter) return;
+    this._data.homeStageId = stage.id;
+    this._data.homeChapter = stage.chapter;
+    this._save();
+  }
+
+  /** 切章浏览：只留章、清掉关，避免「已通关→下一关」把浏览中的章抢走 */
+  clearHomeStage(): void {
+    if (!this._data.homeStageId) return;
+    this._data.homeStageId = '';
+    this._save();
+  }
+
+  /** 所有返回主页的入口带上刚才那一章，TitleScene 才不会落到进度章 */
+  titleEnter(): { chapter: number } | undefined {
+    const chapter = this.homeChapter;
+    return chapter > 0 ? { chapter } : undefined;
+  }
+
+  /**
    * GM：静默解锁到指定关（把目标关之前的主线全部标为 3★）。
    * 不发币/灵玉，避免跳关污染经济；Boss 掉落宠照常发放，方便测后期编队。
    */

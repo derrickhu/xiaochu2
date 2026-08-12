@@ -130,7 +130,9 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
   const result = ctrl.castSkill(petIndex);
   deps.refreshSkillUi();
   Platform.vibrateShort('medium');
-  SfxManager.playPetSkill();
+  // 与 xiao_chu 一致：施放主音走 skill.mp3；★3+ 再叠一层 pet_skill
+  SfxManager.playSkill();
+  if (pet.star >= 3) SfxManager.playPetSkill();
 
   // 通用演出：属性色全屏闪 + 技能名快闪
   const vfx = SKILL_VFX_MAP.get(result.vfxEvents[0]);

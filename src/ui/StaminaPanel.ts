@@ -44,7 +44,10 @@ export class StaminaPanel extends PIXI.Container {
   }
 
   open(cost = 0): void {
-    if (this._isOpen) return;
+    // 关闭淡出未结束时再 open：旧 tween 的 onComplete 会把 visible 关掉，
+    // 且 _isOpen 已为 true，后续点击直接 return（主页连点体力：前两次有、后面没）
+    if (this._isOpen && this.visible) return;
+    TweenManager.cancelTarget(this);
     this._isOpen = true;
     this._cost = cost;
     this._busy = false;
@@ -70,12 +73,13 @@ export class StaminaPanel extends PIXI.Container {
   close(): void {
     if (!this._isOpen || this._busy) return;
     this._isOpen = false;
+    TweenManager.cancelTarget(this);
     TweenManager.to({
       target: this,
       props: { alpha: 0 },
       duration: 0.15,
       ease: Ease.easeInQuad,
-      onComplete: () => { this.visible = false; },
+      onComplete: () => { if (!this._isOpen) this.visible = false; },
     });
   }
 

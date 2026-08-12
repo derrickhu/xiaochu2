@@ -9,6 +9,7 @@ import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { UI } from '@/balance/ui';
 import { CHAPTERS, CHAPTER_NAME, STAGE_MAP, stagesOfChapter } from '@/balance/stages';
+import { resolveHomeDisplay } from '@/balance/chapterMap';
 import { PlayerData } from '@/game/PlayerData';
 import { reportQuest } from '@/game/dailyQuestTracker';
 import {
@@ -37,10 +38,15 @@ declare const GameGlobal: any;
 const HOME_DISPLAY_NAME = '仙灵小萌新';
 
 export interface TitleEnterData {
-  /** 进入时选中的章节（默认最新已解锁章） */
+  /** 进入时选中的章节（切章 / 返回时带回刚才那一章；缺省用存档落点章） */
   chapter?: number;
   /** 排除法：对齐 L7 手写路径，或逐级加回 TitleScene 特性 */
   minimalStrip?: 'l7like' | 'withAnim' | 'full';
+}
+
+/** 所有「返回主页」共用：把刚才点的章带回去，避免被进度章抢走 */
+export function titleBackData(): TitleEnterData | undefined {
+  return PlayerData.titleEnter();
 }
 
 export class TitleScene implements Scene {
@@ -55,6 +61,8 @@ export class TitleScene implements Scene {
   }
 
   private _chapter = 1;
+  /** 地图高亮关；切章浏览时为 null，用章内第一未通关 */
+  private _focusStageId: string | null = null;
   private _minimalStrip: TitleEnterData['minimalStrip'];
   private _scroll = new ScrollListController();
   private _worldRoot: PIXI.Container | null = null;
@@ -77,6 +85,9 @@ export class TitleScene implements Scene {
     if (typeof chapter !== 'number' || !Number.isFinite(chapter)) return;
     if (!CHAPTERS.includes(chapter)) return;
     this._chapter = chapter;
+    this._focusStageId = null;
+    PlayerData.setHomeChapter(chapter);
+    PlayerData.clearHomeStage();
     if (SceneManager.current?.name === 'title') this._rebuild();
   };
 
@@ -90,7 +101,11 @@ export class TitleScene implements Scene {
       Game.setMaxFPS(UI.fps.idle);
     }
     PlayerData.load();
-    this._chapter = enter?.chapter ?? this._latestUnlockedChapter();
+    const display = this._resolveHomeDisplay(enter?.chapter);
+    this._chapter = display.chapter;
+    this._focusStageId = display.stageId;
+    // 只把章写回：高亮关是展示结果，写回会把「已通关→下一关」跨章结果存进档，下次返回就粘在进度章
+    PlayerData.setHomeChapter(display.chapter);
     if (SceneManager.current?.name !== 'title') return;
     this._rebuild();
     reportQuest('login');
@@ -117,6 +132,23 @@ export class TitleScene implements Scene {
       if (PlayerData.isChapterUnlocked(ch)) latest = ch;
     }
     return latest;
+  }
+
+  /**
+   * 点过的章就停在该章。选过关且已打过，只在该章内高亮下一关，绝不跳到进度章。
+   */
+  private _resolveHomeDisplay(preferred?: number) {
+    return resolveHomeDisplay({
+      preferred,
+      rememberedChapter: PlayerData.homeChapter,
+      rememberedStageId: PlayerData.homeStageId,
+      latestUnlocked: this._latestUnlockedChapter(),
+      chapters: CHAPTERS,
+      isChapterUnlocked: (ch) => PlayerData.isChapterUnlocked(ch),
+      stagesOfChapter,
+      starsOf: (id) => PlayerData.starsOf(id),
+      isUnlocked: (s) => PlayerData.isUnlocked(s),
+    });
   }
 
   onExit(): void {
@@ -151,6 +183,7 @@ export class TitleScene implements Scene {
         if (mapEditMode) return;
         this._openStageEntry(stageId);
       },
+      focusStageId: this._focusStageId,
     });
     this._worldRoot = mapWorld.world;
     this.container.addChild(mapWorld.world);
@@ -191,6 +224,8 @@ export class TitleScene implements Scene {
     this._stageEntry = showStageEntryDialog(this._dialogLayer, stage, {
       onConfirm: (id) => {
         this._stageEntry = null;
+        const stage = STAGE_MAP.get(id);
+        if (stage) PlayerData.setHomeStage(stage.id);
         SceneManager.switchTo('team', { stageId: id } satisfies TeamEnterData);
       },
       onClose: () => {
@@ -348,6 +383,9 @@ export class TitleScene implements Scene {
         enabled,
         onTap: () => {
           this._chapter = targetChapter!;
+          this._focusStageId = null;
+          PlayerData.setHomeChapter(this._chapter);
+          PlayerData.clearHomeStage();
           this._rebuild();
         },
       });

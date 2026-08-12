@@ -1,0 +1,30 @@
+Game sprite ONLY — cute Q xianxia pagoda with CLEAR five-element spirit ring. Isolated asset on soft solid mint-cream studio background (easy cutout). NO UI chrome, NO buttons, NO panels, NO bottom nav, NO phone frame, NO watermark.
+
+STYLE (must match reference pagoda):
+- Soft painterly cream-mint Q cultivation mobile game look
+- Light daylight soft shading, friendly, pastel, not dark/cosmic
+- Same cute soft stone pagoda proportions as the style-reference tower image
+
+PAGODA (center subject):
+- Multi-tier Chinese pagoda, cream stone body, arched windows, golden corner bells, stone base + steps + small green bushes
+- Roof eaves gently colored as 五行 from bottom→top (harmonious pastels, not neon):
+  · bottom eaves: warm earth amber / soft gold (土)
+  · next: soft fire coral-rose (火)
+  · next: soft water cyan-teal (水)
+  · next: wood jade-green (木)
+  · top eaves + finial: metal pale gold / silver-cream (金)
+
+CRITICAL — FIVE ELEMENTS RING (must be OBVIOUS, do not omit):
+- A translucent pastel five-color spirit halo / oval ring BEHIND and around mid-tower
+- Soft thin ring strokes in gold / jade-green / cyan / coral / ochre — readable, not nearly invisible
+- FIVE circular badge medallions ON the ring, each clearly showing ONE Chinese character:
+  · 金 (pale gold badge, upper-left of ring)
+  · 木 (jade-green badge, mid-left)
+  · 水 (cyan badge, upper-right)
+  · 火 (coral-rose badge, mid-right)
+  · 土 (warm ochre badge, lower area of ring)
+- Badges are solid enough to survive cutout (soft fill + light gold rim), characters dark-readable ink
+- The ONLY allowed writing is these five glyphs 金木水火土 inside badges — no other text/labels anywhere
+
+Composition: full pagoda + ring + badges in frame with margin; 3:4 portrait; subject large and centered.
+Use references for style + the required 五行环 layout from the UI mock (extract tower+ring idea only).

@@ -2,7 +2,7 @@
  * 章节路径地图 — 背景图路径折线 + 弧长等距插值放关卡节点
  */
 import type { StageDef } from './stages';
-import { STAGES } from './stages';
+import { nextMainlineStage, STAGES } from './stages';
 
 /** 背景设计稿尺寸（9:16） */
 export const CHAPTER_MAP_DESIGN = {
@@ -123,6 +123,114 @@ export function playerProgressChapter(
     if (isUnlocked(stage) && starsOf(stage.id) === 0) return stage.chapter;
   }
   return null;
+}
+
+export interface HomeDisplay {
+  chapter: number;
+  /** 地图高亮关；整章已通且只是在浏览时为 null */
+  stageId: string | null;
+}
+
+/**
+ * 上次选中的关若已通关，只在同一章内走到下一关未通关。
+ * 不跨章：回主页必须停在刚才点的那一章，不能被全局进度章抢走。
+ */
+export function walkHomeStage(
+  stageId: string,
+  starsOf: (id: string) => number,
+  isUnlocked: (s: StageDef) => boolean,
+  stayInChapter?: number,
+): StageDef | undefined {
+  const start = STAGES.find((s) => s.id === stageId);
+  if (!start) return undefined;
+  const chapter = stayInChapter ?? start.chapter;
+  if (start.chapter !== chapter) return undefined;
+  let cur: StageDef = start;
+  const seen = new Set<string>();
+  while (!seen.has(cur.id)) {
+    seen.add(cur.id);
+    if (starsOf(cur.id) === 0) return cur;
+    const next = nextMainlineStage(cur.id);
+    if (!next || next.chapter !== chapter || !isUnlocked(next)) return cur;
+    cur = next;
+  }
+  return cur;
+}
+
+function firstOpenStageId(
+  chapter: number,
+  stagesOfChapter: (ch: number) => readonly StageDef[],
+  starsOf: (id: string) => number,
+  isUnlocked: (s: StageDef) => boolean,
+): string | null {
+  const idx = chapterMapProgressIndex(stagesOfChapter(chapter), starsOf, isUnlocked);
+  if (idx == null) return null;
+  return stagesOfChapter(chapter)[idx]?.id ?? null;
+}
+
+/**
+ * 主页落点：章永远跟「刚才点的那一章」。
+ * 编队返回、战斗返回、结算返回主页都走这里，不允许跳到全局进度章。
+ * 选过关且已打过 → 只在该章内高亮下一关；整章已通则停在该章、不高亮进度点。
+ */
+export function resolveHomeDisplay(opts: {
+  preferred?: number;
+  rememberedChapter: number;
+  rememberedStageId: string;
+  latestUnlocked: number;
+  chapters: readonly number[];
+  isChapterUnlocked: (ch: number) => boolean;
+  stagesOfChapter: (ch: number) => readonly StageDef[];
+  starsOf: (id: string) => number;
+  isUnlocked: (s: StageDef) => boolean;
+}): HomeDisplay {
+  const {
+    preferred, rememberedChapter, rememberedStageId, latestUnlocked, chapters,
+    isChapterUnlocked, stagesOfChapter, starsOf, isUnlocked,
+  } = opts;
+
+  const ofChapter = (ch: number): HomeDisplay => ({
+    chapter: ch,
+    stageId: firstOpenStageId(ch, stagesOfChapter, starsOf, isUnlocked),
+  });
+
+  const chapter = (typeof preferred === 'number' && chapters.includes(preferred)
+    && isChapterUnlocked(preferred))
+    ? preferred
+    : (rememberedChapter > 0 && isChapterUnlocked(rememberedChapter)
+      ? rememberedChapter
+      : latestUnlocked);
+
+  if (rememberedStageId) {
+    const cursor = walkHomeStage(rememberedStageId, starsOf, isUnlocked, chapter);
+    if (cursor && cursor.chapter === chapter) {
+      if (starsOf(cursor.id) === 0) {
+        return { chapter, stageId: cursor.id };
+      }
+      // 章内已无下一关（整章打完）：停在该章，不要跨到进度章
+    }
+  }
+
+  return ofChapter(chapter);
+}
+
+/** @deprecated 仅返回章号；新代码用 resolveHomeDisplay */
+export function resolveHomeDisplayChapter(opts: {
+  preferred?: number;
+  remembered: number;
+  rememberedStageId?: string;
+  latestUnlocked: number;
+  chapters: readonly number[];
+  isChapterUnlocked: (ch: number) => boolean;
+  stagesOfChapter: (ch: number) => readonly StageDef[];
+  starsOf: (id: string) => number;
+  isUnlocked: (s: StageDef) => boolean;
+}): number {
+  return resolveHomeDisplay({
+    ...opts,
+    rememberedChapter: opts.remembered,
+    rememberedStageId: opts.rememberedStageId ?? '',
+  }).chapter;
 }
 
 export function chapterMapActiveIndex(

@@ -1,9 +1,9 @@
 /**
- * 通天塔（对齐 docs/ui/tower_ui_prototype.png）
+ * 通天塔（布局方案 A：塔为舞台）
  *
- * 顶栏：返回 + 匾「通天塔」+ 重置次数
- * 中央宝塔立绘 + 右侧「本轮状态」卡
- * 层数里程碑横条 + 底部挑战/重置 CTA
+ * 顶栏：返回 + 匾「通天塔」+ 重置/印记
+ * 中央宝塔 + 五行环（无侧栏遮挡）
+ * 塔下：层数浮标 + 起手血条 → 本轮信息横条 → 矮里程碑 → CTA
  *
  * 与主线差异：HP / 技能 CD 跨层继承；战败回落存档点，需消耗每日重置续爬。
  */
@@ -40,13 +40,23 @@ import type { TeamEnterData } from './TeamScene';
 import { analytics } from '@/analytics';
 
 const MILESTONE_PREVIEW = 4;
-/** 里程碑：更高更窄；挑战钮更小一档 */
-const TOWER_PANEL_W = 480;
+/** 状态条 / 里程碑左右边距一致，横向占满内容区 */
+const TOWER_SIDE_PAD = 20;
 const CTA_BTN_W = WARM_GOLD_CTA_SIZE.width;
 const CTA_BTN_H = WARM_GOLD_CTA_SIZE.height;
-const STATUS_W = 200;
-const STATUS_H = 270;
-const STATUS_FOOTER_H = 42;
+/** 字号加大后条/板略增高，塔区靠上方弹性压缩保持不挤 */
+const META_STRIP_H = 58;
+/** 层数 + 起手文案 + 血条三段纵向排布，避免重叠 */
+const FLOOR_HUD_H = 88;
+const MILESTONE_H = 138;
+const META_TEXT_SIZE = 18;
+const MILESTONE_TITLE_SIZE = 22;
+const MILESTONE_TAG_SIZE = 16;
+const MILESTONE_CIRCLE_R = 30;
+/** 层标六角相对圆心下移；与板底留白一起算，避免贴边 */
+const MILESTONE_TAG_GAP = 14;
+const MILESTONE_TAG_H = 22;
+const MILESTONE_BOTTOM_PAD = 14;
 
 export class TowerScene implements Scene {
   readonly name = 'tower';
@@ -62,6 +72,7 @@ export class TowerScene implements Scene {
     void TextureCache.preload([
       BACKGROUND_IMAGES.tower,
       UI_IMAGES.towerPagoda,
+      UI_IMAGES.towerMetaStripBg,
       UI_IMAGES.towerBtnCta,
       UI_IMAGES.sceneTitlePlaque,
       UI_IMAGES.btnBack,
@@ -94,7 +105,7 @@ export class TowerScene implements Scene {
     headerBand.endFill();
     this.container.addChild(headerBand);
 
-    const back = makeBackButton({ onTap: () => SceneManager.switchTo('title') });
+    const back = makeBackButton({ onTap: () => SceneManager.switchTo('title', PlayerData.titleEnter()) });
     back.position.set(72, Game.safeHeaderCenterY);
     this.container.addChild(back);
 
@@ -104,32 +115,33 @@ export class TowerScene implements Scene {
 
     const resets = makeText(
       `重置 ${PlayerData.towerResetsLeft}/${TOWER.dailyResets}`,
-      { size: FONT_SIZE.xs, fill: COLORS.textTitle, bold: true, anchor: [1, 0.5] },
+      { size: FONT_SIZE.xs, fill: COLORS.textTitle, bold: true, anchor: [1, 0.5], role: 'body' },
     );
     resets.position.set(w - 22, Game.safeHeaderCenterY - 11);
     this.container.addChild(resets);
 
     const coins = makeText(
       `登塔印记 ${PlayerData.towerCoins}`,
-      { size: FONT_SIZE.xxs, fill: 0x8a6a4a, bold: true, anchor: [1, 0.5] },
+      { size: FONT_SIZE.xs, fill: 0x8a6a4a, bold: true, anchor: [1, 0.5], role: 'body' },
     );
     coins.position.set(w - 22, Game.safeHeaderCenterY + 11);
     this.container.addChild(coins);
 
     this._buildLegacyEntry(w, Game.safeTop + 84);
 
-    // 内容区给底栏留位；挑战 CTA 叠在底栏上方
+    // 自下而上：CTA → 矮里程碑 → 本轮横条 → 层数/血条 → 塔舞台
     const contentTop = Game.safeTop + 72;
     const contentBottom = h - BOTTOM_NAV_RESERVE - 4;
     const ctaTop = contentBottom - CTA_BTN_H;
-    const milestoneH = 168;
-    const milestoneTop = ctaTop - 18 - milestoneH;
-    // 塔可略叠进里程碑上沿，保证够大；下方仍留按钮区
-    const stageBottom = milestoneTop + 28;
-    const stageH = Math.max(420, stageBottom - contentTop);
+    const milestoneTop = ctaTop - 10 - MILESTONE_H;
+    const metaTop = milestoneTop - 6 - META_STRIP_H;
+    const floorHudTop = metaTop - 4 - FLOOR_HUD_H;
+    const stageH = Math.max(340, floorHudTop - contentTop);
 
     this._buildStage(w, contentTop, stageH);
-    this._buildMilestone(w, milestoneTop, milestoneH);
+    this._buildFloorHud(w, floorHudTop, FLOOR_HUD_H);
+    this._buildMetaStrip(w, metaTop, META_STRIP_H);
+    this._buildMilestone(w, milestoneTop, MILESTONE_H);
     this._buildCta(w, ctaTop);
     buildBottomNav(this.container, w, h, 'tower');
   }
@@ -153,7 +165,7 @@ export class TowerScene implements Scene {
     btn.addChild(bg);
 
     const label = makeText('传承', {
-      size: FONT_SIZE.xs, fill: 0x7a5520, bold: true, anchor: 0.5, role: 'title',
+      size: FONT_SIZE.sm, fill: 0x7a5520, bold: false, anchor: 0.5, role: 'title',
     });
     label.position.set(bw / 2, bh / 2);
     btn.addChild(label);
@@ -183,169 +195,109 @@ export class TowerScene implements Scene {
     stage.position.set(0, y);
     this.container.addChild(stage);
 
-    // 再放大一档，位置略下移（相对上一版 0.42）
-    const towerH = Math.min(Math.round(stageH * 1.18), 820);
-    const towerW = Math.round(towerH * (315 / 900) * 1.32);
-    const towerX = w * 0.46;
-    const towerY = stageH * 0.48;
+    // 五行塔略偏上，底边留在舞台内，避免压住下方「第 N 层」
+    const towerH = Math.min(Math.round(stageH * 0.98), 720);
+    const towerW = Math.round(towerH * (911 / 1278));
+    const towerX = w * 0.5;
+    const towerY = stageH * 0.47;
     this._mountSprite(stage, UI_IMAGES.towerPagoda, towerX, towerY, towerW, towerH);
-
-    const panelX = w - 14 - STATUS_W;
-    const panelY = Math.max(8, (stageH - STATUS_H) * 0.32);
-    this._buildStatusCard(stage, panelX, panelY);
   }
 
-  /**
-   * 右侧状态区 —— 严格对齐截图：
-   * 「本轮状态」→ 大号层数 → 起手血量 → 绿条+金菱 → 分隔 → 最高/存档 → 底栏规则带
-   */
-  private _buildStatusCard(parent: PIXI.Container, x: number, y: number): void {
+  /** 塔下浮标：层数（书法）→ 起手文案（文楷）→ 血条，纵向留白防叠 */
+  private _buildFloorHud(w: number, y: number, h: number): void {
     const tower = PlayerData.tower;
-    const card = new PIXI.Container();
-    card.position.set(x, y);
-    parent.addChild(card);
-
-    const shadow = new PIXI.Graphics();
-    shadow.beginFill(0x000000, 0.1);
-    shadow.drawRoundedRect(3, 5, STATUS_W, STATUS_H, 14);
-    shadow.endFill();
-    card.addChild(shadow);
-
-    card.addChild(makePanel({
-      width: STATUS_W, height: STATUS_H, radius: 14,
-      bg: 0xf7f3e9, bgAlpha: 0.96,
-      border: 0xb08a52, borderWidth: 2,
-      centered: false,
-    }));
-
-    // 底栏色带（规则区）
-    const footer = new PIXI.Graphics();
-    footer.beginFill(0xefe6d5, 1);
-    const fr = 12;
-    const fy = STATUS_H - STATUS_FOOTER_H;
-    footer.moveTo(2, fy);
-    footer.lineTo(STATUS_W - 2, fy);
-    footer.lineTo(STATUS_W - 2, STATUS_H - fr);
-    footer.quadraticCurveTo(STATUS_W - 2, STATUS_H - 2, STATUS_W - fr, STATUS_H - 2);
-    footer.lineTo(fr, STATUS_H - 2);
-    footer.quadraticCurveTo(2, STATUS_H - 2, 2, STATUS_H - fr);
-    footer.closePath();
-    footer.endFill();
-    card.addChild(footer);
-
-    // 角花轻点缀
-    this._cornerFlourish(card, 10, 10, 1, 1);
-    this._cornerFlourish(card, STATUS_W - 10, 10, -1, 1);
-    this._cornerFlourish(card, 10, STATUS_H - 10, 1, -1);
-    this._cornerFlourish(card, STATUS_W - 10, STATUS_H - 10, -1, -1);
-
-    const pad = 16;
-    const cx = STATUS_W / 2;
-    let cy = 20;
-
-    const eyebrow = makeText('「本轮状态」', {
-      size: 14, fill: 0x5c4033, bold: true, anchor: 0.5,
-    });
-    eyebrow.position.set(cx, cy);
-    card.addChild(eyebrow);
-    cy += 30;
+    const hud = new PIXI.Container();
+    hud.position.set(0, y);
+    this.container.addChild(hud);
 
     const floorTitle = tower.runEnded
       ? `第 ${PlayerData.towerCheckpointFloor()} 层`
       : `第 ${tower.runFloor} 层`;
     const floorText = makeText(floorTitle, {
-      size: 36, fill: 0x5c4033, bold: true, anchor: 0.5,
-      role: 'title',
+      size: FONT_SIZE.lg, fill: 0x5c4033, bold: false, anchor: 0.5, role: 'title',
     });
-    floorText.position.set(cx, cy);
-    card.addChild(floorText);
-    cy += 36;
+    try { floorText.updateText(true); } catch { /* noop */ }
+    floorText.position.set(w / 2, Math.max(18, floorText.height * 0.52));
+    hud.addChild(floorText);
 
     const hpRatio = tower.runEnded ? 0 : Math.max(0, Math.min(1, tower.runHpPct));
     const hpPct = Math.round(hpRatio * 100);
+    const barW = Math.min(220, w - 160);
+    const barH = 14;
+    const barY = h - barH - 4;
+
     const hpLabel = makeText(
-      tower.runEnded ? '本轮已中断' : `起手血量 ${hpPct}%`,
-      { size: FONT_SIZE.xxs, fill: 0x5c4033, bold: true, anchor: 0.5 },
+      tower.runEnded ? '本轮已中断' : `起手 ${hpPct}%`,
+      { size: FONT_SIZE.xs, fill: 0x5c4033, bold: true, anchor: 0.5, role: 'body' },
     );
-    hpLabel.position.set(cx, cy);
-    card.addChild(hpLabel);
-    cy += 18;
+    try { hpLabel.updateText(true); } catch { /* noop */ }
+    // 夹在层数与血条之间：上离层数 ≥6，下离血条 ≥8
+    const minCy = floorText.y + floorText.height / 2 + 6 + hpLabel.height / 2;
+    const maxCy = barY - 8 - hpLabel.height / 2;
+    hpLabel.position.set(w / 2, Math.min(maxCy, Math.max(minCy, (minCy + maxCy) / 2)));
+    hud.addChild(hpLabel);
 
-    const barW = STATUS_W - pad * 2;
-    const barH = 16;
-    this._drawStatusHpBar(card, pad, cy, barW, barH, hpRatio);
-    cy += barH + 18;
-
-    const line = new PIXI.Graphics();
-    line.lineStyle(1.5, 0xc4b49a, 0.75);
-    line.moveTo(pad + 8, cy);
-    line.lineTo(STATUS_W - pad - 8, cy);
-    card.addChild(line);
-    this._diamond(card, cx, cy, 0xc4b49a);
-    cy += 22;
-
-    const meta = makeText(
-      `最高 ${tower.bestFloor} · 存档每${TOWER.checkpointEvery}层`,
-      { size: FONT_SIZE.xxs, fill: 0x5c4033, bold: true, anchor: 0.5 },
-    );
-    try { meta.updateText(true); } catch { /* noop */ }
-    if (meta.width > STATUS_W - pad * 2) {
-      meta.scale.set((STATUS_W - pad * 2) / meta.width);
-    }
-    meta.position.set(cx, cy);
-    card.addChild(meta);
-    cy += 26;
-
-    this._buildBlessRow(card, cx, cy);
-
-    const tip = makeText(
-      `每层回${Math.round(TOWER.healPctPerFloor * 100)}% · 守关回${Math.round(TOWER.healPctPerGuard * 100)}%`,
-      {
-        size: 13, fill: 0x5c4033, bold: true, anchor: 0.5,
-        wordWrapWidth: STATUS_W - 20,
-        align: 'center',
-      },
-    );
-    tip.position.set(cx, STATUS_H - STATUS_FOOTER_H / 2);
-    card.addChild(tip);
+    this._drawStatusHpBar(hud, (w - barW) / 2, barY, barW, barH, hpRatio);
   }
 
-  /** 本轮机缘计数条：点开看全部已得词条；旁白钉死「仅本轮有效」 */
-  private _buildBlessRow(card: PIXI.Container, cx: number, y: number): void {
+  /**
+   * 本轮信息横条：独立底图四格分界 + 最高 / 存档 / 机缘 / 回血。
+   * 机缘可点开列表；其余只读。
+   */
+  private _buildMetaStrip(w: number, y: number, stripH: number): void {
+    const tower = PlayerData.tower;
+    const stripW = w - TOWER_SIDE_PAD * 2;
+    const strip = new PIXI.Container();
+    strip.position.set(TOWER_SIDE_PAD, y);
+    this.container.addChild(strip);
+
+    this._mountSprite(strip, UI_IMAGES.towerMetaStripBg, stripW / 2, stripH / 2, stripW, stripH);
+
     const owned = describeOwnedBlesses(PlayerData.towerBlesses);
-    const total = owned.reduce((sum, o) => sum + o.stacks, 0);
-    const row = new PIXI.Container();
-    row.position.set(cx, y);
-    card.addChild(row);
+    const blessTotal = owned.reduce((sum, o) => sum + o.stacks, 0);
+    const blessLabel = blessTotal > 0 ? `本轮机缘 ${blessTotal}›` : '本轮机缘';
+    const healPct = Math.round(TOWER.healPctPerFloor * 100);
+    const guardPct = Math.round(TOWER.healPctPerGuard * 100);
 
-    const pillW = STATUS_W - 40;
-    const pillH = 26;
-    const bg = new PIXI.Graphics();
-    bg.beginFill(total > 0 ? 0xfff3d8 : 0xf0ebe0, 1);
-    bg.lineStyle(1.5, total > 0 ? 0xd8a63c : 0xc4b49a, 1);
-    bg.drawRoundedRect(-pillW / 2, -pillH / 2, pillW, pillH, pillH / 2);
-    bg.endFill();
-    row.addChild(bg);
+    const parts: Array<{ text: string; fill: number; tap?: () => void }> = [
+      { text: `最高 ${tower.bestFloor}`, fill: 0x5c4033 },
+      { text: `存档每${TOWER.checkpointEvery}层`, fill: 0x5c4033 },
+      {
+        text: blessLabel,
+        fill: blessTotal > 0 ? 0x7a5520 : 0x8a6a4a,
+        tap: blessTotal > 0 ? () => this._showBlessList(owned) : undefined,
+      },
+      // 末格两行，放大后仍落在格内
+      { text: `每层回${healPct}%\n守关${guardPct}%`, fill: 0x5c4033 },
+    ];
 
-    const label = makeText(
-      total > 0 ? `本轮机缘 ${total} 道 ›` : '本轮尚无机缘',
-      { size: 13, fill: total > 0 ? 0x7a5520 : 0x9b8b80, bold: true, anchor: 0.5 },
-    );
-    row.addChild(label);
+    const cols = parts.length;
+    const colW = stripW / cols;
+    const cellPad = 6;
+    for (let i = 0; i < cols; i++) {
+      const part = parts[i];
+      const maxW = colW - cellPad * 2;
+      const label = makeText(part.text, {
+        size: META_TEXT_SIZE, fill: part.fill, bold: true, anchor: 0.5,
+        align: 'center',
+        wordWrapWidth: maxW,
+        role: 'body',
+      });
+      try { label.updateText(true); } catch { /* noop */ }
+      const maxH = stripH - 10;
+      if (label.width > maxW) label.scale.set(maxW / label.width);
+      if (label.height > maxH) label.scale.set(label.scale.x * (maxH / label.height));
+      label.position.set(colW * i + colW / 2, stripH / 2);
+      strip.addChild(label);
 
-    const hint = makeText(
-      total > 0 ? '点开可查看 · 仅本轮有效' : '打完可选 · 仅本轮有效',
-      { size: 11, fill: 0x9b8b80, bold: true, anchor: 0.5 },
-    );
-    hint.position.set(0, pillH / 2 + 12);
-    row.addChild(hint);
-
-    if (total === 0) return;
-    row.eventMode = 'static';
-    row.cursor = 'pointer';
-    row.hitArea = new PIXI.Rectangle(-pillW / 2, -pillH / 2, pillW, pillH);
-    pressFeedback(row);
-    bindPointerTap(row, () => this._showBlessList(owned));
+      if (part.tap) {
+        label.eventMode = 'static';
+        label.cursor = 'pointer';
+        label.hitArea = new PIXI.Rectangle(-colW / 2 + 4, -stripH / 2, colW - 8, stripH);
+        pressFeedback(label);
+        bindPointerTap(label, part.tap);
+      }
+    }
   }
 
   private _showBlessList(
@@ -455,75 +407,71 @@ export class TowerScene implements Scene {
     parent.addChild(g);
   }
 
-  private _cornerFlourish(
-    parent: PIXI.Container,
-    x: number,
-    y: number,
-    sx: number,
-    sy: number,
-  ): void {
-    const g = new PIXI.Graphics();
-    g.lineStyle(1.5, 0xb08a52, 0.7);
-    g.moveTo(x, y + 10 * sy);
-    g.lineTo(x, y);
-    g.lineTo(x + 10 * sx, y);
-    parent.addChild(g);
-  }
-
   /**
-   * 里程碑横条 —— 严格对齐 UI 图三态：
-   * 已领(灰圈+层数+灰六角「已领」) / 待领(金光圈+层数+金六角「待领」) / 未达成(奖励图+六角「N层」)
+   * 里程碑横条（方案 A）：横向占满，四列均分，列间虚线分界。
+   * 已领 / 待领 / 未达成 三态保留。
    */
   private _buildMilestone(w: number, y: number, panelH: number): void {
     const tower = PlayerData.tower;
-    // 更高更窄，两侧多留白
-    const panelW = Math.min(TOWER_PANEL_W, w - 160);
-    const panelX = (w - panelW) / 2;
+    const panelW = w - TOWER_SIDE_PAD * 2;
     const panel = new PIXI.Container();
-    panel.position.set(panelX, y);
+    panel.position.set(TOWER_SIDE_PAD, y);
     this.container.addChild(panel);
 
     panel.addChild(makePanel({
-      width: panelW, height: panelH, radius: 14,
+      width: panelW, height: panelH, radius: 12,
       bg: 0xfdf6e9, bgAlpha: 0.96,
       border: 0xb08a52, borderWidth: 2,
       centered: false,
     }));
-    this._diamond(panel, 12, 12, 0xb08a52);
-    this._diamond(panel, panelW - 12, 12, 0xb08a52);
-    this._diamond(panel, 12, panelH - 12, 0xb08a52);
-    this._diamond(panel, panelW - 12, panelH - 12, 0xb08a52);
+    this._diamond(panel, 10, 10, 0xb08a52);
+    this._diamond(panel, panelW - 10, 10, 0xb08a52);
+    this._diamond(panel, 10, panelH - 10, 0xb08a52);
+    this._diamond(panel, panelW - 10, panelH - 10, 0xb08a52);
 
     const title = makeText('里程碑', {
-      size: FONT_SIZE.sm, fill: 0x5c4033, bold: true, anchor: 0.5,
+      size: MILESTONE_TITLE_SIZE, fill: 0x5c4033, bold: false, anchor: 0.5,
       role: 'title',
     });
-    title.position.set(panelW / 2, 22);
+    title.position.set(panelW / 2, 16);
     panel.addChild(title);
     try { title.updateText(true); } catch { /* noop */ }
 
     const deco = new PIXI.Graphics();
-    deco.lineStyle(1.5, 0xb08a52, 0.85);
+    deco.lineStyle(1.4, 0xb08a52, 0.8);
     const ly = title.y;
     const tw = title.width;
-    deco.moveTo(28, ly);
-    deco.lineTo(panelW / 2 - tw / 2 - 14, ly);
-    deco.moveTo(panelW / 2 + tw / 2 + 14, ly);
-    deco.lineTo(panelW - 28, ly);
+    deco.moveTo(22, ly);
+    deco.lineTo(panelW / 2 - tw / 2 - 12, ly);
+    deco.moveTo(panelW / 2 + tw / 2 + 12, ly);
+    deco.lineTo(panelW - 22, ly);
     panel.addChild(deco);
-    this._diamond(panel, panelW / 2 - tw / 2 - 20, ly, 0xb08a52);
-    this._diamond(panel, panelW / 2 + tw / 2 + 20, ly, 0xb08a52);
+
+    const colW = panelW / MILESTONE_PREVIEW;
+    // 列间虚线分界（对齐方案 A）
+    const dividers = new PIXI.Graphics();
+    const dashH = 3;
+    const dashGap = 4;
+    const y0 = 32;
+    const y1 = panelH - 10;
+    for (let i = 1; i < MILESTONE_PREVIEW; i++) {
+      const dx = colW * i;
+      for (let yy = y0; yy < y1; yy += dashH + dashGap) {
+        dividers.lineStyle(1.5, 0xb08a52, 0.55);
+        dividers.moveTo(dx, yy);
+        dividers.lineTo(dx, Math.min(yy + dashH, y1));
+      }
+    }
+    panel.addChild(dividers);
 
     const firstFloor = Math.max(
       TOWER.milestoneEvery,
       (Math.floor(tower.bestFloor / TOWER.milestoneEvery) - 1) * TOWER.milestoneEvery,
     );
-    // 圆更大、图标吃满圆面，窄板内仍两侧留白
-    const circleR = 36;
-    const gap = 22;
-    const total = MILESTONE_PREVIEW * (circleR * 2) + (MILESTONE_PREVIEW - 1) * gap;
-    let x = (panelW - total) / 2 + circleR;
-    const cy = 78;
+    const circleR = MILESTONE_CIRCLE_R;
+    // 以「层标底边 + 底边距」反推圆心，四列同一高度，不贴底框
+    const tagReach = circleR + MILESTONE_TAG_GAP + MILESTONE_TAG_H / 2;
+    const cy = panelH - MILESTONE_BOTTOM_PAD - tagReach;
 
     for (let i = 0; i < MILESTONE_PREVIEW; i++) {
       const floor = firstFloor + i * TOWER.milestoneEvery;
@@ -533,11 +481,15 @@ export class TowerScene implements Scene {
       const state: 'claimed' | 'claimable' | 'locked' = claimed
         ? 'claimed'
         : (claimable ? 'claimable' : 'locked');
+      const x = colW * i + colW / 2;
       this._mountMilestoneSlot(panel, x, cy, circleR, floor, state);
-      x += circleR * 2 + gap;
     }
   }
 
+  /**
+   * 里程碑槽三态（对齐 tower_milestone_states_design_v1）：
+   * 未达成=灰奖励+锁角标；可领取=金光晕+彩奖励+「待领」；已领取=灰勾+「已领」。
+   */
   private _mountMilestoneSlot(
     parent: PIXI.Container,
     x: number,
@@ -552,73 +504,72 @@ export class TowerScene implements Scene {
 
     if (state === 'claimable') {
       const halo = new PIXI.Graphics();
-      halo.beginFill(0xffe08a, 0.4);
+      halo.beginFill(0xffd24a, 0.22);
+      halo.drawCircle(0, 0, r + 14);
+      halo.endFill();
+      halo.beginFill(0xffe08a, 0.45);
       halo.drawCircle(0, 0, r + 7);
       halo.endFill();
-      halo.beginFill(0xffd24a, 0.18);
-      halo.drawCircle(0, 0, r + 12);
-      halo.endFill();
       root.addChild(halo);
+      this._drawClaimSparkles(root, r + 10);
     }
 
     const ring = new PIXI.Graphics();
     if (state === 'claimable') {
-      ring.beginFill(0xffe9a0, 1);
-      ring.lineStyle(2.5, 0xe0b44a, 1);
+      ring.beginFill(0xfff6d8, 1);
+      ring.lineStyle(3, 0xe0b44a, 1);
       ring.drawCircle(0, 0, r);
       ring.endFill();
     } else if (state === 'claimed') {
-      ring.beginFill(0xd8d0c4, 0.95);
-      ring.lineStyle(1.8, 0xa8a098, 0.7);
+      ring.beginFill(0xe8e4dc, 1);
+      ring.lineStyle(2, 0xb0aaa0, 0.9);
       ring.drawCircle(0, 0, r);
       ring.endFill();
     } else {
-      ring.beginFill(0xfffdf8, 0.98);
-      ring.lineStyle(1.8, 0xc4a06a, 0.9);
+      // 未达成：冷灰圈，和可领金圈拉开
+      ring.beginFill(0xf0ece4, 1);
+      ring.lineStyle(2, 0xa8a098, 0.85);
       ring.drawCircle(0, 0, r);
       ring.endFill();
-      ring.lineStyle(1, 0xc4a06a, 0.35);
-      ring.drawCircle(0, 0, r + 3);
     }
     root.addChild(ring);
 
-    if (state === 'locked') {
-      // 未达成：圈内图标放大，保证看清
-      const icon = Math.round(r * 0.95);
-      this._mountSprite(root, UI_IMAGES.iconLingyu, -r * 0.32, -2, icon, icon);
-      this._mountSprite(root, UI_IMAGES.iconShard, r * 0.34, 4, Math.round(icon * 0.92), Math.round(icon * 0.92));
+    const icon = Math.round(r * 0.88);
+    if (state === 'claimed') {
+      this._drawCheckMark(root, r * 0.72);
+    } else if (state === 'claimable') {
+      this._mountSprite(root, UI_IMAGES.iconLingyu, -r * 0.28, -2, icon, icon);
+      this._mountSprite(root, UI_IMAGES.iconShard, r * 0.3, 3, Math.round(icon * 0.9), Math.round(icon * 0.9));
     } else {
-      const floorText = makeText(`${floor}层`, {
-        size: state === 'claimable' ? 22 : 20,
-        fill: state === 'claimable' ? 0x5c3d24 : 0x8a8680,
-        bold: true,
-        anchor: 0.5,
-        role: 'title',
+      // 未达成：奖励图标降饱和发灰
+      this._mountSprite(root, UI_IMAGES.iconLingyu, -r * 0.28, -2, icon, icon, {
+        tint: 0x9a9a9a, alpha: 0.72,
       });
-      try { floorText.updateText(true); } catch { /* noop */ }
-      if (floorText.width > r * 1.55) floorText.scale.set((r * 1.55) / floorText.width);
-      root.addChild(floorText);
+      this._mountSprite(root, UI_IMAGES.iconShard, r * 0.3, 3, Math.round(icon * 0.9), Math.round(icon * 0.9), {
+        tint: 0x9a9a9a, alpha: 0.72,
+      });
+      this._drawLockBadge(root, r * 0.62, r * 0.58);
     }
 
-    // 底部六角标签
     const tagLabel = state === 'claimed'
       ? '已领'
       : (state === 'claimable' ? '待领' : `${floor}层`);
     const tagFill = state === 'claimed'
-      ? 0xd0ccc4
-      : (state === 'claimable' ? 0xfff0c8 : 0xf5efe6);
+      ? 0xd8d4cc
+      : (state === 'claimable' ? 0xffe9a0 : 0xe8e4dc);
     const tagBorder = state === 'claimed'
       ? 0xa8a098
-      : (state === 'claimable' ? 0xc9a45a : 0xc4a06a);
+      : (state === 'claimable' ? 0xd4a84a : 0xb0aaa0);
     const tagTextFill = state === 'claimed'
       ? 0x7a7670
-      : 0x5c4033;
-    const tagW = Math.round(r * 1.25);
-    const tagH = 20;
-    const tagY = r + 16;
+      : (state === 'claimable' ? 0x5c3d24 : 0x8a8680);
+    const tagW = Math.round(r * (state === 'claimable' ? 1.55 : 1.45));
+    const tagH = MILESTONE_TAG_H;
+    const tagY = r + MILESTONE_TAG_GAP;
     root.addChild(this._drawHexTag(0, tagY, tagW, tagH, tagFill, tagBorder));
     const tagText = makeText(tagLabel, {
-      size: 13, fill: tagTextFill, bold: true, anchor: 0.5,
+      size: state === 'claimable' ? MILESTONE_TAG_SIZE + 1 : MILESTONE_TAG_SIZE,
+      fill: tagTextFill, bold: true, anchor: 0.5, role: 'body',
     });
     tagText.position.set(0, tagY);
     root.addChild(tagText);
@@ -626,7 +577,7 @@ export class TowerScene implements Scene {
     if (state === 'claimable') {
       root.eventMode = 'static';
       root.cursor = 'pointer';
-      root.hitArea = new PIXI.Rectangle(-r - 8, -r - 8, (r + 8) * 2, r * 2 + tagH + 28);
+      root.hitArea = new PIXI.Rectangle(-r - 8, -r - 10, (r + 8) * 2, r * 2 + tagH + 28);
       pressFeedback(root);
       bindPointerTap(root, () => {
         if (!PlayerData.claimTowerMilestone(floor)) return;
@@ -635,6 +586,49 @@ export class TowerScene implements Scene {
         this._build();
       });
     }
+  }
+
+  /** 可领取槽外圈碎金点 */
+  private _drawClaimSparkles(parent: PIXI.Container, radius: number): void {
+    const g = new PIXI.Graphics();
+    const dots: Array<[number, number, number]> = [
+      [-0.85, -0.55, 2.2], [0.9, -0.4, 1.8], [-0.2, -0.95, 1.6],
+      [0.55, 0.75, 1.7], [-0.7, 0.65, 1.5], [0.15, 0.92, 1.4],
+    ];
+    for (const [nx, ny, s] of dots) {
+      g.beginFill(0xfff3c8, 0.95);
+      g.drawCircle(nx * radius, ny * radius, s);
+      g.endFill();
+    }
+    parent.addChild(g);
+  }
+
+  /** 未达成右下角小锁 */
+  private _drawLockBadge(parent: PIXI.Container, x: number, y: number): void {
+    const g = new PIXI.Graphics();
+    g.beginFill(0x7a6248, 1);
+    g.lineStyle(1.2, 0xf0e6d4, 0.9);
+    g.drawCircle(x, y, 10);
+    g.endFill();
+    g.lineStyle(2.4, 0xf5efe6, 1);
+    g.arc(x, y - 3.2, 3.6, Math.PI * 1.05, -0.05);
+    g.beginFill(0xf5efe6, 1);
+    g.drawRoundedRect(x - 4.2, y - 1.5, 8.4, 6.5, 1.6);
+    g.endFill();
+    g.beginFill(0x7a6248, 1);
+    g.drawCircle(x, y + 1.2, 1.3);
+    g.endFill();
+    parent.addChild(g);
+  }
+
+  /** 已领取灰勾 */
+  private _drawCheckMark(parent: PIXI.Container, size: number): void {
+    const g = new PIXI.Graphics();
+    g.lineStyle(5.5, 0x8a8680, 1);
+    g.moveTo(-size * 0.38, size * 0.02);
+    g.lineTo(-size * 0.08, size * 0.32);
+    g.lineTo(size * 0.4, -size * 0.3);
+    parent.addChild(g);
   }
 
   /** 横向六角标签（圆角矩形切角近似） */
@@ -813,6 +807,7 @@ export class TowerScene implements Scene {
     y: number,
     w: number,
     h?: number,
+    opts?: { tint?: number; alpha?: number },
   ): void {
     const slot = new PIXI.Container();
     slot.position.set(x, y);
@@ -828,6 +823,8 @@ export class TowerScene implements Scene {
         const scale = w / Math.max(tex.width, tex.height);
         sp.scale.set(scale);
       }
+      if (opts?.tint != null) sp.tint = opts.tint;
+      if (opts?.alpha != null) sp.alpha = opts.alpha;
       slot.addChild(sp);
     };
     const cached = TextureCache.get(path);

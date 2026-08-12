@@ -151,7 +151,7 @@ export function buildBottomNav(
     },
     {
       tab: 'home', label: '主线', icon: UI_IMAGES.navHome, x: xs[2],
-      onTap: () => { if (active !== 'home') SceneManager.switchTo('title'); },
+      onTap: () => { if (active !== 'home') SceneManager.switchTo('title', PlayerData.titleEnter()); },
     },
     {
       tab: 'realm', label: '秘境', icon: UI_IMAGES.navRealm, x: xs[3],

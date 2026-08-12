@@ -140,6 +140,16 @@ export interface SaveData {
   tower: TowerState;
   /** 体力（惰性恢复，见 game/staminaService.ts），v7 起 */
   stamina: StaminaState;
+  /**
+   * 主页落点章：最近主线对战 / 章节切换。
+   * 0 = 未记过，回主页时落到最新已解锁章。
+   */
+  homeChapter: number;
+  /**
+   * 主页落点关：最近点进编队/开打的主线关。
+   * 空 = 只记了章（切章浏览）；已通关则回主页时落到下一关。
+   */
+  homeStageId: string;
 }
 
 /** 招募结果 */
@@ -220,6 +230,8 @@ export function initialData(): SaveData {
     checkin: emptyCheckinState(),
     tower: emptyTowerState(),
     stamina: emptyStaminaState(),
+    homeChapter: 0,
+    homeStageId: '',
   };
 }
 
@@ -271,6 +283,10 @@ export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown
     checkin: sanitizeCheckin(migrated.checkin),
     tower: sanitizeTower(migrated.tower),
     stamina: sanitizeStamina(migrated.stamina),
+    homeChapter: typeof migrated.homeChapter === 'number' && Number.isFinite(migrated.homeChapter)
+      ? Math.max(0, Math.floor(migrated.homeChapter))
+      : 0,
+    homeStageId: typeof migrated.homeStageId === 'string' ? migrated.homeStageId : '',
   };
 }
 

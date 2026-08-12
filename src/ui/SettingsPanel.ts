@@ -232,7 +232,8 @@ export class SettingsPanel extends PIXI.Container {
   }
 
   open(): void {
-    if (this._isOpen) return;
+    if (this._isOpen && this.visible) return;
+    TweenManager.cancelTarget(this);
     this._isOpen = true;
     this.visible = true;
     this._syncFromSettings();
@@ -243,12 +244,13 @@ export class SettingsPanel extends PIXI.Container {
   close(): void {
     if (!this._isOpen) return;
     this._isOpen = false;
+    TweenManager.cancelTarget(this);
     TweenManager.to({
       target: this,
       props: { alpha: 0 },
       duration: 0.15,
       ease: Ease.easeInQuad,
-      onComplete: () => { this.visible = false; },
+      onComplete: () => { if (!this._isOpen) this.visible = false; },
     });
   }
 

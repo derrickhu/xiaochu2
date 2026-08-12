@@ -122,7 +122,7 @@
       "duration": 0.85,
       "prompt_influence": 0.55,
       "output": "../../minigame/subpackages/pkg-audio/audio/pet_skill.mp3",
-      "notes": "上滑施放主动技。旧文件峰值约 -24dB、均值 -41dB，BGM 下几乎听不见。"
+      "notes": "沿用 xiao_chu/audio/pet_skill.mp3（★3+ 叠层）。施放主音是 skill.mp3；勿用 ElevenLabs 覆盖。"
     },
     {
       "name": "enemy_charge",

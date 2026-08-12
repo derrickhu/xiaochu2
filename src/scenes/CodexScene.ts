@@ -239,7 +239,7 @@ export class CodexScene implements Scene {
     // 顶栏同一水平中线：返回 → 灵宠标题贴图 → 币/灵玉（避抖音胶囊）
     const headerY = Game.safeHeaderCenterY;
     const back = makeBackButton({
-      onTap: () => SceneManager.switchTo('title'),
+      onTap: () => SceneManager.switchTo('title', PlayerData.titleEnter()),
     });
     back.position.set(64, headerY);
     this.container.addChild(back);

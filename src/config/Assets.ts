@@ -209,6 +209,8 @@ export const UI_IMAGES = {
   railTower: `${IMG}/ui/icon/rail_tower.png`,
   /** 通天塔主视觉宝塔立绘（pkg-scene / CDN） */
   towerPagoda: `${PKG.scene}/images/ui/tower/tower_pagoda.png`,
+  /** 通天塔本轮状态四格横条底板（含分界线；pkg-scene / CDN） */
+  towerMetaStripBg: `${PKG.scene}/images/ui/tower/tower_meta_strip_bg.png`,
   /** 通天塔暖金杏渐变挑战匾钮（pkg-scene / CDN） */
   towerBtnCta: `${PKG.scene}/images/ui/tower/tower_btn_cta.png`,
   /** 机缘三选一：标题匾（对齐 implemented-02） */
@@ -382,7 +384,56 @@ export const UI_BATTLE_IMAGES = {
   skillReadySpark: `${PKG.battle}/images/ui/battle/battle_skill_ready_spark.png`,
   /** 封印珠圆形叠层（金框 +「封」匾，盖在属性珠上） */
   orbSeal: `${PKG.battle}/images/ui/battle/battle_orb_seal.png`,
+
+  /** 连击位图印章（scripts/bake_combo_stamps.py；固定字表避开真机 Text 糊底） */
+  comboFlare: `${PKG.battle}/images/ui/battle/combo/combo_flare.png`,
+  comboMsBreak: `${PKG.battle}/images/ui/battle/combo/combo_ms_break.png`,
+  comboMsWushuang: `${PKG.battle}/images/ui/battle/combo/combo_ms_wushuang.png`,
+  comboMsShenwei: `${PKG.battle}/images/ui/battle/combo/combo_ms_shenwei.png`,
+  comboMsTianxuan: `${PKG.battle}/images/ui/battle/combo/combo_ms_tianxuan.png`,
+  comboMsChuanshuo: `${PKG.battle}/images/ui/battle/combo/combo_ms_chuanshuo.png`,
+  comboMsShenhua: `${PKG.battle}/images/ui/battle/combo/combo_ms_shenhua.png`,
 } as const;
+
+/**
+ * 连击档位 → 色板名。索引即 ComboDisplay.getComboTier 的返回值，
+ * 与 bake_combo_stamps.py 的 STYLE_BY_TIER 一一对应，改一边要同步另一边。
+ * t0 与 t5 同用熔金，故实际只有 6 套素材。
+ */
+export const COMBO_TIER_STYLES = ['gold', 'ice', 'amber', 'blood', 'violet', 'gold', 'mythic'] as const;
+
+function comboTierStyle(tier: number): string {
+  return COMBO_TIER_STYLES[Math.max(0, Math.min(COMBO_TIER_STYLES.length - 1, tier))];
+}
+
+/** 连击数字位图 0–9，随档位换色 */
+export function comboDigitImage(digit: number, tier = 0): string {
+  const d = Math.max(0, Math.min(9, Math.floor(digit)));
+  return `${PKG.battle}/images/ui/battle/combo/combo_digit_${comboTierStyle(tier)}_${d}.png`;
+}
+
+/**「连击」二字位图，随档位换色 */
+export function comboLabelImage(tier = 0): string {
+  return `${PKG.battle}/images/ui/battle/combo/combo_label_${comboTierStyle(tier)}.png`;
+}
+
+/** 各档位的「连击」+ 数字全表（t0/t5 同色，去重后 6 套） */
+export const COMBO_TEXT_PATHS: readonly string[] = Array.from(new Set(
+  COMBO_TIER_STYLES.flatMap((_, tier) => [
+    comboLabelImage(tier),
+    ...Array.from({ length: 10 }, (_, i) => comboDigitImage(i, tier)),
+  ]),
+));
+
+/** 里程碑 stampKey → 贴图 */
+export const COMBO_MS_IMAGES: Readonly<Record<string, string>> = {
+  break: UI_BATTLE_IMAGES.comboMsBreak,
+  wushuang: UI_BATTLE_IMAGES.comboMsWushuang,
+  shenwei: UI_BATTLE_IMAGES.comboMsShenwei,
+  tianxuan: UI_BATTLE_IMAGES.comboMsTianxuan,
+  chuanshuo: UI_BATTLE_IMAGES.comboMsChuanshuo,
+  shenhua: UI_BATTLE_IMAGES.comboMsShenhua,
+};
 
 /**
  * 碎片商店专用 UI 贴图（pkg-shop，随包；非 CDN）

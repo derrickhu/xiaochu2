@@ -1,0 +1,24 @@
+Create ONE production hero sprite for a mobile xianxia Q-style sky pagoda (通天塔).
+
+REFERENCE USAGE:
+- Reference A (current tall tower): KEEP the same tall multi-tier silhouette, proportions, floor count (~7 tiers), base steps, and upright centered composition.
+- Reference B (bottom-nav tower icon): MATCH its COLOR language and contrast — richer saturated teal/jade roofs, warm cream walls, deeper wood trim, bright metallic gold finial/eaves accents, clearer dark-brown outlines. Do NOT copy the icon's short 3-tier stubby proportions.
+- Do NOT copy any UI, landscape, or text from any reference.
+
+COLOR / CONTRAST (critical — previous asset was too pale):
+- Roofs: deep saturated jade / emerald teal (NOT pale mint, NOT washed seafoam)
+- Walls: warm cream with readable shadow planes (not flat chalk white)
+- Trim / railings / pillars: medium-warm wood brown with darker edge lines
+- Windows: warm golden glow (bright but not blown-out)
+- Finial / eave tips: vivid metallic gold
+- Overall: high readability and punch against a soft cloudy scene; avoid pastel desaturation
+
+ART STYLE:
+- Soft cute Q xianxia cel illustration for mobile game
+- Clean production sprite, single subject
+- Tall multi-tier traditional Chinese pagoda with upturned eaves
+- Standing upright, centered, FULL tower visible including base stairs
+- Transparent background outside the tower (no landscape, no sky fill, no UI)
+- Clean edges suitable for overlay on a misty cloud background
+
+NO TEXT, no labels, no captions, no writing, no phone frame, no second copy, no watermark.

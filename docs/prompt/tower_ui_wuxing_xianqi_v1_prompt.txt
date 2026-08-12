@@ -1,0 +1,47 @@
+UI mockup — redesign 「通天塔」 for a Chinese xianxia / xuanhuan mobile game.
+
+REFERENCE IMAGES:
+1) Current game screenshot — keep ONLY the functional layout skeleton (back / title / tower hero / right status / milestone strip / challenge CTA / bottom 5-tab nav). Do NOT keep the cute mint-cream casual look.
+2) xiao_chu tower scene — use for atmosphere: majestic floating pagoda, sea of clouds, celestial mandala glow, floating stone islands, pine, night-to-dusk immortal realm. Premium xianqi, NOT cute toy style.
+
+ART DIRECTION:
+- Mature soft-painted xianxia (玄幻仙气), elegant, mystical, premium mobile game quality
+- Cool dusk / indigo-violet sky with warm gold spirit light, soft mist, floating islands
+- Avoid: pastel candy Q-cute, flat cream UI cards, purple neon cyber, photoreal 3D, dark grimdark
+
+CENTER HERO — FIVE-ELEMENT PAGODA (must read as 五行):
+- Tall 7–9 tier floating sky pagoda as main hero
+- Each tier visually tied to one element (cycle upward or banding):
+  · 金 Metal: pale gold / silver-white eaves, metallic sheen, sharp finial
+  · 木 Wood: jade-green glazed tiles, vine/leaf motif subtle
+  · 水 Water: cyan-blue roof glaze, soft ripple light
+  · 火 Fire: warm crimson-orange eaves, ember glow in windows
+  · 土 Earth: amber-ochre stone body bands, grounded base
+- Around mid-tower: a large translucent five-element spirit ring / Taiji-adjacent celestial circle (inspired by reference mandala), segmented into 5 colored arcs (gold / green / blue / red / ochre), soft rune glow — NOT text
+- Tower floats above cloud sea; faint spirit particles and light shafts
+- Grand, sacred, ascending-to-heaven feeling
+
+BACKGROUND:
+- Full-bleed immortal realm: misty mountains, floating islets with pines, cloud ocean, dusk star-haze
+- Soft depth; leave clear readability for UI chrome
+
+UI CHROME (Chinese labels required — this is a UI原稿 mock):
+1) Top-left: jade pendant back button
+2) Top center: elegant dark-jade / antique-gold plaque 「通天塔」
+3) Top-right: small 「重置」 or menu dots (subtle)
+4) Small left float button 「传承」 (cream-gold, not covering tower core)
+5) Right slim parchment/jade status panel:
+   · 「第12层」
+   · HP bar ~72%
+   · 「最高 11 · 每5层存档」
+   · micro line 「跨层回血」
+6) Lower milestone strip 「里程碑」 with 4 reward slots labeled 10 / 20 / 30 / 40
+7) Bottom primary CTA: glowing antique-gold button 「挑战第12层」
+8) Bottom cloud-shaped 5-tab nav (灵宠 / 召唤 / 主线 / 秘境 / 通天塔 active)
+
+COMPOSITION:
+- 9:16 full mobile screen, one composition (not a dashboard)
+- Tower is the visual hero; UI supports, does not bury it
+- No phone device frame, no watermark, no English UI
+
+Chinese labels required on UI. High polish production mockup.

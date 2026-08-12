@@ -8,12 +8,13 @@ import { SceneManager } from '@/core/SceneManager';
 import { SfxManager } from '@/core/SfxManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
-import { STAGES } from '@/balance/stages';
+import { nextMainlineStage } from '@/balance/stages';
 import { PET_MAP } from '@/balance/pets';
 import { ECONOMY } from '@/balance/economy';
 import { DAILY_FIRST_WIN_MULT } from '@/balance/dailyQuest';
 import { UI_IMAGES, UI_PANEL_IMAGES, petAvatarPath } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
+import { titleBackData } from '../TitleScene';
 import type { BattleContext } from '@/game/battleContext';
 import { checkStaminaFor } from '@/game/staminaGate';
 import { reportQuest } from '@/game/dailyQuestTracker';
@@ -201,11 +202,13 @@ export class BattleResultOverlay {
     const progressHintText = context
       ? null
       : battleProgressHint(ctrl.stage.id, granted.lingyu > 0);
+    // 主线下一关可跨章（1-8 → 2-1）；未解锁则不展示「下一关」
     const nextStage = context
       ? undefined
-      : STAGES.find(
-        (s) => s.chapter === ctrl.stage.chapter && s.index === ctrl.stage.index + 1,
-      );
+      : (() => {
+        const next = nextMainlineStage(ctrl.stage.id);
+        return next && PlayerData.isUnlocked(next) ? next : undefined;
+      })();
 
     const root = this._mountScrim();
     const card = new PIXI.Container();
@@ -230,16 +233,23 @@ export class BattleResultOverlay {
     });
     y += 64;
 
-    // UI 图：大号金星
-    const stars = makeStarRow({
-      star: result.stars, maxStar: 3, style: 'sprite',
-      starSize: 76, gap: 22, anchor: 'center',
-    });
-    stars.position.set(0, y + 38);
-    content.addChild(stars);
-    y += 88;
+    // 通天塔星级无玩法意义：不展示星排，并收紧标题→回合间距，避免大块留白
+    const isTower = context?.kind === 'tower';
+    if (!isTower) {
+      const stars = makeStarRow({
+        star: result.stars, maxStar: 3, style: 'sprite',
+        starSize: 76, gap: 22, anchor: 'center',
+      });
+      stars.position.set(0, y + 38);
+      content.addChild(stars);
+      y += 88;
+    } else {
+      y += 8;
+    }
 
-    y = this._addTurnBlock(content, y, result.turnsUsed, ctrl.stage.starTurnLimit);
+    y = this._addTurnBlock(content, y, result.turnsUsed, ctrl.stage.starTurnLimit, {
+      showStarHint: !isTower,
+    });
     y += 14;
 
     // 奖励区与广告翻倍共用 granted，改字段只改这一处
@@ -384,7 +394,7 @@ export class BattleResultOverlay {
     context: BattleContext | undefined,
     btnW: number,
     btnH: number,
-    nextStage: { id: string } | undefined,
+    nextStage: { id: string; chapter: number } | undefined,
   ): PIXI.Container[] {
     const btns: PIXI.Container[] = [];
     const go = (scene: string, data?: unknown): void => {
@@ -409,7 +419,7 @@ export class BattleResultOverlay {
       btns.push(makeActionButton({
         title: '返回主页', width: btnW, height: btnH, variant: 'cream',
         fontSize: FONT_SIZE.md,
-        onTap: () => leaveWithAds('title'),
+        onTap: () => leaveWithAds('title', titleBackData()),
       }));
       return btns;
     }
@@ -423,7 +433,7 @@ export class BattleResultOverlay {
       btns.push(makeActionButton({
         title: '返回主页', width: btnW, height: btnH, variant: 'cream',
         fontSize: FONT_SIZE.md,
-        onTap: () => leaveWithAds('title'),
+        onTap: () => leaveWithAds('title', titleBackData()),
       }));
       return btns;
     }
@@ -447,7 +457,9 @@ export class BattleResultOverlay {
     btns.push(makeActionButton({
       title: '返回主页', width: btnW, height: btnH, variant: 'cream',
       fontSize: FONT_SIZE.md,
-      onTap: () => leaveWithAds('title'),
+      onTap: () => {
+        leaveWithAds('title', titleBackData());
+      },
     }));
     return btns;
   }
@@ -582,7 +594,7 @@ export class BattleResultOverlay {
     const home = makeActionButton({
       title: '返回主页', width: halfW, height: halfH, variant: 'cream',
       fontSize: FONT_SIZE.md,
-      onTap: () => commitDefeat(() => SceneManager.switchTo('title')),
+      onTap: () => commitDefeat(() => SceneManager.switchTo('title', titleBackData())),
     });
     home.position.set((halfW + halfGap) / 2, y + halfH / 2);
     content.addChild(home);
@@ -632,7 +644,9 @@ export class BattleResultOverlay {
     y: number,
     turns: number,
     starTurnLimit: number,
+    opts: { showStarHint?: boolean } = {},
   ): number {
+    const showStarHint = opts.showStarHint !== false;
     // 先排文字，再按字宽拉开两侧金线，避免「回合数」与菱形/横线重叠
     const turn = makeText(`回合数 ${turns}`, {
       size: FONT_SIZE.md, fill: TITLE_BROWN, bold: true, anchor: 0.5,
@@ -664,6 +678,11 @@ export class BattleResultOverlay {
     line.position.set(0, turnY);
     // 装饰线压在文字下层
     parent.addChildAt(line, parent.getChildIndex(turn));
+
+    if (!showStarHint) {
+      // 无星级提示时只保留回合行，高度收紧
+      return y + 40;
+    }
 
     const hint = makeText(`（${formatStarTurnHint(starTurnLimit)}）`, {
       size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5,

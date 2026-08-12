@@ -120,7 +120,7 @@ export class GachaScene implements Scene {
     this._page.addChild(makeCoverBackground(BACKGROUND_IMAGES.gachaEgg, w, h));
 
     const back = makeBackButton({
-      onTap: () => SceneManager.switchTo('title'),
+      onTap: () => SceneManager.switchTo('title', PlayerData.titleEnter()),
     });
     back.position.set(80, Game.safeHeaderCenterY);
     this._page.addChild(back);

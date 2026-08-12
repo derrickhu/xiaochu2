@@ -330,7 +330,7 @@ export class ShopScene implements Scene {
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.shop, w, h));
 
     const back = makeBackButton({
-      onTap: () => SceneManager.switchTo('title'),
+      onTap: () => SceneManager.switchTo('title', PlayerData.titleEnter()),
     });
     back.position.set(56, Game.safeHeaderCenterY);
     this.container.addChild(back);

@@ -119,9 +119,9 @@ export const UI = {
     /** 消珠动画（v0.4.1 放慢：0.25→0.32，玩家反馈消除节奏太赶） */
     orbClear: 0.32,
     orbFall: 0.34,
-    /** 宠物冲刺 / 回位（略放慢，便于看清出手与弹道） */
-    petDash: 0.26,
-    petReturn: 0.30,
+    /** 宠物冲刺 / 回位（玩家反馈转珠后普攻太赶：0.26→0.30） */
+    petDash: 0.30,
+    petReturn: 0.34,
     enemyHitFlash: 0.12,
     damageFloat: 0.6,
     /** 英雄受击飘字（专用动效，比通用 damageFloat 停更久） */
@@ -129,11 +129,11 @@ export const UI = {
     /** 英雄回血飘字（心珠 / 治疗技） */
     heroHealFloat: 1.7,
     /** 多组攻击的间隔节奏（旧串行完整出手间隔；错峰起飞后作兜底） */
-    attackGap: 0.38,
+    attackGap: 0.44,
     /** 刃命中爆炸总时长；多宠错峰起飞间隔与此对齐 */
-    bladeImpact: 0.24,
-    /** 多宠错峰起飞间隔（略长于爆炸，出手层次更清晰） */
-    petAttackStagger: 0.32,
+    bladeImpact: 0.28,
+    /** 多宠错峰起飞间隔（玩家反馈太快：0.32→0.40） */
+    petAttackStagger: 0.40,
     /** 最后一击后稍停再出总伤害（秒）；不阻塞操作，仅错开弹出节奏 */
     turnTotalLeadIn: 0.30,
     /** 击杀后等待单段伤害飘字的上限（秒）；正常约 0.8–1.1s，超时兜底避免卡死 */
@@ -148,10 +148,22 @@ export const UI = {
     /** 波次切换敌人入场 */
     waveEnter: 0.35,
     /** ── 阶段二：手感强化 ── */
-    /** 连组消除音画节拍（v0.4.1 放慢：16→22 帧 @60fps，每组连击留出辨识时间） */
-    comboElimBeat: 22 / 60,
-    /** 逐组消除之间的节奏间隔（与 comboElimBeat 同构，保留别名） */
-    groupClearGap: 22 / 60,
+    /**
+     * 连组消除节拍曲线 —— 第 n 连的间隔 = base + (n-1) × step，封顶 max。
+     *
+     * xiao_chu 是恒定 16 帧，靠音阶上行撑爽感；实测玩家反馈「一样的节奏、没有变化」。
+     * 业界（PAD 连锁、三消 cascade）都让后段逐拍变慢：停顿拉长制造期待，
+     * 音高与特效同步爬升。
+     *
+     * base 不能低于 orbClear（0.32s ≈ 19 帧）：playClear 是不 await 的，
+     * 节拍比它短的话前几连的消珠动画会被下一组打断，看起来就是「一闪而过」。
+     */
+    comboBeatBase: 19 / 60,
+    comboBeatStep: 1.7 / 60,
+    comboBeatMax: 36 / 60,
+    /** 里程碑额外空拍 = base + tier × step；tier 越高，「破」后的空白越久 */
+    comboMilestoneHoldBase: 4 / 60,
+    comboMilestoneHoldStep: 3 / 60,
     /** 消除粒子寿命 */
     orbBurst: 0.45,
     /** Combo 大字弹跳 */
@@ -159,8 +171,8 @@ export const UI = {
     /** Combo 淡出（延迟 + 时长） */
     comboFadeDelay: 0.5,
     comboFade: 0.4,
-    /** 属性弹道飞行（宠物 → 敌人） */
-    projectile: 0.30,
+    /** 属性弹道飞行（宠物 → 敌人；随普攻节奏略放慢：0.30→0.36） */
+    projectile: 0.36,
     /** 敌人弹道飞行（略慢，便于看清来向） */
     enemyProjectile: 0.32,
     enemyProjectileHeavy: 0.42,

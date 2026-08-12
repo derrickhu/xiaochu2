@@ -535,6 +535,16 @@ export function stagesOfChapter(chapter: number): readonly StageDef[] {
   return STAGES.filter((s) => s.chapter === chapter);
 }
 
+/**
+ * 主线下一关（可跨章）：按 STAGES 顺序取当前关之后的一关。
+ * 章末 Boss 之后返回下一章第 1 关；已是最后一关则 undefined。
+ */
+export function nextMainlineStage(stageId: string): StageDef | undefined {
+  const idx = STAGES.findIndex((s) => s.id === stageId);
+  if (idx < 0 || idx >= STAGES.length - 1) return undefined;
+  return STAGES[idx + 1];
+}
+
 /** 短标签：1-1 青苔林边（编队 / 战斗顶栏） */
 export function formatStageShortLabel(
   stage: Pick<StageDef, 'chapter' | 'index' | 'name'> & { displayLabel?: string },

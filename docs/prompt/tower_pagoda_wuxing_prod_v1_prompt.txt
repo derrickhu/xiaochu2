@@ -1,0 +1,27 @@
+Create ONE production hero sprite of a cute soft Q xianxia sky pagoda for a mobile game.
+
+PRIMARY STYLE = attached current tower_pagoda.png + attached UI mock v2 for COLOR ONLY.
+- Keep the SAME soft hand-painted Q illustration feel, gentle gradients, warm brown linework (NOT thick black outlines)
+- Same soft natural lighting, mild volume shading — no plastic gloss, no photoreal
+- Same friendly rounded Q proportions, upturned eaves, tiny corner bells, cream stone walls, stone base + steps + small bushes
+
+COLOR CHANGE ONLY (五行 roof banding, harmonious pastels like mock v2):
+From bottom eaves upward roughly:
+· earth: warm amber / soft gold-yellow roof glaze
+· fire: muted soft coral-rose / muted red eaves
+· water: soft cyan-blue roof glaze
+· wood: soft jade / seafoam green eaves
+· metal (top): pale cream-gold / silver-white eaves + golden finial
+Walls stay warm cream stone. Doors/windows quiet dark wood with soft warm interior hint (not neon).
+
+OPTIONAL: a VERY light translucent pastel five-color spirit ring behind mid-tower (thin gold/green/blue/coral/ochre arcs), soft glow — NO Chinese characters, NO letters, NO runes that look like text.
+
+OUTPUT:
+- Single subject production sprite
+- Transparent background (no landscape, no sky, no UI)
+- Clean edges for overlay
+- Tall portrait composition (~similar proportions to current tall pagoda)
+
+AVOID: heavy black outlines, neon, rainbow sticker look, dark cosmic style, photorealism, UI chrome
+
+NO TEXT, no labels, no captions, no writing, no phone frame, no watermark, no second copy.

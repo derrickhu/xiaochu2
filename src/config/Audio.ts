@@ -19,6 +19,32 @@ export const AUDIO = {
 
   eliminate: `${A}/eliminate.mp3`,
   combo: `${A}/combo.mp3`,
+  /**
+   * 连击声阶预烘焙采样（scripts/bake_combo_ladder.py）。
+   *
+   * 两条约束决定了必须预烘焙而不是运行时变调：
+   * 1) 抖音小游戏 InnerAudioContext 无可靠 playbackRate，运行时变调会整段发平；
+   * 2) playbackRate 即便可用也封顶 2.0，第 8 连之后就再也升不上去。
+   * 烘焙不受这两条限制，故一路排到 12 档（×1.30 → ×3.28）。
+   * 源采样是 8kHz，升调后必须输出到 44.1kHz——回采到 8kHz 会把移上去的高频截掉，
+   * 结果就是「烘了 8 档但听着都一样闷」。
+   */
+  comboC1: `${A}/combo_c1.mp3`,
+  comboC2: `${A}/combo_c2.mp3`,
+  comboC3: `${A}/combo_c3.mp3`,
+  comboC4: `${A}/combo_c4.mp3`,
+  comboC5: `${A}/combo_c5.mp3`,
+  comboC6: `${A}/combo_c6.mp3`,
+  comboC7: `${A}/combo_c7.mp3`,
+  comboC8: `${A}/combo_c8.mp3`,
+  comboC9: `${A}/combo_c9.mp3`,
+  comboC10: `${A}/combo_c10.mp3`,
+  comboC11: `${A}/combo_c11.mp3`,
+  comboC12: `${A}/combo_c12.mp3`,
+  /** 「破」和弦预烘焙：Sol / Si / Do' */
+  levelupSol: `${A}/levelup_sol.mp3`,
+  comboSi: `${A}/combo_si.mp3`,
+  eliminateDo: `${A}/eliminate_do.mp3`,
   rolling: `${A}/rolling.mp3`,
   levelup: `${A}/levelup.mp3`,
   attack: `${A}/attack.mp3`,

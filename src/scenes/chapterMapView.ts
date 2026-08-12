@@ -67,6 +67,8 @@ export interface TitleScreenWorldOpts {
   screenH: number;
   scroll: ScrollListController;
   onStageTap: (stageId: string) => void;
+  /** 指定高亮关；缺省为章内第一未通关 */
+  focusStageId?: string | null;
   /** GM 编辑模式：节点可拖拽，禁用进关 */
   mapEditMode?: boolean;
 }
@@ -468,17 +470,22 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
   const fit = chapterMapDesignFit(opts.screenW, opts.screenH);
   const positions = resolveNodePositions(opts.stages.length, designW, designH);
   const editMode = !!opts.mapEditMode;
-  const activeIdx = chapterMapActiveIndex(
+  const progressIdx = chapterMapActiveIndex(
     opts.stages,
     (id) => PlayerData.starsOf(id),
     (s) => PlayerData.isUnlocked(s),
   );
+  const focusIdx = opts.focusStageId
+    ? opts.stages.findIndex((s) => s.id === opts.focusStageId)
+    : -1;
+  const activeIdx = focusIdx >= 0 ? focusIdx : progressIdx;
   const progressChapter = playerProgressChapter(
     (id) => PlayerData.starsOf(id),
     (s) => PlayerData.isUnlocked(s),
   );
   const showProgressMarker = !editMode
-    && progressChapter === opts.chapter
+    && activeIdx >= 0
+    && (focusIdx >= 0 || progressChapter === opts.chapter)
     && chapterMapProgressIndex(
       opts.stages,
       (id) => PlayerData.starsOf(id),

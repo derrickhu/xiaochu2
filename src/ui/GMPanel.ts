@@ -93,7 +93,8 @@ export class GMPanel extends PIXI.Container {
 
   open(): void {
     if (!GMManager.isRuntimeAllowed || !GMManager.isEnabled) return;
-    if (this._isOpen) return;
+    if (this._isOpen && this.visible) return;
+    TweenManager.cancelTarget(this);
     this._isOpen = true;
     this.visible = true;
     this._refresh();
@@ -105,9 +106,10 @@ export class GMPanel extends PIXI.Container {
     if (!this._isOpen) return;
     this._isOpen = false;
     this._dragging = false;
+    TweenManager.cancelTarget(this);
     TweenManager.to({
       target: this, props: { alpha: 0 }, duration: 0.15, ease: Ease.easeInQuad,
-      onComplete: () => { this.visible = false; },
+      onComplete: () => { if (!this._isOpen) this.visible = false; },
     });
   }
 

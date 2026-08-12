@@ -32,7 +32,8 @@ export class SidebarPanel extends PIXI.Container {
 
   open(): void {
     // 开发者工具可预览 UI；真机仅抖音侧边栏场景
-    if ((!Platform.isDouyin && !Platform.isDevtools) || this._isOpen) return;
+    if ((!Platform.isDouyin && !Platform.isDevtools) || (this._isOpen && this.visible)) return;
+    TweenManager.cancelTarget(this);
     this._isOpen = true;
     this.visible = true;
     this._refresh();
@@ -43,12 +44,13 @@ export class SidebarPanel extends PIXI.Container {
   close(): void {
     if (!this._isOpen) return;
     this._isOpen = false;
+    TweenManager.cancelTarget(this);
     TweenManager.to({
       target: this,
       props: { alpha: 0 },
       duration: 0.15,
       ease: Ease.easeInQuad,
-      onComplete: () => { this.visible = false; },
+      onComplete: () => { if (!this._isOpen) this.visible = false; },
     });
   }
 

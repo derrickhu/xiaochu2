@@ -17,8 +17,10 @@ import { TweenManager, Ease } from '@/core/TweenManager';
 import { Platform } from '@/core/PlatformService';
 import { BgmManager } from '@/core/BgmManager';
 import { SfxManager, SFX_PATHS } from '@/core/SfxManager';
+import { titleBackData } from './TitleScene';
 import { enemyDisplayTierOf } from '@/balance/enemyDisplay';
-import { isComboMilestone } from './battle/ComboDisplay';
+import { getComboTier, isComboMilestone } from './battle/ComboDisplay';
+import { comboBeat, comboMilestoneHold, comboShake, comboVibrate } from './battle/comboRhythm';
 import { GMManager } from '@/core/GMManager';
 import { battlePreloadImages, battlePetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import {
@@ -148,6 +150,10 @@ export class BattleScene implements Scene {
       this._context?.kind === 'tower' ? PlayerData.towerRunModifiers() : undefined);
     // 体力与秘境次数都在真正开打时才扣：编队页返回不该白吃
     consumeStaminaFor(this._ctrl.stage, this._context);
+    // 主线开打记下这一关；回主页时若已通关，落到下一关
+    if (!this._context) {
+      PlayerData.setHomeStage(this._ctrl.stage.id);
+    }
     if (this._context?.kind === 'realm') {
       PlayerData.consumeRealmRun();
     }
@@ -267,7 +273,7 @@ export class BattleScene implements Scene {
     // 顶栏：全局统一返回钮（奶油胶囊 + 箭头）
     const headerY = this._layout.headerY;
     const backBtn = makeBackButton({
-      onTap: () => { SceneManager.switchTo('title'); },
+      onTap: () => { SceneManager.switchTo('title', titleBackData()); },
     });
     backBtn.position.set(80, headerY);
     this.container.addChild(backBtn);
@@ -463,21 +469,34 @@ export class BattleScene implements Scene {
           if (isStale()) return;
           allGroups.push(group);
           const combo = allGroups.length;
-          // 音效顺序对齐 xiao_chu startNextElimAnim：连击升调 → 里程碑 → 消除
+          // 音效：预烘焙升调连击 →「破」和弦；消除音错开，避免盖住声阶
+          const milestone = isComboMilestone(combo);
           SfxManager.playComboHit(combo);
-          if (isComboMilestone(combo)) SfxManager.playComboMilestone(combo);
-          if (this._groupPlaysElimSfx(group)) {
-            SfxManager.playEliminate(group.cells.length);
+          if (milestone) {
+            SfxManager.playComboMilestone(combo);
+            // 里程碑已含 eliminate 层，不再叠普通消除音
+          } else if (this._groupPlaysElimSfx(group)) {
+            const elimCount = group.cells.length;
+            setTimeout(() => {
+              if (!isStale()) SfxManager.playEliminate(elimCount);
+            }, 55);
           }
           this._board.clearCells(group.cells);
-          this._burstGroup(group);
+          this._burstGroup(group, combo);
           this._hud.showCombo(combo, this._fx);
-          Platform.vibrateShort(allGroups.length >= 7 ? 'medium' : 'light');
-          if (allGroups.length >= 7) this._fx.shakeLight();
+          Platform.vibrateShort(comboVibrate(combo));
+          const shake = comboShake(combo);
+          if (shake === 'heavy') this._fx.shakeHeavy();
+          else if (shake === 'medium') this._fx.shakeMedium();
+          else if (shake === 'light') this._fx.shakeLight();
+          if (milestone && getComboTier(combo) >= 3) {
+            this._fx.flash(0xffe6b0, 0.16, 0.22);
+          }
           void this._boardView!.playClear(group);
           if (isStale()) return;
-          // 16 帧节拍驱动下一组连击音（动画并行，不叠在 playClear 尾部）
-          await delay(UI.anim.comboElimBeat);
+          // 节拍随连击变长；里程碑后再插一段空拍，形成可感知的「顿」
+          await delay(comboBeat(combo));
+          if (milestone) await delay(comboMilestoneHold(combo));
         }
         if (isStale()) return;
         await delay(UI.anim.orbClear * 0.35);
@@ -523,17 +542,22 @@ export class BattleScene implements Scene {
     return this._ctrl.teamElementSet.has(group.orb as Element);
   }
 
-  private _burstGroup(group: MatchGroup): void {
+  /** 爆裂粒子随连击加量加速，让第 10 连看起来确实比第 2 连更狠 */
+  private _burstGroup(group: MatchGroup, combo = 1): void {
     const cell = UI.board.cellSize;
     const color = ORB_COLOR[group.orb];
+    const boost = Math.min(1, (combo - 1) / 11);
+    const count = Math.round(6 + boost * 6);
+    const speed = 320 + boost * 220;
+    const size = 13 + boost * 6;
     for (const { r, c } of group.cells) {
       this._fx.burst({
         x: this._layout.boardX + c * cell + cell / 2,
         y: this._layout.boardY + r * cell + cell / 2,
         color,
-        count: 6,
-        speed: 320,
-        size: 13,
+        count,
+        speed,
+        size,
         life: UI.anim.orbBurst,
       });
     }
