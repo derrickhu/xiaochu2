@@ -63,6 +63,8 @@ export const COLORS = {
   textDisabled: 0x9c8c70,
   /** 标题强调金（用于浅底上的标题点缀） */
   textTitle: 0xb5701f,
+  /** 正向加成文字（队长技 / 增益说明）—— 浅底深绿，对齐编队 UI 原型 */
+  textPositive: 0x3d7a2b,
   /** 战斗关卡匾正文（mockup 深棕墨） */
   battlePlaqueText: 0x3f2408,
   /** 敌人名匾底板（截图采样浅金奶油 #eddbac） */
@@ -79,6 +81,8 @@ export const COLORS = {
   battleTagText: 0xeddfb4,
   /** 战斗克制标签文字描边（深棕） */
   battleTagTextStroke: 0x3a2c10,
+  /** 三星回合胶囊投影（浮在立绘上，需压住背景） */
+  battleStarTurnShadow: 0x1a120c,
 
   // ── 强调 ──
   accent: 0xe8a33d,
@@ -95,6 +99,8 @@ export const COLORS = {
   panelBorderSoft: 0xddbf8e,
   /** 卡面名字（深墨棕，写在浅色卡底上） */
   cardNameText: 0x3b2414,
+  /** 朱砂题字（米色飘带 / 匾额上的红字，取自 v3b 原型） */
+  textSeal: 0x9f3d20,
   /** 卡面名字描边（浅米，提升浅底可读性） */
   cardNameStroke: 0xfff0cd,
 
@@ -187,3 +193,31 @@ export const SPACING = {
 
 export type ColorToken = keyof typeof COLORS;
 export type FontSizeToken = keyof typeof FONT_SIZE;
+
+/**
+ * 战斗「回合 n/m」胶囊三档色（对齐 PAD / AFK 目标芯片：绿=达标、琥珀=掉档、锈红=保底）。
+ * HUD 按 starTurnPace 取一组，禁止场景裸写色值。
+ */
+export const BATTLE_STAR_TURN = {
+  onTrack: {
+    bg: 0x1c4a32,
+    rim: 0x8ee4a4,
+    inner: 0xa8f0b8,
+    text: 0xf2fff4,
+    muted: 0xc5e8ce,
+  },
+  twoStar: {
+    bg: 0x5c3a12,
+    rim: 0xffc46a,
+    inner: 0xffdca0,
+    text: 0xfff4e4,
+    muted: 0xe8d0a8,
+  },
+  oneStar: {
+    bg: 0x5a241c,
+    rim: 0xf09078,
+    inner: 0xf8b0a0,
+    text: 0xffece8,
+    muted: 0xe8c8c0,
+  },
+} as const;

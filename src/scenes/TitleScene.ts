@@ -13,7 +13,7 @@ import { resolveHomeDisplay } from '@/balance/chapterMap';
 import { PlayerData } from '@/game/PlayerData';
 import { reportQuest } from '@/game/dailyQuestTracker';
 import {
-  makeCurrencyLabel, makeChapterNavArrow, NAV_ARROW_SIZE,
+  makeCurrencySourceChip, makeChapterNavArrow, NAV_ARROW_SIZE,
   makeChapterTitlePlaque, namePlaqueOuterHalf,
   buildBottomNav, BOTTOM_NAV_RESERVE,
   buildHomeLeftRail, homeLeftRailHeight, DEFAULT_HOME_RAIL,
@@ -305,24 +305,30 @@ export class TitleScene implements Scene {
     profile.addChild(name);
     this.container.addChild(profile);
 
-    const stamina = makeCurrencyLabel(
-      'stamina', PlayerData.stamina, undefined,
-      `${PlayerData.stamina}/${PlayerData.staminaMax}`,
-    );
-    // 体力是消耗最快的资源，点一下直达回体面板（也是主要 IAA 位）
-    stamina.eventMode = 'static';
-    stamina.cursor = 'pointer';
-    bindPointerTap(stamina, () => EventBus.emit('stamina:open', 0));
-    const lingyu = makeCurrencyLabel('lingyu', PlayerData.lingyu);
-    const coins = makeCurrencyLabel('coin', PlayerData.coins);
+    const stamina = makeCurrencySourceChip({
+      kind: 'stamina',
+      amount: PlayerData.stamina,
+      text: `${PlayerData.stamina}/${PlayerData.staminaMax}`,
+      onTap: () => EventBus.emit('currency-source:open', 'stamina'),
+    });
+    const lingyu = makeCurrencySourceChip({
+      kind: 'lingyu',
+      amount: PlayerData.lingyu,
+      onTap: () => EventBus.emit('currency-source:open', 'lingyu'),
+    });
+    const coins = makeCurrencySourceChip({
+      kind: 'coin',
+      amount: PlayerData.coins,
+      onTap: () => EventBus.emit('currency-source:open', 'coin'),
+    });
     const items = [stamina, lingyu, coins];
-    const rightLimit = Game.contentRightX(GMManager.isEnabled ? 72 : 28);
-    const nameGap = 18;
+    const rightLimit = Game.contentRightX(28);
+    const nameGap = 14;
     const measureRow = (g: number): number =>
       items.reduce((s, it) => s + it.width, 0) + g * (items.length - 1);
 
     // 货币不得叠昵称：空间不够先压 gap，再截断昵称；禁止再把整行往左拽到名字上
-    let gap = 14;
+    let gap = 10;
     while (gap > 6 && padX + nameLeft + name.width + nameGap + measureRow(gap) > rightLimit) {
       gap -= 2;
     }

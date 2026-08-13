@@ -86,14 +86,18 @@ export const UI = {
     /** 顶栏关卡匾最大宽度 / 高度（宽随文字自适应；高度宜扁，少占竖向空间） */
     stageBannerW: 560,
     stageBannerH: 64,
-    /** 关卡匾相对「标题+回合」内容的左右内边距（需避开两端卷尖花边） */
+    /** 关卡匾相对标题内容的左右内边距（需避开两端卷尖花边） */
     stageBannerPadX: 44,
     /** 关卡匾最小宽度 */
     stageBannerMinW: 180,
-    /** 关卡匾内回合胶囊左右内边距 */
-    stageTurnPillPadX: 12,
-    /** 关卡匾内回合胶囊与标题间距 */
-    stageTurnPillGap: 8,
+    /** 三星回合胶囊左右内边距 */
+    stageTurnPillPadX: 14,
+    /** 关卡匾下沿 → 三星回合胶囊上沿 */
+    stageTurnPillGap: 6,
+    /** 三星回合胶囊高度 */
+    stageTurnPillH: 28,
+    /** 胶囊内三星行单星边长 */
+    stageTurnStarSize: 15,
     /** 敌人名独立匾（叠在立绘区、血条正上方） */
     enemyNamePlaqueW: 320,
     enemyNamePlaqueH: 44,

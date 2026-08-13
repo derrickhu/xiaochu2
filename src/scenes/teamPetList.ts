@@ -3,6 +3,7 @@ import { Game } from '@/core/Game';
 import { TextureCache } from '@/core/TextureCache';
 import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import { getRarity } from '@/balance/rarity';
+import type { Element } from '@/balance/combat';
 import { PET_MAP, type PetDef } from '@/balance/pets';
 import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import {
@@ -51,8 +52,10 @@ export interface TeamPetListOpts {
   container: PIXI.Container;
   startY: number;
   listBottom?: number;
-  /** 紧凑卡（战前原型）：名+定位胶囊+等级星，无三维行 */
+  /** 紧凑卡（旧双列）；战前 v3b 用 grid5 */
   compact?: boolean;
+  layout?: 'row2' | 'grid5';
+  filterElement?: Element | 'all';
   checks: Map<string, PIXI.Container>;
   items: Map<string, PIXI.Container>;
   scroll: ScrollListController;
@@ -63,15 +66,21 @@ export interface TeamPetListOpts {
 
 export function buildTeamPetList(opts: TeamPetListOpts): PIXI.Container | null {
   const { container, startY, listBottom, compact, checks, items, scroll, onToggle, onLongPress } = opts;
+  const layout = opts.layout ?? (compact ? 'row2' : 'row2');
+  const filter = opts.filterElement ?? 'all';
   const w = Game.logicWidth;
-  const cols = 2;
-  const cardW = compact ? PREP_CARD_W : FREE_CARD_W;
-  const cardH = compact ? PREP_CARD_H : FREE_CARD_H;
-  const gapX = compact ? 16 : 24;
-  const gapY = compact ? 10 : 14;
+  const grid5 = layout === 'grid5';
+  const cols = grid5 ? 5 : 2;
+  const gapX = grid5 ? 8 : (compact ? 16 : 24);
+  const gapY = grid5 ? 12 : (compact ? 10 : 14);
+  const side = grid5 ? 16 : 0;
+  const cardW = grid5
+    ? Math.floor((w - side * 2 - gapX * (cols - 1)) / cols)
+    : (compact ? PREP_CARD_W : FREE_CARD_W);
+  const cardH = grid5 ? cardW : (compact ? PREP_CARD_H : FREE_CARD_H);
   const gridW = cols * cardW + (cols - 1) * gapX;
   const startX = (w - gridW) / 2 + cardW / 2;
-  const scrollTex = compact ? null : TextureCache.get(UI_SCENE_IMAGES.petCardTeamRow);
+  const scrollTex = compact || grid5 ? null : TextureCache.get(UI_SCENE_IMAGES.petCardTeamRow);
   const scrollable = listBottom !== undefined;
   const parent = scrollable ? new PIXI.Container() : container;
   if (scrollable) {
@@ -79,20 +88,32 @@ export function buildTeamPetList(opts: TeamPetListOpts): PIXI.Container | null {
     container.addChild(parent);
   }
 
+  const owned = PlayerData.ownedPets.filter((petId) => {
+    const pet = PET_MAP.get(petId);
+    if (!pet) return false;
+    if (filter === 'all') return true;
+    return pet.element === filter;
+  });
+
   let maxBottom = 0;
-  PlayerData.ownedPets.forEach((petId, i) => {
+  owned.forEach((petId, i) => {
     const pet = PET_MAP.get(petId);
     if (!pet) return;
     const lv = PlayerData.petLevel(petId);
     const star = PlayerData.petStar(petId);
-    const item = buildListItem(
-      pet, lv, star, scrollTex, scroll, onToggle, !!compact, cardW, cardH,
-      scrollable ? {
+    const item = grid5
+      ? buildGridCell(pet, lv, star, cardW, scroll, onToggle, scrollable ? {
         viewportTop: startY,
         viewportBottom: listBottom!,
-      } : undefined,
-      onLongPress,
-    );
+      } : undefined, onLongPress)
+      : buildListItem(
+        pet, lv, star, scrollTex, scroll, onToggle, !!compact, cardW, cardH,
+        scrollable ? {
+          viewportTop: startY,
+          viewportBottom: listBottom!,
+        } : undefined,
+        onLongPress,
+      );
 
     const col = i % cols;
     const row = Math.floor(i / cols);
@@ -224,6 +245,91 @@ export function addTeamPrepSlotPet(
   rim.lineStyle(2.5, border, 1);
   rim.drawRoundedRect(-slotW / 2, -slotH / 2, slotW, slotH, radius);
   parent.addChild(rim);
+}
+
+function buildGridCell(
+  pet: PetDef,
+  lv: number,
+  star: number,
+  cell: number,
+  scroll: ScrollListController,
+  onToggle: (petId: string) => void,
+  viewport?: { viewportTop: number; viewportBottom: number },
+  onLongPress?: (petId: string, item: PIXI.Container) => void,
+): PIXI.Container {
+  const item = new PIXI.Container();
+  const face = cell;
+  const radius = 16;
+
+  // 原型是统一的宣纸奶油卡底 + 浅金细边；稀有度靠角标表达，不染卡框
+  item.addChild(makePanel({
+    width: face, height: face, radius,
+    bg: COLORS.panelBg, bgAlpha: 0.96,
+    border: COLORS.panelBorderSoft, borderWidth: 1.5,
+    centered: true,
+  }));
+  const art = new PIXI.Container();
+  const spr = new PIXI.Sprite(PIXI.Texture.EMPTY);
+  spr.anchor.set(0.5);
+  art.addChild(spr);
+  bindPetAvatarSprite(spr, pet.id, star, (tex) => {
+    // 立绘上移让出底部两行（星级 + 等级）
+    const inner = face * 0.74;
+    spr.scale.set(Math.min(inner / tex.width, inner / tex.height));
+    spr.y = -12;
+  });
+  const mask = new PIXI.Graphics();
+  mask.beginFill(0xffffff);
+  mask.drawRoundedRect(-face / 2, -face / 2, face, face, radius);
+  mask.endFill();
+  art.addChild(mask);
+  art.mask = mask;
+  item.addChild(art);
+
+  const orbSize = 24;
+  const orb = makeElementOrb(pet.element, orbSize);
+  orb.position.set(-face / 2 + orbSize / 2 + 5, -face / 2 + orbSize / 2 + 5);
+  item.addChild(orb);
+
+  // 稀有度占右上角（静态身份），故「已上阵」不再抢角标位，改整卡蒙层
+  const badge = makeRarityBadge({ tier: pet.rarity, height: Math.max(18, Math.round(face * 0.17)) });
+  const bb = badge.getLocalBounds();
+  badge.position.set(face / 2 - bb.width - 5, -face / 2 + 5);
+  item.addChild(badge);
+
+  const stars = makeStarRow({
+    star, starSize: 13, gap: 2, anchor: 'center', style: 'sprite',
+  });
+  stars.position.set(0, face / 2 - 33);
+  item.addChild(stars);
+
+  const lvText = makeText(`Lv.${lv}`, {
+    size: FONT_SIZE.xs, fill: COLORS.cardNameText, bold: true, anchor: 0.5,
+  });
+  lvText.position.set(0, face / 2 - 14);
+  item.addChild(lvText);
+
+  const check = buildCheckMark({ width: face, height: face, radius });
+  check.name = 'check';
+  item.addChild(check);
+
+  item.hitArea = new PIXI.Rectangle(-face / 2, -face / 2, face, face);
+  item.eventMode = 'static';
+  item.cursor = 'pointer';
+  item.interactiveChildren = false;
+  bindPointerTap(item, () => onToggle(pet.id), {
+    blockTap: () => scroll.moved,
+    pointGuard: viewport
+      ? (dx, dy) => dy >= viewport.viewportTop && dy <= viewport.viewportBottom
+      : undefined,
+    onLongPress: onLongPress
+      ? () => {
+        if (scroll.moved) return;
+        onLongPress(pet.id, item);
+      }
+      : undefined,
+  });
+  return item;
 }
 
 function buildListItem(
@@ -405,15 +511,40 @@ function addPrepListPortrait(
   host.addChild(rim);
 }
 
-function buildCheckMark(): PIXI.Container {
+/**
+ * 已上阵标记。
+ *
+ * 五列格（veil）：整卡淡绿蒙层 + 描边即可扫出在队名单，不再叠「上」字。
+ * 横排卡：仍用角落圆章，没有整卡圈，字还需要。
+ */
+function buildCheckMark(veil?: { width: number; height: number; radius: number }): PIXI.Container {
   const check = new PIXI.Container();
   check.visible = false;
-  check.addChild(makePanel({
-    width: 32, height: 32, radius: 16,
-    bg: COLORS.btnSuccessBg, border: COLORS.btnSuccessBorder, borderWidth: 2,
-  }));
+
+  if (veil) {
+    const cover = new PIXI.Graphics();
+    cover.beginFill(COLORS.btnSuccessBg, 0.26);
+    cover.drawRoundedRect(-veil.width / 2, -veil.height / 2, veil.width, veil.height, veil.radius);
+    cover.endFill();
+    cover.lineStyle(2.5, COLORS.btnSuccessBorder, 0.95);
+    cover.drawRoundedRect(-veil.width / 2, -veil.height / 2, veil.width, veil.height, veil.radius);
+    check.addChild(cover);
+    return check;
+  }
+
+  const d = 34;
+  const bg = new PIXI.Graphics();
+  bg.beginFill(COLORS.scrim, 0.18);
+  bg.drawCircle(0, 2, d / 2);
+  bg.endFill();
+  bg.beginFill(COLORS.btnSuccessBg, 1);
+  bg.drawCircle(0, 0, d / 2);
+  bg.endFill();
+  bg.lineStyle(2, COLORS.btnSuccessBorder, 0.9);
+  bg.drawCircle(0, 0, d / 2 - 1);
+  check.addChild(bg);
   check.addChild(makeText('上', {
-    size: FONT_SIZE.xxs, fill: COLORS.btnText, bold: true, anchor: 0.5,
+    size: FONT_SIZE.xs, fill: COLORS.btnText, bold: true, anchor: 0.5,
   }));
   return check;
 }

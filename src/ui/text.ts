@@ -83,6 +83,17 @@ export interface MakeTextOpts {
  */
 const SYNTHETIC_BOLD_MIN_SIZE = 17;
 
+/**
+ * 小字加粗改走「同色细描边」。
+ *
+ * 合成加粗把整个字形向外膨胀，中文小字会粘连成墨块；而同色描边只按固定像素
+ * 加宽笔画（不随字形密度放大），既拿到设计稿那种「粗而清楚」的观感，又不糊。
+ * 已显式传 strokeColor 的（亮底描边强调）不叠，避免描边打架。
+ */
+function fauxBoldThickness(fontSize: number): number {
+  return fontSize <= 16 ? 0.9 : 1.3;
+}
+
 function resolveFontFamily(opts: MakeTextOpts): string {
   if (opts.fontFamily) return opts.fontFamily;
   const role = opts.role ?? 'body';
@@ -121,6 +132,9 @@ export function makeText(content: string, opts: MakeTextOpts = {}): PIXI.Text {
   if (opts.strokeColor !== undefined) {
     style.stroke = opts.strokeColor;
     style.strokeThickness = opts.strokeWidth ?? 4;
+  } else if (opts.bold && fontSize < SYNTHETIC_BOLD_MIN_SIZE) {
+    style.stroke = style.fill as number;
+    style.strokeThickness = fauxBoldThickness(fontSize);
   }
   if (opts.dropShadow) {
     const ds = opts.dropShadow === true ? {} : opts.dropShadow;

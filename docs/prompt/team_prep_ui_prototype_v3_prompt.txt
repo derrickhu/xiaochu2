@@ -1,0 +1,54 @@
+Create ONE high-fidelity mobile game UI prototype (tall portrait 9:16, thin iPhone-like frame optional) for a Chinese fantasy pre-battle TEAM FORMATION screen.
+
+Use the reference screenshot for ART STYLE and CHARACTER LOOK only (cute chibi spirit pets, cream parchment, mint-green atmosphere, gold cream plaques). Do NOT copy the current crowded layout. This is a REDESIGN.
+
+PROBLEM TO SOLVE: Current page is dense, cheap, enemy card dominates, team has no focus.
+INDUSTRY REFERENCES (layout logic, not art): Puzzle & Dragons / 智龙迷城 team select, Onmyoji sortie, Summoners War prep — YOUR TEAM is the hero, enemy intel is a compact briefing strip, pet pool is a clean icon grid.
+
+AESTHETIC: soft pastel cream xianxia, airy negative space, premium casual RPG. Warm parchment #F7EAD0, ink brown #3A2E22, gold trim #C9A45A, mint atmosphere. NOT dark mode, NOT purple neon, NOT generic card-stack dashboard.
+
+HIERARCHY (top to bottom, generous padding, one job per band):
+
+1) HEADER (small)
+- Cream back pill left, calligraphy title plaque「编队」center
+- Tiny caption under plaque:「1-4 荆棘丛林 · 普通」
+- No extra widgets
+
+2) ENEMY BRIEF STRIP (compact, ~12% of height, NOT a huge card)
+- Thin cream-gold horizontal bar
+- Left: SMALL enemy portrait (green moss slime) ~80px, not the largest object on screen
+- Name:「杂兵 · 木域软泥」
+- One line stats: HP 1896 · 攻 186 · 每1回合
+- Two small orbs:「克制 金」「抵抗 土」
+- Tiny pager 1/2 on the right chevron (tap to next wave)
+- Skill is ONE quiet line, not a boxed novel:「蚀骨毒雾 · 中毒3回合」
+
+3) MY TEAM — THE HERO (largest band, ~32% of height)
+- Soft cloud / stone platform stage, open air, few boxes
+- Five cute chibi spirit pets STANDING in a shallow arc (not cramped vertical trading-cards)
+- CENTER pet is LEADER: slightly larger, gold pedestal, small「队长」ribbon, crown pip
+- Outer four: rounded portrait pedestals with tiny element orb top-left, Lv. under feet
+- Empty feel of space between pets
+- One quiet summary under the row (single line, not a stats dashboard):
+  「战力 1777   木伤 +31%   五行 ●●●●●」
+
+4) PET POOL (toolbox, ~38%)
+- Section label「可选灵宠」left-aligned, small
+- Filter chips in one row: 全部 / 金 / 木 / 火 / 水 / 土  (木 selected)
+- 5-column grid of SQUARE/rounded avatars (gacha-home style), lots of gutter
+- Deployed pets have a small green「上」corner tag only — no extra role pills, no giant rarity plates, no 5-star rows stuffing the card
+- Level as tiny caption under avatar (Lv.28)
+- Show about 10 pets (2 rows), implying scroll
+
+5) CTA
+- No full-width cream footer slab eating the list
+- One glossy jade-green oval button「开始战斗」with small stamina「体力 6」under it, floating over the bottom with breathing room
+
+READABILITY / PREMIUM RULES:
+- Team pets must be the visual magnet (largest figures)
+- Enemy strip must be readable at a glance but visually quieter than the team
+- Plenty of mint-cream negative space; avoid nested boxes inside boxes
+- Chinese UI labels exactly as specified
+- High-end casual RPG polish, not a prototype wireframe, not a dense spreadsheet
+
+NO watermark, no English chrome, no extra settings gear, no shop, no chat.

@@ -50,10 +50,8 @@ export function canTryInterstitial(): boolean {
 export async function tryShowInterstitial(scene: string): Promise<boolean> {
   const skip = skipReason();
   if (skip) {
+    // 频控 / 冷启动 / 未配置都是正常跳过，弹 Toast 会让玩家以为返回失败
     console.log(`[Interstitial] 跳过 ${scene}: ${skip}`);
-    if (Platform.isDevtools) {
-      Platform.showToast(`插屏跳过：${skip}`, 'none');
-    }
     return false;
   }
 
@@ -61,10 +59,6 @@ export async function tryShowInterstitial(scene: string): Promise<boolean> {
   const ok = await Platform.showInterstitialAd(INTERSTITIAL_AD_UNIT);
   analytics.trackAdClose(scene, ok, { ad_type: 'interstitial' });
   console.log(`[Interstitial] ${scene} show=${ok} unit=${INTERSTITIAL_AD_UNIT}`);
-  if (!ok && Platform.isDevtools) {
-    // 模拟器无填充时给个可感知反馈，避免误以为没接代码
-    Platform.showToast('插屏已调用·模拟器常无填充，请真机看', 'none');
-  }
   if (ok) _lastShowAt = Date.now();
   return ok;
 }

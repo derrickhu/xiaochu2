@@ -26,6 +26,12 @@ import { SKILL_IMPACT, type SkillImpactTier } from '@/balance/skillVfx';
 import { enemyImage, UI_BATTLE_IMAGES } from '@/config/Assets';
 import { makeElementOrb } from '@/ui';
 import { formatStageBattleHeader } from '@/balance/stages';
+import {
+  formatBattleStarTurnValue,
+  starsFromTurns,
+  starTurnPace,
+  type StarTurnPace,
+} from '@/formulas/stars';
 import type { BattleController, EnemyActResult } from '@/game/battle/BattleController';
 import { nextEnemySkillCountdown } from '@/game/battle/battleEnemyIntent';
 import { phaseHpMarkers } from '@/game/battle/bossPhase';
@@ -34,15 +40,28 @@ import { delay } from './battleWidgets';
 import type { BattleLayout } from './BattleLayout';
 import type { BattleFx } from './BattleFx';
 import { ComboDisplay } from './ComboDisplay';
-import { COLORS, FONT_SIZE, RADIUS } from '@/ui/theme';
+import { COLORS, FONT_SIZE, BATTLE_STAR_TURN } from '@/ui/theme';
 import { applyTextResolution, makeText } from '@/ui/text';
+import { makeStarRow } from '@/ui/GrowthVisual';
 import { bindPointerTap } from '@/utils/bindPointerTap';
+
+function paceRank(pace: StarTurnPace): number {
+  if (pace === 'onTrack') return 0;
+  if (pace === 'twoStar') return 1;
+  return 2;
+}
 
 export class BattleHud {
   private _stageTitleText!: PIXI.Text;
-  private _stageTurnText!: PIXI.Text;
-  /** 关卡匾内回合胶囊底板 */
+  /** 关卡匾下方：三星回合胶囊（星行 + 回合 n/m） */
+  private _stageStarTurnChip!: PIXI.Container;
   private _stageTurnPillBg!: PIXI.Graphics;
+  private _stageTurnStars: PIXI.Container | null = null;
+  private _stageTurnPrefix!: PIXI.Text;
+  private _stageTurnValue!: PIXI.Text;
+  private _starTurnFilled = -1;
+  private _lastStarTurnNumber = 0;
+  private _lastStarTurnPace: ReturnType<typeof starTurnPace> | null = null;
   private _stageSubText!: PIXI.Text;
   /** 关卡匾贴图（宽随标题自适应） */
   private _stageBannerSprite: PIXI.Sprite | null = null;
@@ -71,14 +90,18 @@ export class BattleHud {
   private _shieldText!: PIXI.Text;
   private _dragBar!: PIXI.Graphics;
   private _dragClock: PIXI.Sprite | null = null;
-  private _combo!: ComboDisplay;
+  private _combo: ComboDisplay | null = null;
   private _statusText!: PIXI.Text;
 
   /** 血条显示状态：shown = 主条（快速跟随），white = 损血白条（延迟收缩） */
   private _enemyHpDisp = { shown: 1, white: 1 };
   private _heroHpDisp = { shown: 1, white: 1 };
 
-  constructor(private readonly _ctrl: BattleController, private readonly _layout: BattleLayout) {}
+  constructor(
+    private readonly _ctrl: BattleController,
+    private readonly _layout: BattleLayout,
+    private readonly _showStarTurnHud = true,
+  ) {}
 
   // ════════════ 构建 ════════════
 
@@ -100,7 +123,8 @@ export class BattleHud {
   }
 
   /**
-   * 顶栏：关卡匾单层（关卡名 + 回合胶囊）+ 敌人名匾叠在血条上方（对齐 mockup v3）。
+   * 顶栏：关卡匾只留关卡名；三星回合独立胶囊挂在匾下（对齐 xiao_chu / PAD 目标芯片）。
+   * 敌人名匾仍叠在血条上方。
    */
   buildStageHeader(parent: PIXI.Container): void {
     const w = Game.logicWidth;
@@ -121,18 +145,24 @@ export class BattleHud {
       this._stageBannerFallback = fallback;
     }
 
-    // 关卡名（匾内左侧）+ 回合胶囊（匾内右侧）同一层；长标题用较小字号以免顶进卷尖
     this._stageTitleText = makeText(this._stageTitleLabel(), {
-      size: FONT_SIZE.xs, fill: COLORS.battlePlaqueText, bold: true, anchor: 0.5,
+      size: FONT_SIZE.sm, fill: COLORS.battlePlaqueText, bold: true, anchor: 0.5,
     });
     parent.addChild(this._stageTitleText);
 
+    this._stageStarTurnChip = new PIXI.Container();
     this._stageTurnPillBg = new PIXI.Graphics();
-    parent.addChild(this._stageTurnPillBg);
-    this._stageTurnText = makeText(this._turnLabel(), {
-      size: FONT_SIZE.xs, fill: COLORS.battlePlaqueText, bold: true, anchor: 0.5,
+    this._stageStarTurnChip.addChild(this._stageTurnPillBg);
+    this._stageTurnPrefix = makeText('回合', {
+      size: FONT_SIZE.xxs, fill: BATTLE_STAR_TURN.onTrack.muted, bold: true, anchor: 0.5,
     });
-    parent.addChild(this._stageTurnText);
+    this._stageTurnValue = makeText('1/1', {
+      size: FONT_SIZE.xs, fill: BATTLE_STAR_TURN.onTrack.text, bold: true, anchor: 0.5,
+      strokeColor: COLORS.battleStarTurnShadow, strokeWidth: 3,
+    });
+    this._stageStarTurnChip.addChild(this._stageTurnPrefix);
+    this._stageStarTurnChip.addChild(this._stageTurnValue);
+    parent.addChild(this._stageStarTurnChip);
     this._fitStageBannerAndTitle();
 
     // 敌人名：血条正上方独立匾（浅金底 + 深棕字）
@@ -174,15 +204,10 @@ export class BattleHud {
     this._layout.enemyStatusIconY = cy;
   }
 
-  /** 刷新顶栏关卡号 / 回合 / 多波进度 / 敌人名匾 */
+  /** 刷新顶栏关卡号 / 三星回合 / 多波进度 / 敌人名匾 */
   refreshStageHeader(): void {
     if (displayAlive(this._stageTitleText)) {
       this._stageTitleText.text = this._stageTitleLabel();
-    }
-    if (displayAlive(this._stageTurnText)) {
-      this._stageTurnText.text = this._turnLabel();
-    }
-    if (displayAlive(this._stageTitleText)) {
       this._fitStageBannerAndTitle();
     }
     if (displayAlive(this._stageSubText)) {
@@ -192,58 +217,145 @@ export class BattleHud {
   }
 
   /**
-   * 关卡匾 + 标题 + 回合胶囊自适应（同一层）：
-   * 匾宽紧贴「标题 + 回合」内容，只留少量花边内边距，避免大块留白。
+   * 关卡匾只包标题：宽随文字，长名缩放避开卷尖。
+   * 三星回合胶囊另挂匾下，不再和标题抢同一层。
    */
   private _fitStageBannerAndTitle(): void {
-    if (!displayAlive(this._stageTitleText) || !displayAlive(this._stageTurnText)) return;
-    const {
-      stageBannerW, stageBannerH, stageBannerPadX, stageBannerMinW,
-      stageTurnPillPadX, stageTurnPillGap,
-    } = UI.battle;
+    if (!displayAlive(this._stageTitleText)) return;
+    const { stageBannerW, stageBannerH, stageBannerPadX, stageBannerMinW } = UI.battle;
     const cy = this._layout.headerY;
     const t = this._stageTitleText;
-    const turn = this._stageTurnText;
     t.scale.set(1);
-    turn.scale.set(1);
-    t.style.fontSize = FONT_SIZE.xs; // 19：长标题（含首领/波次）需避开两端花边
-    turn.style.fontSize = FONT_SIZE.xxs + 2;
+    t.style.fontSize = FONT_SIZE.sm;
     try { t.updateText(true); } catch { /* 部分运行时无 updateText */ }
-    try { turn.updateText(true); } catch { /* 部分运行时无 updateText */ }
 
-    const pillH = 28;
-    const pillW = Math.ceil(turn.width) + stageTurnPillPadX * 2;
-    // 返回钮 / 右上角控件之间的可用宽
     const maxBannerW = Math.min(stageBannerW, Game.logicWidth - 280);
-    const contentW0 = Math.max(1, t.width) + stageTurnPillGap + pillW;
+    const contentW0 = Math.max(1, t.width);
     let bannerW = Math.min(maxBannerW, Math.max(stageBannerMinW, contentW0 + stageBannerPadX * 2));
     const innerMax = bannerW - stageBannerPadX * 2;
     if (contentW0 > innerMax) {
       const scale = innerMax / contentW0;
       t.scale.set(scale);
-      turn.scale.set(scale);
       bannerW = Math.min(maxBannerW, Math.max(stageBannerMinW, contentW0 * scale + stageBannerPadX * 2));
     }
-    const titleW = t.width;
-    const scaledPillW = Math.ceil(turn.width) + stageTurnPillPadX * 2;
-    const blockW = titleW + stageTurnPillGap + scaledPillW;
-    const cx = Game.logicWidth / 2;
-    const blockLeft = cx - blockW / 2;
-    t.position.set(blockLeft + titleW / 2, cy);
-    const pillCx = blockLeft + titleW + stageTurnPillGap + scaledPillW / 2;
-    turn.position.set(pillCx, cy);
-    this._drawTurnPill(pillCx, cy, scaledPillW, pillH);
+    t.position.set(Game.logicWidth / 2, cy);
     this._applyStageBannerSize(bannerW, stageBannerH);
+    this._layoutStarTurnChip();
   }
 
-  private _drawTurnPill(cx: number, cy: number, bw: number, bh: number): void {
+  /** 匾下居中胶囊：★★★ 回合 n/m，绿/琥珀/锈红三档 */
+  private _layoutStarTurnChip(): void {
+    const chip = this._stageStarTurnChip;
+    if (!displayAlive(chip)) return;
+    const limit = this._ctrl.stage.starTurnLimit;
+    const show = this._showStarTurnHud && limit > 0;
+    chip.visible = show;
+    if (!show) return;
+
+    const turn = this._currentTurnNumber();
+    const pace = starTurnPace(turn, limit);
+    const palette = BATTLE_STAR_TURN[pace];
+    const filled = starsFromTurns(turn, limit);
+    this._syncStarTurnStars(filled);
+
+    this._stageTurnPrefix.style.fill = palette.muted;
+    this._stageTurnValue.style.fill = palette.text;
+    this._stageTurnValue.text = formatBattleStarTurnValue(turn, limit);
+    try { this._stageTurnPrefix.updateText(true); } catch { /* 部分运行时无 updateText */ }
+    try { this._stageTurnValue.updateText(true); } catch { /* 部分运行时无 updateText */ }
+
+    const {
+      stageBannerH, stageTurnPillPadX, stageTurnPillGap, stageTurnPillH, stageTurnStarSize,
+    } = UI.battle;
+    const starGap = 1;
+    const starW = this._stageTurnStars
+      ? 3 * stageTurnStarSize + 2 * starGap
+      : 0;
+    const gapStar = 6;
+    const gapLabel = 5;
+    const innerW = starW + gapStar
+      + Math.ceil(this._stageTurnPrefix.width) + gapLabel
+      + Math.ceil(this._stageTurnValue.width);
+    const pillW = innerW + stageTurnPillPadX * 2;
+    const pillH = stageTurnPillH;
+    const r = pillH / 2;
+
+    let x = -pillW / 2 + stageTurnPillPadX;
+    if (this._stageTurnStars && displayAlive(this._stageTurnStars)) {
+      this._stageTurnStars.position.set(x, 0);
+      x += starW + gapStar;
+    }
+    this._stageTurnPrefix.position.set(x + this._stageTurnPrefix.width / 2, 0);
+    x += this._stageTurnPrefix.width + gapLabel;
+    this._stageTurnValue.position.set(x + this._stageTurnValue.width / 2, 0);
+
+    this._drawStarTurnPill(pillW, pillH, r, palette);
+
+    const pillCy = this._layout.headerY + stageBannerH / 2 + stageTurnPillGap + pillH / 2;
+    chip.position.set(Game.logicWidth / 2, pillCy);
+
+    const worsened = this._lastStarTurnPace != null
+      && paceRank(pace) > paceRank(this._lastStarTurnPace);
+    if (this._lastStarTurnNumber > 0 && turn !== this._lastStarTurnNumber) {
+      this._pulseStarTurnChip(worsened);
+    }
+    this._lastStarTurnNumber = turn;
+    this._lastStarTurnPace = pace;
+  }
+
+  private _syncStarTurnStars(filled: number): void {
+    if (this._starTurnFilled === filled && this._stageTurnStars && displayAlive(this._stageTurnStars)) {
+      return;
+    }
+    this._starTurnFilled = filled;
+    if (this._stageTurnStars) {
+      this._stageTurnStars.destroy({ children: true });
+      this._stageTurnStars = null;
+    }
+    const stars = makeStarRow({
+      star: filled,
+      maxStar: 3,
+      starSize: UI.battle.stageTurnStarSize,
+      gap: 1,
+      anchor: 'left',
+    });
+    this._stageStarTurnChip.addChildAt(stars, 1);
+    this._stageTurnStars = stars;
+  }
+
+  private _drawStarTurnPill(
+    bw: number,
+    bh: number,
+    r: number,
+    palette: (typeof BATTLE_STAR_TURN)[StarTurnPace],
+  ): void {
     if (!displayAlive(this._stageTurnPillBg)) return;
     const g = this._stageTurnPillBg;
     g.clear();
-    g.beginFill(COLORS.battleEnemyNameBg, 0.98);
-    g.lineStyle(2, COLORS.accent, 1);
-    g.drawRoundedRect(cx - bw / 2, cy - bh / 2, bw, bh, bh / 2);
+    const x = -bw / 2;
+    const y = -bh / 2;
+    g.beginFill(COLORS.battleStarTurnShadow, 0.38);
+    g.drawRoundedRect(x + 1, y + 2, bw, bh, r);
     g.endFill();
+    g.beginFill(palette.bg, 0.94);
+    g.lineStyle(2, palette.rim, 0.95);
+    g.drawRoundedRect(x, y, bw, bh, r);
+    g.endFill();
+    g.lineStyle(1.2, palette.inner, 0.4);
+    g.drawRoundedRect(x + 2.5, y + 2.5, bw - 5, bh - 5, Math.max(2, r - 2.5));
+  }
+
+  private _pulseStarTurnChip(strong: boolean): void {
+    const chip = this._stageStarTurnChip;
+    if (!displayAlive(chip) || !chip.visible) return;
+    cancelDisplayTweens(chip);
+    resetScale(chip);
+    const peak = strong ? 1.12 : 1.06;
+    void tweenScale(chip, { x: peak, y: peak }, { duration: 0.08, ease: Ease.easeOutQuad })
+      .then(() => {
+        if (!displayAlive(chip)) return;
+        return tweenScale(chip, { x: 1, y: 1 }, { duration: 0.16, ease: Ease.easeOutBack });
+      });
   }
 
   private _applyStageBannerSize(bannerW: number, bannerH: number): void {
@@ -278,10 +390,6 @@ export class BattleHud {
   private _currentTurnNumber(): number {
     if (this._ctrl.state === 'playerTurn') return this._ctrl.turnsUsed + 1;
     return Math.max(1, this._ctrl.turnsUsed);
-  }
-
-  private _turnLabel(): string {
-    return `第${this._currentTurnNumber()}回合`;
   }
 
   private _stageSubLabel(): string {
@@ -938,15 +1046,20 @@ export class BattleHud {
 
   /** Combo 跳字 + 粒子/闪光（对齐 xiao_chu 棋盘中央展示） */
   showCombo(combo: number, fx: BattleFx): void {
-    this._combo.show(combo, fx);
+    this._combo?.show(combo, fx);
   }
 
   hideCombo(immediate = false): void {
-    this._combo.hide(immediate);
+    this._combo?.hide(immediate);
+  }
+
+  destroyCombo(): void {
+    this._combo?.destroy();
+    this._combo = null;
   }
 
   updateCombo(dt: number): void {
-    this._combo.update(dt);
+    this._combo?.update(dt);
   }
 
   /** 英雄血条数字受击跳动 */

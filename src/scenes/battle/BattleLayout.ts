@@ -22,7 +22,7 @@ export interface BattleLayout {
   boardY: number;
   enemyAreaTop: number;
   enemyAreaBottom: number;
-  /** 关卡匾中心 Y（关卡名 + 回合同层） */
+  /** 关卡匾中心 Y（仅关卡名；三星回合胶囊挂在匾下） */
   headerY: number;
   /** 敌人名匾中心 Y（叠层：血条正上方） */
   enemyNameY: number;

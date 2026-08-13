@@ -70,31 +70,51 @@ export function containsDesignPoint(target: PIXI.Container, dx: number, dy: numb
   return localContains(local, target.hitArea, target);
 }
 
-/** 从候选容器里取最上层命中项（后添加 / 子树更深者优先） */
+/** 从候选容器里取最上层命中项（对齐 Pixi 绘制顺序：后绘制的在上） */
 export function pickTopmostHit(
   candidates: PIXI.Container[],
   dx: number,
   dy: number,
 ): PIXI.Container | null {
   let best: PIXI.Container | null = null;
-  let bestOrder = -1;
+  let bestPath: number[] | null = null;
   for (const target of candidates) {
     if (!containsDesignPoint(target, dx, dy)) continue;
-    const order = worldOrder(target);
-    if (order >= bestOrder) {
+    const path = worldPath(target);
+    if (!bestPath || comparePath(path, bestPath) >= 0) {
       best = target;
-      bestOrder = order;
+      bestPath = path;
     }
   }
   return best;
 }
 
-function worldOrder(target: PIXI.Container): number {
-  let order = 0;
+/**
+ * 从根到叶的子节点索引链。
+ *
+ * 必须保留成数组逐层比，不能压成一个数。曾经压成 `order * 1000 + index` 从叶往根
+ * 累加，等于把叶节点的索引放到了最高位：Overlay 层的 GM 按钮算出 3002，战斗场景里
+ * 埋得更深的点怪热区算出 15001，热区反而赢了——点 GM 按钮弹出的是怪物说明。
+ * 只要下层子树够深，它的叶节点就能压过顶层容器，「Overlay 永远在最上层」这个前提
+ * 就被算法本身破坏了。
+ */
+function worldPath(target: PIXI.Container): number[] {
+  const path: number[] = [];
   let cur: PIXI.Container | null = target;
   while (cur?.parent) {
-    order = order * 1000 + cur.parent.getChildIndex(cur);
+    path.push(cur.parent.getChildIndex(cur));
     cur = cur.parent;
   }
-  return order;
+  return path.reverse();
+}
+
+/** 顶层先分胜负，同层再往下比；祖先相同时更深的那个在上 */
+function comparePath(a: readonly number[], b: readonly number[]): number {
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    const av = a[i] ?? -1;
+    const bv = b[i] ?? -1;
+    if (av !== bv) return av - bv;
+  }
+  return 0;
 }

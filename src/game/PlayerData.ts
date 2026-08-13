@@ -500,15 +500,18 @@ class PlayerDataClass {
   }
 
   /**
-   * 设为队长（移到首位）。队长技只认 team[0]，所以「换队长」就是换顺序，
-   * 其余成员保持相对次序不变（避免顺便把编队洗了）。
+   * 设为队长：与现任队长对调位置。
+   *
+   * 队长技只认 team[0]。点皇冠只换这两只的站位，其余槽位不动 ——
+   * 否则 splice+unshift 会把中间几只整体平移，站台上看起来像洗牌。
    * @returns false = 不在队中或已经是队长
    */
   setLeader(petId: string): boolean {
     const idx = this._data.team.indexOf(petId);
     if (idx <= 0) return false;
-    this._data.team.splice(idx, 1);
-    this._data.team.unshift(petId);
+    const prev = this._data.team[0];
+    this._data.team[0] = petId;
+    this._data.team[idx] = prev;
     this._save();
     return true;
   }

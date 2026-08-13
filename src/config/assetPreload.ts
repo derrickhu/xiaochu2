@@ -29,6 +29,7 @@ import {
   petAvatarLoadPaths,
   petFrameImage,
   petShowcaseImage,
+  petShowcaseLoadPaths,
   skillIconImage,
   passiveIconImage,
 } from '@/config/Assets';
@@ -63,10 +64,15 @@ export const TEAM_SHELL_IMAGES: readonly string[] = [
   ...PET_POOL_SHELL_IMAGES,
   UI_SCENE_IMAGES.petCardTeamRow,
   UI_IMAGES.btnPlateSuccess,
+  UI_IMAGES.btnPlateCream,
+  UI_IMAGES.btnPlateGold,
+  UI_IMAGES.teamPedestalStone,
+  UI_IMAGES.teamPedestalGold,
+  UI_IMAGES.teamLeaderRibbon,
   UI_IMAGES.iconStatHp,
   UI_IMAGES.iconStatAtk,
   UI_BATTLE_IMAGES.petStar,
-  ENEMY_PORTRAIT_FRAME,
+  ...Object.values(PET_FRAME_IMAGES),
 ];
 
 export const GACHA_SHELL_IMAGES: readonly string[] = [
@@ -161,6 +167,9 @@ export function codexPetAvatarEntries(): PetAvatarPreloadEntry[] {
 /** 编队页：已拥有灵宠 + 可选本关敌人（含敌技图标） */
 export function teamPreloadImages(stageId?: string): readonly string[] {
   const paths = [...TEAM_SHELL_IMAGES];
+  for (const petId of PlayerData.team) {
+    paths.push(...petShowcaseLoadPaths(petId, PlayerData.petStar(petId)));
+  }
   if (stageId) {
     const stage = STAGE_MAP.get(stageId);
     if (stage) {

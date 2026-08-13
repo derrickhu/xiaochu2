@@ -36,6 +36,10 @@ export class GMEntryButton extends PIXI.Container {
 
     this.eventMode = 'static';
     this.cursor = 'pointer';
+    // 显式 hitArea：小游戏 tap 走自绘 hitTest，缺了它会回退到 getLocalBounds()，
+    // 边缘几像素容易判不中，点击就漏到下层（战斗里下层是全宽点怪热区）
+    this.hitArea = new PIXI.Rectangle(0, 0, w, h);
+    this.interactiveChildren = false;
     bindPointerTap(this, () => GMManager.openPanel());
 
     this._layout();
@@ -43,12 +47,11 @@ export class GMEntryButton extends PIXI.Container {
 
   private _layout(): void {
     const w = 56;
-    const h = 32;
-    const pad = 10;
-    // 避开微信右上角胶囊：放在胶囊左侧、垂直居中
-    const x = Math.max(pad, Game.safeCapsuleLeft - w - pad);
-    const capH = Math.max(28, Game.safeCapsuleBottom - Game.safeCapsuleTop);
-    const y = Game.safeCapsuleTop + Math.round((capH - h) / 2);
+    const gap = 6;
+    const inset = 8;
+    // 贴屏幕右缘、胶囊正下方，避开章节左右箭头
+    const x = Math.max(8, Game.logicWidth - w - inset);
+    const y = Game.safeCapsuleBottom + gap;
     this.position.set(x, y);
   }
 

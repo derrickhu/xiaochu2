@@ -294,6 +294,10 @@ export const UI_IMAGES = {
   btnPlateSuccess: `${IMG}/ui/button/plate_success.png`,
   /** 召唤单抽主按钮底板（金橙） */
   btnPlateGold: `${IMG}/ui/button/plate_gold.png`,
+  /** 战前编队站台：石座 / 金座 / 队长题名飘带（pkg-scene） */
+  teamPedestalStone: `${PKG.scene}/images/ui/team/pedestal_stone.png`,
+  teamPedestalGold: `${PKG.scene}/images/ui/team/pedestal_gold.png`,
+  teamLeaderRibbon: `${PKG.scene}/images/ui/team/leader_ribbon.png`,
   /** 通用进度条外框（复用战斗英雄血条框） */
   progressFrame: `${IMG}/ui/bar/progress_frame.png`,
   /** R/SR/SSR/UR 角标雪碧图（pkg-scene，优先读单张 rarity_*.png） */
@@ -393,6 +397,17 @@ export const UI_BATTLE_IMAGES = {
   comboMsTianxuan: `${PKG.battle}/images/ui/battle/combo/combo_ms_tianxuan.png`,
   comboMsChuanshuo: `${PKG.battle}/images/ui/battle/combo/combo_ms_chuanshuo.png`,
   comboMsShenhua: `${PKG.battle}/images/ui/battle/combo/combo_ms_shenhua.png`,
+
+  /**
+   * 连击能量爆发特效（scripts/bake_combo_fx.py）。
+   * 全部存「RGB 全白 + alpha 承载强度」，运行时 tint 成档位色，一套贴图吃所有档位。
+   * 放射拆成彩色层与白芯两张：白芯负责锐度，被 tint 染色就糊了。
+   */
+  comboEnergy: `${PKG.battle}/images/ui/battle/combo/combo_energy.png`,
+  comboRays: `${PKG.battle}/images/ui/battle/combo/combo_rays.png`,
+  comboRaysCore: `${PKG.battle}/images/ui/battle/combo/combo_rays_core.png`,
+  comboStarFlare: `${PKG.battle}/images/ui/battle/combo/combo_star_flare.png`,
+  comboGoldFlake: `${PKG.battle}/images/ui/battle/combo/combo_gold_flake.png`,
 } as const;
 
 /**

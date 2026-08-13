@@ -1,5 +1,5 @@
 /**
- * 编队场景：战前按 team_prep_ui_prototype_v1 布局。
+ * 编队场景：战前按 team_prep_ui_prototype_v3b 布局。
  * 仅接受带 stageId 的战前入口；自由编队底栏入口已拆除。
  */
 import * as PIXI from 'pixi.js';
@@ -9,6 +9,7 @@ import { teamPreloadImages, teamPetAvatarEntries, ensurePetAvatars } from '@/con
 import { ensureAssets } from '@/config/Subpackages';
 import { Platform } from '@/core/PlatformService';
 import { UI } from '@/balance/ui';
+import type { Element } from '@/balance/combat';
 import {
   PET_MAP, TEAM_SIZE,
   type PetDef,
@@ -19,7 +20,7 @@ import {
   baseStageIdOf, hasEliteVariant, isEliteStageId,
 } from '@/balance/eliteMode';
 import type { TeamMember } from '@/formulas/team';
-import { BACKGROUND_IMAGES } from '@/config/Assets';
+import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import type { BattleContext } from '@/game/battleContext';
 import { checkStaminaFor } from '@/game/staminaGate';
@@ -29,7 +30,7 @@ import { titleBackData } from './TitleScene';
 import {
   COLORS, FONT_SIZE, RADIUS,
   makeActionButton, makeBackButton, makeCoverBackground, makePanel, makeText,
-  makePageTitlePlaque,
+  makeElementOrb, makePageTitlePlaque,
   staggerIn, popIn, fadeIn, attachRarityBadge,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
@@ -37,12 +38,20 @@ import {
   refreshTeamOverviewPanel,
   type TeamOverviewSnapshot,
 } from './teamOverviewPanel';
-import { addTeamPetAvatar, addTeamPrepSlotPet, buildTeamPetList } from './teamPetList';
+import { addTeamPetAvatar, buildTeamPetList } from './teamPetList';
 import { buildTeamEnemyIntelCard, type TeamEnemyIntelHandle } from './teamEnemyIntelCard';
 import {
   buildTeamPrepSummary,
   makeSectionTitle,
+  addStretchedPlate,
+  makeLeaderPickChip,
+  TEAM_SUMMARY_BAR_H,
+  TEAM_SUMMARY_TOTAL_H,
 } from './teamPrepChrome';
+import {
+  addTeamStageEmpty, addTeamStagePet, stageSlotLayout,
+  STAGE_PAINT_ORDER, STAGE_ORB_LOCAL_Y, STAGE_ORB_SIZE,
+} from './teamStage';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { skillForPet } from '@/game/battle/SkillEngine';
@@ -91,6 +100,8 @@ export class TeamScene implements Scene {
   /** 技能说明气泡置顶层（长按宠卡/槽位） */
   private _previewLayer = new PIXI.Container();
   private _skillPreview: PetSkillPreviewHandle | null = null;
+  private _filterElement: Element | 'all' = 'all';
+  private _slotUnbinds: Array<() => void> = [];
 
   onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
@@ -156,6 +167,8 @@ export class TeamScene implements Scene {
     this._summaryHost = null;
     this._listScroll.detach();
     this._listContent = null;
+    this._slotUnbinds.forEach((u) => u());
+    this._slotUnbinds = [];
     this.container.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
     });
@@ -177,6 +190,8 @@ export class TeamScene implements Scene {
     this._summaryHost = null;
     this._listContent = null;
     this._intel = null;
+    this._slotUnbinds.forEach((u) => u());
+    this._slotUnbinds = [];
     this.container.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
     });
@@ -209,9 +224,8 @@ export class TeamScene implements Scene {
 
   private _buildPrepLayout(w: number, h: number, stage: StageDef): void {
     const panelW = 690;
-    let y = Game.safeTop + 24;
+    let y = Game.safeHeaderCenterY + 52;
 
-    // 只读难度后缀（切换在地图弹层完成，编队页不可改）
     const labelStage = this._baseStage ?? stage;
     const modeSuffix = this._readOnlyModeSuffix();
     const stageLabel = makeText(`${formatStageShortLabel(labelStage)}${modeSuffix}`, {
@@ -224,69 +238,38 @@ export class TeamScene implements Scene {
     this._intel = intel;
     intel.root.position.set((w - panelW) / 2, y);
     this.container.addChild(intel.root);
-    y += intel.height + 10;
+    y += intel.height + 12;
 
-    const teamTitle = makeSectionTitle('我的队伍', panelW);
-    teamTitle.position.set(w / 2, y + 12);
-    this.container.addChild(teamTitle);
-    y += 30;
-
-    // 竖卡高度 = 托盘内容区高度（对齐原型：头像与背景板同高）
-    const slotW = 124;
-    const slotH = 176;
-    const trayPadX = 12;
-    const trayPadTop = 10;
-    // 两行：战力 + 五行覆盖 / 队长技
-    const summaryH = 58;
-    const trayH = trayPadTop + slotH + summaryH + 8;
-    const tray = makePanel({
-      width: panelW, height: trayH, radius: 16,
-      bg: 0xfff8ec, bgAlpha: 0.96,
-      border: 0xe0c896, borderWidth: 2,
-      centered: false,
-    });
-    tray.position.set((w - panelW) / 2, y);
-    this.container.addChild(tray);
-
-    this._slotW = slotW;
-    this._slotH = slotH;
-    this._slotY = y + trayPadTop;
+    const stageH = Math.max(396, Math.min(430, Math.round(h * 0.26)));
     this._slotArea = new PIXI.Container();
     this.container.addChild(this._slotArea);
+    this._slotY = y + stageH * 0.78;
+    y += stageH + 6;
 
-    this._summaryW = panelW - trayPadX * 2;
+    this._summaryW = panelW;
     this._summaryHost = new PIXI.Container();
-    this._summaryHost.position.set(w / 2, y + trayPadTop + slotH + summaryH / 2);
+    this._summaryHost.position.set(w / 2, y + TEAM_SUMMARY_BAR_H / 2);
     this.container.addChild(this._summaryHost);
-    y += trayH + 12;
+    y += TEAM_SUMMARY_TOTAL_H;
 
-    const bottomBtnH = 96;
-    const bottomPad = 18;
-    const listBtnGap = 10;
+    const bottomBtnH = 88;
+    const bottomPad = 16;
+    const listBtnGap = 8;
     const listBottom = h - bottomPad - bottomBtnH - listBtnGap;
 
-    // 可选灵宠区：整块奶油外板（对齐 UI 原型，标题 + 双列卡都在板内）
-    const pickPadTop = 38;
-    const pickPadBot = 12;
-    const pickH = Math.max(120, listBottom - y);
-    const pickPanel = makePanel({
-      width: panelW, height: pickH, radius: 16,
-      bg: 0xfff8ec, bgAlpha: 0.96,
-      border: 0xe0c896, borderWidth: 2,
-      centered: false,
-    });
-    pickPanel.position.set((w - panelW) / 2, y);
-    this.container.addChild(pickPanel);
-
-    const pickTitle = makeSectionTitle('可选灵宠', panelW - 40);
-    pickTitle.position.set(w / 2, y + 18);
+    const pickTitle = makeSectionTitle('可选灵宠', panelW - 80);
+    pickTitle.position.set(w / 2, y + 14);
     this.container.addChild(pickTitle);
+    y += 32;
+
+    y += this._buildFilterRow(w, y) + 10;
 
     this._listContent = buildTeamPetList({
       container: this.container,
-      startY: y + pickPadTop,
-      listBottom: y + pickH - pickPadBot,
-      compact: true,
+      startY: y,
+      listBottom,
+      layout: 'grid5',
+      filterElement: this._filterElement,
       checks: this._listChecks,
       items: this._listItems,
       scroll: this._listScroll,
@@ -294,37 +277,66 @@ export class TeamScene implements Scene {
       onLongPress: (petId, item) => this._showPetSkillPreview(petId, item),
     });
 
-    const footTop = listBottom;
-    const footH = h - footTop;
-    const footShield = new PIXI.Container();
-    footShield.position.set(w / 2, footTop + footH / 2);
-    footShield.hitArea = new PIXI.Rectangle(-w / 2, -footH / 2, w, footH);
-    footShield.eventMode = 'static';
-    footShield.interactiveChildren = false;
-    // 与 UI 图一致：淡奶油底，避免深色脚垫
-    footShield.addChild(makePanel({
-      width: w, height: footH, radius: 0,
-      bg: 0xfff8ec, bgAlpha: 0.94,
-      centered: true,
-    }));
-    bindPointerTap(footShield, () => { /* absorb */ });
-    this.container.addChild(footShield);
-
     const staminaCost = this._prepStage
       ? stageStaminaCost(this._prepStage, this._context)
       : 0;
     const startBtn = makeActionButton({
       title: '开始战斗',
-      subtitle: staminaCost > 0
-        ? `体力 ${staminaCost} · 当前 ${PlayerData.stamina}/${PlayerData.staminaMax}`
-        : undefined,
-      width: Math.min(620, w - 56),
+      subtitle: staminaCost > 0 ? `体力 ${staminaCost}` : undefined,
+      width: Math.min(560, w - 80),
       height: bottomBtnH,
       variant: 'success',
       onTap: () => this._startBattle(),
     });
     startBtn.position.set(w / 2, h - bottomPad - bottomBtnH / 2);
     this.container.addChild(startBtn);
+  }
+
+  private _buildFilterRow(w: number, y: number): number {
+    const chips: Array<{ id: Element | 'all'; label: string }> = [
+      { id: 'all', label: '全部' },
+      { id: 'metal', label: '金' },
+      { id: 'wood', label: '木' },
+      { id: 'fire', label: '火' },
+      { id: 'water', label: '水' },
+      { id: 'earth', label: '土' },
+    ];
+    const chipW = 88;
+    const chipH = 40;
+    const gap = 10;
+    const total = chips.length * chipW + (chips.length - 1) * gap;
+    let x = (w - total) / 2 + chipW / 2;
+    for (const chip of chips) {
+      const on = this._filterElement === chip.id;
+      const root = new PIXI.Container();
+      root.position.set(x, y + chipH / 2);
+      addStretchedPlate(
+        root,
+        on ? UI_IMAGES.btnPlateSuccess : UI_IMAGES.btnPlateCream,
+        chipW,
+        chipH,
+      );
+      root.addChild(makeText(chip.label, {
+        size: FONT_SIZE.xs,
+        fill: on ? COLORS.btnText : COLORS.textMain,
+        bold: true,
+        anchor: 0.5,
+        ...(on ? { strokeColor: COLORS.btnSuccessBorder, strokeWidth: 3 } : {}),
+      }));
+      root.eventMode = 'static';
+      root.cursor = 'pointer';
+      root.hitArea = new PIXI.Rectangle(-chipW / 2, -chipH / 2, chipW, chipH);
+      root.interactiveChildren = false;
+      const id = chip.id;
+      bindPointerTap(root, () => {
+        if (this._filterElement === id) return;
+        this._filterElement = id;
+        this._build({ animate: false });
+      });
+      this.container.addChild(root);
+      x += chipW + gap;
+    }
+    return chipH;
   }
 
   /** 编队顶栏只读难度；无可精英变体的关（Boss 等）不加后缀 */
@@ -449,80 +461,21 @@ export class TeamScene implements Scene {
     const slotH = this._slotH;
     const slotY = this._slotY;
     const prep = !!this._prepStage;
+    this._slotUnbinds.forEach((u) => u());
+    this._slotUnbinds = [];
     this._slotArea.removeChildren().forEach((c) => c.destroy({ children: true }));
 
-    const gap = prep ? 14 : 10;
-    const totalW = TEAM_SIZE * slotW + (TEAM_SIZE - 1) * gap;
-    const leftX = (w - totalW) / 2;
-    const y = slotY;
-
     const team = PlayerData.team;
-    for (let i = 0; i < TEAM_SIZE; i++) {
-      const slot = new PIXI.Container();
-      const cx = leftX + i * (slotW + gap) + slotW / 2;
-      const cy = y + slotH / 2;
-      slot.position.set(cx, cy);
-      const petId = team[i];
-      const pet = petId ? PET_MAP.get(petId) : undefined;
 
-      if (pet) {
-        if (prep) {
-          addTeamPrepSlotPet(
-            slot, pet, slotW, slotH,
-            PlayerData.petLevel(pet.id),
-            PlayerData.petStar(pet.id),
-          );
-        } else {
-          addTeamPetAvatar(slot, pet, 0, 0, slotW);
-          attachRarityBadge(slot, pet.rarity, -slotW / 2, -slotH / 2, slotW, { variant: 'codex' });
-        }
-        if (i === 0) {
-          const ring = new PIXI.Graphics();
-          ring.lineStyle(3.5, COLORS.accentDeep, 1);
-          ring.drawRoundedRect(-slotW / 2 + 1.5, -slotH / 2 + 1.5, slotW - 3, slotH - 3, 12);
-          slot.addChild(ring);
-        }
-        slot.hitArea = new PIXI.Rectangle(-slotW / 2, -slotH / 2, slotW, slotH);
-        slot.interactiveChildren = false;
-        slot.eventMode = 'static';
-        slot.cursor = 'pointer';
-        // 点卡面下阵；长按看主动技。换队长走右下角皇冠。
-        bindPointerTap(slot, () => this._onSlotTap(pet.id), {
-          onLongPress: () => this._showPetSkillPreview(pet.id, slot),
-        });
-        if (this._prevTeam[i] !== petId) fadeIn(slot, { duration: 0.24 });
-        this._slotArea.addChild(slot);
-
-        const isLeader = i === 0;
-        const crown = makeLeaderCrown(isLeader);
-        // 右下角：躲开左上属性珠、右上稀有度、底部星级
-        crown.position.set(cx + slotW / 2 - 20, cy + slotH / 2 - 36);
-        this._slotArea.addChild(crown);
-        if (isLeader) {
-          bindPointerTap(crown, () => {
-            Platform.showToast(`队长 ${pet.name} · ${resolveLeaderSkill(pet).text}`);
-          });
-        } else {
-          bindPointerTap(crown, () => this._onSetLeader(pet.id));
-        }
-        continue;
-      } else {
-        const empty = new PIXI.Graphics();
-        empty.beginFill(0xfff8ec, prep ? 0.55 : 0.55);
-        empty.drawRoundedRect(-slotW / 2, -slotH / 2, slotW, slotH, 12);
-        empty.endFill();
-        empty.lineStyle(2.5, 0xe0c896, 0.95);
-        drawDashedRoundedRect(empty, -slotW / 2, -slotH / 2, slotW, slotH, 12, 8, 6);
-        slot.addChild(empty);
-        const plus = makeText('+', { size: prep ? 48 : 42, fill: COLORS.textSub, anchor: 0.5 });
-        slot.addChild(plus);
-        slot.hitArea = new PIXI.Rectangle(-slotW / 2, -slotH / 2, slotW, slotH);
-        slot.interactiveChildren = false;
-        slot.eventMode = 'static';
-        slot.cursor = 'pointer';
-        bindPointerTap(slot, () => Platform.showToast('请从下方列表选择灵宠上阵'));
+    if (prep) {
+      this._refreshPrepStage(w, slotY, team);
+    } else {
+      const gap = 10;
+      const totalW = TEAM_SIZE * slotW + (TEAM_SIZE - 1) * gap;
+      const leftX = (w - totalW) / 2;
+      for (let i = 0; i < TEAM_SIZE; i++) {
+        this._paintFreeSlot(leftX, slotY, slotW, slotH, gap, i, team);
       }
-      this._slotArea.addChild(slot);
     }
 
     const members: TeamMember[] = team
@@ -545,6 +498,7 @@ export class TeamScene implements Scene {
     }
 
     for (const [petId, check] of this._listChecks) {
+      if (!check) continue;
       const checked = PlayerData.isInTeam(petId);
       check.visible = checked;
       if (checked && !this._prevChecked.has(petId)) popIn(check, { duration: 0.26 });
@@ -552,6 +506,119 @@ export class TeamScene implements Scene {
 
     this._prevTeam = [...team];
     this._prevChecked = new Set(team);
+  }
+
+  private _refreshPrepStage(w: number, baseY: number, team: readonly string[]): void {
+    const layouts = stageSlotLayout(w / 2, baseY);
+    // 珠 / 换队长钮统一置顶：相邻石座（尤其放大的队长座）会压住下沿控件
+    const overlay = new PIXI.Container();
+    for (const visual of STAGE_PAINT_ORDER) {
+      const layout = layouts[visual];
+      const slot = new PIXI.Container();
+      slot.position.set(layout.x, layout.y);
+      const petId = team[layout.teamIndex];
+      const pet = petId ? PET_MAP.get(petId) : undefined;
+      const size = pet
+        ? addTeamStagePet(
+          slot, pet, PlayerData.petStar(pet.id), layout.scale, layout.isLeaderSlot,
+          layout.isLeaderSlot ? resolveLeaderSkill(pet) : undefined,
+        )
+        : addTeamStageEmpty(slot, layout.scale);
+      this._slotUnbinds.push(size.unbind);
+      const hitW = Math.max(110, size.width);
+      const hitH = Math.max(160, size.height);
+      slot.hitArea = new PIXI.Rectangle(-hitW / 2, -hitH * 0.78, hitW, hitH);
+      slot.interactiveChildren = false;
+      slot.eventMode = 'static';
+      slot.cursor = 'pointer';
+      if (pet) {
+        bindPointerTap(slot, () => this._onSlotTap(pet.id), {
+          onLongPress: () => this._showPetSkillPreview(pet.id, slot),
+        });
+        if (layout.isLeaderSlot && size.leaderPlaque && this._prevTeam[0] !== petId) {
+          popIn(size.leaderPlaque, { duration: 0.34, fromScale: 0.72 });
+        } else if (this._prevTeam[layout.teamIndex] !== petId) {
+          fadeIn(slot, { duration: 0.24 });
+        }
+      } else {
+        bindPointerTap(slot, () => Platform.showToast('请从下方列表选择灵宠上阵'));
+      }
+      this._slotArea.addChild(slot);
+
+      if (!pet) continue;
+
+      const orb = makeElementOrb(pet.element, STAGE_ORB_SIZE);
+      orb.position.set(layout.x, baseY + STAGE_ORB_LOCAL_Y);
+      overlay.addChild(orb);
+
+      if (!layout.isLeaderSlot) {
+        const chip = makeLeaderPickChip();
+        chip.position.set(layout.x - 42, baseY + STAGE_ORB_LOCAL_Y + 2);
+        overlay.addChild(chip);
+        bindPointerTap(chip, () => this._onSetLeader(pet.id));
+      }
+    }
+    this._slotArea.addChild(overlay);
+  }
+
+  private _paintFreeSlot(
+    leftX: number, slotY: number, slotW: number, slotH: number, gap: number,
+    i: number, team: readonly string[],
+  ): void {
+    const slot = new PIXI.Container();
+    const cx = leftX + i * (slotW + gap) + slotW / 2;
+    const cy = slotY + slotH / 2;
+    slot.position.set(cx, cy);
+    const petId = team[i];
+    const pet = petId ? PET_MAP.get(petId) : undefined;
+
+    if (pet) {
+      addTeamPetAvatar(slot, pet, 0, 0, slotW);
+      attachRarityBadge(slot, pet.rarity, -slotW / 2, -slotH / 2, slotW, { variant: 'codex' });
+      if (i === 0) {
+        const ring = new PIXI.Graphics();
+        ring.lineStyle(3.5, COLORS.accentDeep, 1);
+        ring.drawRoundedRect(-slotW / 2 + 1.5, -slotH / 2 + 1.5, slotW - 3, slotH - 3, 12);
+        slot.addChild(ring);
+      }
+      slot.hitArea = new PIXI.Rectangle(-slotW / 2, -slotH / 2, slotW, slotH);
+      slot.interactiveChildren = false;
+      slot.eventMode = 'static';
+      slot.cursor = 'pointer';
+      bindPointerTap(slot, () => this._onSlotTap(pet.id), {
+        onLongPress: () => this._showPetSkillPreview(pet.id, slot),
+      });
+      if (this._prevTeam[i] !== petId) fadeIn(slot, { duration: 0.24 });
+      this._slotArea.addChild(slot);
+
+      const isLeader = i === 0;
+      const crown = makeLeaderCrown(isLeader);
+      crown.position.set(cx + slotW / 2 - 20, cy + slotH / 2 - 36);
+      this._slotArea.addChild(crown);
+      if (isLeader) {
+        bindPointerTap(crown, () => {
+          Platform.showToast(`队长 ${pet.name} · ${resolveLeaderSkill(pet).text}`);
+        });
+      } else {
+        bindPointerTap(crown, () => this._onSetLeader(pet.id));
+      }
+      return;
+    }
+
+    const empty = new PIXI.Graphics();
+    empty.beginFill(0xfff8ec, 0.55);
+    empty.drawRoundedRect(-slotW / 2, -slotH / 2, slotW, slotH, 12);
+    empty.endFill();
+    empty.lineStyle(2.5, 0xe0c896, 0.95);
+    drawDashedRoundedRect(empty, -slotW / 2, -slotH / 2, slotW, slotH, 12, 8, 6);
+    slot.addChild(empty);
+    slot.addChild(makeText('+', { size: 42, fill: COLORS.textSub, anchor: 0.5 }));
+    slot.hitArea = new PIXI.Rectangle(-slotW / 2, -slotH / 2, slotW, slotH);
+    slot.interactiveChildren = false;
+    slot.eventMode = 'static';
+    slot.cursor = 'pointer';
+    bindPointerTap(slot, () => Platform.showToast('请从下方列表选择灵宠上阵'));
+    this._slotArea.addChild(slot);
   }
 
   private _dismissSkillPreview(): void {

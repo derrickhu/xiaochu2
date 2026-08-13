@@ -20,6 +20,7 @@ import { SfxManager, SFX_PATHS } from '@/core/SfxManager';
 import { titleBackData } from './TitleScene';
 import { enemyDisplayTierOf } from '@/balance/enemyDisplay';
 import { getComboTier, isComboMilestone } from './battle/ComboDisplay';
+import { GmComboProbe } from './battle/GmComboProbe';
 import { comboBeat, comboMilestoneHold, comboShake, comboVibrate } from './battle/comboRhythm';
 import { GMManager } from '@/core/GMManager';
 import { battlePreloadImages, battlePetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
@@ -118,6 +119,8 @@ export class BattleScene implements Scene {
   private _overlay!: BattleResultOverlay;
   private _enemyDetailLayer!: PIXI.Container;
   private _enemyDetail: EnemyDetailHandle | null = null;
+  /** GM 连击特效探针：手搓长连太难，调特效时用它直接点出各档表现 */
+  private _gmComboProbe: GmComboProbe | null = null;
   /** 通天塔三选一浮层容器（仅塔内使用） */
   private _blessLayer: PIXI.Container | null = null;
 
@@ -133,6 +136,9 @@ export class BattleScene implements Scene {
   private _tickerCb = (): void => this._update();
   private readonly _enterSeq = new SceneEnterSeq();
   private readonly _gmInstantClear = (): string => this._executeGmInstantClear();
+  private readonly _gmComboProbeToggle = (on: boolean): void => {
+    this._gmComboProbe?.setVisible(on);
+  };
   private _battleStartedAt = 0;
   private _context: BattleContext | undefined;
   /** 本场最高 Combo（日常任务「单场 N 连击」判定） */
@@ -181,7 +187,7 @@ export class BattleScene implements Scene {
 
     this._layout = computeBattleLayout();
     this._fx = new BattleFx();
-    this._hud = new BattleHud(this._ctrl, this._layout);
+    this._hud = new BattleHud(this._ctrl, this._layout, this._context?.kind !== 'tower');
     this._statusIcons = new BattleStatusIcons(this._ctrl, this._layout);
     this._stunHalo = new EnemyStunHalo();
     this._petBar = new BattlePetBar(this._ctrl, this._layout);
@@ -239,6 +245,7 @@ export class BattleScene implements Scene {
     this._closeEnemyDetail();
     BgmManager.resumeNormal();
     GMManager.unregisterInstantClearHandler();
+    GMManager.unregisterComboProbeHandler();
     this._resolveSeq++;
     this._stopPresent?.();
     this._stopPresent = null;
@@ -249,6 +256,10 @@ export class BattleScene implements Scene {
     this._boardView = null;
     this._statusIcons?.destroy();
     this._stunHalo?.destroy();
+    // 须在容器整体销毁之前，否则探针里的引用会指向已销毁的显示对象
+    this._gmComboProbe?.destroy();
+    this._gmComboProbe = null;
+    this._hud?.destroyCombo();
     this._petBar?.teardownInput();
     this._fx?.destroy();
     this._blessLayer = null;
@@ -345,6 +356,12 @@ export class BattleScene implements Scene {
         Game.safeTop + 28,
       );
       this.container.addChild(skipBtn);
+
+      // 容器先建好占住层级，显隐由 GM 面板开关控制（默认关）
+      this._gmComboProbe = new GmComboProbe();
+      this._gmComboProbe.build(this.container, this._hud, this._fx);
+      this._gmComboProbe.setVisible(GMManager.isComboProbeEnabled);
+      GMManager.registerComboProbeHandler(this._gmComboProbeToggle);
     }
 
     this._overlay.build(this.container);
@@ -380,6 +397,7 @@ export class BattleScene implements Scene {
     this._hud.redrawDragBar(this._boardView);
     this._hud.redrawHpBars();
     this._hud.updateCombo(dt);
+    this._gmComboProbe?.update(dt);
   }
 
   /** 刷新槽位技能 CD + buff 状态行 + 状态图标行（队伍栏 + HUD 协同） */

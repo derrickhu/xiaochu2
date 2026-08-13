@@ -38,6 +38,7 @@ import { SidebarPanel } from '@/ui/SidebarPanel';
 import { DesktopShortcutPanel } from '@/ui/DesktopShortcutPanel';
 import { CheckinPanel } from '@/ui/CheckinPanel';
 import { DailyQuestPanel } from '@/ui/DailyQuestPanel';
+import { CurrencySourcePanel } from '@/ui/CurrencySourcePanel';
 import { StaminaPanel } from '@/ui/StaminaPanel';
 import {
   LOADING_SPLASH_IMAGES,
@@ -145,6 +146,7 @@ async function main(): Promise<void> {
 
   OverlayManager.container.addChild(new CheckinPanel());
   OverlayManager.container.addChild(new DailyQuestPanel());
+  OverlayManager.container.addChild(new CurrencySourcePanel());
   OverlayManager.container.addChild(new StaminaPanel());
   OverlayManager.container.addChild(new SettingsPanel());
 

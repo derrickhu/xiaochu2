@@ -17,14 +17,16 @@ import {
   COMBO_MS_IMAGES,
   COMBO_TEXT_PATHS,
   UI_BATTLE_IMAGES,
+  UI_FX_IMAGES,
   comboDigitImage,
   comboLabelImage,
 } from '@/config/Assets';
 import type { BattleLayout } from './BattleLayout';
 import type { BattleFx } from './BattleFx';
 import { dmgFloatScale } from './damageFloatStyle';
-import { displayAlive, readScale } from '@/core/animationGuard';
+import { displayAlive, readScale, resetScale } from '@/core/animationGuard';
 import { applyTextResolution } from '@/ui/text';
+import { FxLayer } from '@/core/FxLayer';
 
 const COMBO_FONT = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
 
@@ -65,6 +67,12 @@ export function isComboMilestone(combo: number): boolean {
  */
 export const COMBO_STAMP_PATHS: readonly string[] = [
   UI_BATTLE_IMAGES.comboFlare,
+  UI_FX_IMAGES.particleSpark,
+  UI_BATTLE_IMAGES.comboEnergy,
+  UI_BATTLE_IMAGES.comboRays,
+  UI_BATTLE_IMAGES.comboRaysCore,
+  UI_BATTLE_IMAGES.comboStarFlare,
+  UI_BATTLE_IMAGES.comboGoldFlake,
   ...Object.values(COMBO_MS_IMAGES),
   ...COMBO_TEXT_PATHS,
 ];
@@ -96,6 +104,27 @@ const SHINE_END = 15;
 const JITTER_END = 11;
 const BANNER_END = 20;
 const TILT_END = 9;
+/**
+ * 能量爆发窗口。
+ *
+ * 背景光效不用 Graphics 画：圆环用 drawCircle、放射用等分 lineTo，出来的是数学上
+ * 完美的圆和等长直线，人眼一看就知道是代码画的，靠调参数（更大更亮更多粒子）
+ * 救不回来。改用离线烘焙的贴图（scripts/bake_combo_fx.py），边缘的不规则、粗细
+ * 变化、末端飞散都是噪声算出来的。
+ *
+ * 底层刻意是「亮色」而不是暗色。先做过一版水墨暗底托字，玩家的原话是「黑色
+ * 一大坨，还不如没有」——暗色底靠遮挡制造对比，压在五彩珠子上必然脏。同一块底
+ * 改成 ADD 亮色，珠子非但不被遮黑反而被照亮，既撑得起场面又不脏。
+ *
+ * 四层各司其职，少一层都塌：放射冲出去给动势、能量团给体量、白热核给刺眼的
+ * 亮度、星芒给「高光时刻」的招牌感。
+ */
+const FLASH_END = 5;
+const RAYS_END = 15;
+const ENERGY_BURST_END = 7;
+const ENERGY_SETTLE_END = 16;
+const FLARE_IN_END = 4;
+const FLARE_SETTLE_END = 22;
 /** 多位数逐位入场的错帧，第二位晚落一点更有节奏 */
 const DIGIT_STAGGER = 2;
 const DIGIT_POP = 8;
@@ -130,6 +159,62 @@ function hex(c: string): number {
   return parseInt(c.replace('#', ''), 16);
 }
 
+function comboPalette(tier: number): readonly string[] {
+  if (tier >= 4) return ['#ff2050', '#ff6040', '#ffaa00', '#ffffff', '#ff80aa'];
+  if (tier >= 3) return ['#ff4d6a', '#ff8060', '#ffd700', '#ffffff'];
+  if (tier >= 2) return ['#ff8c00', '#ffd700', '#ffffff', '#ffcc66'];
+  if (tier >= 1) return ['#4d88ff', '#ffd700', '#ffffff', '#8ec5ff'];
+  return ['#ffd700', '#ffe066', '#ffffff'];
+}
+
+/**
+ * 特效色，刻意与文字色（COMBO_MILESTONES.color）解耦。
+ *
+ * 棋盘底是米黄的、还铺满金色珠子，橙和金这两档一旦照搬字色就会融进背景，
+ * 亮度调多高都不跳——试过「金色 + 超强白热核」，结果整块糊成白饼。只能靠色相
+ * 岔开：低档走青蓝、无双走洋红、传说走赤橙。
+ */
+function fxTint(tier: number): number {
+  switch (tier) {
+    case 1: return 0x38ccff;
+    case 2: return 0xff2d95;
+    case 3: return 0xff2a5a;
+    case 4: return 0xa24dff;
+    case 5: return 0xff600a;
+    case 6: return 0xff2a6a;
+    default: return 0xff961e;
+  }
+}
+
+/**
+ * 能量底的常驻强度。爆发过后要留一层托住文字，但压太亮会把珠面洗白，
+ * 低档尤其要克制——每两三次消除就闪一次满屏的话，高档就没有惊喜了。
+ */
+function energyAlpha(tier: number): number {
+  if (tier >= 5) return 0.70;
+  if (tier >= 4) return 0.66;
+  if (tier >= 3) return 0.60;
+  if (tier >= 2) return 0.54;
+  if (tier >= 1) return 0.42;
+  return 0.26;
+}
+
+/** 传说档没法靠色相跳出暖底，只能把白热核开大压过背景 */
+function hotBoost(tier: number): number {
+  return tier === 5 ? 1.15 : 1;
+}
+
+function comboParticleTex(kind: 'star' | 'flake'): PIXI.Texture {
+  if (kind === 'flake') {
+    return TextureCache.get(UI_BATTLE_IMAGES.comboGoldFlake)
+      ?? TextureCache.get(UI_FX_IMAGES.particleSpark)
+      ?? PIXI.Texture.WHITE;
+  }
+  return TextureCache.get(UI_BATTLE_IMAGES.petStar)
+    ?? TextureCache.get(UI_FX_IMAGES.particleSpark)
+    ?? PIXI.Texture.WHITE;
+}
+
 function styledMulText(content: string, fontSize: number, fill: string): PIXI.Text {
   const S = dmgFloatScale();
   const t = new PIXI.Text(content, {
@@ -157,8 +242,22 @@ function makeSprite(path: string): PIXI.Sprite {
 
 export class ComboDisplay {
   private _root!: PIXI.Container;
+  /** 文字冲击层：只缩放这一层，背后光效/粒子保持世界尺寸 */
+  private _pop!: PIXI.Container;
+  /** 全屏泛光：爆发那一瞬整块屏幕被照亮，不遮挡任何东西 */
+  private _flash!: PIXI.Graphics;
+  /** 放射彩色层：宽光锥给体量 + 彩色宽线给存在感 */
+  private _rays!: PIXI.Sprite;
+  /** 放射白芯层：细白线单给锐度，不跟着 tint 染色 */
+  private _raysCore!: PIXI.Sprite;
+  /** 能量团主体，托住文字 */
+  private _energy!: PIXI.Sprite;
+  /** 白热核：比能量团小得多，铺大了会洗白棋盘 */
+  private _hot!: PIXI.Sprite;
+  /** 六角星芒 + 横向长条 */
+  private _starFlare!: PIXI.Sprite;
+  private _comboFx!: FxLayer;
   private _banner!: PIXI.Graphics;
-  private _ring!: PIXI.Graphics;
   private _flare!: PIXI.Sprite;
   private _milestone!: PIXI.Sprite;
   private _ghostRow!: PIXI.Container;
@@ -181,27 +280,79 @@ export class ComboDisplay {
   private _rowW = 0;
   private _rowH = 0;
 
+  private _energyBaseX = 1;
+  private _energyBaseY = 1;
+  private _hotBaseX = 1;
+  private _hotBaseY = 1;
+  private _raysBaseX = 1;
+  private _raysBaseY = 1;
+  private _starBaseX = 1;
+  private _starBaseY = 1;
+  private _energyPeak = 0.6;
+  /** 逐连翻转贴图，同一张连着出两次就会被认出来 */
+  private _fxFlipX = 1;
+  private _fxFlipY = 1;
+  private _raysSpin = 0;
+
   constructor(private readonly _layout: BattleLayout) {}
 
   build(parent: PIXI.Container): void {
     this._root = new PIXI.Container();
     parent.addChild(this._root);
 
+    /*
+     * 从下往上：泛光 → 放射 → 能量团 → 白热核 → 星芒 → 粒子 → 文字。
+     * 顺序不能乱：放射必须垫在能量团下面，不然细线会盖在能量团上像划痕；
+     * 星芒必须压在最上层，它是「高光时刻」的招牌，被能量团糊住就没意义了。
+     */
+    this._flash = new PIXI.Graphics();
+    this._flash.blendMode = PIXI.BLEND_MODES.ADD;
+    this._flash.visible = false;
+    this._root.addChild(this._flash);
+
+    this._rays = makeSprite(UI_BATTLE_IMAGES.comboRays);
+    this._rays.blendMode = PIXI.BLEND_MODES.ADD;
+    this._rays.visible = false;
+    this._root.addChild(this._rays);
+
+    this._raysCore = makeSprite(UI_BATTLE_IMAGES.comboRaysCore);
+    this._raysCore.blendMode = PIXI.BLEND_MODES.ADD;
+    this._raysCore.visible = false;
+    this._root.addChild(this._raysCore);
+
+    this._energy = makeSprite(UI_BATTLE_IMAGES.comboEnergy);
+    this._energy.blendMode = PIXI.BLEND_MODES.ADD;
+    this._energy.visible = false;
+    this._root.addChild(this._energy);
+
+    this._hot = makeSprite(UI_BATTLE_IMAGES.comboFlare);
+    this._hot.blendMode = PIXI.BLEND_MODES.ADD;
+    this._hot.visible = false;
+    this._root.addChild(this._hot);
+
+    this._starFlare = makeSprite(UI_BATTLE_IMAGES.comboStarFlare);
+    this._starFlare.blendMode = PIXI.BLEND_MODES.ADD;
+    this._starFlare.visible = false;
+    this._root.addChild(this._starFlare);
+
+    this._comboFx = new FxLayer();
+    this._root.addChild(this._comboFx.container);
+
     this._banner = new PIXI.Graphics();
     this._banner.blendMode = PIXI.BLEND_MODES.ADD;
     this._root.addChild(this._banner);
 
-    this._ring = new PIXI.Graphics();
-    this._root.addChild(this._ring);
+    this._pop = new PIXI.Container();
+    this._root.addChild(this._pop);
 
     this._flare = makeSprite(UI_BATTLE_IMAGES.comboFlare);
     this._flare.visible = false;
     this._flare.blendMode = PIXI.BLEND_MODES.ADD;
-    this._root.addChild(this._flare);
+    this._pop.addChild(this._flare);
 
     this._milestone = makeSprite(UI_BATTLE_IMAGES.comboMsBreak);
     this._milestone.visible = false;
-    this._root.addChild(this._milestone);
+    this._pop.addChild(this._milestone);
 
     /*
      * 残影是主行的等价副本，垫在主行之下放大淡出，ADD 让它像光一样散开而不是脏叠影。
@@ -209,7 +360,7 @@ export class ComboDisplay {
      */
     this._ghostRow = new PIXI.Container();
     this._ghostRow.visible = false;
-    this._root.addChild(this._ghostRow);
+    this._pop.addChild(this._ghostRow);
     this._ghostNumRow = new PIXI.Container();
     this._ghostRow.addChild(this._ghostNumRow);
     this._ghostSuffix = makeSprite(comboLabelImage(0));
@@ -217,7 +368,7 @@ export class ComboDisplay {
     this._ghostRow.addChild(this._ghostSuffix);
 
     this._mainRow = new PIXI.Container();
-    this._root.addChild(this._mainRow);
+    this._pop.addChild(this._mainRow);
 
     this._numRow = new PIXI.Container();
     this._mainRow.addChild(this._numRow);
@@ -228,7 +379,7 @@ export class ComboDisplay {
     this._shine = new PIXI.Graphics();
     this._shine.blendMode = PIXI.BLEND_MODES.ADD;
     this._shine.visible = false;
-    this._root.addChild(this._shine);
+    this._pop.addChild(this._shine);
 
     this._mul = styledMulText('x1.0', 18, '#ffe082');
     this._mul.anchor.set(0.5, 0);
@@ -353,7 +504,50 @@ export class ComboDisplay {
       this._flare.visible = false;
     }
 
+    this._layoutFx(style);
     this._laidCombo = combo;
+  }
+
+  /**
+   * 背景特效的尺寸与配色。
+   *
+   * 贴图都是方形，这里统一压成横向椭圆去贴合文字行的长宽比——竖着铺开的能量
+   * 会跑到棋盘上下方去，既盖住珠子又跟文字对不上。压扁不会露馅，因为能量舌和
+   * 放射本来就是各向发散的，横向拉开反而更像被文字撞开。
+   */
+  private _layoutFx(style: ComboStyle): void {
+    const tint = fxTint(style.tier);
+    const texW = (sp: PIXI.Sprite): number => Math.max(1, sp.texture.width || 512);
+
+    // 能量团要兜住整行字，上限卡在屏宽：最高档行宽本就接近棋盘，再乘系数就甩出屏幕了
+    const energyW = Math.min(
+      Math.max(this._rowW * 2.1, style.baseSz * 4.2),
+      Game.logicWidth * 1.1,
+    );
+    this._energyBaseX = energyW / texW(this._energy);
+    this._energyBaseY = this._energyBaseX * 0.66;
+    this._energy.tint = tint;
+    this._energyPeak = energyAlpha(style.tier);
+
+    const hotW = energyW * 0.34 * hotBoost(style.tier);
+    this._hotBaseX = hotW / texW(this._hot);
+    this._hotBaseY = this._hotBaseX * 0.62;
+    this._hot.tint = 0xfffaf0;
+
+    // 放射铺得比能量团更开，冲出棋盘边缘才有「炸开」的感觉
+    const raysW = Math.min(this._rowW * 2.9, Game.logicWidth * 1.5);
+    this._raysBaseX = raysW / texW(this._rays);
+    this._raysBaseY = this._raysBaseX * 0.72;
+    this._rays.tint = tint;
+
+    const starW = this._rowW * 1.9;
+    this._starBaseX = starW / texW(this._starFlare);
+    this._starBaseY = this._starBaseX * 0.5;
+    this._starFlare.tint = 0xffecbe;
+
+    // 低档不给星芒和泛光：每两三次消除就闪一次满屏的话，高档就没有惊喜了
+    this._starFlare.visible = style.tier >= 2;
+    this._flash.visible = style.tier >= 2;
   }
 
   private _updateMilestonePulse(timer: number): void {
@@ -375,36 +569,97 @@ export class ComboDisplay {
     }
   }
 
-  /** 里程碑局部冲击环 + 放射速度线（控制半径，避免旧版「全屏外圈」感） */
-  private _drawRing(combo: number, style: ComboStyle, timer: number): void {
-    this._ring.clear();
-    if (!isComboMilestone(combo) || timer > 22) return;
-    const S = dmgFloatScale();
-    const p = timer / 22;
-    const r = style.baseSz * (0.55 + p * 1.65);
-    const alpha = (1 - p) * 0.85;
-    const color = hex(style.glowColor);
-    this._ring.lineStyle(Math.max(2, (6 - p * 3.5) * S), color, alpha);
-    this._ring.drawCircle(0, 0, r);
-    if (timer > 3) {
-      const p2 = (timer - 3) / 22;
-      const r2 = style.baseSz * (0.35 + p2 * 1.35);
-      this._ring.lineStyle(Math.max(1.5, (4 - p2 * 2.5) * S), color, Math.max(0, 1 - p2) * 0.5);
-      this._ring.drawCircle(0, 0, r2);
+  /**
+   * 背景能量爆发。
+   *
+   * 四层各走各的时间线，错开才有层次：泛光只闪 5 帧（久了就是蒙了层色片）、
+   * 放射一路冲出去后彻底消失（留着会挡住后续操作）、能量团 7 帧甩到最大再
+   * 回落到常驻托住文字、星芒最后淡到低亮度当装饰。
+   *
+   * 贴图不做旋转，只做镜像。旋转会让人一眼看穿是同一张图在转；而且这些图都被
+   * 压成了横向椭圆，转过 90° 就立起来跟文字对不上了。
+   */
+  private _updateFx(style: ComboStyle, timer: number): void {
+    const fx = this._fxFlipX;
+    const fy = this._fxFlipY;
+
+    if (this._flash.visible) {
+      const p = Math.min(1, timer / FLASH_END);
+      this._flash.alpha = (1 - p) * 0.10;
+      if (timer > FLASH_END) this._flash.visible = false;
     }
-    // 放射速度线：格斗/MOBA 播报的标志性元素，条数随 tier 增加
-    if (style.tier < 2) return;
-    const n = 6 + style.tier * 2;
-    const r0 = style.baseSz * (0.9 + p * 1.9);
-    const len = style.baseSz * 0.5 * (1 - p);
-    this._ring.lineStyle(Math.max(1.5, 3 * S), color, (1 - p) * 0.65);
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + style.tier * 0.4;
-      const cos = Math.cos(a);
-      const sin = Math.sin(a);
-      this._ring.moveTo(cos * r0, sin * r0);
-      this._ring.lineTo(cos * (r0 + len), sin * (r0 + len));
+
+    if (timer <= RAYS_END) {
+      // 加速冲出：起手快、末段慢，比线性更像被炸开
+      const p = timer / RAYS_END;
+      const mul = 0.35 + (1 - (1 - p) ** 2) * 1.05;
+      const a = Math.min(1, p * 5) * (1 - p) ** 0.8;
+      const spin = this._raysSpin;
+      this._rays.visible = true;
+      this._raysCore.visible = true;
+      this._rays.rotation = spin;
+      this._raysCore.rotation = spin;
+      this._rays.scale.set(this._raysBaseX * mul * fx, this._raysBaseY * mul * fy);
+      this._raysCore.scale.set(this._raysBaseX * mul * fx, this._raysBaseY * mul * fy);
+      this._rays.alpha = a;
+      this._raysCore.alpha = a * 0.85;
+    } else {
+      this._rays.visible = false;
+      this._raysCore.visible = false;
     }
+
+    let mul: number;
+    let a: number;
+    if (timer <= ENERGY_BURST_END) {
+      const p = timer / ENERGY_BURST_END;
+      mul = 0.45 + 0.85 * p;
+      a = this._energyPeak * Math.min(1, p * 2.4);
+    } else if (timer <= ENERGY_SETTLE_END) {
+      const p = (timer - ENERGY_BURST_END) / (ENERGY_SETTLE_END - ENERGY_BURST_END);
+      mul = 1.30 - 0.30 * p;
+      a = this._energyPeak;
+    } else {
+      mul = 1;
+      a = this._energyPeak;
+    }
+    this._energy.visible = true;
+    this._energy.scale.set(this._energyBaseX * mul * fx, this._energyBaseY * mul * fy);
+    this._energy.alpha = a;
+
+    // 热核收缩得比能量团更快，模拟高温部分先冷却
+    const hotP = Math.min(1, timer / ENERGY_SETTLE_END);
+    const hotMul = 1.5 - 0.6 * hotP;
+    this._hot.visible = true;
+    this._hot.scale.set(this._hotBaseX * hotMul, this._hotBaseY * hotMul);
+    this._hot.alpha = (0.95 - 0.5 * hotP) * (a / Math.max(this._energyPeak, 0.01));
+
+    if (!this._starFlare.visible) return;
+    let starMul: number;
+    let starA: number;
+    if (timer <= FLARE_IN_END) {
+      const p = timer / FLARE_IN_END;
+      starMul = 1.45 - 0.45 * p;
+      starA = p;
+    } else if (timer <= FLARE_SETTLE_END) {
+      const p = (timer - FLARE_IN_END) / (FLARE_SETTLE_END - FLARE_IN_END);
+      starMul = 1 + p * 0.12;
+      starA = 1 - 0.62 * p;
+    } else {
+      starMul = 1.12;
+      starA = 0.38;
+    }
+    this._starFlare.scale.set(this._starBaseX * starMul * fx, this._starBaseY * starMul);
+    this._starFlare.alpha = starA;
+  }
+
+  /** 全屏泛光的矩形。root 挂在棋盘中上部，往四周铺满够一屏即可 */
+  private _drawFlash(): void {
+    const w = Game.logicWidth;
+    const h = Game.logicHeight;
+    this._flash.clear();
+    this._flash.beginFill(0xffffff, 1);
+    this._flash.drawRect(-w / 2, -h, w, h * 2);
+    this._flash.endFill();
   }
 
   /**
@@ -488,67 +743,115 @@ export class ComboDisplay {
     }
   }
 
-  private _spawnVfx(combo: number, fx: BattleFx): void {
+  /**
+   * 飞溅粒子分三种，缺一种都会露怯：
+   *   能量屑  染成档位色、ADD，数量最多，负责「有东西被炸出去」的实感
+   *   金箔    偏白的亮片，在彩色能量里打出高光，没有它整团颜色会发闷
+   *   星屑    少量彩色高光，只在里程碑加，负责最后那一下闪
+   */
+  private _spawnVfx(combo: number): void {
     const style = comboStyle(combo);
     const tier = style.tier;
     const isTierBreak = isComboMilestone(combo);
-    const center = this._comboCenter(combo);
+    const S = dmgFloatScale();
+    const flakeTex = comboParticleTex('flake');
 
-    const palettes = tier >= 4
-      ? ['#ff2050', '#ff6040', '#ffaa00', '#ffffff']
-      : tier >= 3
-        ? ['#ff4d6a', '#ff8060', '#ffd700', '#ffffff']
-        : tier >= 2
-          ? ['#ff8c00', '#ffd700', '#ffffff', '#ffcc66']
-          : tier >= 1
-            ? ['#4d88ff', '#ffd700', '#ffffff', '#8ec5ff']
-            : ['#ffd700', '#ffe066', '#ffffff'];
+    const speedMul = tier >= 4 ? 1.8 : tier >= 3 ? 1.65 : tier >= 2 ? 1.5 : tier >= 1 ? 1.25 : 1.05;
+    const sizeMul = tier >= 4 ? 1.55 : tier >= 3 ? 1.42 : tier >= 2 ? 1.28 : tier >= 1 ? 1.12 : 1;
+    const speed = 420 * S * speedMul;
+    const size = Math.min(9.5 * S * sizeMul, 22);
+    // 0.97 远高于默认阻尼，碎屑要飞得开才像被甩出去而不是原地淡出
+    const drag = 0.97;
 
-    const baseCount = (tier >= 4 ? 22 : tier >= 3 ? 18 : tier >= 2 ? 14 : tier >= 1 ? 12 : 7)
+    const motesCount = (tier >= 4 ? 24 : tier >= 3 ? 19 : tier >= 2 ? 15 : tier >= 1 ? 11 : 6)
       + (isTierBreak ? 8 : 0);
-    const count = Math.min(30, baseCount);
-    fx.burst({
-      x: center.x,
-      y: center.y,
-      color: hex(palettes[Math.min(tier, palettes.length - 1)] ?? palettes[0]),
-      count,
-      speed: 200 + tier * 28 + (isTierBreak ? 40 : 0),
-      gravity: -90,
-      size: 9 + tier + (isTierBreak ? 3 : 0),
-      life: isTierBreak ? 0.55 : 0.42,
-      alpha: 0.9,
+    this._comboFx.burst({
+      x: 0,
+      y: 0,
+      color: fxTint(tier),
+      count: motesCount,
+      speed,
+      speedVar: 0.6,
+      gravity: 110 * S,
+      size: size * 1.25,
+      life: isTierBreak ? 0.66 : 0.54,
+      alpha: 0.95,
+      texture: flakeTex,
+      blendMode: PIXI.BLEND_MODES.ADD,
+      drag,
     });
-    if (isTierBreak) {
-      fx.burst({
-        x: center.x,
-        y: center.y - style.baseSz * 1.6,
-        color: hex(style.mainColor),
-        count: 10,
-        speed: 160,
-        gravity: -40,
-        size: 12,
-        life: 0.45,
-        alpha: 0.85,
+
+    const flakeCount = (tier >= 4 ? 18 : tier >= 3 ? 14 : tier >= 2 ? 11 : tier >= 1 ? 8 : 5)
+      + (isTierBreak ? 8 : 0);
+    this._comboFx.burst({
+      x: 0,
+      y: 0,
+      color: 0xfff2d0,
+      count: flakeCount,
+      speed: speed * 0.92,
+      speedVar: 0.55,
+      gravity: 95 * S,
+      size,
+      life: isTierBreak ? 0.62 : 0.5,
+      alpha: 0.95,
+      texture: flakeTex,
+      blendMode: PIXI.BLEND_MODES.ADD,
+      drag,
+    });
+
+    if (!isTierBreak) return;
+
+    const starTex = comboParticleTex('star');
+    const palettes = comboPalette(tier);
+    const perColor = Math.max(2, Math.round((tier >= 4 ? 16 : 11) / palettes.length));
+    for (const color of palettes) {
+      this._comboFx.burst({
+        x: 0,
+        y: 0,
+        color: hex(color),
+        count: perColor,
+        speed: speed * 1.05,
+        speedVar: 0.5,
+        gravity: 60 * S,
+        size: size + 4,
+        life: 0.6,
+        alpha: 0.95,
+        texture: starTex,
+        blendMode: PIXI.BLEND_MODES.ADD,
+        drag,
       });
     }
   }
 
   /** 每组消除 +1 时调用（combo≥2 才显示文字，VFX 每连都播） */
-  show(combo: number, fx: BattleFx): void {
+  show(combo: number, _fx: BattleFx): void {
     if (combo <= 0 || !displayAlive(this._root)) return;
-    this._spawnVfx(combo, fx);
-
-    if (combo < 2) {
-      this._root.visible = false;
-      return;
-    }
-
-    const style = comboStyle(combo);
     const center = this._comboCenter(combo);
     this._anchorY = center.y;
     this._root.position.set(center.x, center.y);
     this._root.visible = true;
+    this._root.alpha = 1;
+    this._spawnVfx(combo);
+
+    if (combo < 2) {
+      this._pop.visible = false;
+      this._mul.visible = false;
+      this._hideFx();
+      this._banner.clear();
+      this._anim = null;
+      return;
+    }
+
+    const style = comboStyle(combo);
+    this._pop.visible = true;
+    this._pop.position.set(0, 0);
+    this._mul.visible = true;
     this._inBattle = true;
+
+    // 每连换一种镜像与放射角度：同一张图连着出两次就会被认出来
+    this._fxFlipX = Math.random() < 0.5 ? 1 : -1;
+    this._fxFlipY = Math.random() < 0.5 ? 1 : -1;
+    this._raysSpin = Math.random() * Math.PI;
 
     const milestone = isComboMilestone(combo);
     const initScale = milestone ? (style.tier >= 4 ? 4.2 : 3.4) : 3.0;
@@ -561,19 +864,31 @@ export class ComboDisplay {
       tiltDir: combo % 2 === 0 ? 1 : -1,
     };
     this._layoutStatic(combo, style);
+    this._drawFlash();
     this._updateMilestonePulse(0);
     this._updateGhost(style, 0);
     this._updateDigits(0);
-    readScale(this._root)?.set(initScale);
-    this._root.alpha = style.isLow ? 0.65 : 1;
+    this._updateFx(style, 0);
+    readScale(this._pop)?.set(initScale);
+    this._root.alpha = 1;
+    this._pop.alpha = style.isLow ? 0.7 : 1;
   }
 
   hide(immediate = false): void {
     this._inBattle = false;
+    /*
+     * 淡出窗口是第 HOLD_END~TOTAL_END 帧，而 hold 期间 timer 照常走到 TOTAL_END 就封顶。
+     * 于是 hold 超过一秒再收，timer 早已越过淡出段，退场会「啪」地瞬间消失。把 timer
+     * 拉回淡出起点，无论托了多久都能走完整的淡出。
+     */
+    if (!immediate && this._anim && this._anim.timer > HOLD_END) {
+      this._anim.timer = HOLD_END;
+    }
     if (immediate) {
       this._root.visible = false;
       this._root.alpha = 0;
-      this._ring.clear();
+      this._pop.visible = false;
+      resetScale(this._pop);
       this._banner.clear();
       this._shine.clear();
       this._shine.visible = false;
@@ -582,12 +897,32 @@ export class ComboDisplay {
       this._ghostRow.rotation = 0;
       this._milestone.visible = false;
       this._flare.visible = false;
+      this._hideFx();
+      this._comboFx.clear();
       this._anim = null;
       this._laidCombo = -1;
     }
   }
 
+  private _hideFx(): void {
+    this._flash.visible = false;
+    this._rays.visible = false;
+    this._raysCore.visible = false;
+    this._energy.visible = false;
+    this._hot.visible = false;
+    this._starFlare.visible = false;
+  }
+
+  destroy(): void {
+    this.hide(true);
+    if (this._comboFx.container.parent) {
+      this._comboFx.container.parent.removeChild(this._comboFx.container);
+    }
+    this._comboFx.destroy();
+  }
+
   update(dt: number): void {
+    this._comboFx.update(dt);
     if (!this._anim || !displayAlive(this._root) || !this._root.visible) return;
 
     const S = dmgFloatScale();
@@ -639,7 +974,6 @@ export class ComboDisplay {
       this._layoutStatic(this._anim.combo, style);
     }
 
-    // 里程碑落地那几帧高频抖动，衰减到 0；tier 越高抖得越狠
     let jx = 0;
     let jy = 0;
     if (this._anim.isMilestone && t < JITTER_END) {
@@ -648,25 +982,21 @@ export class ComboDisplay {
       jy = (Math.random() - 0.5) * 2 * k;
     }
 
-    readScale(this._root)?.set(scale * (1 + stretch), scale * (1 - stretch * 0.55));
-    this._root.alpha = alpha * (style.isLow ? 0.65 : 1);
-    this._root.position.set(Game.logicWidth / 2 + jx, this._anchorY + offsetY + jy);
-    // 入场倾斜回正：弹性收敛，末尾归零免得停在歪的
+    readScale(this._pop)?.set(scale * (1 + stretch), scale * (1 - stretch * 0.55));
+    this._pop.alpha = alpha * (style.isLow ? 0.7 : 1);
+    this._pop.position.set(jx, offsetY + jy);
+    this._root.position.set(Game.logicWidth / 2, this._anchorY);
+    this._root.alpha = alpha;
+    this._mul.alpha = alpha;
     this._mainRow.rotation = t < TILT_END
       ? this._anim.tiltDir * 0.17 * (1 - t / TILT_END) ** 2
       : 0;
     this._ghostRow.rotation = this._mainRow.rotation;
-    this._drawRing(this._anim.combo, style, t);
-    /*
-     * 速度带反向抵消 root 的入场缩放。不抵消的话，前几帧 root 还是 3~4 倍，
-     * 两条带子会被撑成横贯全屏的色块，抢掉文字本身。
-     */
-    this._banner.scale.set(1 / Math.max(0.35, scale));
+    this._updateFx(style, t);
     this._drawBanner(style, t, this._anim.isMilestone);
     this._drawShine(t);
     this._updateGhost(style, t);
     this._updateDigits(t);
-    // 战斗中把脉冲时钟钳在收尾点，印章保持可见等下一连，而不是中途消失
     this._updateMilestonePulse(this._inBattle ? Math.min(t, 40) : t);
   }
 }

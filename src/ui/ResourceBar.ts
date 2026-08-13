@@ -7,6 +7,8 @@ import * as PIXI from 'pixi.js';
 import { UI_IMAGES } from '@/config/Assets';
 import { COLORS, FONT_SIZE } from './theme';
 import { makeIconLabel, type IconLabelHandle } from './IconLabel';
+import { pressFeedback } from './motion';
+import { bindPointerTap } from '@/utils/bindPointerTap';
 
 /** 顶栏货币图标默认尺寸 */
 export const CURRENCY_ICON_SIZE = 38;
@@ -43,6 +45,119 @@ export function makeCurrencyLabel(
     text: text ?? `${amount}`,
     ...CURRENCY_VALUE_STYLE,
   });
+}
+
+/** 主页货币胶囊（方案 A）：双线金边 + 右沿金玉「+」 */
+export const CURRENCY_CHIP_H = 38;
+export const CURRENCY_PLUS_R = 11;
+
+function drawCurrencyChipFrame(w: number, h: number): PIXI.Graphics {
+  const g = new PIXI.Graphics();
+  const r = h / 2;
+  // 奶油半透底
+  g.beginFill(COLORS.panelBg, 0.94);
+  g.drawRoundedRect(0, -h / 2, w, h, r);
+  g.endFill();
+  // 外金边
+  g.lineStyle(2.4, COLORS.panelBorder, 1);
+  g.drawRoundedRect(0.5, -h / 2 + 0.5, w - 1, h - 1, r - 0.5);
+  // 内浅金边（双线，对齐原型）
+  g.lineStyle(1.2, COLORS.panelBorderSoft, 0.95);
+  g.drawRoundedRect(3.5, -h / 2 + 3.5, w - 7, h - 7, Math.max(4, r - 3.5));
+  // 上下中点内凹小阶，对齐原型边框细节
+  const cx = w / 2;
+  const notch = (y: number, dir: number) => {
+    g.lineStyle(1.8, COLORS.panelBorder, 1);
+    g.moveTo(cx - 7, y);
+    g.lineTo(cx - 3, y + 3.2 * dir);
+    g.lineTo(cx + 3, y + 3.2 * dir);
+    g.lineTo(cx + 7, y);
+  };
+  notch(-h / 2 + 1.2, 1);
+  notch(h / 2 - 1.2, -1);
+  return g;
+}
+
+export function makeCurrencyPlusBadge(r: number = CURRENCY_PLUS_R): PIXI.Container {
+  const badge = new PIXI.Container();
+  const g = new PIXI.Graphics();
+  g.beginFill(COLORS.accent, 1);
+  g.lineStyle(1.6, 0xf6e0a8, 1);
+  g.drawCircle(0, 0, r);
+  g.endFill();
+  g.lineStyle(1, COLORS.accentDeep, 0.55);
+  g.drawCircle(0, 0, r - 2.2);
+  g.lineStyle(2.3, 0xffffff, 1);
+  const arm = Math.max(4, r - 5);
+  g.moveTo(-arm, 0);
+  g.lineTo(arm, 0);
+  g.moveTo(0, -arm);
+  g.lineTo(0, arm);
+  badge.addChild(g);
+  return badge;
+}
+
+/**
+ * 主页货币胶囊：图标 + 数值 + 右沿金玉加号（整块可点，打开获取途径）。
+ * 原点在左缘垂直中心，便于顶栏横排。
+ */
+export function makeCurrencySourceChip(opts: {
+  kind: CurrencyKind;
+  amount: number;
+  text?: string;
+  onTap: () => void;
+}): PIXI.Container {
+  const h = CURRENCY_CHIP_H;
+  const iconSize = 30;
+  const padL = 8;
+  const padR = 6;
+  const gap = 6;
+  const plusR = CURRENCY_PLUS_R;
+
+  const label = makeCurrencyLabel(opts.kind, opts.amount, iconSize, opts.text);
+
+  const plus = makeCurrencyPlusBadge(plusR);
+  const contentW = Math.ceil(label.width);
+  const w = Math.max(108, padL + contentW + gap + plusR * 2 + padR);
+
+  const root = new PIXI.Container();
+  root.addChild(drawCurrencyChipFrame(w, h));
+  label.position.set(padL, 0);
+  root.addChild(label);
+  // 「+」嵌在右端圆帽内，不悬空
+  plus.position.set(w - padR - plusR, 0);
+  root.addChild(plus);
+
+  root.eventMode = 'static';
+  root.cursor = 'pointer';
+  root.hitArea = new PIXI.Rectangle(0, -h / 2, w, h);
+  pressFeedback(root);
+  bindPointerTap(root, opts.onTap);
+  return root;
+}
+
+/**
+ * @deprecated 主页请用 makeCurrencySourceChip；保留以免旧调用崩。
+ */
+export function withCurrencyPlus(
+  label: PIXI.Container,
+  onTap: () => void,
+): PIXI.Container {
+  const root = new PIXI.Container();
+  root.addChild(label);
+  const r = CURRENCY_PLUS_R;
+  const gap = 4;
+  const plus = makeCurrencyPlusBadge(r);
+  plus.position.set(label.width + gap + r, 0);
+  root.addChild(plus);
+  const w = label.width + gap + r * 2;
+  const h = Math.max(36, r * 2 + 8);
+  root.eventMode = 'static';
+  root.cursor = 'pointer';
+  root.hitArea = new PIXI.Rectangle(0, -h / 2, w, h);
+  pressFeedback(root);
+  bindPointerTap(root, onTap);
+  return root;
 }
 
 export interface CurrencyRowOpts {

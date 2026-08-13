@@ -1,0 +1,11 @@
+Create ONE image: a 3-column x 1-row UI asset sheet on a flat solid magenta (#FF00FF) background for easy cutout. NO TEXT, no labels, no captions, no letters, no numbers, no watermark, no UI chrome.
+
+Same premium Chinese fantasy casual-game style as the reference formation mockup: cream, stone, gold, soft painted lighting.
+
+LEFT cell: a circular STONE pedestal / dais, 3/4 camera looking slightly down. Grey-beige carved stone ring, mossy cream top disc, soft contact shadow. Isolated object, fully visible, generous margin. No character standing on it.
+
+MIDDLE cell: a circular GOLD pedestal, same camera and size language as the left, but ornate gold metal rim, brighter cream top, slightly larger presence. Isolated, no character.
+
+RIGHT cell: a vertical leader BACKLIGHT PLATE / aura: tall soft oval glow of warm gold and cream light rays, faint halo rings, sparkling dust, no character, no pedestal, no frame, no text. Looks like a saint backlight that would sit behind a chibi pet.
+
+Each cell clearly separated. Objects fully inside their cell. NO TEXT anywhere.

@@ -34,9 +34,13 @@ class GMManagerClass {
   private _lastTapTime = 0;
   private _commands: GMCommand[] = [];
   private _instantClearHandler: (() => string) | null = null;
+  /** 连击特效探针，默认关：调完特效就该收起来，不然一直挂在战斗界面碍事 */
+  private _comboProbe = false;
+  private _comboProbeHandler: ((on: boolean) => void) | null = null;
 
   get isRuntimeAllowed(): boolean { return this._runtimeAllowed; }
   get isEnabled(): boolean { return this._runtimeAllowed && this._enabled; }
+  get isComboProbeEnabled(): boolean { return this.isEnabled && this._comboProbe; }
   get commands(): readonly GMCommand[] { return this._commands; }
 
   get groups(): string[] {
@@ -115,6 +119,15 @@ class GMManagerClass {
     this._instantClearHandler = null;
   }
 
+  /** 战斗场景注册连击探针显隐回调，面板里切换后立即生效，不必重进战斗 */
+  registerComboProbeHandler(fn: (on: boolean) => void): void {
+    this._comboProbeHandler = fn;
+  }
+
+  unregisterComboProbeHandler(): void {
+    this._comboProbeHandler = null;
+  }
+
   /**
    * 解锁到指定关（目标关可打，之前主线全部 3★）。
    * 刷新首页并切到目标章。
@@ -191,6 +204,25 @@ class GMManagerClass {
       execute: () => {
         if (!this._instantClearHandler) return '请进入战斗后使用';
         return this._instantClearHandler();
+      },
+    });
+    // 用 getter 让标签跟着状态走：开关类指令看不到当前状态，很容易反复点错
+    const self = this;
+    this._commands.push({
+      id: 'toggle_combo_probe',
+      group: '战斗',
+      get name(): string {
+        return `连击特效探针（当前${self._comboProbe ? '开' : '关'}）`;
+      },
+      desc: '战斗内左上角档位按钮条，可直接点出 3~18 连特效',
+      execute: () => {
+        this._comboProbe = !this._comboProbe;
+        this._saveState();
+        this._comboProbeHandler?.(this._comboProbe);
+        EventBus.emit('gm:close');
+        return this._comboProbe
+          ? '已开启：战斗内左上角出现 3/6/9/12/15/18 与连播'
+          : '已关闭：按钮条已收起';
       },
     });
 
@@ -366,7 +398,10 @@ class GMManagerClass {
 
   private _saveState(): void {
     try {
-      Platform.setStorageSync(GM_STORAGE_KEY, JSON.stringify({ enabled: this._enabled }));
+      Platform.setStorageSync(GM_STORAGE_KEY, JSON.stringify({
+        enabled: this._enabled,
+        comboProbe: this._comboProbe,
+      }));
     } catch (_) { /* */ }
   }
 
@@ -380,6 +415,7 @@ class GMManagerClass {
       if (raw) {
         const data = JSON.parse(raw);
         this._enabled = !!data.enabled;
+        this._comboProbe = !!data.comboProbe;
       }
     } catch (_) { /* */ }
     if (!this._enabled) {

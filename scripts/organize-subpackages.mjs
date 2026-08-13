@@ -148,6 +148,7 @@ function migrateOverflowFromMain() {
     [path.join(ROOT, 'images/ui/realm'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/realm')],
     [path.join(ROOT, 'images/ui/tower'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/tower')],
     [path.join(ROOT, 'images/ui/codex'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/codex')],
+    [path.join(ROOT, 'images/ui/team'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/team')],
     // 自定义字体随包（非 CDN）：勿进主包，否则主包易超 4MB
     [path.join(ROOT, 'fonts'), path.join(ROOT, 'subpackages/pkg-shop/fonts')],
   ];

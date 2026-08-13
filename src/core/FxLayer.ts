@@ -50,6 +50,8 @@ export interface BurstOptions {
   alpha?: number;
   /** 混合模式，默认 NORMAL；黑底发光贴图传 ADD 可叠加成辉光 */
   blendMode?: PIXI.BLEND_MODES;
+  /** 每帧速度衰减，默认 0.92；连击星屑用 0.97 才飞得开 */
+  drag?: number;
 }
 
 export class FxLayer {
@@ -119,7 +121,7 @@ export class FxLayer {
         vx: Math.cos(ang) * v,
         vy: Math.sin(ang) * v,
         gravity,
-        drag: 0.92,
+        drag: opts.drag ?? 0.92,
         life: lifeJitter,
         maxLife: lifeJitter,
         startSize: size * (0.7 + Math.random() * 0.6),
