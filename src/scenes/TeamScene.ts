@@ -419,20 +419,17 @@ export class TeamScene implements Scene {
   }
 
   /**
-   * 槽位点击：非首位 → 设为队长；首位 → 复述当前队长技。
-   *
-   * 之前槽位点击是「下阵」，但下方列表勾选已经能下阵，两处同义手势里更该留给
-   * 唯一没有入口的操作 —— 换队长。
+   * 槽位点击 = 下阵。换队长点卡面右下角皇冠（业界编队页的标准控件，不占顶栏）。
    */
-  private _onSlotTap(petId: string, index: number): void {
+  private _onSlotTap(petId: string): void {
+    this._togglePet(petId);
+  }
+
+  private _onSetLeader(petId: string): void {
     const pet = PET_MAP.get(petId);
     if (!pet) return;
-    const skill = resolveLeaderSkill(pet);
-    if (index === 0) {
-      Platform.showToast(`队长 ${pet.name} · ${skill.text}`);
-      return;
-    }
     if (!PlayerData.setLeader(petId)) return;
+    const skill = resolveLeaderSkill(pet);
     Platform.vibrateShort('light');
     Platform.showToast(`${pet.name} 已任队长 · ${skill.text}`, 'success');
     this._refreshTeamUi();
@@ -479,16 +476,36 @@ export class TeamScene implements Scene {
           addTeamPetAvatar(slot, pet, 0, 0, slotW);
           attachRarityBadge(slot, pet.rarity, -slotW / 2, -slotH / 2, slotW, { variant: 'codex' });
         }
-        if (i === 0) addLeaderBadge(slot, slotH);
+        if (i === 0) {
+          const ring = new PIXI.Graphics();
+          ring.lineStyle(3.5, COLORS.accentDeep, 1);
+          ring.drawRoundedRect(-slotW / 2 + 1.5, -slotH / 2 + 1.5, slotW - 3, slotH - 3, 12);
+          slot.addChild(ring);
+        }
         slot.hitArea = new PIXI.Rectangle(-slotW / 2, -slotH / 2, slotW, slotH);
         slot.interactiveChildren = false;
         slot.eventMode = 'static';
         slot.cursor = 'pointer';
-        // 短按换队长；长按看主动技（下阵走下方列表勾选）
-        bindPointerTap(slot, () => this._onSlotTap(pet.id, i), {
+        // 点卡面下阵；长按看主动技。换队长走右下角皇冠。
+        bindPointerTap(slot, () => this._onSlotTap(pet.id), {
           onLongPress: () => this._showPetSkillPreview(pet.id, slot),
         });
         if (this._prevTeam[i] !== petId) fadeIn(slot, { duration: 0.24 });
+        this._slotArea.addChild(slot);
+
+        const isLeader = i === 0;
+        const crown = makeLeaderCrown(isLeader);
+        // 右下角：躲开左上属性珠、右上稀有度、底部星级
+        crown.position.set(cx + slotW / 2 - 20, cy + slotH / 2 - 36);
+        this._slotArea.addChild(crown);
+        if (isLeader) {
+          bindPointerTap(crown, () => {
+            Platform.showToast(`队长 ${pet.name} · ${resolveLeaderSkill(pet).text}`);
+          });
+        } else {
+          bindPointerTap(crown, () => this._onSetLeader(pet.id));
+        }
+        continue;
       } else {
         const empty = new PIXI.Graphics();
         empty.beginFill(0xfff8ec, prep ? 0.55 : 0.55);
@@ -568,21 +585,60 @@ export class TeamScene implements Scene {
   }
 }
 
-/** 首位槽的「队长」角标：不加角标玩家无从知道首位有额外收益 */
-function addLeaderBadge(slot: PIXI.Container, slotH: number): void {
-  const badgeW = 56;
-  const badgeH = 24;
-  const badge = new PIXI.Container();
-  badge.position.set(0, slotH / 2 - badgeH / 2 - 2);
+/**
+ * 编队队长控件：角落小皇冠（原神/阴阳师/AFK 编队页同款）。
+ * 现任实心金冠；其余淡描边金冠，点一下即设为队长。不占顶栏、不挡立绘。
+ */
+function makeLeaderCrown(active: boolean): PIXI.Container {
+  const r = 16;
+  const root = new PIXI.Container();
   const bg = new PIXI.Graphics();
-  bg.beginFill(COLORS.accentDeep, 0.94);
-  bg.drawRoundedRect(-badgeW / 2, -badgeH / 2, badgeW, badgeH, badgeH / 2);
-  bg.endFill();
-  badge.addChild(bg);
-  badge.addChild(makeText('队长', {
-    size: FONT_SIZE.xxs, fill: COLORS.white, bold: true, anchor: 0.5,
-  }));
-  slot.addChild(badge);
+  if (active) {
+    bg.beginFill(COLORS.accentDeep, 0.96);
+    bg.drawCircle(0, 0, r);
+    bg.endFill();
+    bg.lineStyle(1.5, 0xffe7b0, 0.95);
+    bg.drawCircle(0, 0, r);
+  } else {
+    bg.beginFill(0x2a1a0c, 0.45);
+    bg.drawCircle(0, 0, r);
+    bg.endFill();
+    bg.lineStyle(1.6, COLORS.accentDeep, 0.9);
+    bg.drawCircle(0, 0, r);
+  }
+  root.addChild(bg);
+  root.addChild(drawCrownIcon(active ? 0xfff4d4 : COLORS.accent, active));
+  root.hitArea = new PIXI.Circle(0, 0, 18);
+  root.eventMode = 'static';
+  root.cursor = 'pointer';
+  return root;
+}
+
+function drawCrownIcon(color: number, filled: boolean): PIXI.Graphics {
+  const g = new PIXI.Graphics();
+  const pts = [
+    -8, 5,
+    -8, -1,
+    -4, 3,
+    0, -6,
+    4, 3,
+    8, -1,
+    8, 5,
+  ];
+  if (filled) {
+    g.beginFill(color, 1);
+    g.drawPolygon(pts);
+    g.endFill();
+  } else {
+    g.lineStyle(1.8, color, 1);
+    g.drawPolygon(pts);
+  }
+  g.beginFill(color, filled ? 1 : 0.9);
+  g.drawCircle(-8, -2, 1.6);
+  g.drawCircle(0, -7, 1.8);
+  g.drawCircle(8, -2, 1.6);
+  g.endFill();
+  return g;
 }
 
 function drawDashedRoundedRect(

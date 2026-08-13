@@ -80,7 +80,10 @@ export class BattleController {
   readonly teamRcvTotal: number;
   /** 队伍属性覆盖（不在集合内的属性珠 = 无效珠，消除无伤害） */
   readonly teamElementSet: ReadonlySet<Element>;
-  /** 盘面掉落池：本队属性 + 心珠。窄队换来的是有效珠密度，而不是一盘死珠 */
+  /**
+   * 盘面掉落池。对齐 xiao_chu：五色 + 心珠都会掉，和上阵宠物颜色无关。
+   * 没覆盖的颜色是死珠（消了不出伤），这是编队覆盖面的代价，不是靠少出珠来回避。
+   */
   readonly orbSpawnPool: readonly OrbType[];
 
   // ── 关卡机制（机制节奏表 stageMechanics.ts 解析） ──
@@ -196,7 +199,7 @@ export class BattleController {
     this.heroHp = this.heroMaxHp;
     this.teamRcvTotal = teamRcv(members);
     this.teamElementSet = teamElements(members);
-    this.orbSpawnPool = [...ORB_TYPES.filter((o) => o !== 'heart' && this.teamElementSet.has(o as Element)), 'heart'];
+    this.orbSpawnPool = ORB_TYPES;
     this._teamAtkTotal = this.team.reduce((sum, p) => sum + p.atk, 0);
 
     const teamFx = teamEffectAggregate(members);

@@ -89,8 +89,13 @@ export const MINDLESS_MAX_DEPTH = MINDLESS_WALL_CHAPTER - 1;
  *
  * 针对队至少要快这么多比例，否则说明「换队没用，堆数值就行」——
  * 这条是整份契约里**唯一直接对准用户原始诉求**（动态搭配不同宠物体系）的指标。
+ *
+ * v0.9 出珠改回与 xiao_chu 一致：盘面恒定五色+心珠，不再按上阵宠物收窄。
+ * 旧 30% 下限有一半来自「针对队盘面更密」；那部分被玩家明确否定后，换队收益
+ * 只剩克制倍率与覆盖死珠，实测章末大约 12%~70%。下限收到 10%，避免把「出珠
+ * 跟宠物无关」又用关卡数值倒逼回去。
  */
-export const TEAM_SWAP_EDGE_MIN = 0.30;
+export const TEAM_SWAP_EDGE_MIN = 0.10;
 
 /** 从该章起开始要求换队收益（前三章教学期不作要求） */
 export const TEAM_SWAP_EDGE_FROM_CHAPTER = 4;

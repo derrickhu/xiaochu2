@@ -11,6 +11,7 @@ import { BoardModel } from '@/game/board/BoardModel';
 import { PETS } from '@/balance/pets';
 import { petAtk } from '@/formulas/growth';
 import { skillForPet } from '../SkillEngine';
+import { BattleController } from '../BattleController';
 import { resolvePlayerTurnDamage } from '../battleTurnResolution';
 import type { EnemyUnit, TeamPet } from '../battleTypes';
 import type { MatchGroup } from '@/game/board/BoardModel';
@@ -97,7 +98,7 @@ describe('同色宠全员出手', () => {
 });
 
 describe('盘面掉落池', () => {
-  it('只生成传入的珠色', () => {
+  it('自定义池只生成传入的珠色', () => {
     const pool: OrbType[] = ['water', 'fire', 'heart'];
     const board = new BoardModel(Math.random, pool);
     const seen = new Set<OrbType>();
@@ -107,10 +108,6 @@ describe('盘面掉落池', () => {
         if (orb) seen.add(orb);
       }
     }
-    /*
-     * 队伍没覆盖的颜色若照样落在盘上就是死珠，等于给窄队一个无条件的盘面惩罚，
-     * 「三色爆发流」这类构筑从开打前就输了。收窄掉落池之后它才成立。
-     */
     for (const orb of seen) {
       expect(pool, `盘面掉出了池外的珠：${orb}`).toContain(orb);
     }
@@ -127,5 +124,12 @@ describe('盘面掉落池', () => {
     }
     expect(seen.size).toBeGreaterThan(2);
     for (const orb of seen) expect(ORB_TYPES).toContain(orb);
+  });
+
+  it('战斗掉落池是五色+心珠，不随上阵宠物收窄', () => {
+    const mono = PETS[0]!;
+    const ctrl = new BattleController('stage_1_1', [mono.id]);
+    expect(ctrl.teamElementSet).toEqual(new Set([mono.element]));
+    expect(ctrl.orbSpawnPool).toEqual(ORB_TYPES);
   });
 });

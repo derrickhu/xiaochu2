@@ -9,7 +9,7 @@
  *   - 仅队伍覆盖到的元素珠造成伤害；心珠回血；未覆盖元素珠浪费
  *   - 不计暴击（期望影响极小，且保持确定性）
  */
-import { COMBAT, type Element } from '@/balance/combat';
+import { COMBAT, ORB_TYPES, type Element } from '@/balance/combat';
 import type { PetDef } from '@/balance/pets';
 import type { StageDef } from '@/balance/stages';
 import { STAGE_MAP } from '@/balance/stages';
@@ -203,25 +203,20 @@ export function simulateBattle(
 
   /*
    * 每种珠子平均分到的消除组数 = 总 combo / 盘面色数。
-   *
-   * 盘面只掉本队属性 + 心珠（见 BoardModel._spawnPool），所以分母是「覆盖色数 + 1」而非固定 6。
-   * 窄队因此不再是无条件劣势：色数少 → 每色分到的组更多、更容易起大组，
-   * 用盘面覆盖面换取单色密度，正是「换阵容」需要权衡的那个变量。
+   * 盘面恒定掉五色 + 心珠（与 xiao_chu 一致），分母固定 6；没覆盖的颜色是死珠。
    */
-  const groupsPerType = model.combo / (covered.size + 1);
+  const groupsPerType = model.combo / ORB_TYPES.length;
 
   /**
    * 每回合每种珠的期望消除颗数（充能口径与 battleTurnResolution 同源）。
-   * 盘面只掉本队属性 + 心珠，故分母是 covered.size + 1。
    */
   const orbsPerType = groupsPerType * model.matchCount;
-  /** 能充能的属性（被禁属性是无效珠，镜像 BattleController._awardSkillCharge） */
-  const chargeableEls = [...covered].filter((el) => !bannedSet.has(el));
-  /** 某只宠每回合的期望充能：本色为主 + 其余珠（含心珠）涓流，与实机共用 turnChargeGain */
+  /** 某只宠每回合的期望充能：本色为主 + 其余珠（含心珠与未覆盖色）涓流 */
   const chargePerTurnOf = (el: Element): number => {
     const sameOrbs = bannedSet.has(el) ? 0 : orbsPerType;
-    // +1 = 心珠：它永远在掉落池里，也算涓流来源
-    const otherTypes = chargeableEls.filter((e) => e !== el).length + 1;
+    const otherTypes = ORB_TYPES.filter(
+      (o) => o !== el && (o === 'heart' || !bannedSet.has(o as Element)),
+    ).length;
     return turnChargeGain(sameOrbs, otherTypes * orbsPerType);
   };
 

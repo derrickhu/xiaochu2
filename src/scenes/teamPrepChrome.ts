@@ -83,10 +83,10 @@ export function buildTeamPrepSummary(
   left.position.set(-width / 2 + 8, -11);
   root.addChild(left);
 
-  // 队长技：战前必须能看到，否则「点槽位换队长」这个操作没有反馈落点
+  // 队长技：战前必须能看到；换队长点卡面右下角皇冠，这里是效果落点
   const leader = teamLeaderSkill(members);
   if (leader) {
-    const leaderText = makeText(leader.text, {
+    const leaderText = makeText(`队长技 · ${leader.text}`, {
       size: FONT_SIZE.xxs, fill: COLORS.accentDeep, anchor: [0, 0.5],
     });
     leaderText.position.set(-width / 2 + 8, 15);

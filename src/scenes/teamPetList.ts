@@ -200,7 +200,7 @@ export function addTeamPrepSlotPet(
   orb.position.set(-slotW / 2 + orbSize / 2 + orbPad, -slotH / 2 + orbSize / 2 + orbPad);
   parent.addChild(orb);
 
-  // 稀有度角标：右上，避开左上属性珠与底部 Lv/星/队长标
+  // 稀有度角标：右上，避开左上属性珠与右下队长冠
   const rarityBadge = makeRarityBadge({
     tier: pet.rarity,
     height: Math.max(18, Math.round(slotW * 0.28)),
