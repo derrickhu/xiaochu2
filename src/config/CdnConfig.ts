@@ -40,11 +40,10 @@ export const CDN_CONFIG: CdnConfig = {
   downloadTimeoutMs: 30000,
   /**
    * 大体积立绘 / 场景底图 / BGM 走 CDN。
-   * 微信上传前务必 `npm run cdn:strip` 物理剔除（勿只靠 packOptions.ignore）。
    *
-   * 短音效**不在此列**：它们要求「按下即响」，走 CDN 时首次播放必然延迟，
-   * 且一旦 strip 后 manifest 漏登记就会整局静音（曾发生：技能音效全哑）。
-   * 全部 SFX 合计仅约 276KB，留包内换取确定性。
+   * 抖音上传靠 minigame/project.config.json 的 packOptions.ignore 排除这些目录，
+   * 磁盘文件保留（Git 干净，开发者工具预览也能走 CDN）。勿再 cdn:strip 物理删文件。
+   * 短音效不在此列：按下即响，全部 SFX 约 276KB，留包内。
    */
   cdnDirs: [
     'subpackages/pkg-pet/images',
