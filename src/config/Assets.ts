@@ -386,6 +386,8 @@ export const UI_BATTLE_IMAGES = {
   skillReadyArrow: `${PKG.battle}/images/ui/battle/battle_skill_ready_arrow.png`,
   /** 技能就绪：边框闪点 */
   skillReadySpark: `${PKG.battle}/images/ui/battle/battle_skill_ready_spark.png`,
+  /** 技能就绪：上涌软光点（加法混合，tint 成五行色） */
+  skillReadyMote: `${PKG.battle}/images/ui/battle/battle_skill_ready_mote.png`,
   /** 封印珠圆形叠层（金框 +「封」匾，盖在属性珠上） */
   orbSeal: `${PKG.battle}/images/ui/battle/battle_orb_seal.png`,
 

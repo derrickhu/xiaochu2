@@ -1,0 +1,6 @@
+Game VFX particle sprite, 1:1 square. A single soft circular energy mote for additive blending.
+Center is brilliant white, smoothly fading through warm cream to fully black at the edges.
+Soft gaussian glow orb, like a firefly / spirit ember, NOT a star, NOT a four-point sparkle, NOT a hard circle, NOT a lens flare cross.
+No spikes, no rays, no rings, no geometry. Only a round luminous blob with airy falloff.
+Pure black background. Isolated, centered, fills about 70% of the canvas.
+NO TEXT, no labels, no captions, no watermark, no frame.

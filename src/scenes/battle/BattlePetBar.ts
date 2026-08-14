@@ -182,7 +182,7 @@ export class BattlePetBar {
       this._slotChargeShown.push(ratio);
       this._drawChargeBar(chargeBar, ratio, color);
 
-      const readyFx = createPetSkillReadyFx(petSize, color);
+      const readyFx = createPetSkillReadyFx(frameSize, color);
       slot.addChild(readyFx.root);
       this._slotReadyFx.push(readyFx);
       this._slotWasReady.push(ratio >= 1);
@@ -272,9 +272,10 @@ export class BattlePetBar {
     g.drawRoundedRect(x, y, w, h, h / 2);
   }
 
-  /** 技能就绪槽：粗光边 +「技能」匾 + 双箭头 + 闪点（对齐 skill_ready_v1） */
+  /** 技能就绪槽：金柱 + 粗粒子上涌 + 双箭头（方案 B） */
   update(dt: number): void {
     const petSize = this._petSize;
+    const frameSize = petSize * UI.battle.petFrameScale;
     const canAct = !this._hooks.isBusy() && this._ctrl.state === 'playerTurn';
 
     // 充能条缓动：一次消除后条子「涨上去」而不是瞬移，这是这套系统的主要反馈
@@ -305,7 +306,7 @@ export class BattlePetBar {
       updatePetSkillReadyFx(
         fx,
         dt,
-        petSize,
+        frameSize,
         canAct,
         true,
         canAct && displayAlive(this._slots[i]) ? readScale(this._slots[i]) ?? undefined : undefined,
