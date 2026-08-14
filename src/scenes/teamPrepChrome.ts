@@ -1,12 +1,12 @@
 /**
- * 战前编队 · 队伍摘要行（战力 + 队长技 + 五行）与分区标题。
- * 对齐 team_prep_ui_prototype_v3b。
+ * 战前编队 · 队伍摘要行（三维 + 五行）与分区标题。
+ * 对齐 team_prep_ui_prototype_v3b；战力合成分不进战前条，避免抹平搭配决策。
  */
 import * as PIXI from 'pixi.js';
 import { ELEMENTS } from '@/balance/combat';
+import { getStatUi, type StatKey } from '@/balance/petRoles';
 import {
   teamAtk,
-  teamEffectAggregate,
   teamElements,
   teamMaxHp,
   teamRcv,
@@ -51,7 +51,7 @@ export function addStretchedPlate(
   return spr;
 }
 
-/** 浅色细条：敌情 / 战力 / 队长令共用，半透明米底，不压风景。 */
+/** 浅色细条：敌情 / 三维摘要 / 队长令共用，半透明米底，不压风景。 */
 export const TEAM_CHROME_STRIP_H = 64;
 
 export function addSoftCapsule(
@@ -70,20 +70,6 @@ export function addSoftCapsule(
   g.position.set(opts?.x ?? 0, opts?.y ?? 0);
   parent.addChild(g);
   return g;
-}
-
-/** 与 teamOverviewPanel 同口径的辅助战力 */
-export function computeTeamPower(members: readonly TeamMember[]): number {
-  const atk = teamAtk(members);
-  const hp = teamMaxHp(members);
-  const rcv = teamRcv(members);
-  const fx = teamEffectAggregate(members);
-  const dmg = fx.teamDamageMult - 1;
-  const shield = fx.startShieldPct;
-  const regen = fx.regenPct;
-  const base = atk * 2 + hp * 0.25 + rcv * 0.8;
-  const mult = 1 + dmg + shield * 0.5 + regen * 0.6;
-  return Math.round(base * mult);
 }
 
 /** 队长冠符号：换队长钮与摘要行队长令共用同一图形，玩家一眼建立「冠 = 队长」联想。 */
@@ -241,7 +227,13 @@ export function makeLeaderSkillPlaque(
   return root;
 }
 
-/** 站台下方摘要：单行胶囊「战力 | 五行」。队长令挂在队长头顶，见 makeLeaderSkillPlaque。 */
+/**
+ * 站台下方摘要：三维等权 + 五行覆盖。
+ *
+ * 细条 HUD 跟 PAD 编队条、上方敌情条同一套：一个维 = 图标+数字，单行读完。
+ * 两行（数在上、名在下）是详情卡写法，64px 胶囊里会把「攻击317」拆成两次扫视。
+ * 维名交给图标和 STAT_UI 色，不再重复写「攻击/生命/回复」。
+ */
 export function buildTeamPrepSummary(
   members: readonly TeamMember[],
   width: number,
@@ -250,20 +242,12 @@ export function buildTeamPrepSummary(
   const inset = 56;
   addSoftCapsule(root, width, TEAM_SUMMARY_BAR_H);
 
-  const power = computeTeamPower(members);
   const covered = teamElements(members);
-
-  const left = new PIXI.Container();
-  const sword = makeStatIcon('atk', 22);
-  sword.position.set(11, 0);
-  left.addChild(sword);
-  const powerText = makeText(`战力 ${power}`, {
-    size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
-  });
-  powerText.position.set(28, 0);
-  left.addChild(powerText);
-  left.position.set(-width / 2 + inset, 0);
-  root.addChild(left);
+  const values: Record<StatKey, number> = {
+    atk: teamAtk(members),
+    hp: teamMaxHp(members),
+    rcv: teamRcv(members),
+  };
 
   const right = new PIXI.Container();
   const coverLabel = makeText('五行', {
@@ -281,6 +265,31 @@ export function buildTeamPrepSummary(
   right.position.set(width / 2 - inset - ox, 0);
   root.addChild(right);
 
+  let x = -width / 2 + inset;
+  const order: StatKey[] = ['atk', 'hp', 'rcv'];
+  order.forEach((stat, i) => {
+    if (i > 0) x += 28;
+    const token = makeTeamStatToken(stat, values[stat]);
+    token.position.set(x, 0);
+    root.addChild(token);
+    x += token.width;
+  });
+
+  return root;
+}
+
+/** 图标 + 维色数字，与敌情条「❤ 1896」同一语法，字号略大（本队是决策面）。 */
+function makeTeamStatToken(stat: StatKey, value: number): PIXI.Container {
+  const def = getStatUi(stat);
+  const root = new PIXI.Container();
+  const icon = makeStatIcon(stat, 22);
+  icon.position.set(11, 0);
+  root.addChild(icon);
+  const num = makeText(`${value}`, {
+    size: FONT_SIZE.sm, fill: def.color, bold: true, anchor: [0, 0.5],
+  });
+  num.position.set(26, 0);
+  root.addChild(num);
   return root;
 }
 

@@ -1,7 +1,7 @@
 /**
  * 战前编队 · 敌情细条（对齐 team_prep_ui_prototype_v3b）
  *
- * 单行浅色胶囊：头像 + 名/血攻/克制/抵抗 + 波次。内容避开两端圆弧。
+ * 单行浅色胶囊：属性珠 + 头像 + 名/血攻/克制/抵抗 + 波次。内容避开两端圆弧。
  */
 import * as PIXI from 'pixi.js';
 import { enemyImage } from '@/config/Assets';
@@ -28,6 +28,9 @@ export interface TeamEnemyIntelHandle {
 const STRIP_H = TEAM_CHROME_STRIP_H;
 /** 避开胶囊两端圆弧 / 如意纹 */
 const INSET = 58;
+/** 属性珠在头像前：先认色再认怪（夹在名字里会被血攻吃掉） */
+const ELEM_ORB = 28;
+const ELEM_GAP = 8;
 /** 无边框圆头像直径 */
 const PORTRAIT = 52;
 const ARROW_SIZE = 26;
@@ -72,12 +75,20 @@ export function buildTeamEnemyIntelCard(opts: {
     y: STRIP_H / 2,
   });
 
+  const identLeft = INSET;
+  const portraitX = identLeft + ELEM_ORB + ELEM_GAP + PORTRAIT / 2;
+  const infoX = identLeft + ELEM_ORB + ELEM_GAP + PORTRAIT + 12;
+
+  const elementHost = new PIXI.Container();
+  elementHost.position.set(identLeft + ELEM_ORB / 2, STRIP_H / 2);
+  root.addChild(elementHost);
+
   const portraitHost = new PIXI.Container();
-  portraitHost.position.set(INSET + PORTRAIT / 2, STRIP_H / 2);
+  portraitHost.position.set(portraitX, STRIP_H / 2);
   root.addChild(portraitHost);
 
   const infoHost = new PIXI.Container();
-  infoHost.position.set(INSET + PORTRAIT + 12, STRIP_H / 2);
+  infoHost.position.set(infoX, STRIP_H / 2);
   root.addChild(infoHost);
 
   const pagerHost = new PIXI.Container();
@@ -112,13 +123,17 @@ export function buildTeamEnemyIntelCard(opts: {
       },
     }));
     unbindPortrait = () => { for (const u of unbinds) u(); };
+
+    elementHost.removeChildren().forEach((c) => c.destroy({ children: true }));
+    elementHost.addChild(makeElementOrb(def.element, ELEM_ORB));
   };
 
   const paintInfo = (def: EnemyDef): void => {
     infoHost.removeChildren().forEach((c) => c.destroy({ children: true }));
     const stats = enemyStats(def, stage.chapter, stage.difficulty);
     const pagerW = waveCount > 1 ? PAGER_W + 8 : 0;
-    const infoW = width - INSET - PORTRAIT - 12 - INSET - pagerW;
+    const identW = ELEM_ORB + ELEM_GAP + PORTRAIT;
+    const infoW = width - INSET - identW - 12 - INSET - pagerW;
 
     let x = 0;
     const mid = 0;
@@ -127,12 +142,7 @@ export function buildTeamEnemyIntelCard(opts: {
     });
     name.position.set(x, mid);
     infoHost.addChild(name);
-    x += name.width + 8;
-
-    const elOrb = makeElementOrb(def.element, 22);
-    elOrb.position.set(x + 11, mid);
-    infoHost.addChild(elOrb);
-    x += 28;
+    x += name.width + 10;
 
     const addStat = (kind: 'hp' | 'atk', value: number): void => {
       const icon = makeStatIcon(kind, 18);

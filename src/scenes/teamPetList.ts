@@ -20,6 +20,8 @@ import {
   makePanel,
   makePetStatsLine,
   makeRoleBadge,
+  makeCompactRoleBadge,
+  COMPACT_ROLE_BADGE_H,
   attachRarityBadge,
   makeRarityBadge,
   makeRarityCardBorder,
@@ -286,10 +288,22 @@ function buildGridCell(
   art.mask = mask;
   item.addChild(art);
 
+  // 左上身份簇：属性珠 + 定位胶囊同一排（崩铁/鸣潮：身份在左上，养成在底部）
   const orbSize = 24;
+  const identPad = 5;
   const orb = makeElementOrb(pet.element, orbSize);
-  orb.position.set(-face / 2 + orbSize / 2 + 5, -face / 2 + orbSize / 2 + 5);
+  orb.position.set(
+    -face / 2 + identPad + orbSize / 2,
+    -face / 2 + identPad + orbSize / 2,
+  );
   item.addChild(orb);
+
+  const roleBadge = makeCompactRoleBadge(pet.role);
+  roleBadge.position.set(
+    -face / 2 + identPad + orbSize + 3,
+    -face / 2 + identPad + (orbSize - COMPACT_ROLE_BADGE_H) / 2,
+  );
+  item.addChild(roleBadge);
 
   // 稀有度占右上角（静态身份），故「已上阵」不再抢角标位，改整卡蒙层
   const badge = makeRarityBadge({ tier: pet.rarity, height: Math.max(18, Math.round(face * 0.17)) });

@@ -23,6 +23,34 @@ export interface RoleBadgeOpts {
   textFill?: number;
 }
 
+/** 五列头像格用：矮胶囊，与属性珠同一排（崩铁式身份簇） */
+export const COMPACT_ROLE_BADGE_H = 20;
+
+export function makeCompactRoleBadge(role: PetRole): PIXI.Container {
+  const def = getPetRole(role);
+  const pillH = COMPACT_ROLE_BADGE_H;
+  const padX = 6;
+  const label = makeText(def.name, {
+    size: FONT_SIZE.xxs,
+    fill: 0xffffff,
+    bold: true,
+    anchor: 0.5,
+    strokeColor: 0x2d180c,
+    strokeWidth: 2,
+  });
+  const pillW = Math.ceil(label.width + padX * 2);
+
+  const cont = new PIXI.Container();
+  cont.addChild(makePanel({
+    width: pillW, height: pillH, radius: pillH / 2, centered: false,
+    bg: def.ui.badgeBg, bgAlpha: 0.94,
+    border: def.ui.badgeBorder, borderWidth: 1,
+  }));
+  label.position.set(pillW / 2, pillH / 2);
+  cont.addChild(label);
+  return cont;
+}
+
 /** 定位胶囊（输出 / 治疗 / 坦克 / 辅助） */
 export function makeRoleBadge(opts: RoleBadgeOpts): PIXI.Container {
   const def = getPetRole(opts.role);
