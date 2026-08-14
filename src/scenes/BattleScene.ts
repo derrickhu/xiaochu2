@@ -1113,6 +1113,7 @@ export class BattleScene implements Scene {
       this._layout.enemyCenterX,
       this._layout.enemyCenterY,
       attack.element,
+      { lane: attack.petIndex, weight: 'basic', crit: attack.isCrit },
     );
     await guardedPromise(fly, UI.anim.projectile + 0.45);
     if (isStale() || slot.destroyed) return;

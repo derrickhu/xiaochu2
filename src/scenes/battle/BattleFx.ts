@@ -15,7 +15,7 @@ import { ScreenShake } from '@/core/ScreenShake';
 import { FlashOverlay } from '@/core/FlashOverlay';
 import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
-import { ELEMENT_BLADE_IMAGES, ELEMENT_IMPACT_IMAGES, ORB_IMAGES, UI_FX_IMAGES } from '@/config/Assets';
+import { ELEMENT_BLADE_IMAGES, ELEMENT_IMPACT_IMAGES, ORB_IMAGES, UI_BATTLE_IMAGES, UI_FX_IMAGES } from '@/config/Assets';
 import { applyTextResolution } from '@/ui/text';
 import {
   applyDmgRenderStyle,
@@ -90,6 +90,42 @@ type ScopedPetDamageRuntime = PetDamageFloatRuntime & {
   /** 回合总伤等：不受 clearTransient / scope 切换提前回收，播完再消失 */
   persistUntilDone?: boolean;
 };
+
+export type BladeWeight = 'basic' | 'skill' | 'heavy';
+
+function bladeScaleOf(weight: BladeWeight): number {
+  if (weight === 'skill') return 1.28;
+  if (weight === 'heavy') return 1.18;
+  return 0.88;
+}
+
+function impactMulOf(weight: BladeWeight, crit: boolean): number {
+  const base = weight === 'skill' ? 1.38 : weight === 'heavy' ? 1.22 : 1;
+  return crit ? base * 1.12 : base;
+}
+
+function trailCountOf(weight: BladeWeight, crit: boolean): number {
+  if (weight === 'skill') return 4;
+  if (weight === 'heavy' || crit) return 3;
+  return 2;
+}
+
+/** 沿飞行方向的法线微弧，lane 错开左右，避免五宠同一条线 */
+function bladeArc(
+  fromX: number, fromY: number, toX: number, toY: number, lane: number,
+): { midX: number; midY: number } {
+  const vx = toX - fromX;
+  const vy = toY - fromY;
+  const len = Math.hypot(vx, vy) || 1;
+  const nx = -vy / len;
+  const ny = vx / len;
+  const curve = 44 + (Math.abs(lane) % 3) * 8;
+  const sign = lane % 2 === 0 ? 1 : -1;
+  return {
+    midX: (fromX + toX) / 2 + nx * curve * sign,
+    midY: (fromY + toY) / 2 + ny * curve * sign,
+  };
+}
 
 export class BattleFx {
   private _fx!: FxLayer;
@@ -697,73 +733,11 @@ export class BattleFx {
     if (isCrit && !minor) this.shakeLight();
   }
 
-  /** 属性色弹道：珠子贴图 + 拖尾粒子，从起点飞向终点（宠物 / 敌人共用） */
-  fireProjectileBetween(
-    fromX: number,
-    fromY: number,
-    toX: number,
-    toY: number,
-    element: Element,
-    opts?: { size?: number; duration?: number; heavy?: boolean },
-  ): Promise<void> {
-    return new Promise((resolve) => {
-      const heavy = opts?.heavy ?? false;
-      const color = ORB_COLOR[element];
-      const size = opts?.size ?? (heavy ? 56 : 48);
-      const duration = opts?.duration ?? UI.anim.projectile;
-      const tex = TextureCache.get(ORB_IMAGES[element]);
-      const p = new PIXI.Sprite(tex ?? PIXI.Texture.WHITE);
-      p.anchor.set(0.5);
-      p.width = size;
-      p.height = size;
-      if (!tex) p.tint = color;
-      p.position.set(fromX, fromY);
-      const scopeId = this._scopeId;
-      this._projectiles.set(p, scopeId);
-      this._fx.container.addChild(p);
-
-      let frame = 0;
-      const complete = once(() => {
-        TweenManager.cancelTarget(p);
-        this._projectiles.delete(p);
-        if (displayAlive(p)) {
-          this._fx.burst({
-            x: toX, y: toY, color,
-            count: heavy ? 10 : 6,
-            speed: heavy ? 320 : 240,
-            size: heavy ? 16 : 12,
-            life: 0.35,
-          });
-          p.destroy();
-        }
-        resolve();
-      });
-      minigameFallback(duration, complete, 100);
-      TweenManager.to({
-        target: p, props: { x: toX, y: toY },
-        duration, ease: Ease.easeInQuad,
-        onUpdate: () => {
-          if (!displayAlive(p)) return;
-          if (++frame % 2 === 0) {
-            this._fx.burst({
-              x: p.x, y: p.y, color,
-              count: heavy ? 2 : 1,
-              speed: heavy ? 55 : 40,
-              gravity: 0,
-              size: heavy ? 16 : 12,
-              life: 0.22,
-              alpha: 0.85,
-            });
-          }
-        },
-        onComplete: complete,
-      });
-    });
-  }
-
   /**
-   * 属性普攻：一道元素刃飞向敌人（金/木/水/火/土共用节奏）。
-   * 飞行中逐步放大 → 命中后短暂停住 → 再播爆炸并消失。
+   * 属性刃弹道（普攻 / 技能直伤 / 敌人出手共用）。
+   *
+   * 枪口闪 → 定尺寸刃 + 残影/光点 → 命中按入射角分层。
+   * 技能档更粗；暴击更快、多一层星芒、命中停 2 帧。缺刃图才降级圆珠。
    */
   fireElementBladeVolley(
     fromX: number,
@@ -771,38 +745,41 @@ export class BattleFx {
     toX: number,
     toY: number,
     element: Element,
-    opts?: { duration?: number },
+    opts?: { duration?: number; weight?: BladeWeight; lane?: number; crit?: boolean },
   ): Promise<void> {
+    const weight = opts?.weight ?? 'basic';
+    const crit = opts?.crit ?? false;
     const bladeTex = TextureCache.get(ELEMENT_BLADE_IMAGES[element]);
     if (!bladeTex) {
-      return this.fireProjectileBetween(fromX, fromY, toX, toY, element, {
-        size: 52,
-        duration: opts?.duration ?? UI.anim.projectile + 0.06,
+      return this._fireOrbFallback(fromX, fromY, toX, toY, element, {
+        duration: opts?.duration ?? UI.anim.projectile,
+        heavy: weight !== 'basic' || crit,
       });
     }
 
     const impactTex = TextureCache.get(ELEMENT_IMPACT_IMAGES[element]);
     const color = ORB_COLOR[element];
-    // 飞行略慢于旧圆珠弹道；爆炸总时长见 impactDur
-    const flyDur = opts?.duration ?? Math.max(0.34, UI.anim.projectile * 1.2);
+    const flyDur = (opts?.duration ?? UI.anim.projectile) * (crit ? 0.92 : 1);
     const impactDur = UI.anim.bladeImpact;
+    const scale = bladeScaleOf(weight) * (crit ? 1.08 : 1);
     const baseW = 128;
     const baseH = 76;
-    // 起飞偏小，飞行中逐步放大，临近命中更明显
-    const startScale = 0.28;
-    const endScale = 1.58;
-    const midX = (fromX + toX) / 2;
-    const midY = Math.min(fromY, toY) - 95;
+    const { midX, midY } = bladeArc(fromX, fromY, toX, toY, opts?.lane ?? 0);
+    const mote = this._moteTex();
+    const trailN = trailCountOf(weight, crit);
+    const ghostEvery = weight === 'skill' ? 2 : 3;
+
+    this._spawnMuzzle(fromX, fromY, color, weight);
 
     return new Promise((resolve) => {
       const done = once(() => resolve());
-      minigameFallback(flyDur + 0.2, done, 120);
+      minigameFallback(flyDur + (crit ? 0.22 : 0.18), done, 120);
 
       const blade = new PIXI.Sprite(bladeTex);
       blade.anchor.set(0.5);
       blade.blendMode = PIXI.BLEND_MODES.ADD;
-      blade.width = baseW * startScale;
-      blade.height = baseH * startScale;
+      blade.width = baseW * scale * 1.15;
+      blade.height = baseH * scale * 0.75;
       blade.alpha = 1;
       blade.position.set(fromX, fromY);
       const scopeId = this._scopeId;
@@ -811,44 +788,56 @@ export class BattleFx {
 
       const state = { t: 0 };
       let frame = 0;
+      let hitAngle = Math.atan2(toY - fromY, toX - fromX);
 
-      /** 命中瞬间：刃立刻消失并切爆炸；Promise 在命中时 resolve（不跟爆炸播完），便于震屏/飘字同步 */
       const finishBladeAndImpact = once(() => {
         TweenManager.cancelTarget(state);
         this._projectiles.delete(blade);
-        if (displayAlive(blade)) {
-          blade.destroy();
+        if (displayAlive(blade)) blade.destroy();
+        void this._playElementImpact(toX, toY, element, impactTex, impactDur, hitAngle, weight, crit);
+        if (crit) {
+          this._waitHitstop(2 / 60, done);
+          return;
         }
-        void this._playElementImpact(toX, toY, element, impactTex, impactDur);
         done();
       });
 
-      minigameFallback(flyDur + 0.12, finishBladeAndImpact, 90);
+      minigameFallback(flyDur + (crit ? 0.14 : 0.1), finishBladeAndImpact, 90);
       TweenManager.to({
         target: state,
         props: { t: 1 },
         duration: flyDur,
-        ease: Ease.easeInQuad,
+        ease: Ease.easeInCubic,
         onUpdate: () => {
           if (!displayAlive(blade)) return;
           const t = state.t;
           const u = 1 - t;
           const x = u * u * fromX + 2 * u * t * midX + t * t * toX;
           const y = u * u * fromY + 2 * u * t * midY + t * t * toY;
-          blade.position.set(x, y);
-          // 前缓后快放大，飞行越久体量感越强
-          const growT = t * t;
-          const scale = startScale + (endScale - startScale) * growT;
-          blade.width = baseW * scale;
-          blade.height = baseH * scale;
           const dx = 2 * u * (midX - fromX) + 2 * t * (toX - midX);
           const dy = 2 * u * (midY - fromY) + 2 * t * (toY - midY);
-          blade.rotation = Math.atan2(dy, dx);
+          hitAngle = Math.atan2(dy, dx);
+          blade.position.set(x, y);
+          blade.rotation = hitAngle;
           if (++frame % 2 === 0) {
             this._fx.burst({
               x, y, color,
-              count: 1, speed: 28, gravity: 0, size: 8, life: 0.16, alpha: 0.7,
+              count: trailN,
+              speed: 36,
+              gravity: 0,
+              size: weight === 'skill' ? 16 : 14,
+              life: 0.16,
+              alpha: crit ? 0.85 : 0.72,
+              texture: mote,
+              blendMode: PIXI.BLEND_MODES.ADD,
+              angle: hitAngle + Math.PI,
+              spread: 0.7,
+              drag: 0.86,
             });
+            this._spawnBladeStreak(x, y, hitAngle, color, mote, scopeId, weight);
+          }
+          if (frame % ghostEvery === 0) {
+            this._spawnBladeGhost(blade, bladeTex, scopeId);
           }
         },
         onComplete: finishBladeAndImpact,
@@ -862,27 +851,161 @@ export class BattleFx {
     fromY: number,
     toX: number,
     toY: number,
-    opts?: { duration?: number },
+    opts?: { duration?: number; weight?: BladeWeight; lane?: number; crit?: boolean },
   ): Promise<void> {
     return this.fireElementBladeVolley(fromX, fromY, toX, toY, 'water', opts);
   }
 
-  /** 元素刃命中爆炸：放大停留 → 再淡出；Promise 在消失后 resolve */
+  /** 刃图未就绪时的圆珠降级：拖尾仍用软光点，不再撒白方块 */
+  private _fireOrbFallback(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    element: Element,
+    opts: { duration: number; heavy: boolean },
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      const color = ORB_COLOR[element];
+      const size = opts.heavy ? 40 : 32;
+      const tex = TextureCache.get(ORB_IMAGES[element]);
+      const mote = this._moteTex();
+      const p = new PIXI.Sprite(tex ?? PIXI.Texture.WHITE);
+      p.anchor.set(0.5);
+      p.width = size;
+      p.height = size;
+      if (!tex) p.tint = color;
+      p.position.set(fromX, fromY);
+      const scopeId = this._scopeId;
+      this._projectiles.set(p, scopeId);
+      this._fx.container.addChild(p);
+      this._spawnMuzzle(fromX, fromY, color, opts.heavy ? 'heavy' : 'basic');
+
+      let frame = 0;
+      const complete = once(() => {
+        TweenManager.cancelTarget(p);
+        this._projectiles.delete(p);
+        if (displayAlive(p)) {
+          this._fx.burst({
+            x: toX, y: toY, color,
+            count: opts.heavy ? 10 : 6,
+            speed: 260,
+            size: 12,
+            life: 0.28,
+            texture: mote,
+            blendMode: PIXI.BLEND_MODES.ADD,
+          });
+          p.destroy();
+        }
+        resolve();
+      });
+      minigameFallback(opts.duration, complete, 100);
+      TweenManager.to({
+        target: p, props: { x: toX, y: toY },
+        duration: opts.duration, ease: Ease.easeInCubic,
+        onUpdate: () => {
+          if (!displayAlive(p)) return;
+          if (++frame % 2 === 0) {
+            this._fx.burst({
+              x: p.x, y: p.y, color,
+              count: 2, speed: 32, gravity: 0, size: 12, life: 0.16, alpha: 0.7,
+              texture: mote,
+              blendMode: PIXI.BLEND_MODES.ADD,
+            });
+          }
+        },
+        onComplete: complete,
+      });
+    });
+  }
+
+  private _moteTex(): PIXI.Texture {
+    return TextureCache.get(UI_BATTLE_IMAGES.skillReadyMote)
+      ?? TextureCache.get(UI_FX_IMAGES.particleSpark)
+      ?? PIXI.Texture.WHITE;
+  }
+
+  private _spawnBladeGhost(src: PIXI.Sprite, tex: PIXI.Texture, scopeId: number): void {
+    const ghost = new PIXI.Sprite(tex);
+    ghost.anchor.set(0.5);
+    ghost.blendMode = PIXI.BLEND_MODES.ADD;
+    ghost.position.copyFrom(src.position);
+    ghost.rotation = src.rotation;
+    ghost.width = src.width;
+    ghost.height = src.height;
+    ghost.alpha = 0.4;
+    this._scopeChildren.set(ghost, scopeId);
+    this._fx.container.addChildAt(ghost, Math.max(0, this._fx.container.getChildIndex(src)));
+    const fade = once(() => {
+      this._scopeChildren.delete(ghost);
+      if (displayAlive(ghost)) ghost.destroy();
+    });
+    TweenManager.to({
+      target: ghost, props: { alpha: 0 }, duration: 0.12, ease: Ease.easeOutQuad, onComplete: fade,
+    });
+  }
+
+  /** 沿速度拉长的软光带，顶上专用光带贴图 */
+  private _spawnBladeStreak(
+    x: number, y: number, angle: number, color: number, tex: PIXI.Texture, scopeId: number,
+    weight: BladeWeight,
+  ): void {
+    const streak = new PIXI.Sprite(tex);
+    streak.anchor.set(0.5);
+    streak.blendMode = PIXI.BLEND_MODES.ADD;
+    streak.tint = color;
+    streak.position.set(x, y);
+    streak.rotation = angle;
+    streak.width = weight === 'skill' ? 52 : 36;
+    streak.height = weight === 'skill' ? 14 : 10;
+    streak.alpha = weight === 'skill' ? 0.48 : 0.38;
+    this._scopeChildren.set(streak, scopeId);
+    this._fx.container.addChild(streak);
+    const fade = once(() => {
+      this._scopeChildren.delete(streak);
+      if (displayAlive(streak)) streak.destroy();
+    });
+    TweenManager.to({
+      target: streak, props: { alpha: 0 }, duration: 0.1, ease: Ease.easeOutQuad, onComplete: fade,
+    });
+  }
+
+  /** 命中：白闪 + 爆炸图转入射角 + 细环 + 软光点沿法线溅出 */
   private _playElementImpact(
     x: number,
     y: number,
     element: Element,
     tex: PIXI.Texture | null,
     duration: number,
+    incomingAngle: number,
+    weight: BladeWeight,
+    crit = false,
   ): Promise<void> {
     return new Promise((resolve) => {
       const done = once(() => resolve());
       minigameFallback(duration + 0.25, done, 140);
+      const color = ORB_COLOR[element];
+      const mote = this._moteTex();
+      const wMul = impactMulOf(weight, crit);
 
       this._fx.burst({
-        x, y, color: ORB_COLOR[element],
-        count: 8, speed: 220, size: 10, life: 0.32,
+        x, y, color,
+        count: weight === 'skill' ? 14 : (crit ? 12 : 8),
+        speed: 280,
+        gravity: 90,
+        size: 12,
+        life: 0.28,
+        alpha: 0.9,
+        texture: mote,
+        blendMode: PIXI.BLEND_MODES.ADD,
+        angle: incomingAngle,
+        spread: 1.35,
+        drag: 0.9,
       });
+
+      this._spawnImpactFlash(x, y, wMul);
+      this._spawnImpactRing(x, y, color, wMul);
+      if (crit) this._spawnCritStar(x, y, incomingAngle);
 
       if (!tex) {
         done();
@@ -893,7 +1016,8 @@ export class BattleFx {
       sp.anchor.set(0.5);
       sp.blendMode = PIXI.BLEND_MODES.ADD;
       sp.position.set(x, y);
-      setScaleSafe(sp, 0.55);
+      sp.rotation = incomingAngle;
+      setScaleSafe(sp, 0.7 * wMul);
       sp.alpha = 1;
       this._scopeChildren.set(sp, this._scopeId);
       this._fx.container.addChild(sp);
@@ -904,20 +1028,177 @@ export class BattleFx {
         done();
       });
 
-      // 爆炸放大 → 短停留 → 淡出
-      void tweenScale(sp, { x: 1.25, y: 1.25 }, {
-        duration: duration * 0.25, ease: Ease.easeOutCubic,
+      void tweenScale(sp, { x: 1.12 * wMul, y: 1.12 * wMul }, {
+        duration: duration * 0.22, ease: Ease.easeOutCubic,
         onComplete: () => {
           void guardedTween({
             target: sp,
             props: { alpha: 0 },
-            duration: duration * 0.38,
-            delay: duration * 0.37,
+            duration: duration * 0.4,
+            delay: duration * 0.22,
             ease: Ease.easeInQuad,
             onComplete: cleanup,
           }, { onFallback: cleanup });
         },
       }, { onFallback: cleanup });
+    });
+  }
+
+  /** 枪口：热核 + 细环，4～6 帧，不挡飞行 */
+  private _spawnMuzzle(x: number, y: number, color: number, weight: BladeWeight): void {
+    const mote = this._moteTex();
+    const flare = TextureCache.get(UI_BATTLE_IMAGES.comboFlare) ?? mote;
+    const mul = weight === 'skill' ? 1.25 : 1;
+    const core = new PIXI.Sprite(flare);
+    core.anchor.set(0.5);
+    core.blendMode = PIXI.BLEND_MODES.ADD;
+    core.tint = color;
+    core.position.set(x, y);
+    const sz = 28 * mul;
+    core.width = sz;
+    core.height = sz;
+    core.alpha = 0.95;
+    this._scopeChildren.set(core, this._scopeId);
+    this._fx.container.addChild(core);
+    const fadeCore = once(() => {
+      this._scopeChildren.delete(core);
+      if (displayAlive(core)) core.destroy();
+    });
+    TweenManager.to({
+      target: core,
+      props: { alpha: 0, width: sz * 1.7, height: sz * 1.7 },
+      duration: 0.12,
+      ease: Ease.easeOutQuad,
+      onComplete: fadeCore,
+    });
+
+    const ring = new PIXI.Graphics();
+    ring.blendMode = PIXI.BLEND_MODES.ADD;
+    ring.position.set(x, y);
+    this._scopeChildren.set(ring, this._scopeId);
+    this._fx.container.addChild(ring);
+    const state = { r: 6 * mul, a: 0.75 };
+    const draw = (): void => {
+      if (!displayAlive(ring)) return;
+      ring.clear();
+      ring.lineStyle(2, color, state.a);
+      ring.drawCircle(0, 0, state.r);
+    };
+    draw();
+    const fadeRing = once(() => {
+      this._scopeChildren.delete(ring);
+      if (displayAlive(ring)) ring.destroy();
+    });
+    TweenManager.to({
+      target: state,
+      props: { r: 26 * mul, a: 0 },
+      duration: 0.13,
+      ease: Ease.easeOutQuad,
+      onUpdate: draw,
+      onComplete: fadeRing,
+    });
+
+    this._fx.burst({
+      x, y, color,
+      count: weight === 'skill' ? 6 : 4,
+      speed: 90,
+      gravity: 0,
+      size: 10,
+      life: 0.16,
+      alpha: 0.8,
+      texture: mote,
+      blendMode: PIXI.BLEND_MODES.ADD,
+      drag: 0.84,
+    });
+  }
+
+  private _spawnCritStar(x: number, y: number, angle: number): void {
+    const tex = TextureCache.get(UI_BATTLE_IMAGES.comboStarFlare) ?? this._moteTex();
+    const star = new PIXI.Sprite(tex);
+    star.anchor.set(0.5);
+    star.blendMode = PIXI.BLEND_MODES.ADD;
+    star.tint = 0xfff2c8;
+    star.position.set(x, y);
+    star.rotation = angle;
+    star.width = 72;
+    star.height = 40;
+    star.alpha = 0.95;
+    this._scopeChildren.set(star, this._scopeId);
+    this._fx.container.addChild(star);
+    const fade = once(() => {
+      this._scopeChildren.delete(star);
+      if (displayAlive(star)) star.destroy();
+    });
+    TweenManager.to({
+      target: star,
+      props: { alpha: 0, width: 110, height: 58 },
+      duration: 0.16,
+      ease: Ease.easeOutQuad,
+      onComplete: fade,
+    });
+  }
+
+  /** 暴击命中停 2 帧，让受击/飘字晚一拍出现 */
+  private _waitHitstop(sec: number, done: () => void): void {
+    const dummy = { t: 0 };
+    const finish = once(done);
+    minigameFallback(sec, finish, 30);
+    TweenManager.to({
+      target: dummy, props: { t: 1 }, duration: sec, onComplete: finish,
+    });
+  }
+
+  private _spawnImpactFlash(x: number, y: number, wMul: number): void {
+    const tex = TextureCache.get(UI_BATTLE_IMAGES.comboFlare) ?? this._moteTex();
+    const flash = new PIXI.Sprite(tex);
+    flash.anchor.set(0.5);
+    flash.blendMode = PIXI.BLEND_MODES.ADD;
+    flash.tint = 0xffffff;
+    flash.position.set(x, y);
+    const sz = 42 * wMul;
+    flash.width = sz;
+    flash.height = sz;
+    flash.alpha = 0.95;
+    this._scopeChildren.set(flash, this._scopeId);
+    this._fx.container.addChild(flash);
+    const fade = once(() => {
+      this._scopeChildren.delete(flash);
+      if (displayAlive(flash)) flash.destroy();
+    });
+    TweenManager.to({
+      target: flash,
+      props: { alpha: 0, width: sz * 1.8, height: sz * 1.8 },
+      duration: 0.08,
+      ease: Ease.easeOutQuad,
+      onComplete: fade,
+    });
+  }
+
+  private _spawnImpactRing(x: number, y: number, color: number, wMul: number): void {
+    const ring = new PIXI.Graphics();
+    ring.blendMode = PIXI.BLEND_MODES.ADD;
+    ring.position.set(x, y);
+    this._scopeChildren.set(ring, this._scopeId);
+    this._fx.container.addChild(ring);
+    const state = { r: 10 * wMul, a: 0.7 };
+    const draw = (): void => {
+      if (!displayAlive(ring)) return;
+      ring.clear();
+      ring.lineStyle(2.4, color, state.a);
+      ring.drawCircle(0, 0, state.r);
+    };
+    draw();
+    const fade = once(() => {
+      this._scopeChildren.delete(ring);
+      if (displayAlive(ring)) ring.destroy();
+    });
+    TweenManager.to({
+      target: state,
+      props: { r: 52 * wMul, a: 0 },
+      duration: 0.18,
+      ease: Ease.easeOutQuad,
+      onUpdate: draw,
+      onComplete: fade,
     });
   }
 

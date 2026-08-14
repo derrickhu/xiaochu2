@@ -1272,12 +1272,12 @@ export class BattleHud {
       duration: heavy ? 0.14 : 0.1,
       ease: Ease.easeOutQuad,
     });
-    await fx.fireProjectileBetween(
+    await fx.fireElementBladeVolley(
       enemyCenterX, enemyCenterY, toX, toY, element,
       {
-        heavy,
-        size: heavy ? 58 : 46,
+        weight: heavy ? 'heavy' : 'basic',
         duration: heavy ? UI.anim.enemyProjectileHeavy : UI.anim.enemyProjectile,
+        lane: heavy ? 2 : 1,
       },
     );
     void guardedTween({

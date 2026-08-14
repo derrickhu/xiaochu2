@@ -87,7 +87,10 @@ function fireSkillBlade(
   element: Element,
 ): Promise<void> {
   const slot = petBar.slotAt(petIndex);
-  return fx.fireElementBladeVolley(slot.x, slot.y - 60, toX, toY, element);
+  return fx.fireElementBladeVolley(slot.x, slot.y - 60, toX, toY, element, {
+    weight: 'skill',
+    lane: petIndex,
+  });
 }
 
 /**

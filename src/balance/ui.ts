@@ -123,8 +123,8 @@ export const UI = {
     /** 消珠动画（v0.4.1 放慢：0.25→0.32，玩家反馈消除节奏太赶） */
     orbClear: 0.32,
     orbFall: 0.34,
-    /** 宠物冲刺 / 回位（玩家反馈转珠后普攻太赶：0.26→0.30） */
-    petDash: 0.30,
+    /** 宠物冲刺 / 回位（玩家反馈转珠后普攻太赶：0.26→0.34） */
+    petDash: 0.34,
     petReturn: 0.34,
     enemyHitFlash: 0.12,
     damageFloat: 0.6,
@@ -136,8 +136,8 @@ export const UI = {
     attackGap: 0.44,
     /** 刃命中爆炸总时长；多宠错峰起飞间隔与此对齐 */
     bladeImpact: 0.28,
-    /** 多宠错峰起飞间隔（玩家反馈太快：0.32→0.40） */
-    petAttackStagger: 0.40,
+    /** 多宠错峰起飞间隔（玩家反馈太快：0.32→0.44） */
+    petAttackStagger: 0.44,
     /** 最后一击后稍停再出总伤害（秒）；不阻塞操作，仅错开弹出节奏 */
     turnTotalLeadIn: 0.30,
     /** 击杀后等待单段伤害飘字的上限（秒）；正常约 0.8–1.1s，超时兜底避免卡死 */
@@ -172,11 +172,11 @@ export const UI = {
     /** Combo 淡出（延迟 + 时长） */
     comboFadeDelay: 0.5,
     comboFade: 0.4,
-    /** 属性弹道飞行（宠物 → 敌人；随普攻节奏略放慢：0.30→0.36） */
-    projectile: 0.36,
-    /** 敌人弹道飞行（略慢，便于看清来向） */
-    enemyProjectile: 0.32,
-    enemyProjectileHeavy: 0.42,
+    /** 属性刃飞行：能看清轨迹，再长会飘成贴纸 */
+    projectile: 0.38,
+    /** 敌人刃飞行（略慢于玩家，便于看清来向） */
+    enemyProjectile: 0.40,
+    enemyProjectileHeavy: 0.46,
     /**
      * 玩家消珠/伤害表现结束后 → 敌人出手前的空拍（秒）。
      * 避免「打完立刻挨打」，给玩家读完数字的时间。
