@@ -35,7 +35,7 @@ import { UI, ORB_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
 import { describeUnmet } from '@/balance/damageGates';
 import { STAGES } from '@/balance/stages';
-import { BoardModel, type MatchGroup } from '@/game/board/BoardModel';
+import { BoardModel, type Cell, type MatchGroup } from '@/game/board/BoardModel';
 import { BoardView } from '@/game/board/BoardView';
 import { BattleController, type PetAttack, type TurnResolution } from '@/game/battle/BattleController';
 import type { EnemyActResult } from '@/game/battle/battleTypes';
@@ -213,6 +213,9 @@ export class BattleScene implements Scene {
       UI_FX_IMAGES.particleSpark,
       ...Object.values(ELEMENT_BLADE_IMAGES),
       ...Object.values(ELEMENT_IMPACT_IMAGES),
+      UI_FX_IMAGES.enemyBolt,
+      UI_FX_IMAGES.enemyImpact,
+      UI_FX_IMAGES.summonCircle,
     ]).catch(() => { /* 降级路径：BattleFx 内按贴图缺失回退粒子 */ });
     if (!this._enterSeq.stillValid(token)) return;
     deferSceneBuild(token, this._enterSeq, 'battle', () => {
@@ -905,10 +908,10 @@ export class BattleScene implements Scene {
         break;
       }
       case 'charge':
-        await this._hud.playEnemyCharge(this._fx);
+        await this._hud.playEnemyCharge(this._fx, result.skillName);
         break;
       case 'heal':
-        await this._hud.playEnemyHeal(this._fx, result.healed);
+        await this._hud.playEnemyHeal(this._fx, result.healed, result.skillName);
         if (result.damage > 0 || result.absorbed > 0) {
           await this._hud.playEnemyAttackTelegraph(this._fx, false);
           if (isStale()) return;
@@ -916,7 +919,7 @@ export class BattleScene implements Scene {
         }
         break;
       case 'shield':
-        await this._hud.playEnemyShield(this._fx);
+        await this._hud.playEnemyShield(this._fx, result.skillName);
         if (result.damage > 0 || result.absorbed > 0) {
           await this._hud.playEnemyAttackTelegraph(this._fx, false);
           if (isStale()) return;
@@ -926,7 +929,10 @@ export class BattleScene implements Scene {
       case 'sealOrbs': {
         const sealed = this._board.sealRandom(result.boardSealCount ?? 0);
         this._boardView?.refreshOrbStates();
-        await this._hud.playEnemyDebuff(this._fx, result, `封印 ${sealed.length} 颗珠子！`);
+        await this._hud.playEnemyDebuff(
+          this._fx, result, `封印 ${sealed.length} 颗珠子！`,
+          { beamTo: this._sealBeamTargets(sealed) },
+        );
         break;
       }
       case 'poison':
@@ -949,7 +955,7 @@ export class BattleScene implements Scene {
         );
         break;
       case 'enrage':
-        await this._hud.playEnemyEnrage(this._fx, result.value ?? 1);
+        await this._hud.playEnemyEnrage(this._fx, result.value ?? 1, result.skillName);
         break;
       case 'skillSeal': {
         const petName = this._ctrl.team[result.sealedPetIndex ?? 0]?.def.name ?? '';
@@ -1006,6 +1012,7 @@ export class BattleScene implements Scene {
         await this._hud.playEnemyDebuff(
           this._fx, result,
           `封印${result.absorbElementName ?? ''}珠 ${sealed.length} 颗！`,
+          { beamTo: this._sealBeamTargets(sealed) },
         );
         break;
       }
@@ -1132,6 +1139,12 @@ export class BattleScene implements Scene {
       orderIdx,
       hitCount,
     });
+  }
+
+  private _sealBeamTargets(cells: readonly Cell[]): { x: number; y: number }[] {
+    const view = this._boardView;
+    if (!view || cells.length === 0) return [];
+    return cells.map((cell) => view.worldPosOf(cell));
   }
 
   /** 敌人对英雄的弹道 + 命中反馈（普攻 / 蓄力 / 技能后追刀共用） */

@@ -856,6 +856,174 @@ export class BattleFx {
     return this.fireElementBladeVolley(fromX, fromY, toX, toY, 'water', opts);
   }
 
+  /**
+   * 敌人打英雄：专用敌对能量矛，从上往下砸血条。
+   * 不用玩家新月刃，更不用棋盘珠。贴图未到时用拉长软光点顶上。
+   */
+  fireEnemyBolt(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    element: Element,
+    opts?: { duration?: number; heavy?: boolean },
+  ): Promise<void> {
+    const heavy = opts?.heavy ?? false;
+    const color = ORB_COLOR[element];
+    const flyDur = opts?.duration ?? UI.anim.enemyProjectile;
+    const boltTex = TextureCache.get(UI_FX_IMAGES.enemyBolt) ?? this._moteTex();
+    const impactTex = TextureCache.get(UI_FX_IMAGES.enemyImpact);
+    const mote = this._moteTex();
+    const vx = toX - fromX;
+    const vy = toY - fromY;
+    const len = Math.hypot(vx, vy) || 1;
+    const side = (heavy ? 1 : -1) * 22;
+    const midX = (fromX + toX) / 2 + (-vy / len) * side;
+    const midY = (fromY + toY) / 2 + (vx / len) * side;
+    const scale = heavy ? 1.15 : 0.92;
+    const baseW = 72;
+    const baseH = 128;
+
+    this._spawnMuzzle(fromX, fromY, 0xff3b30, heavy ? 'heavy' : 'basic');
+
+    return new Promise((resolve) => {
+      const done = once(() => resolve());
+      minigameFallback(flyDur + 0.2, done, 120);
+
+      const bolt = new PIXI.Sprite(boltTex);
+      bolt.anchor.set(0.5);
+      bolt.blendMode = PIXI.BLEND_MODES.ADD;
+      bolt.tint = color;
+      bolt.width = baseW * scale;
+      bolt.height = baseH * scale * 1.15;
+      bolt.alpha = 1;
+      bolt.position.set(fromX, fromY);
+      const scopeId = this._scopeId;
+      this._projectiles.set(bolt, scopeId);
+      this._fx.container.addChild(bolt);
+
+      const state = { t: 0 };
+      let frame = 0;
+      let hitAngle = Math.atan2(toY - fromY, toX - fromX);
+
+      const finish = once(() => {
+        TweenManager.cancelTarget(state);
+        this._projectiles.delete(bolt);
+        if (displayAlive(bolt)) bolt.destroy();
+        void this._playEnemyBoltImpact(toX, toY, color, impactTex, hitAngle, heavy);
+        done();
+      });
+
+      minigameFallback(flyDur + 0.12, finish, 90);
+      TweenManager.to({
+        target: state,
+        props: { t: 1 },
+        duration: flyDur,
+        ease: Ease.easeInCubic,
+        onUpdate: () => {
+          if (!displayAlive(bolt)) return;
+          const t = state.t;
+          const u = 1 - t;
+          const x = u * u * fromX + 2 * u * t * midX + t * t * toX;
+          const y = u * u * fromY + 2 * u * t * midY + t * t * toY;
+          const dx = 2 * u * (midX - fromX) + 2 * t * (toX - midX);
+          const dy = 2 * u * (midY - fromY) + 2 * t * (toY - midY);
+          hitAngle = Math.atan2(dy, dx);
+          bolt.position.set(x, y);
+          // 贴图默认朝下，对准速度方向
+          bolt.rotation = hitAngle - Math.PI / 2;
+          if (++frame % 2 === 0) {
+            this._fx.burst({
+              x, y, color,
+              count: heavy ? 3 : 2,
+              speed: 40,
+              gravity: 0,
+              size: 16,
+              life: 0.18,
+              alpha: 0.78,
+              texture: mote,
+              blendMode: PIXI.BLEND_MODES.ADD,
+              angle: hitAngle + Math.PI,
+              spread: 0.55,
+              drag: 0.86,
+            });
+            this._spawnBladeStreak(x, y, hitAngle, color, mote, scopeId, heavy ? 'heavy' : 'basic');
+          }
+          if (frame % 3 === 0) {
+            this._spawnBladeGhost(bolt, boltTex, scopeId);
+          }
+        },
+        onComplete: finish,
+      });
+    });
+  }
+
+  private _playEnemyBoltImpact(
+    x: number,
+    y: number,
+    color: number,
+    tex: PIXI.Texture | null,
+    incomingAngle: number,
+    heavy: boolean,
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      const done = once(() => resolve());
+      minigameFallback(0.32, done, 120);
+      const mote = this._moteTex();
+      const wMul = heavy ? 1.25 : 1;
+
+      this._fx.burst({
+        x, y, color,
+        count: heavy ? 12 : 8,
+        speed: 260,
+        gravity: 70,
+        size: 13,
+        life: 0.3,
+        alpha: 0.9,
+        texture: mote,
+        blendMode: PIXI.BLEND_MODES.ADD,
+        angle: incomingAngle,
+        spread: 1.2,
+        drag: 0.9,
+      });
+      this._spawnImpactFlash(x, y, wMul);
+      this._spawnImpactRing(x, y, 0xff3b30, wMul);
+
+      if (!tex) {
+        done();
+        return;
+      }
+      const sp = new PIXI.Sprite(tex);
+      sp.anchor.set(0.5);
+      sp.blendMode = PIXI.BLEND_MODES.ADD;
+      sp.tint = color;
+      sp.position.set(x, y);
+      sp.rotation = incomingAngle - Math.PI / 2;
+      setScaleSafe(sp, 0.72 * wMul);
+      sp.alpha = 1;
+      this._scopeChildren.set(sp, this._scopeId);
+      this._fx.container.addChild(sp);
+      const cleanup = once(() => {
+        this._scopeChildren.delete(sp);
+        if (displayAlive(sp)) sp.destroy();
+        done();
+      });
+      void tweenScale(sp, { x: 1.15 * wMul, y: 1.15 * wMul }, {
+        duration: 0.1, ease: Ease.easeOutCubic,
+        onComplete: () => {
+          void guardedTween({
+            target: sp,
+            props: { alpha: 0 },
+            duration: 0.16,
+            delay: 0.06,
+            ease: Ease.easeInQuad,
+            onComplete: cleanup,
+          }, { onFallback: cleanup });
+        },
+      }, { onFallback: cleanup });
+    });
+  }
+
   /** 刃图未就绪时的圆珠降级：拖尾仍用软光点，不再撒白方块 */
   private _fireOrbFallback(
     fromX: number,
@@ -1223,6 +1391,7 @@ export class BattleFx {
   spawnHeroHitImpact(x: number, y: number, element: Element, heavy = false): void {
     const elColor = ORB_COLOR[element];
     const impactColor = heavy ? 0xff1744 : 0xff5252;
+    const mote = this._moteTex();
     this.burst({
       x, y,
       color: elColor,
@@ -1230,6 +1399,8 @@ export class BattleFx {
       speed: heavy ? 320 : 240,
       size: heavy ? 14 : 11,
       life: 0.36,
+      texture: mote,
+      blendMode: PIXI.BLEND_MODES.ADD,
     });
     this.burst({
       x, y,
@@ -1238,6 +1409,8 @@ export class BattleFx {
       speed: 200,
       size: heavy ? 12 : 9,
       life: 0.3,
+      texture: mote,
+      blendMode: PIXI.BLEND_MODES.ADD,
     });
     this._spawnSparkBurst(x, y, heavy ? 5 : 3, impactColor);
   }
@@ -1288,6 +1461,177 @@ export class BattleFx {
         onComplete: cleanup,
       }, { onFallback: cleanup });
     }
+  }
+
+  /**
+   * 怪物技能施法拍：脚下法阵 + 敌对技能匾 + 软光点。
+   * 比宠物横幅更靠上、更暗，用来和普攻「敌人攻击！」区分。
+   */
+  playEnemySkillCast(
+    x: number,
+    y: number,
+    name: string,
+    opts?: { color?: number; footY?: number },
+  ): Promise<void> {
+    const color = opts?.color ?? 0xc06cf0;
+    const footY = opts?.footY ?? y + 72;
+    const mote = this._moteTex();
+    this._spawnEnemyCastCircle(x, footY, color);
+    this._spawnMuzzle(x, y, color, 'skill');
+    this.burst({
+      x, y, color,
+      count: 10,
+      speed: 160,
+      gravity: -80,
+      size: 12,
+      life: 0.36,
+      alpha: 0.85,
+      texture: mote,
+      blendMode: PIXI.BLEND_MODES.ADD,
+    });
+    return this._showEnemySkillPlaque(name, color, x, y - 88);
+  }
+
+  /** 从怪物拉光到被封的珠，再在珠上闪一下 */
+  playEnemySealBeams(fromX: number, fromY: number, targets: readonly { x: number; y: number }[]): void {
+    const mote = this._moteTex();
+    for (const to of targets) {
+      const line = new PIXI.Graphics();
+      line.blendMode = PIXI.BLEND_MODES.ADD;
+      line.lineStyle(2.4, 0xe8c36a, 0.85);
+      line.moveTo(fromX, fromY);
+      line.lineTo(to.x, to.y);
+      this._scopeChildren.set(line, this._scopeId);
+      this._fx.container.addChild(line);
+      const fade = once(() => {
+        this._scopeChildren.delete(line);
+        if (displayAlive(line)) line.destroy();
+      });
+      TweenManager.to({
+        target: line, props: { alpha: 0 }, duration: 0.28, ease: Ease.easeInQuad, onComplete: fade,
+      });
+      this.burst({
+        x: to.x, y: to.y, color: 0xe8c36a,
+        count: 5, speed: 90, gravity: 0, size: 11, life: 0.22, alpha: 0.9,
+        texture: mote, blendMode: PIXI.BLEND_MODES.ADD,
+      });
+    }
+  }
+
+  private _spawnEnemyCastCircle(x: number, y: number, color: number): void {
+    const tex = TextureCache.get(UI_FX_IMAGES.summonCircle);
+    if (!tex) {
+      this._spawnEnemyCastCircleFallback(x, y, color);
+      return;
+    }
+    const sp = new PIXI.Sprite(tex);
+    sp.anchor.set(0.5);
+    sp.blendMode = PIXI.BLEND_MODES.ADD;
+    sp.tint = color;
+    sp.position.set(x, y);
+    const dest = 210 / Math.max(1, tex.width);
+    sp.scale.set(dest * 0.45);
+    sp.alpha = 0;
+    this._scopeChildren.set(sp, this._scopeId);
+    this._fx.container.addChild(sp);
+    const fade = once(() => {
+      this._scopeChildren.delete(sp);
+      if (displayAlive(sp)) sp.destroy();
+    });
+    TweenManager.to({
+      target: sp, props: { alpha: 0.72 }, duration: 0.12, ease: Ease.easeOutQuad,
+    });
+    const sc = readScale(sp);
+    if (sc) {
+      TweenManager.to({
+        target: sc, props: { x: dest, y: dest }, duration: 0.36, ease: Ease.easeOutCubic,
+      });
+    }
+    TweenManager.to({
+      target: sp, props: { rotation: 0.7, alpha: 0 },
+      duration: 0.22, delay: 0.28, ease: Ease.easeInQuad, onComplete: fade,
+    });
+  }
+
+  /** 法阵图未到时：两圈描边，直径卡在约 210，避免空拍 */
+  private _spawnEnemyCastCircleFallback(x: number, y: number, color: number): void {
+    const g = new PIXI.Graphics();
+    g.blendMode = PIXI.BLEND_MODES.ADD;
+    g.position.set(x, y);
+    g.lineStyle(3.2, color, 0.9);
+    g.drawCircle(0, 0, 78);
+    g.lineStyle(1.6, 0xe8c36a, 0.6);
+    g.drawCircle(0, 0, 52);
+    g.alpha = 0;
+    g.scale.set(0.45);
+    this._scopeChildren.set(g, this._scopeId);
+    this._fx.container.addChild(g);
+    const fade = once(() => {
+      this._scopeChildren.delete(g);
+      if (displayAlive(g)) g.destroy();
+    });
+    TweenManager.to({
+      target: g, props: { alpha: 0.8 }, duration: 0.12, ease: Ease.easeOutQuad,
+    });
+    const sc = readScale(g);
+    if (sc) {
+      TweenManager.to({
+        target: sc, props: { x: 1, y: 1 }, duration: 0.36, ease: Ease.easeOutCubic,
+      });
+    }
+    TweenManager.to({
+      target: g, props: { rotation: 0.55, alpha: 0 },
+      duration: 0.22, delay: 0.28, ease: Ease.easeInQuad, onComplete: fade,
+    });
+  }
+
+  private _showEnemySkillPlaque(name: string, color: number, x: number, y: number): Promise<void> {
+    return new Promise((resolve) => {
+      const label = name.trim() || '技能';
+      const root = new PIXI.Container();
+      root.position.set(x, y);
+      root.alpha = 0;
+      setScaleSafe(root, 0.82);
+
+      const text = applyTextResolution(new PIXI.Text(label, {
+        fontSize: 28, fill: 0xf6efe4, fontWeight: 'bold',
+        stroke: 0x1a1020, strokeThickness: 4,
+      }));
+      text.anchor.set(0.5);
+      const padX = 22;
+      const padY = 10;
+      const w = Math.min(Game.logicWidth - 48, text.width + padX * 2);
+      const h = text.height + padY * 2;
+      const plate = new PIXI.Graphics();
+      plate.beginFill(0x1c1224, 0.92);
+      plate.lineStyle(2.5, color, 0.95);
+      plate.drawRoundedRect(-w / 2, -h / 2, w, h, 10);
+      plate.endFill();
+      plate.lineStyle(1, 0xe8c36a, 0.55);
+      plate.drawRoundedRect(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6, 8);
+      root.addChild(plate, text);
+      this._scopeChildren.set(root, this._scopeId);
+      this._floatLayer.addChild(root);
+
+      const finish = once(() => {
+        this._scopeChildren.delete(root);
+        if (displayAlive(root)) root.destroy({ children: true });
+        resolve();
+      });
+      minigameFallback(0.52, finish, 80);
+      TweenManager.to({
+        target: root, props: { alpha: 1 }, duration: 0.1, ease: Ease.easeOutQuad,
+      });
+      void tweenScale(root, { x: 1, y: 1 }, {
+        duration: 0.12, ease: Ease.easeOutBack,
+        onComplete: () => {
+          void guardedTween({
+            target: root, props: { alpha: 0, y: y - 18 },
+            duration: 0.16, delay: 0.22, ease: Ease.easeInQuad, onComplete: finish,
+          }, { onFallback: finish });
+        },
+      }, { onFallback: finish });
+    });
   }
 
   /** 技能名横幅：放大弹入 → 短暂停留 → 淡出 */

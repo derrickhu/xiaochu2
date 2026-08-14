@@ -1,0 +1,9 @@
+Game VFX sprite, single hostile HIT BURST for enemy striking the hero HP bar, square 1:1.
+
+Pure black background #000000 for additive blending. Centered.
+
+Crimson-black starburst impact with a white-hot core, sharp spikes, a few dark embers flying out.
+Looks dangerous and painful, not cute water droplets, not a puzzle orb splash.
+Mobile game combat VFX, AFK Arena / 阴阳师 quality.
+
+NO TEXT, no labels, no captions, no watermark, no UI.

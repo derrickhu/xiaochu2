@@ -16,7 +16,8 @@ import { enemyStats } from '@/formulas/growth';
 import { GROWTH } from '@/balance/growth';
 import { skillForEnemy, type SkillRuntimeContext } from '../SkillEngine';
 import { initialPhaseState } from '../bossPhase';
-import { predictEnemyIntent } from '../battleEnemyIntent';
+import { nextEnemySkillCountdown, predictEnemyIntent } from '../battleEnemyIntent';
+import { ENEMY_SKILL_IDS } from '@/balance/skills/ids';
 import { runEnemyTurnAction, type EnemyTurnContext } from '../battleEnemyTurn';
 import type { EnemyUnit } from '../battleTypes';
 
@@ -216,5 +217,39 @@ describe('Boss 出手密度', () => {
     }
 
     expect(thin, `以下 Boss 打起来是木桩：\n  ${thin.join('\n  ')}`).toEqual([]);
+  });
+});
+
+describe('条件技不进预告', () => {
+  it('血怒满血不报即将放技能，残血才报', () => {
+    const stage = STAGES.find((s) => s.id === 'stage_1_3');
+    expect(stage, '1-3 焰蝠洞口应存在').toBeTruthy();
+    const ref = stage!.encounters[0];
+    const def = resolveEncounter(ref).def;
+    expect(def.skillIds).toContain(ENEMY_SKILL_IDS.enrage);
+
+    const stats = enemyStats(def, stage!.chapter, stage!.difficulty);
+    const spawn = (hpPct: number): EnemyUnit => ({
+      def,
+      maxHp: stats.hp,
+      hp: Math.max(1, Math.floor(stats.hp * hpPct)),
+      atk: stats.atk,
+      def_: stats.def,
+      attackCountdown: GROWTH.enemy.initialAttackCountdown,
+      skillCds: (def.skillIds ?? []).map(() => 0),
+      skillRotation: 0,
+      charging: null,
+      dmgReduction: null,
+      ...initialPhaseState(def, stats.atk),
+    }) as EnemyUnit;
+
+    const full = spawn(0.95);
+    const fullCtx = makeCtx(full);
+    expect(nextEnemySkillCountdown(full, fullCtx.enemyCaster(), fullCtx.runtimeContext())).toBeNull();
+
+    const low = spawn(0.30);
+    const lowCtx = makeCtx(low);
+    const intent = nextEnemySkillCountdown(low, lowCtx.enemyCaster(), lowCtx.runtimeContext());
+    expect(intent).toEqual(expect.objectContaining({ name: '血怒', turns: 0 }));
   });
 });

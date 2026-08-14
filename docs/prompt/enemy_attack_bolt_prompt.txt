@@ -1,0 +1,10 @@
+Game VFX sprite, single hostile energy bolt for enemy attack, square 1:1.
+
+Pure black background #000000 for additive blending. Centered.
+
+A sharp downward-pointing energy SPEAR / meteor, not a circle, not a puzzle gem, not a cute crescent blade.
+White-hot core, dark crimson to violet rim, jagged aggressive silhouette.
+Short upward motion streaks and embers as a tail (the bolt is flying DOWN).
+Soft bloom, high contrast, mobile game combat VFX, AFK Arena / 阴阳师 quality.
+
+NO TEXT, no labels, no captions, no watermark, no UI.

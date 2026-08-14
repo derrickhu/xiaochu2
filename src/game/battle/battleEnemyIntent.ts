@@ -5,7 +5,8 @@
  * 侧挂徽章报的是「几回合后放技能」（普攻间隔=1 时「N 回合后攻击」毫无决策价值）。
  * 本文件仍保留：
  * 1. `pickEnemySkill`：实机与模拟器共用的固定轮转选招
- * 2. `nextEnemySkillCountdown`：侧挂徽章 / 详情页读下次技能倒计时
+ * 2. `nextEnemySkillCountdown`：侧挂徽章 / 详情页读下次「真的会放」的技能
+ *    （冷却到了但条件不成立的招不报，避免「即将放技能」却一直普攻）
  * 3. `predictEnemyIntent`：测试用推演，保证「轮转挑出来的」就是「真正打出来的」
  *
  * 蓄力预警仍走侧挂（「蓄力中」），那是动作本身的 telegraph。
@@ -40,9 +41,16 @@ export interface EnemySkillPick {
 /**
  * 距离下次放技能还要几个敌人回合。
  * `turns === 0` = 下个敌人回合就会放（与回合开始先扣 CD 再选招的口径一致）。
- * 无技能表时返回 null。
+ * 无技能表、或所有招当前都放不出来（血线/已触发/互斥）时返回 null。
+ *
+ * 智龙迷城 / 魔灵召唤同一口径：预告只报「下一动真会出手的」，
+ * 条件技写在技能说明里，未满足时不当成即将释放。
  */
-export function nextEnemySkillCountdown(enemy: EnemyUnit): {
+export function nextEnemySkillCountdown(
+  enemy: EnemyUnit,
+  caster: SkillCaster,
+  runtime: SkillRuntimeContext,
+): {
   turns: number;
   skillId: string;
   name: string;
@@ -52,9 +60,10 @@ export function nextEnemySkillCountdown(enemy: EnemyUnit): {
   let best: { turns: number; skillId: string; name: string } | null = null;
   for (let k = 0; k < n; k++) {
     const i = (enemy.skillRotation + k) % n;
+    const skill = skillForEnemy(enemy.skillIds[i]);
+    if (!runSkill(skill, caster, runtime)) continue;
     const turns = Math.max(0, enemy.skillCds[i]);
     if (best && turns >= best.turns) continue;
-    const skill = skillForEnemy(enemy.skillIds[i]);
     best = { turns, skillId: skill.id, name: skill.name };
   }
   return best;

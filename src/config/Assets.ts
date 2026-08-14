@@ -698,6 +698,10 @@ export const UI_FX_IMAGES = {
   fireImpact: `${PKG.fx}/images/ui/fx/fx_fire_impact.png`,
   earthBlade: `${PKG.fx}/images/ui/fx/fx_earth_blade.png`,
   earthImpact: `${PKG.fx}/images/ui/fx/fx_earth_impact.png`,
+  /** 敌人出手：敌对能量矛（加法混合，tint 成属性色） */
+  enemyBolt: `${PKG.fx}/images/ui/fx/fx_enemy_bolt.png`,
+  /** 敌人命中英雄血条 */
+  enemyImpact: `${PKG.fx}/images/ui/fx/fx_enemy_impact.png`,
 } as const;
 
 /** 属性普攻刃贴图 */

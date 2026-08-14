@@ -23,7 +23,7 @@ import {
 } from '@/balance/enemyDisplay';
 import { counterElementOf, resistedElementOf, type Element } from '@/balance/combat';
 import { SKILL_IMPACT, type SkillImpactTier } from '@/balance/skillVfx';
-import { enemyImage, UI_BATTLE_IMAGES } from '@/config/Assets';
+import { enemyImage, UI_BATTLE_IMAGES, UI_FX_IMAGES } from '@/config/Assets';
 import { makeElementOrb } from '@/ui';
 import { formatStageBattleHeader } from '@/balance/stages';
 import {
@@ -33,7 +33,6 @@ import {
   type StarTurnPace,
 } from '@/formulas/stars';
 import type { BattleController, EnemyActResult } from '@/game/battle/BattleController';
-import { nextEnemySkillCountdown } from '@/game/battle/battleEnemyIntent';
 import { phaseHpMarkers } from '@/game/battle/bossPhase';
 import type { BoardView } from '@/game/board/BoardView';
 import { delay } from './battleWidgets';
@@ -977,7 +976,7 @@ export class BattleHud {
         });
       }
     } else {
-      const nextSkill = nextEnemySkillCountdown(enemy);
+      const nextSkill = this._ctrl.nextSkillCountdown();
       if (nextSkill) {
         if (nextSkill.turns <= 0) lines.push('即将', '放技能');
         else lines.push(`${nextSkill.turns}回合后`, '技能');
@@ -1213,7 +1212,7 @@ export class BattleHud {
     });
   }
 
-  /** 敌人攻击：蓄力缩放 → 属性弹道飞向英雄血条 → 命中反馈（onHeroHit 由编排者注入） */
+  /** 敌人攻击：蓄力下压 → 敌对能量矛砸向英雄血条 → 命中反馈 */
   playEnemyAttack(
     fx: BattleFx, _damage: number, _absorbed: number, heavy: boolean, onHeroHit: () => void,
   ): Promise<void> {
@@ -1238,6 +1237,10 @@ export class BattleHud {
       gravity: -220,
       size: heavy ? 15 : 13,
       life: UI.anim.enemyAttackTelegraph * 0.85,
+      texture: TextureCache.get(UI_BATTLE_IMAGES.skillReadyMote)
+        ?? TextureCache.get(UI_FX_IMAGES.particleSpark)
+        ?? undefined,
+      blendMode: PIXI.BLEND_MODES.ADD,
     });
     Platform.vibrateShort(heavy ? 'medium' : 'light');
     await delay(UI.anim.enemyAttackTelegraph);
@@ -1262,42 +1265,68 @@ export class BattleHud {
     }
     const baseScale = spriteScale.x;
 
+    const container = this._enemyContainer;
+    const baseY = container.y;
     TweenManager.cancelTarget(spriteScale);
-    await guardedTween({
-      target: spriteScale,
-      props: {
-        x: baseScale * (heavy ? 1.14 : 1.08),
-        y: baseScale * (heavy ? 1.14 : 1.08),
-      },
-      duration: heavy ? 0.14 : 0.1,
-      ease: Ease.easeOutQuad,
-    });
-    await fx.fireElementBladeVolley(
-      enemyCenterX, enemyCenterY, toX, toY, element,
+    TweenManager.cancelTarget(container);
+    await Promise.all([
+      guardedTween({
+        target: spriteScale,
+        props: {
+          x: baseScale * (heavy ? 1.16 : 1.1),
+          y: baseScale * (heavy ? 1.16 : 1.1),
+        },
+        duration: heavy ? 0.16 : 0.12,
+        ease: Ease.easeOutQuad,
+      }),
+      guardedTween({
+        target: container,
+        props: { y: baseY + (heavy ? 28 : 20) },
+        duration: heavy ? 0.16 : 0.12,
+        ease: Ease.easeInQuad,
+      }),
+    ]);
+    await fx.fireEnemyBolt(
+      enemyCenterX, container.y, toX, toY, element,
       {
-        weight: heavy ? 'heavy' : 'basic',
+        heavy,
         duration: heavy ? UI.anim.enemyProjectileHeavy : UI.anim.enemyProjectile,
-        lane: heavy ? 2 : 1,
       },
     );
     void guardedTween({
       target: spriteScale,
       props: { x: baseScale, y: baseScale },
-      duration: 0.12,
+      duration: 0.14,
       ease: Ease.easeOutQuad,
+    });
+    void guardedTween({
+      target: container,
+      props: { y: baseY },
+      duration: 0.16,
+      ease: Ease.easeOutBack,
     });
     onHeroHit();
   }
 
+  private _castMote(): PIXI.Texture | undefined {
+    return TextureCache.get(UI_BATTLE_IMAGES.skillReadyMote)
+      ?? TextureCache.get(UI_FX_IMAGES.particleSpark)
+      ?? undefined;
+  }
+
   /** 蓄力起手：红色凝聚粒子 + 立绘膨胀脉冲（预告文字由 refreshEnemyCd 常驻） */
-  async playEnemyCharge(fx: BattleFx): Promise<void> {
+  async playEnemyCharge(fx: BattleFx, skillName?: string): Promise<void> {
     const { enemyCenterX, enemyCenterY } = this._layout;
+    await fx.playEnemySkillCast(enemyCenterX, enemyCenterY, skillName || '蓄力', {
+      color: 0xff5252, footY: enemyCenterY + 70,
+    });
     fx.burst({
       x: enemyCenterX, y: enemyCenterY,
       color: 0xff5252, count: 14, speed: 200, gravity: -350,
       size: 14, life: UI.anim.chargeWarn,
+      texture: this._castMote(),
+      blendMode: PIXI.BLEND_MODES.ADD,
     });
-    fx.spawnFloat('蓄力中！', enemyCenterX, enemyCenterY - 60, 0xff5252, 1.3);
     Platform.vibrateShort('medium');
     const c = this._enemyContainer;
     if (!displayAlive(c)) return;
@@ -1313,22 +1342,32 @@ export class BattleHud {
     });
   }
 
-  async playEnemyHeal(fx: BattleFx, healed: number): Promise<void> {
+  async playEnemyHeal(fx: BattleFx, healed: number, skillName?: string): Promise<void> {
     const { enemyCenterX, enemyCenterY } = this._layout;
+    await fx.playEnemySkillCast(enemyCenterX, enemyCenterY, skillName || '回复', {
+      color: 0x8be78b, footY: enemyCenterY + 70,
+    });
     fx.burst({
       x: enemyCenterX, y: enemyCenterY,
       color: 0x8be78b, count: 12, speed: 240, gravity: -250, size: 14, life: 0.55,
+      texture: this._castMote(),
+      blendMode: PIXI.BLEND_MODES.ADD,
     });
     fx.spawnFloat(`+${healed}`, enemyCenterX, enemyCenterY - 50, 0x8be78b, 1.2);
     this.refreshEnemyHp();
     await delay(0.45);
   }
 
-  async playEnemyShield(fx: BattleFx): Promise<void> {
+  async playEnemyShield(fx: BattleFx, skillName?: string): Promise<void> {
     const { enemyCenterX, enemyCenterY } = this._layout;
+    await fx.playEnemySkillCast(enemyCenterX, enemyCenterY, skillName || '护壁', {
+      color: 0xb0c4de, footY: enemyCenterY + 70,
+    });
     fx.burst({
       x: enemyCenterX, y: enemyCenterY,
       color: 0xb0c4de, count: 12, speed: 260, gravity: -150, size: 15, life: 0.5,
+      texture: this._castMote(),
+      blendMode: PIXI.BLEND_MODES.ADD,
     });
     fx.spawnFloat('减伤护壁！', enemyCenterX, enemyCenterY - 50, 0xb0c4de, 1.2);
     this.refreshEnemyCd();
@@ -1339,29 +1378,37 @@ export class BattleHud {
    * 敌人对我方施加 debuff（封珠/中毒/时间压缩/禁疗/技能封印）：
    * 敌人侧技能名 + 紫色施法粒子 → 英雄区 debuff 飘字 + 暗紫闪屏
    */
-  async playEnemyDebuff(fx: BattleFx, result: EnemyActResult, text: string): Promise<void> {
+  async playEnemyDebuff(
+    fx: BattleFx,
+    result: EnemyActResult,
+    text: string,
+    opts?: { beamTo?: readonly { x: number; y: number }[] },
+  ): Promise<void> {
     const { enemyCenterX, enemyCenterY } = this._layout;
-    if (result.skillName) {
-      fx.spawnFloat(result.skillName, enemyCenterX, enemyCenterY - 60, 0xc06cf0, 1.25);
+    await fx.playEnemySkillCast(
+      enemyCenterX, enemyCenterY, result.skillName || '技能',
+      { color: 0xc06cf0, footY: enemyCenterY + 70 },
+    );
+    if (opts?.beamTo && opts.beamTo.length > 0) {
+      fx.playEnemySealBeams(enemyCenterX, enemyCenterY, opts.beamTo);
     }
     fx.burst({
       x: enemyCenterX, y: enemyCenterY,
       color: 0xc06cf0, count: 12, speed: 240, gravity: -180, size: 14, life: 0.5,
+      texture: this._castMote(),
+      blendMode: PIXI.BLEND_MODES.ADD,
     });
     Platform.vibrateShort('medium');
-    const debuffGap = Platform.isMinigame && !Platform.isDevtools ? 0.2 : 0.35;
-    const debuffTail = Platform.isMinigame && !Platform.isDevtools ? 0.22 : 0.4;
-    await delay(debuffGap);
     fx.flash(0x7a3cb8, 0.24, 0.3);
     const { statusAnnounceX, statusAnnounceY } = this._layout;
-    // 居中公告：旧锚点贴右侧，长句「中毒！每回合 -77（3回合）」直接裁出屏
     fx.spawnStatusAnnounceFloat(text, statusAnnounceX, statusAnnounceY, 0xc06cf0);
     fx.burst({
       x: statusAnnounceX, y: statusAnnounceY,
       color: 0xc06cf0, count: 10, speed: 260, size: 13, life: 0.45,
+      texture: this._castMote(),
+      blendMode: PIXI.BLEND_MODES.ADD,
     });
-    // 至少让大字停稳再进入下一拍；真机也不再压成 0.22s
-    await delay(Math.max(debuffTail, 0.85));
+    await delay(0.72);
   }
 
   /**
@@ -1443,13 +1490,18 @@ export class BattleHud {
     });
   }
 
-  /** 敌人狂暴：红色爆发粒子 + 立绘膨胀脉冲 + 红闪 + 「狂暴」飘字 */
-  async playEnemyEnrage(fx: BattleFx, atkMult: number): Promise<void> {
+  /** 敌人狂暴：施法拍 + 红色爆发粒子 + 立绘膨胀脉冲 + 红闪 */
+  async playEnemyEnrage(fx: BattleFx, atkMult: number, skillName?: string): Promise<void> {
     const { enemyCenterX, enemyCenterY } = this._layout;
+    await fx.playEnemySkillCast(enemyCenterX, enemyCenterY, skillName || '狂暴', {
+      color: 0xff5252, footY: enemyCenterY + 70,
+    });
     fx.flash(0xff2d2d, 0.3, 0.4);
     fx.burst({
       x: enemyCenterX, y: enemyCenterY,
       color: 0xff3030, count: 18, speed: 360, gravity: -120, size: 17, life: 0.6,
+      texture: this._castMote(),
+      blendMode: PIXI.BLEND_MODES.ADD,
     });
     fx.spawnFloat(`狂暴！攻击 ×${atkMult}`, enemyCenterX, enemyCenterY - 60, 0xff5252, 1.4);
     fx.shakeMedium();
@@ -1476,14 +1528,21 @@ export class BattleHud {
    */
   async playEnemyPhaseShift(fx: BattleFx, label: string): Promise<void> {
     const { enemyCenterX, enemyCenterY } = this._layout;
+    await fx.playEnemySkillCast(enemyCenterX, enemyCenterY, '转阶段', {
+      color: 0xffd451, footY: enemyCenterY + 70,
+    });
     fx.flash(0xffc447, 0.34, 0.5);
     fx.burst({
       x: enemyCenterX, y: enemyCenterY,
       color: 0xffd451, count: 26, speed: 420, gravity: -90, size: 19, life: 0.75,
+      texture: this._castMote(),
+      blendMode: PIXI.BLEND_MODES.ADD,
     });
     fx.burst({
       x: enemyCenterX, y: enemyCenterY,
       color: 0x9b5cff, count: 18, speed: 300, gravity: -60, size: 15, life: 0.9,
+      texture: this._castMote(),
+      blendMode: PIXI.BLEND_MODES.ADD,
     });
     fx.spawnFloat(label, enemyCenterX, enemyCenterY - 70, 0xffd451, 1.8);
     fx.shakeMedium();

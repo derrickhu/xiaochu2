@@ -43,9 +43,11 @@ import { BattleStatusStore, type StatusInstance } from './BattleStatus';
 import {
   runSkill,
   skillCdForPet,
+  skillForEnemy,
   skillForPet,
   type SkillResult,
 } from './SkillEngine';
+import { nextEnemySkillCountdown } from './battleEnemyIntent';
 import type {
   BattleResult,
   BattleState,
@@ -267,6 +269,20 @@ export class BattleController {
   /** 被封印主动技的宠物 index（技能封印 debuff，无则 null） */
   get sealedPetIndex(): number | null {
     return this._statuses.sealedPetIndex();
+  }
+
+  /** 侧挂徽章 / 详情：下次真的会放的技能倒计时（条件不成立的招不报） */
+  nextSkillCountdown() {
+    return nextEnemySkillCountdown(
+      this.enemy,
+      makeEnemyCaster(this.enemy),
+      this._runtimeContext(),
+    );
+  }
+
+  /** 该技能以当前战场状态能否放出来（详情列表标「当前无法释放」） */
+  skillWouldFire(skillId: string): boolean {
+    return runSkill(skillForEnemy(skillId), makeEnemyCaster(this.enemy), this._runtimeContext()) !== null;
   }
 
   get totalWaves(): number {

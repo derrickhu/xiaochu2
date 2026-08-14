@@ -14,7 +14,6 @@ import { ELEMENT_NAME } from '@/balance/ui';
 import { counterElementOf, resistedElementOf } from '@/balance/combat';
 import type { StatusInstance, StatusKind } from '@/game/battle/BattleStatus';
 import type { BattleController } from '@/game/battle/BattleController';
-import { nextEnemySkillCountdown } from '@/game/battle/battleEnemyIntent';
 import { skillForEnemy } from '@/game/battle/SkillEngine';
 import { makePanel } from '@/ui/Panel';
 import { makeText } from '@/ui/text';
@@ -125,7 +124,7 @@ export function showEnemyDetailDialog(
   y += stats.height + 6;
 
   // 行动节奏：优先报下次技能；普攻间隔=1 时不再强调「N 回合后攻击」
-  const nextSkill = nextEnemySkillCountdown(enemy);
+  const nextSkill = ctrl.nextSkillCountdown();
   let rhythm: string;
   if (enemy.charging) {
     rhythm = '蓄力中：下回合重击';
@@ -199,7 +198,8 @@ export function showEnemyDetailDialog(
       const cdExtra = typeof cdLeftSkill === 'number' && cdLeftSkill > 0
         ? ` · 剩余 ${cdLeftSkill}`
         : '';
-      const desc = makeText(`${skill.desc}\n${cdHint}${cdExtra}`, {
+      const gateHint = ctrl.skillWouldFire(id) ? '' : ' · 当前无法释放';
+      const desc = makeText(`${skill.desc}\n${cdHint}${cdExtra}${gateHint}`, {
         size: 12, fill: SUB, anchor: [0, 0],
         wordWrapWidth: innerW - textX,
       });

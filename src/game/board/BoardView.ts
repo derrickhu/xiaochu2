@@ -217,6 +217,14 @@ export class BoardView {
     return playBoardConvert(this._animationContext(), cells, to);
   }
 
+  /** 格子中心的战斗逻辑坐标（容器已摆到棋盘原点） */
+  worldPosOf(cell: Cell): { x: number; y: number } {
+    return {
+      x: this.container.x + this._cellCenterX(cell.c),
+      y: this.container.y + this._cellCenterY(cell.r),
+    };
+  }
+
   /** 强制结束拖拽（场景退出等） */
   cancelDrag(): void {
     if (this._dragging) this._endDrag();
