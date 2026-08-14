@@ -4,8 +4,8 @@
  * xiao_chu 的每组消除是恒定 16 帧，靠音阶上行撑爽感；照搬到 xiaochu2 后玩家反馈
  * 「一样的消除节奏、没有变化」。业界（PAD 连锁、Candy Crush cascade）的通行做法是
  * 让后段连击逐拍变慢并加重：停顿拉长制造期待，音高继续上行推情绪，里程碑处再插一个
- * hitstop。三条曲线放在同一处，是为了让声音、屏震、马达共用同一份 tier 判定——
- * 之前它们各写各的阈值，结果「破」的时候画面已经炸了、声音还停在平段。
+ * hitstop。crescendo 提前到 3 / 6 连——日常回合多半到不了 12。
+ * 三条曲线放在同一处，是为了让声音、屏震、马达共用同一份 tier 判定。
  */
 import { UI } from '@/balance/ui';
 import { getComboTier, isComboMilestone } from './ComboDisplay';

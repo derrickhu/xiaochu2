@@ -155,19 +155,16 @@ export const UI = {
     /**
      * 连组消除节拍曲线 —— 第 n 连的间隔 = base + (n-1) × step，封顶 max。
      *
-     * xiao_chu 是恒定 16 帧，靠音阶上行撑爽感；实测玩家反馈「一样的节奏、没有变化」。
-     * 业界（PAD 连锁、三消 cascade）都让后段逐拍变慢：停顿拉长制造期待，
-     * 音高与特效同步爬升。
-     *
+     * 日常回合多半停在 3～7 连，crescendo 必须提前到「破 / 无双」而不是 12 连。
      * base 不能低于 orbClear（0.32s ≈ 19 帧）：playClear 是不 await 的，
-     * 节拍比它短的话前几连的消珠动画会被下一组打断，看起来就是「一闪而过」。
+     * 节拍比它短的话前几连的消珠动画会被下一组打断。
      */
-    comboBeatBase: 19 / 60,
-    comboBeatStep: 1.7 / 60,
-    comboBeatMax: 36 / 60,
-    /** 里程碑额外空拍 = base + tier × step；tier 越高，「破」后的空白越久 */
-    comboMilestoneHoldBase: 4 / 60,
-    comboMilestoneHoldStep: 3 / 60,
+    comboBeatBase: 22 / 60,
+    comboBeatStep: 2.4 / 60,
+    comboBeatMax: 42 / 60,
+    /** 里程碑额外空拍 = base + tier × step；「破」约 13 帧，让两个字读完再进下一连 */
+    comboMilestoneHoldBase: 8 / 60,
+    comboMilestoneHoldStep: 5 / 60,
     /** 消除粒子寿命 */
     orbBurst: 0.45,
     /** Combo 大字弹跳 */

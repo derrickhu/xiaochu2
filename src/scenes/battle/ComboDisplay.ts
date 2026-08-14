@@ -92,18 +92,18 @@ interface ComboAnim {
  *
  * 参照王者击杀播报 / 格斗 combo counter 的拆解：真正的「炸」不是把字放大，
  * 而是同一瞬间叠了六件事——残影向外扩散、光刃扫过字面、挤压拉伸、倾斜回正、
- * 高频抖动、速度带从中心冲出。单独拿出任何一条都平淡，叠在 0.25 秒里才有冲击力。
- * 全部窗口都压在 POP_END 附近结束，因为最短的连击节拍只有 13 帧。
+ * 高频抖动、速度带从中心冲出。窗口对齐 comboBeatBase（22 帧），让冲击填满节拍
+ * 而不是 16 帧演完再干等下一连。
  */
-const POP_END = 16;
-const HOLD_END = 60;
-const TOTAL_END = 86;
-const GHOST_END = 13;
-const SHINE_START = 2;
-const SHINE_END = 15;
-const JITTER_END = 11;
-const BANNER_END = 20;
-const TILT_END = 9;
+const POP_END = 22;
+const HOLD_END = 80;
+const TOTAL_END = 110;
+const GHOST_END = 18;
+const SHINE_START = 3;
+const SHINE_END = 20;
+const JITTER_END = 16;
+const BANNER_END = 26;
+const TILT_END = 12;
 /**
  * 能量爆发窗口。
  *
@@ -119,15 +119,15 @@ const TILT_END = 9;
  * 四层各司其职，少一层都塌：放射冲出去给动势、能量团给体量、白热核给刺眼的
  * 亮度、星芒给「高光时刻」的招牌感。
  */
-const FLASH_END = 5;
-const RAYS_END = 15;
-const ENERGY_BURST_END = 7;
-const ENERGY_SETTLE_END = 16;
-const FLARE_IN_END = 4;
-const FLARE_SETTLE_END = 22;
+const FLASH_END = 7;
+const RAYS_END = 22;
+const ENERGY_BURST_END = 10;
+const ENERGY_SETTLE_END = 22;
+const FLARE_IN_END = 5;
+const FLARE_SETTLE_END = 30;
 /** 多位数逐位入场的错帧，第二位晚落一点更有节奏 */
-const DIGIT_STAGGER = 2;
-const DIGIT_POP = 8;
+const DIGIT_STAGGER = 3;
+const DIGIT_POP = 11;
 
 interface ComboStyle {
   tier: number;
@@ -552,18 +552,18 @@ export class ComboDisplay {
 
   private _updateMilestonePulse(timer: number): void {
     if (!this._milestone.visible) return;
-    if (timer > 58) {
+    if (timer > 78) {
       this._milestone.visible = false;
       this._flare.visible = false;
       return;
     }
-    const pulse = timer <= 34 ? 1 + (1 - timer / 34) * 0.35 : 1;
+    const pulse = timer <= 46 ? 1 + (1 - timer / 46) * 0.35 : 1;
     this._milestone.scale.set(this._msBaseScale * pulse);
-    if (timer <= 34) {
+    if (timer <= 46) {
       this._flare.visible = true;
-      this._flare.alpha = Math.max(0, 1 - timer / 28) * 0.9;
+      this._flare.alpha = Math.max(0, 1 - timer / 38) * 0.9;
       this._flare.rotation = timer * 0.12;
-      this._flare.scale.set(this._flareBaseScale * (1 + (1 - timer / 28) * 0.4));
+      this._flare.scale.set(this._flareBaseScale * (1 + (1 - timer / 38) * 0.4));
     } else {
       this._flare.visible = false;
     }
@@ -572,8 +572,8 @@ export class ComboDisplay {
   /**
    * 背景能量爆发。
    *
-   * 四层各走各的时间线，错开才有层次：泛光只闪 5 帧（久了就是蒙了层色片）、
-   * 放射一路冲出去后彻底消失（留着会挡住后续操作）、能量团 7 帧甩到最大再
+   * 四层各走各的时间线，错开才有层次：泛光只闪 FLASH_END 帧（久了就是蒙了层色片）、
+   * 放射一路冲出去后彻底消失（留着会挡住后续操作）、能量团先甩到最大再
    * 回落到常驻托住文字、星芒最后淡到低亮度当装饰。
    *
    * 贴图不做旋转，只做镜像。旋转会让人一眼看穿是同一张图在转；而且这些图都被
@@ -774,7 +774,7 @@ export class ComboDisplay {
       speedVar: 0.6,
       gravity: 110 * S,
       size: size * 1.25,
-      life: isTierBreak ? 0.66 : 0.54,
+      life: isTierBreak ? 0.82 : 0.68,
       alpha: 0.95,
       texture: flakeTex,
       blendMode: PIXI.BLEND_MODES.ADD,
@@ -792,7 +792,7 @@ export class ComboDisplay {
       speedVar: 0.55,
       gravity: 95 * S,
       size,
-      life: isTierBreak ? 0.62 : 0.5,
+      life: isTierBreak ? 0.78 : 0.64,
       alpha: 0.95,
       texture: flakeTex,
       blendMode: PIXI.BLEND_MODES.ADD,
@@ -814,7 +814,7 @@ export class ComboDisplay {
         speedVar: 0.5,
         gravity: 60 * S,
         size: size + 4,
-        life: 0.6,
+        life: 0.78,
         alpha: 0.95,
         texture: starTex,
         blendMode: PIXI.BLEND_MODES.ADD,
@@ -997,6 +997,6 @@ export class ComboDisplay {
     this._drawShine(t);
     this._updateGhost(style, t);
     this._updateDigits(t);
-    this._updateMilestonePulse(this._inBattle ? Math.min(t, 40) : t);
+    this._updateMilestonePulse(this._inBattle ? Math.min(t, 54) : t);
   }
 }

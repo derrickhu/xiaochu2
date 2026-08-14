@@ -174,7 +174,7 @@ class SfxManagerClass {
     if (!this.enabled) return;
     const tier = getComboTier(comboNum);
     BgmManager.duck(tier >= 3 ? 0.08 : 0.12, 700 + tier * 220);
-    const gap = 55 + tier * 14;
+    const gap = 90 + tier * 24;
 
     if (tier <= 2) {
       this._playEx(AUDIO.levelupSol, 0.95, 1.0);
