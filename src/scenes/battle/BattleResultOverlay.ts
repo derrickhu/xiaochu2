@@ -9,6 +9,7 @@ import { SfxManager } from '@/core/SfxManager';
 import { TweenManager, Ease } from '@/core/TweenManager';
 import { TextureCache } from '@/core/TextureCache';
 import { nextMainlineStage } from '@/balance/stages';
+import { isEliteStageId, nextUnlockedEliteStage } from '@/balance/eliteMode';
 import { PET_MAP } from '@/balance/pets';
 import { ECONOMY } from '@/balance/economy';
 import { DAILY_FIRST_WIN_MULT } from '@/balance/dailyQuest';
@@ -202,10 +203,13 @@ export class BattleResultOverlay {
     const progressHintText = context
       ? null
       : battleProgressHint(ctrl.stage.id, granted.lingyu > 0);
-    // 主线下一关可跨章（1-8 → 2-1）；未解锁则不展示「下一关」
+    // 主线下一关可跨章（1-8 → 2-1）；精英只连到「下一关已解锁精英」的变体
     const nextStage = context
       ? undefined
       : (() => {
+        if (isEliteStageId(ctrl.stage.id)) {
+          return nextUnlockedEliteStage(ctrl.stage.id, (id) => PlayerData.starsOf(id));
+        }
         const next = nextMainlineStage(ctrl.stage.id);
         return next && PlayerData.isUnlocked(next) ? next : undefined;
       })();

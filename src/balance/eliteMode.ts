@@ -13,7 +13,7 @@
  *   而不是「卡在同一关」。用通关（1 星）解锁会把精英变成劝退墙。
  * - 精英变体走**独立 stageId**，星数与首通里程碑各记一份，主线进度与解锁链完全不受影响。
  */
-import { STAGE_MAP, registerExtraStage, type StageDef } from './stages';
+import { STAGE_MAP, nextMainlineStage, registerExtraStage, type StageDef } from './stages';
 
 export const ELITE_MODE = {
   /** 解锁门槛：普通关达到该星数 */
@@ -76,8 +76,22 @@ export function buildEliteStage(base: StageDef): StageDef {
     difficulty: base.difficulty * ELITE_MODE.difficultyMult,
     starTurnLimit: base.starTurnLimit + ELITE_MODE.starTurnLimitBonus,
     name: `${base.name} · 精英`,
-    displayLabel: `${base.displayLabel ?? base.name} · 精英`,
+    displayLabel: `${base.chapter}-${base.index} ${base.name} · 精英`,
   });
+}
+
+/**
+ * 精英连打：当前精英关之后、已解锁精英的下一关。
+ * 下一关是 Boss / 未三星 / 已是最后一关 → 没有下一关，结算只留回主页。
+ */
+export function nextUnlockedEliteStage(
+  currentId: string,
+  starsOf: (stageId: string) => number,
+): StageDef | undefined {
+  if (!isEliteStageId(currentId)) return undefined;
+  const nextBase = nextMainlineStage(baseStageIdOf(currentId));
+  if (!nextBase || !isEliteUnlocked(nextBase, starsOf)) return undefined;
+  return eliteStageOf(nextBase);
 }
 
 /** 取（并按需注册）精英变体；该关不支持精英化时返回 undefined */

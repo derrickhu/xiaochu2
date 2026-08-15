@@ -547,12 +547,16 @@ export function nextMainlineStage(stageId: string): StageDef | undefined {
 
 /** 短标签：1-1 青苔林边（编队 / 战斗顶栏） */
 export function formatStageShortLabel(
-  stage: Pick<StageDef, 'chapter' | 'index' | 'name'> & { displayLabel?: string },
+  stage: Pick<StageDef, 'chapter' | 'index' | 'name'> & { displayLabel?: string; type?: StageType },
 ): string {
+  if (stage.type === 'elite') {
+    const baseName = stage.name.replace(/\s*·\s*精英$/, '');
+    return `${stage.chapter}-${stage.index} ${baseName} · 精英`;
+  }
   return stage.displayLabel ?? `${stage.chapter}-${stage.index} ${stage.name}`;
 }
 
-/** 战斗顶栏：章节关卡号 + 名称，Boss 关附加标记 */
+/** 战斗顶栏：章节关卡号 + 名称，Boss / 精英附加标记 */
 export function formatStageBattleHeader(stage: StageDef): string {
   const base = formatStageShortLabel(stage);
   return stage.isBoss ? `${base} · 首领` : base;

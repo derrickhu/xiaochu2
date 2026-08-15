@@ -7,6 +7,9 @@
  *
  * 效果不走 if 散落各处：所有灵机聚合成一份 TowerRunModifiers，
  * 由 BattleController 在构造时一次性吃进去，战斗内不再感知「灵机」这个概念。
+ *
+ * v1.1：专精输出线（破军3+真意3+连锁2+猎手2）从约 7× 压到约 3.3×，
+ * 略低于 F20 敌人生命 3.7×。幅度只写在 BLESS_RATE，文案与结算共用。
  */
 import type { Element } from './combat';
 import { ELEMENTS } from './combat';
@@ -45,6 +48,31 @@ export const BLESS_GUARD_TIER_BOOST: Readonly<Record<BlessTier, number>> = {
 /** 每次三选一的候选数 */
 export const BLESS_PICK_COUNT = 3;
 
+/**
+ * 单层幅度（与 maxStacks 相乘后为满层）。
+ * 描述文案和 aggregateBlessModifiers 必须读这里，禁止再写一份魔数。
+ */
+export const BLESS_RATE = {
+  atk: 0.08,
+  hp: 0.12,
+  heal: 0.25,
+  critRate: 0.08,
+  critDmg: 0.25,
+  dragTime: 2,
+  dr: 0.08,
+  defBreak: 0.2,
+  element: 0.15,
+  comboMaster: 0.2,
+  lastStand: 0.3,
+  ember: 0.03,
+  rushCd: 2,
+  thunder: 0.3,
+  heartFire: 0.04,
+  revenge: 0.12,
+  hunter: 0.15,
+  reaper: 0.25,
+} as const;
+
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
@@ -56,35 +84,35 @@ function pct(n: number): string {
 const STAT_BLESSES: TowerBlessDef[] = [
   {
     id: 'bless_atk', name: '破军', category: 'stat', tier: 'common', maxStacks: 3,
-    desc: (s) => `全队攻击 +${pct(0.12 * s)}`,
+    desc: (s) => `全队攻击 +${pct(BLESS_RATE.atk * s)}`,
   },
   {
     id: 'bless_hp', name: '磐石', category: 'stat', tier: 'common', maxStacks: 3,
-    desc: (s) => `最大生命 +${pct(0.15 * s)}`,
+    desc: (s) => `最大生命 +${pct(BLESS_RATE.hp * s)}`,
   },
   {
     id: 'bless_heal', name: '灵泉', category: 'stat', tier: 'common', maxStacks: 3,
-    desc: (s) => `心珠回复 +${pct(0.25 * s)}`,
+    desc: (s) => `心珠回复 +${pct(BLESS_RATE.heal * s)}`,
   },
   {
     id: 'bless_crit_rate', name: '锐意', category: 'stat', tier: 'common', maxStacks: 3,
-    desc: (s) => `暴击率 +${pct(0.08 * s)}`,
+    desc: (s) => `暴击率 +${pct(BLESS_RATE.critRate * s)}`,
   },
   {
     id: 'bless_crit_dmg', name: '血刃', category: 'stat', tier: 'common', maxStacks: 3,
-    desc: (s) => `暴击伤害 +${pct(0.25 * s)}`,
+    desc: (s) => `暴击伤害 +${pct(BLESS_RATE.critDmg * s)}`,
   },
   {
     id: 'bless_drag_time', name: '疾风', category: 'stat', tier: 'common', maxStacks: 2,
-    desc: (s) => `转珠时限 +${2 * s} 秒`,
+    desc: (s) => `转珠时限 +${BLESS_RATE.dragTime * s} 秒`,
   },
   {
     id: 'bless_dr', name: '坚壁', category: 'stat', tier: 'common', maxStacks: 3,
-    desc: (s) => `受到伤害 -${pct(0.12 * s)}`,
+    desc: (s) => `受到伤害 -${pct(BLESS_RATE.dr * s)}`,
   },
   {
     id: 'bless_def_break', name: '破甲', category: 'stat', tier: 'rare', maxStacks: 2,
-    desc: (s) => `敌人防御 -${pct(0.2 * s)}`,
+    desc: (s) => `敌人防御 -${pct(BLESS_RATE.defBreak * s)}`,
   },
   {
     id: 'bless_cd', name: '速咏', category: 'stat', tier: 'rare', maxStacks: 2,
@@ -97,7 +125,7 @@ const STAT_BLESSES: TowerBlessDef[] = [
     tier: 'rare',
     maxStacks: 3,
     element: el,
-    desc: (s) => `${ELEMENT_NAME[el]}属性伤害 +${pct(0.3 * s)}`,
+    desc: (s) => `${ELEMENT_NAME[el]}属性伤害 +${pct(BLESS_RATE.element * s)}`,
   })),
 ];
 
@@ -105,14 +133,14 @@ const STAT_BLESSES: TowerBlessDef[] = [
 // 触发类：产生玩法的那一半
 // ─────────────────────────────────────────────────────────────
 
-/** 连锁大师的 Combo 门槛 */
-export const COMBO_MASTER_THRESHOLD = 8;
+/** 连锁大师的 Combo 门槛（8 对熟练玩家是常态，提到 10 才算条件） */
+export const COMBO_MASTER_THRESHOLD = 10;
 /** 背水的生命门槛 */
 export const LAST_STAND_HP_PCT = 0.3;
 /** 雷霆的消除数门槛 */
 export const BIG_MATCH_COUNT = 5;
-/** 猎手的敌人生命门槛 */
-export const HUNTER_HP_PCT = 0.5;
+/** 猎手的敌人生命门槛（只吃开场，不再覆盖半场） */
+export const HUNTER_HP_PCT = 0.7;
 /** 收割的敌人生命门槛 */
 export const REAPER_HP_PCT = 0.3;
 /** 复仇最大叠加层数（战斗内，与灵机叠加层数无关） */
@@ -121,7 +149,7 @@ export const REVENGE_MAX_STACK = 3;
 const TRIGGER_BLESSES: TowerBlessDef[] = [
   {
     id: 'bless_combo_master', name: '连锁大师', category: 'trigger', tier: 'rare', maxStacks: 2,
-    desc: (s) => `Combo 达 ${COMBO_MASTER_THRESHOLD} 时全体伤害 ×${(1 + 0.4 * s).toFixed(1)}`,
+    desc: (s) => `Combo 达 ${COMBO_MASTER_THRESHOLD} 时全体伤害 ×${(1 + BLESS_RATE.comboMaster * s).toFixed(1)}`,
   },
   {
     id: 'bless_first_crit', name: '一击必杀', category: 'trigger', tier: 'rare', maxStacks: 1,
@@ -129,35 +157,35 @@ const TRIGGER_BLESSES: TowerBlessDef[] = [
   },
   {
     id: 'bless_last_stand', name: '背水', category: 'trigger', tier: 'rare', maxStacks: 2,
-    desc: (s) => `生命低于 ${pct(LAST_STAND_HP_PCT)} 时伤害 ×${(1 + 0.6 * s).toFixed(1)}`,
+    desc: (s) => `生命低于 ${pct(LAST_STAND_HP_PCT)} 时伤害 ×${(1 + BLESS_RATE.lastStand * s).toFixed(1)}`,
   },
   {
     id: 'bless_ember', name: '余烬', category: 'trigger', tier: 'common', maxStacks: 3,
-    desc: (s) => `击败敌人回复 ${pct(0.05 * s)} 最大生命`,
+    desc: (s) => `击败敌人回复 ${pct(BLESS_RATE.ember * s)} 最大生命`,
   },
   {
     id: 'bless_rush', name: '势如破竹', category: 'trigger', tier: 'common', maxStacks: 2,
-    desc: (s) => `每层首回合全队冷却 -${2 * s}`,
+    desc: (s) => `每层首回合全队冷却 -${BLESS_RATE.rushCd * s}`,
   },
   {
     id: 'bless_thunder', name: '雷霆', category: 'trigger', tier: 'epic', maxStacks: 2,
-    desc: (s) => `${BIG_MATCH_COUNT} 连以上额外造成队伍攻击 ${pct(0.3 * s)} 的真实伤害`,
+    desc: (s) => `${BIG_MATCH_COUNT} 连以上额外造成队伍攻击 ${pct(BLESS_RATE.thunder * s)} 的真实伤害`,
   },
   {
     id: 'bless_heart_fire', name: '心火', category: 'trigger', tier: 'common', maxStacks: 3,
-    desc: (s) => `每消除 1 颗心珠，本回合伤害 +${pct(0.06 * s)}`,
+    desc: (s) => `每消除 1 颗心珠，本回合伤害 +${pct(BLESS_RATE.heartFire * s)}`,
   },
   {
     id: 'bless_revenge', name: '复仇', category: 'trigger', tier: 'rare', maxStacks: 2,
-    desc: (s) => `每受一次攻击，下回合伤害 +${pct(0.2 * s)}（最多叠 ${REVENGE_MAX_STACK} 层）`,
+    desc: (s) => `每受一次攻击，下回合伤害 +${pct(BLESS_RATE.revenge * s)}（最多叠 ${REVENGE_MAX_STACK} 层）`,
   },
   {
     id: 'bless_hunter', name: '猎手', category: 'trigger', tier: 'common', maxStacks: 2,
-    desc: (s) => `对生命高于 ${pct(HUNTER_HP_PCT)} 的敌人伤害 ×${(1 + 0.25 * s).toFixed(2)}`,
+    desc: (s) => `对生命高于 ${pct(HUNTER_HP_PCT)} 的敌人伤害 ×${(1 + BLESS_RATE.hunter * s).toFixed(2)}`,
   },
   {
     id: 'bless_reaper', name: '收割', category: 'trigger', tier: 'common', maxStacks: 2,
-    desc: (s) => `对生命低于 ${pct(REAPER_HP_PCT)} 的敌人伤害 ×${(1 + 0.5 * s).toFixed(2)}`,
+    desc: (s) => `对生命低于 ${pct(REAPER_HP_PCT)} 的敌人伤害 ×${(1 + BLESS_RATE.reaper * s).toFixed(2)}`,
   },
 ];
 
@@ -263,30 +291,30 @@ export function aggregateBlessModifiers(
     if (s <= 0) continue;
 
     if (def.element) {
-      elementMult[def.element] = (elementMult[def.element] ?? 1) * (1 + 0.3 * s);
+      elementMult[def.element] = (elementMult[def.element] ?? 1) * (1 + BLESS_RATE.element * s);
       continue;
     }
 
     switch (id) {
-      case 'bless_atk': mod.atkMult *= 1 + 0.12 * s; break;
-      case 'bless_hp': mod.hpMult *= 1 + 0.15 * s; break;
-      case 'bless_heal': mod.healBonusAdd += 0.25 * s; break;
-      case 'bless_crit_rate': mod.critRateAdd += 0.08 * s; break;
-      case 'bless_crit_dmg': mod.critDamageAdd += 0.25 * s; break;
-      case 'bless_drag_time': mod.dragTimeAdd += 2 * s; break;
-      case 'bless_dr': mod.damageReductionAdd += 0.12 * s; break;
-      case 'bless_def_break': mod.enemyDefBreak += 0.2 * s; break;
+      case 'bless_atk': mod.atkMult *= 1 + BLESS_RATE.atk * s; break;
+      case 'bless_hp': mod.hpMult *= 1 + BLESS_RATE.hp * s; break;
+      case 'bless_heal': mod.healBonusAdd += BLESS_RATE.heal * s; break;
+      case 'bless_crit_rate': mod.critRateAdd += BLESS_RATE.critRate * s; break;
+      case 'bless_crit_dmg': mod.critDamageAdd += BLESS_RATE.critDmg * s; break;
+      case 'bless_drag_time': mod.dragTimeAdd += BLESS_RATE.dragTime * s; break;
+      case 'bless_dr': mod.damageReductionAdd += BLESS_RATE.dr * s; break;
+      case 'bless_def_break': mod.enemyDefBreak += BLESS_RATE.defBreak * s; break;
       case 'bless_cd': mod.skillCdReduce += s; break;
-      case 'bless_combo_master': mod.comboMasterMult *= 1 + 0.4 * s; break;
+      case 'bless_combo_master': mod.comboMasterMult *= 1 + BLESS_RATE.comboMaster * s; break;
       case 'bless_first_crit': mod.firstMatchCrit = true; break;
-      case 'bless_last_stand': mod.lastStandMult *= 1 + 0.6 * s; break;
-      case 'bless_ember': mod.killHealPct += 0.05 * s; break;
-      case 'bless_rush': mod.floorStartCdReduce += 2 * s; break;
-      case 'bless_thunder': mod.thunderTrueDamagePct += 0.3 * s; break;
-      case 'bless_heart_fire': mod.heartFirePerOrb += 0.06 * s; break;
-      case 'bless_revenge': mod.revengePerStack += 0.2 * s; break;
-      case 'bless_hunter': mod.hunterMult *= 1 + 0.25 * s; break;
-      case 'bless_reaper': mod.reaperMult *= 1 + 0.5 * s; break;
+      case 'bless_last_stand': mod.lastStandMult *= 1 + BLESS_RATE.lastStand * s; break;
+      case 'bless_ember': mod.killHealPct += BLESS_RATE.ember * s; break;
+      case 'bless_rush': mod.floorStartCdReduce += BLESS_RATE.rushCd * s; break;
+      case 'bless_thunder': mod.thunderTrueDamagePct += BLESS_RATE.thunder * s; break;
+      case 'bless_heart_fire': mod.heartFirePerOrb += BLESS_RATE.heartFire * s; break;
+      case 'bless_revenge': mod.revengePerStack += BLESS_RATE.revenge * s; break;
+      case 'bless_hunter': mod.hunterMult *= 1 + BLESS_RATE.hunter * s; break;
+      case 'bless_reaper': mod.reaperMult *= 1 + BLESS_RATE.reaper * s; break;
       default: break;
     }
   }
