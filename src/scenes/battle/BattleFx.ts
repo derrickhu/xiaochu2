@@ -13,7 +13,7 @@ import { ObjectPool } from '@/core/ObjectPool';
 import { FxLayer, type BurstOptions } from '@/core/FxLayer';
 import { ScreenShake } from '@/core/ScreenShake';
 import { FlashOverlay } from '@/core/FlashOverlay';
-import { UI, ORB_COLOR, FX_ELEMENT_COLOR } from '@/balance/ui';
+import { UI, FX_ELEMENT_COLOR, FX_ENEMY_HOSTILE } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
 import { ELEMENT_BLADE_IMAGES, ELEMENT_IMPACT_IMAGES, ORB_IMAGES, UI_BATTLE_IMAGES, UI_FX_IMAGES } from '@/config/Assets';
 import { applyTextResolution } from '@/ui/text';
@@ -750,7 +750,7 @@ export class BattleFx {
   }
 
   /**
-   * 属性刃弹道（普攻 / 技能直伤 / 敌人出手共用）。
+   * 玩家属性刃弹道（普攻 / 技能直伤）。敌人来弹走 fireEnemyBolt，不共用这套新月刃。
    *
    * 枪口闪 → 定尺寸刃 + 残影/光点 → 命中按入射角分层。
    * 技能档更粗；暴击更快、多一层星芒、命中停 2 帧。缺刃图才降级圆珠。
@@ -904,18 +904,19 @@ export class BattleFx {
 
   /**
    * 敌人打英雄：专用敌对能量矛，从上往下砸血条。
-   * 不用玩家新月刃，更不用棋盘珠。贴图未到时用拉长软光点顶上。
+   * 不用玩家新月刃。核不染色（贴图本身是品红白热矛），外圈敌对红晕。
+   * 比玩家刃更粗、更慢：来弹必须一眼能看见。贴图未到时用软光点顶上。
    */
   fireEnemyBolt(
     fromX: number,
     fromY: number,
     toX: number,
     toY: number,
-    element: Element,
+    _element: Element,
     opts?: { duration?: number; heavy?: boolean },
   ): Promise<void> {
     const heavy = opts?.heavy ?? false;
-    const color = ORB_COLOR[element];
+    const color = FX_ENEMY_HOSTILE;
     const flyDur = opts?.duration ?? UI.anim.enemyProjectile;
     const boltTex = TextureCache.get(UI_FX_IMAGES.enemyBolt) ?? this._moteTex();
     const impactTex = TextureCache.get(UI_FX_IMAGES.enemyImpact);
@@ -926,26 +927,36 @@ export class BattleFx {
     const side = (heavy ? 1 : -1) * 22;
     const midX = (fromX + toX) / 2 + (-vy / len) * side;
     const midY = (fromY + toY) / 2 + (vx / len) * side;
-    const scale = heavy ? 1.15 : 0.92;
-    const baseW = 72;
-    const baseH = 128;
+    const scale = heavy ? 1.32 : 1.12;
+    const boltW = 112 * scale;
+    const boltH = 176 * scale;
 
-    this._spawnMuzzle(fromX, fromY, 0xff3b30, heavy ? 'heavy' : 'basic');
+    this._spawnMuzzle(fromX, fromY, color, heavy ? 'heavy' : 'basic');
 
     return new Promise((resolve) => {
       const done = once(() => resolve());
-      minigameFallback(flyDur + 0.2, done, 120);
+      minigameFallback(flyDur + 0.22, done, 120);
+
+      const glow = new PIXI.Sprite(boltTex);
+      glow.anchor.set(0.5);
+      glow.blendMode = PIXI.BLEND_MODES.ADD;
+      glow.tint = color;
+      glow.width = boltW * 1.48;
+      glow.height = boltH * 1.28;
+      glow.alpha = 0.78;
+      glow.position.set(fromX, fromY);
 
       const bolt = new PIXI.Sprite(boltTex);
       bolt.anchor.set(0.5);
       bolt.blendMode = PIXI.BLEND_MODES.ADD;
-      bolt.tint = color;
-      bolt.width = baseW * scale;
-      bolt.height = baseH * scale * 1.15;
+      bolt.width = boltW;
+      bolt.height = boltH;
       bolt.alpha = 1;
       bolt.position.set(fromX, fromY);
       const scopeId = this._scopeId;
+      this._projectiles.set(glow, scopeId);
       this._projectiles.set(bolt, scopeId);
+      this._fx.container.addChild(glow);
       this._fx.container.addChild(bolt);
 
       const state = { t: 0 };
@@ -954,18 +965,20 @@ export class BattleFx {
 
       const finish = once(() => {
         TweenManager.cancelTarget(state);
+        this._projectiles.delete(glow);
         this._projectiles.delete(bolt);
+        if (displayAlive(glow)) glow.destroy();
         if (displayAlive(bolt)) bolt.destroy();
         void this._playEnemyBoltImpact(toX, toY, color, impactTex, hitAngle, heavy);
         done();
       });
 
-      minigameFallback(flyDur + 0.12, finish, 90);
+      minigameFallback(flyDur + 0.14, finish, 90);
       TweenManager.to({
         target: state,
         props: { t: 1 },
         duration: flyDur,
-        ease: Ease.easeInCubic,
+        ease: bladeFlightEase,
         onUpdate: () => {
           if (!displayAlive(bolt)) return;
           const t = state.t;
@@ -975,28 +988,37 @@ export class BattleFx {
           const dx = 2 * u * (midX - fromX) + 2 * t * (toX - midX);
           const dy = 2 * u * (midY - fromY) + 2 * t * (toY - midY);
           hitAngle = Math.atan2(dy, dx);
+          const stretch = t < 0.66 ? 1 : 1 + ((t - 0.66) / 0.34) * 0.28;
+          const rot = hitAngle - Math.PI / 2;
           bolt.position.set(x, y);
-          // 贴图默认朝下，对准速度方向
-          bolt.rotation = hitAngle - Math.PI / 2;
+          bolt.rotation = rot;
+          bolt.width = boltW * (1 - (stretch - 1) * 0.25);
+          bolt.height = boltH * stretch;
+          if (displayAlive(glow)) {
+            glow.position.set(x, y);
+            glow.rotation = rot;
+            glow.width = bolt.width * 1.48;
+            glow.height = bolt.height * 1.28;
+          }
           if (++frame % 2 === 0) {
             this._fx.burst({
               x, y, color,
               count: heavy ? 3 : 2,
-              speed: 40,
+              speed: 36,
               gravity: 0,
-              size: 16,
-              life: 0.18,
-              alpha: 0.78,
+              size: heavy ? 18 : 14,
+              life: 0.16,
+              alpha: 0.72,
               texture: mote,
               blendMode: PIXI.BLEND_MODES.ADD,
               angle: hitAngle + Math.PI,
-              spread: 0.55,
+              spread: 0.4,
               drag: 0.86,
             });
-            this._spawnBladeStreak(x, y, hitAngle, color, mote, scopeId, heavy ? 'heavy' : 'basic');
+            this._spawnEnemyBoltStreak(x, y, hitAngle, color, mote, scopeId, heavy, stretch);
           }
           if (frame % 3 === 0) {
-            this._spawnBladeGhost(bolt, boltTex, scopeId);
+            this._spawnBladeGhost(bolt, boltTex, scopeId, color, hitAngle);
           }
         },
         onComplete: finish,
@@ -1033,7 +1055,7 @@ export class BattleFx {
         drag: 0.9,
       });
       this._spawnImpactFlash(x, y, wMul);
-      this._spawnImpactRing(x, y, 0xff3b30, wMul);
+      this._spawnImpactRing(x, y, color, wMul);
 
       if (!tex) {
         done();
@@ -1042,10 +1064,9 @@ export class BattleFx {
       const sp = new PIXI.Sprite(tex);
       sp.anchor.set(0.5);
       sp.blendMode = PIXI.BLEND_MODES.ADD;
-      sp.tint = color;
       sp.position.set(x, y);
       sp.rotation = incomingAngle - Math.PI / 2;
-      setScaleSafe(sp, 0.72 * wMul);
+      setScaleSafe(sp, 1.05 * wMul);
       sp.alpha = 1;
       this._scopeChildren.set(sp, this._scopeId);
       this._fx.container.addChild(sp);
@@ -1054,7 +1075,7 @@ export class BattleFx {
         if (displayAlive(sp)) sp.destroy();
         done();
       });
-      void tweenScale(sp, { x: 1.15 * wMul, y: 1.15 * wMul }, {
+      void tweenScale(sp, { x: 1.55 * wMul, y: 1.55 * wMul }, {
         duration: 0.1, ease: Ease.easeOutCubic,
         onComplete: () => {
           void guardedTween({
@@ -1162,6 +1183,33 @@ export class BattleFx {
     });
     TweenManager.to({
       target: ghost, props: { alpha: 0, width: ghost.width * 1.15 },
+      duration: 0.16, ease: Ease.easeOutQuad, onComplete: fade,
+    });
+  }
+
+  /** 敌人来弹尾迹：比玩家刃更粗，敌对红，砸下来的压迫感靠宽度而不是再叠一张贴纸 */
+  private _spawnEnemyBoltStreak(
+    x: number, y: number, angle: number, color: number, tex: PIXI.Texture, scopeId: number,
+    heavy: boolean,
+    stretch = 1,
+  ): void {
+    const streak = new PIXI.Sprite(tex);
+    streak.anchor.set(0.85, 0.5);
+    streak.blendMode = PIXI.BLEND_MODES.ADD;
+    streak.tint = color;
+    streak.position.set(x, y);
+    streak.rotation = angle;
+    streak.width = (heavy ? 188 : 164) * stretch;
+    streak.height = heavy ? 26 : 20;
+    streak.alpha = heavy ? 0.7 : 0.6;
+    this._scopeChildren.set(streak, scopeId);
+    this._fx.container.addChild(streak);
+    const fade = once(() => {
+      this._scopeChildren.delete(streak);
+      if (displayAlive(streak)) streak.destroy();
+    });
+    TweenManager.to({
+      target: streak, props: { alpha: 0, width: streak.width * 1.18 },
       duration: 0.16, ease: Ease.easeOutQuad, onComplete: fade,
     });
   }
@@ -1454,18 +1502,21 @@ export class BattleFx {
   }
 
   /**
-   * 光环扩散已关闭（aura_ring + ADD 放大像全屏外圈震光）。
+   * 治疗/护盾/净化用的局部光环：细圈外扩 + 粒子，不用 ADD 大图（会铺成全屏震光）。
    */
-  spawnAuraRing(_x: number, _y: number, _color: number): void {
-    // no-op
+  spawnAuraRing(x: number, y: number, color: number): void {
+    this._spawnImpactRing(x, y, color, 1.7);
+    this.burst({
+      x, y, color, count: 10, speed: 220, gravity: -160, size: 12, life: 0.45,
+    });
   }
 
   /**
    * 英雄受击冲击：仅局部粒子，不要星爆/光环铺屏。
    */
   spawnHeroHitImpact(x: number, y: number, element: Element, heavy = false): void {
-    const elColor = ORB_COLOR[element];
-    const impactColor = heavy ? 0xff1744 : 0xff5252;
+    const elColor = FX_ELEMENT_COLOR[element];
+    const impactColor = heavy ? 0xff1744 : FX_ENEMY_HOSTILE;
     const mote = this._moteTex();
     this.burst({
       x, y,
@@ -1737,7 +1788,7 @@ export class BattleFx {
         onComplete: () => {
           void guardedTween({
             target: t, props: { alpha: 0, y: t.y - 40 },
-            duration: UI.anim.skillBanner * 0.4, delay: UI.anim.skillBanner * 0.35,
+            duration: UI.anim.skillBanner * 0.32, delay: UI.anim.skillBanner * 0.55,
             ease: Ease.easeOutQuad,
             onComplete: () => {
               finish();

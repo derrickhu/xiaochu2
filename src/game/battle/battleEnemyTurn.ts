@@ -56,7 +56,8 @@ export function runEnemyTurnAction(ctx: EnemyTurnContext): EnemyActResult {
     return { ...base, skillName: fired.skill.name };
   }
 
-  if (ctx.isStunned() && !enemy.charging) return idle();
+  // 眩晕跳过整回合：普攻、技能、已起手的蓄力释放都不打。蓄力状态保留，醒了再放。
+  if (ctx.isStunned()) return idle();
 
   if (enemy.charging) {
     const charging = enemy.charging;

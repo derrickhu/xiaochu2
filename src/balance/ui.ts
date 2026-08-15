@@ -35,6 +35,12 @@ export const FX_ELEMENT_COLOR: Readonly<Record<Element, number>> = {
   earth: 0xff8c1e,
 };
 
+/**
+ * 敌人来弹专用敌对色。不跟玩家五行发光色抢语义：
+ * 来弹必须一眼读成「要挨打」，品红白热矛 + 这层红晕，不拿偏暗珠子色去乘。
+ */
+export const FX_ENEMY_HOSTILE = 0xff2d4a;
+
 export const UI = {
   /** ── 棋盘布局（设计坐标，宽 750） ── */
   board: {
@@ -171,15 +177,17 @@ export const UI = {
      * 日常回合多半停在 3～7 连，crescendo 必须提前到「破 / 无双」而不是 12 连。
      * base 不能低于 orbClear（0.32s ≈ 19 帧）：playClear 是不 await 的，
      * 节拍比它短的话前几连的消珠动画会被下一组打断。
+     * 22 帧时爆发特效还没读完就被下一连重置，玩家反馈「就爆炸完了」；
+     * 拉到 26 帧才能看清蓄力→炸开，后段再随连击变慢。
      */
-    comboBeatBase: 22 / 60,
-    comboBeatStep: 2.4 / 60,
-    comboBeatMax: 42 / 60,
-    /** 里程碑额外空拍 = base + tier × step；「破」约 13 帧，让两个字读完再进下一连 */
-    comboMilestoneHoldBase: 8 / 60,
-    comboMilestoneHoldStep: 5 / 60,
-    /** 消除粒子寿命 */
-    orbBurst: 0.45,
+    comboBeatBase: 26 / 60,
+    comboBeatStep: 2.8 / 60,
+    comboBeatMax: 48 / 60,
+    /** 里程碑额外空拍 = base + tier × step；「破」约 18 帧，印章和爆发余辉读完再进下一连 */
+    comboMilestoneHoldBase: 12 / 60,
+    comboMilestoneHoldStep: 6 / 60,
+    /** 消除粒子寿命：太短只剩一闪，要能看见碎屑飞开 */
+    orbBurst: 0.62,
     /** Combo 大字弹跳 */
     comboPop: 0.18,
     /** Combo 淡出（延迟 + 时长） */
@@ -187,9 +195,9 @@ export const UI = {
     comboFade: 0.4,
     /** 属性刃飞行：出手快、中段可读、命中加速，再长会飘 */
     projectile: 0.42,
-    /** 敌人刃飞行（略慢于玩家，便于看清来向） */
-    enemyProjectile: 0.40,
-    enemyProjectileHeavy: 0.46,
+    /** 敌人矛飞行：比玩家刃慢一拍，来向必须看清 */
+    enemyProjectile: 0.48,
+    enemyProjectileHeavy: 0.56,
     /**
      * 玩家消珠/伤害表现结束后 → 敌人出手前的空拍（秒）。
      * 避免「打完立刻挨打」，给玩家读完数字的时间。
@@ -217,6 +225,11 @@ export const UI = {
     enemyDeath: 0.45,
     /** 技能横幅展示 */
     skillBanner: 0.9,
+    /**
+     * 增益技读句停拍（秒）：横幅之后「全队伤害 ×1.7」必须停住让人读完，
+     * 再播转珠。0.6s 边飘边淡等于没放技。
+     */
+    skillBuffHold: 0.95,
     /** 敌人蓄力预警脉冲 */
     chargeWarn: 0.5,
   },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COMBAT, type Element } from '@/balance/combat';
-import { makeMultiHit, makeNuke, makeTeamNuke } from '@/balance/skills/blueprints';
+import { makeCleanseNuke, makeMultiHit, makeNuke, makeTeamNuke } from '@/balance/skills/blueprints';
 import { runSkill, type SkillCaster, type SkillRuntimeContext } from '../SkillEngine';
 
 const CASTER_ATK = 1000;
@@ -63,6 +63,15 @@ describe('技能瞬发直伤吃五行克制', () => {
   it('全队齐射是混属性齐射，不吃克制', () => {
     const volley = makeTeamNuke({ id: 'test_volley', name: '测试齐射', multiplier: 1.5, cd: 7 });
     expect(enemyDamage(volley, 'metal', 'wood')).toBe(enemyDamage(volley, 'metal', 'fire'));
+  });
+
+  it('净世斩（直伤+净化）必须产出敌方伤害事件，不能只清异常', () => {
+    const skill = makeCleanseNuke({
+      id: 'test_cleanse_nuke', name: '测试净世', element: 'metal', multiplier: 4.5, cd: 6,
+    });
+    const result = runSkill(skill, caster('metal'), ctx('water'));
+    expect(result?.cleanseTeam).toBe(true);
+    expect(result?.damageEvents.filter((e) => e.target === 'enemy')[0]?.amount).toBeGreaterThan(0);
   });
 
   it('敌人技能打英雄不吃克制（英雄无属性）', () => {

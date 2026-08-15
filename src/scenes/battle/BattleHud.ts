@@ -576,17 +576,12 @@ export class BattleHud {
     this._combo.build(parent);
   }
 
-  /** 增伤 buff 状态行（护盾由右侧盾标展示） */
+  /** 旧的浅色状态行已废弃：增益/减益改走 BattleStatusIcons 深底胶囊 */
   buildStatus(parent: PIXI.Container): void {
     this._statusText = makeText('', {
       size: FONT_SIZE.xs, fill: COLORS.accentDeep, bold: true, anchor: [1, 0.5],
-      strokeColor: COLORS.panelBg, strokeWidth: 3,
     });
-    // 与 heroAnnounce 同侧靠右，落在两血条空隙，避免压敌血条数字
-    this._statusText.position.set(
-      Game.logicWidth - UI.board.marginX,
-      this._layout.teamStatusIconY,
-    );
+    this._statusText.visible = false;
     parent.addChild(this._statusText);
   }
 
@@ -1031,14 +1026,10 @@ export class BattleHud {
     }
   }
 
-  /** 增伤等 buff 状态行（护盾由右侧盾标展示） */
+  /** 血条数字/盾标；增益文案由状态胶囊承担 */
   refreshStatus(): void {
     this._refreshHeroHpText();
-    const parts: string[] = [];
-    if (this._ctrl.dmgBuff) {
-      parts.push(`伤害×${this._ctrl.dmgBuff.mult} 剩${this._ctrl.dmgBuff.turnsLeft}回合`);
-    }
-    this._statusText.text = parts.join('   ');
+    if (displayAlive(this._statusText)) this._statusText.visible = false;
   }
 
   // ════════════ Combo ════════════

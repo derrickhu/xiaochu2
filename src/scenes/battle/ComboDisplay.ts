@@ -92,18 +92,20 @@ interface ComboAnim {
  *
  * 参照王者击杀播报 / 格斗 combo counter 的拆解：真正的「炸」不是把字放大，
  * 而是同一瞬间叠了六件事——残影向外扩散、光刃扫过字面、挤压拉伸、倾斜回正、
- * 高频抖动、速度带从中心冲出。窗口对齐 comboBeatBase（22 帧），让冲击填满节拍
- * 而不是 16 帧演完再干等下一连。
+ * 高频抖动、速度带从中心冲出。
+ *
+ * 时间线按格斗/三消惯例拆成蓄力→命中→余辉：先收再放，玩家才能感知「这一下」。
+ * 旧版 10 帧内冲到最大再散，观感就是「闪一下爆炸完了」。
  */
-const POP_END = 22;
-const HOLD_END = 80;
-const TOTAL_END = 110;
-const GHOST_END = 18;
-const SHINE_START = 3;
-const SHINE_END = 20;
-const JITTER_END = 16;
-const BANNER_END = 26;
-const TILT_END = 12;
+const POP_END = 32;
+const HOLD_END = 100;
+const TOTAL_END = 140;
+const GHOST_END = 28;
+const SHINE_START = 10;
+const SHINE_END = 34;
+const JITTER_END = 22;
+const BANNER_END = 38;
+const TILT_END = 16;
 /**
  * 能量爆发窗口。
  *
@@ -118,16 +120,22 @@ const TILT_END = 12;
  *
  * 四层各司其职，少一层都塌：放射冲出去给动势、能量团给体量、白热核给刺眼的
  * 亮度、星芒给「高光时刻」的招牌感。
+ *
+ * 爆发拆三段（格斗 hitstop / PAD 连锁的惯用拍）：
+ * 蓄力收束 → 炸开并在峰值停住 → 余辉托字。没有蓄力就只是「闪一下」。
  */
-const FLASH_END = 7;
-const RAYS_END = 22;
-const ENERGY_BURST_END = 10;
-const ENERGY_SETTLE_END = 22;
-const FLARE_IN_END = 5;
-const FLARE_SETTLE_END = 30;
+const CHARGE_END = 10;
+const FLASH_END = 18;
+const RAYS_END = 40;
+const ENERGY_BURST_END = 18;
+const ENERGY_HOLD_END = 28;
+const ENERGY_SETTLE_END = 52;
+const FLARE_IN_END = 20;
+const FLARE_SETTLE_END = 48;
+const SHOCK_END = 18;
 /** 多位数逐位入场的错帧，第二位晚落一点更有节奏 */
-const DIGIT_STAGGER = 3;
-const DIGIT_POP = 11;
+const DIGIT_STAGGER = 4;
+const DIGIT_POP = 14;
 
 interface ComboStyle {
   tier: number;
@@ -137,6 +145,22 @@ interface ComboStyle {
   mainColor: string;
   glowColor: string;
   baseSz: number;
+  /** 爆发体量 0.28~1：前面几连收着，后面才铺开 */
+  burst: number;
+}
+
+/**
+ * 爆发体量：业界（PAD / 格斗连打）低连只是小爆，里程碑跳一档，高连才铺满。
+ * 2 连 ≈0.28，破≈0.45，无双≈0.60，神威≈0.76，天选起接近满额。
+ */
+function fxBurst(combo: number): number {
+  const base = 0.28 + Math.min(0.62, Math.max(0, combo - 2) * 0.045);
+  const bump = isComboMilestone(combo) ? 0.10 + getComboTier(combo) * 0.02 : 0;
+  return Math.min(1, base + bump);
+}
+
+function burstLerp(min: number, max: number, burst: number): number {
+  return min + (max - min) * burst;
 }
 
 function comboStyle(combo: number): ComboStyle {
@@ -146,13 +170,13 @@ function comboStyle(combo: number): ComboStyle {
   const mainColor = milestone?.color ?? '#ffd700';
   const glowColor = tier >= 4 ? '#ff4060' : tier >= 2 ? '#ff6080' : tier >= 1 ? '#ffaa33' : '#ffe066';
   const S = dmgFloatScale();
-  // 印章是「高光时刻」，宁大勿小；烘焙纹理高 190~300px，放到这个尺寸仍是缩小采样，不会糊
+  const burst = fxBurst(combo);
   const baseSz = tier >= 4 ? 68 * S
     : tier >= 3 ? 60 * S
       : tier >= 2 ? 52 * S
         : tier >= 1 ? 44 * S
           : 28 * S;
-  return { tier, isLow, isSuper: tier >= 2, isMega: tier >= 4, mainColor, glowColor, baseSz };
+  return { tier, isLow, isSuper: tier >= 2, isMega: tier >= 4, mainColor, glowColor, baseSz, burst };
 }
 
 function hex(c: string): number {
@@ -204,6 +228,12 @@ function hotBoost(tier: number): number {
   return tier === 5 ? 1.15 : 1;
 }
 
+/** 炸开用：前段几乎瞬间冲满，比 easeOutQuad 狠得多 */
+function snapEase(p: number): number {
+  const t = Math.max(0, Math.min(1, p));
+  return 1 - (1 - t) ** 4;
+}
+
 function comboParticleTex(kind: 'star' | 'flake'): PIXI.Texture {
   if (kind === 'flake') {
     return TextureCache.get(UI_BATTLE_IMAGES.comboGoldFlake)
@@ -246,6 +276,8 @@ export class ComboDisplay {
   private _pop!: PIXI.Container;
   /** 全屏泛光：爆发那一瞬整块屏幕被照亮，不遮挡任何东西 */
   private _flash!: PIXI.Graphics;
+  /** 炸开瞬间的冲击环：椭圆、由厚变薄，比纯贴图放大更像「爆」 */
+  private _shock!: PIXI.Graphics;
   /** 放射彩色层：宽光锥给体量 + 彩色宽线给存在感 */
   private _rays!: PIXI.Sprite;
   /** 放射白芯层：细白线单给锐度，不跟着 tint 染色 */
@@ -293,6 +325,8 @@ export class ComboDisplay {
   private _fxFlipX = 1;
   private _fxFlipY = 1;
   private _raysSpin = 0;
+  /** 粒子跟炸开同一拍喷，蓄力阶段先不飞，否则碎屑散完爆发才到 */
+  private _pendingBurst = false;
 
   constructor(private readonly _layout: BattleLayout) {}
 
@@ -309,6 +343,10 @@ export class ComboDisplay {
     this._flash.blendMode = PIXI.BLEND_MODES.ADD;
     this._flash.visible = false;
     this._root.addChild(this._flash);
+
+    this._shock = new PIXI.Graphics();
+    this._shock.blendMode = PIXI.BLEND_MODES.ADD;
+    this._root.addChild(this._shock);
 
     this._rays = makeSprite(UI_BATTLE_IMAGES.comboRays);
     this._rays.blendMode = PIXI.BLEND_MODES.ADD;
@@ -519,51 +557,51 @@ export class ComboDisplay {
     const tint = fxTint(style.tier);
     const texW = (sp: PIXI.Sprite): number => Math.max(1, sp.texture.width || 512);
 
-    // 能量团要兜住整行字，上限卡在屏宽：最高档行宽本就接近棋盘，再乘系数就甩出屏幕了
+    const b = style.burst;
+    // 低连只托住字，高连才冲出棋盘
     const energyW = Math.min(
-      Math.max(this._rowW * 2.1, style.baseSz * 4.2),
-      Game.logicWidth * 1.1,
+      Math.max(this._rowW * burstLerp(1.35, 2.25, b), style.baseSz * burstLerp(2.4, 4.6, b)),
+      Game.logicWidth * burstLerp(0.72, 1.15, b),
     );
     this._energyBaseX = energyW / texW(this._energy);
-    this._energyBaseY = this._energyBaseX * 0.66;
+    this._energyBaseY = this._energyBaseX * burstLerp(0.52, 0.66, b);
     this._energy.tint = tint;
-    this._energyPeak = energyAlpha(style.tier);
+    this._energyPeak = energyAlpha(style.tier) * burstLerp(0.7, 1, b);
 
-    const hotW = energyW * 0.34 * hotBoost(style.tier);
+    const hotW = energyW * burstLerp(0.22, 0.34, b) * hotBoost(style.tier);
     this._hotBaseX = hotW / texW(this._hot);
     this._hotBaseY = this._hotBaseX * 0.62;
     this._hot.tint = 0xfffaf0;
 
-    // 放射铺得比能量团更开，冲出棋盘边缘才有「炸开」的感觉
-    const raysW = Math.min(this._rowW * 2.9, Game.logicWidth * 1.5);
+    const raysW = Math.min(this._rowW * burstLerp(1.6, 3.4, b), Game.logicWidth * burstLerp(0.85, 1.65, b));
     this._raysBaseX = raysW / texW(this._rays);
-    this._raysBaseY = this._raysBaseX * 0.72;
+    this._raysBaseY = this._raysBaseX * burstLerp(0.55, 0.72, b);
     this._rays.tint = tint;
 
-    const starW = this._rowW * 1.9;
+    const starW = this._rowW * burstLerp(1.05, 1.9, b);
     this._starBaseX = starW / texW(this._starFlare);
     this._starBaseY = this._starBaseX * 0.5;
     this._starFlare.tint = 0xffecbe;
 
-    // 低档不给星芒和泛光：每两三次消除就闪一次满屏的话，高档就没有惊喜了
-    this._starFlare.visible = style.tier >= 2;
-    this._flash.visible = style.tier >= 2;
+    // 破（≈0.45）起才给星芒和泛光，2 连只留能量小爆
+    this._starFlare.visible = b >= 0.42;
+    this._flash.visible = b >= 0.42;
   }
 
   private _updateMilestonePulse(timer: number): void {
     if (!this._milestone.visible) return;
-    if (timer > 78) {
+    if (timer > 100) {
       this._milestone.visible = false;
       this._flare.visible = false;
       return;
     }
-    const pulse = timer <= 46 ? 1 + (1 - timer / 46) * 0.35 : 1;
+    const pulse = timer <= 58 ? 1 + (1 - timer / 58) * 0.35 : 1;
     this._milestone.scale.set(this._msBaseScale * pulse);
-    if (timer <= 46) {
+    if (timer <= 58) {
       this._flare.visible = true;
-      this._flare.alpha = Math.max(0, 1 - timer / 38) * 0.9;
-      this._flare.rotation = timer * 0.12;
-      this._flare.scale.set(this._flareBaseScale * (1 + (1 - timer / 38) * 0.4));
+      this._flare.alpha = Math.max(0, 1 - timer / 50) * 0.9;
+      this._flare.rotation = timer * 0.1;
+      this._flare.scale.set(this._flareBaseScale * (1 + (1 - timer / 50) * 0.4));
     } else {
       this._flare.visible = false;
     }
@@ -573,8 +611,7 @@ export class ComboDisplay {
    * 背景能量爆发。
    *
    * 四层各走各的时间线，错开才有层次：泛光只闪 FLASH_END 帧（久了就是蒙了层色片）、
-   * 放射一路冲出去后彻底消失（留着会挡住后续操作）、能量团先甩到最大再
-   * 回落到常驻托住文字、星芒最后淡到低亮度当装饰。
+   * 放射先收束再冲出、峰值停住让人看清、再淡出；能量团同样蓄力→炸开→余辉托字。
    *
    * 贴图不做旋转，只做镜像。旋转会让人一眼看穿是同一张图在转；而且这些图都被
    * 压成了横向椭圆，转过 90° 就立起来跟文字对不上了。
@@ -584,17 +621,33 @@ export class ComboDisplay {
     const fy = this._fxFlipY;
 
     if (this._flash.visible) {
-      const p = Math.min(1, timer / FLASH_END);
-      this._flash.alpha = (1 - p) * 0.10;
-      if (timer > FLASH_END) this._flash.visible = false;
+      // 蓄力段不闪，炸开那一瞬才亮；低档更克制，避免每消除都洗白棋盘
+      if (timer < CHARGE_END) {
+        this._flash.alpha = 0;
+      } else {
+        const p = Math.min(1, (timer - CHARGE_END) / (FLASH_END - CHARGE_END));
+        const punch = burstLerp(0.08, 0.34, style.burst);
+        this._flash.alpha = (1 - p) ** 1.4 * punch;
+        if (timer > FLASH_END) this._flash.visible = false;
+      }
     }
 
+    this._updateShock(style, timer);
+
     if (timer <= RAYS_END) {
-      // 加速冲出：起手快、末段慢，比线性更像被炸开
-      const p = timer / RAYS_END;
-      const mul = 0.35 + (1 - (1 - p) ** 2) * 1.05;
-      const a = Math.min(1, p * 5) * (1 - p) ** 0.8;
       const spin = this._raysSpin;
+      let mul: number;
+      let a: number;
+      if (timer <= CHARGE_END) {
+        const p = timer / CHARGE_END;
+        mul = 0.22 - 0.10 * p;
+        a = 0.10 + 0.22 * p;
+      } else {
+        const p = (timer - CHARGE_END) / (RAYS_END - CHARGE_END);
+        mul = 0.14 + burstLerp(0.85, 2.15, style.burst) * snapEase(Math.min(1, p / 0.38));
+        a = (p < 0.08 ? p / 0.08 : p > 0.5 ? Math.max(0, (1 - p) / 0.5) : 1)
+          * burstLerp(0.55, 1, style.burst);
+      }
       this._rays.visible = true;
       this._raysCore.visible = true;
       this._rays.rotation = spin;
@@ -602,7 +655,7 @@ export class ComboDisplay {
       this._rays.scale.set(this._raysBaseX * mul * fx, this._raysBaseY * mul * fy);
       this._raysCore.scale.set(this._raysBaseX * mul * fx, this._raysBaseY * mul * fy);
       this._rays.alpha = a;
-      this._raysCore.alpha = a * 0.85;
+      this._raysCore.alpha = a * 0.9;
     } else {
       this._rays.visible = false;
       this._raysCore.visible = false;
@@ -610,14 +663,23 @@ export class ComboDisplay {
 
     let mul: number;
     let a: number;
-    if (timer <= ENERGY_BURST_END) {
-      const p = timer / ENERGY_BURST_END;
-      mul = 0.45 + 0.85 * p;
-      a = this._energyPeak * Math.min(1, p * 2.4);
+    if (timer <= CHARGE_END) {
+      const p = timer / CHARGE_END;
+      mul = 0.68 - 0.36 * p;
+      a = this._energyPeak * (0.22 + 0.55 * p);
+    } else if (timer <= ENERGY_BURST_END) {
+      const p = (timer - CHARGE_END) / (ENERGY_BURST_END - CHARGE_END);
+      const peak = burstLerp(1.15, 2.0, style.burst);
+      mul = 0.32 + (peak - 0.32) * snapEase(p);
+      a = this._energyPeak * burstLerp(1.05, 1.28, style.burst);
+    } else if (timer <= ENERGY_HOLD_END) {
+      mul = burstLerp(1.15, 2.0, style.burst);
+      a = this._energyPeak * burstLerp(1.05, 1.2, style.burst);
     } else if (timer <= ENERGY_SETTLE_END) {
-      const p = (timer - ENERGY_BURST_END) / (ENERGY_SETTLE_END - ENERGY_BURST_END);
-      mul = 1.30 - 0.30 * p;
-      a = this._energyPeak;
+      const p = (timer - ENERGY_HOLD_END) / (ENERGY_SETTLE_END - ENERGY_HOLD_END);
+      const peak = burstLerp(1.15, 2.0, style.burst);
+      mul = peak - (peak - 1) * p;
+      a = this._energyPeak * burstLerp(1.05, 1.2, style.burst);
     } else {
       mul = 1;
       a = this._energyPeak;
@@ -626,30 +688,67 @@ export class ComboDisplay {
     this._energy.scale.set(this._energyBaseX * mul * fx, this._energyBaseY * mul * fy);
     this._energy.alpha = a;
 
-    // 热核收缩得比能量团更快，模拟高温部分先冷却
-    const hotP = Math.min(1, timer / ENERGY_SETTLE_END);
-    const hotMul = 1.5 - 0.6 * hotP;
+    let hotMul: number;
+    let hotA: number;
+    if (timer <= CHARGE_END) {
+      const p = timer / CHARGE_END;
+      hotMul = 0.7 - 0.28 * p;
+      hotA = 0.5 + 0.5 * p;
+    } else if (timer <= ENERGY_BURST_END) {
+      const p = (timer - CHARGE_END) / (ENERGY_BURST_END - CHARGE_END);
+      const peak = burstLerp(1.05, 2.42, style.burst);
+      hotMul = 0.42 + (peak - 0.42) * snapEase(p);
+      hotA = burstLerp(0.7, 1, style.burst);
+    } else {
+      const hotP = Math.min(1, (timer - ENERGY_BURST_END) / (ENERGY_SETTLE_END - ENERGY_BURST_END));
+      const peak = burstLerp(1.05, 2.42, style.burst);
+      hotMul = peak - (peak - 1) * hotP;
+      hotA = burstLerp(0.7, 1, style.burst) - 0.55 * hotP;
+    }
     this._hot.visible = true;
     this._hot.scale.set(this._hotBaseX * hotMul, this._hotBaseY * hotMul);
-    this._hot.alpha = (0.95 - 0.5 * hotP) * (a / Math.max(this._energyPeak, 0.01));
+    this._hot.alpha = hotA;
 
     if (!this._starFlare.visible) return;
+    const starCap = burstLerp(0.35, 1, style.burst);
     let starMul: number;
     let starA: number;
-    if (timer <= FLARE_IN_END) {
-      const p = timer / FLARE_IN_END;
-      starMul = 1.45 - 0.45 * p;
-      starA = p;
+    if (timer <= CHARGE_END) {
+      const p = timer / CHARGE_END;
+      starMul = 0.4 + 0.1 * p;
+      starA = 0.15 * p * starCap;
+    } else if (timer <= FLARE_IN_END) {
+      const p = (timer - CHARGE_END) / Math.max(1, FLARE_IN_END - CHARGE_END);
+      starMul = 0.5 + burstLerp(0.7, 1.7, style.burst) * snapEase(p);
+      starA = (0.2 + 0.8 * snapEase(p)) * starCap;
     } else if (timer <= FLARE_SETTLE_END) {
       const p = (timer - FLARE_IN_END) / (FLARE_SETTLE_END - FLARE_IN_END);
-      starMul = 1 + p * 0.12;
-      starA = 1 - 0.62 * p;
+      const peak = 0.5 + burstLerp(0.7, 1.7, style.burst);
+      starMul = peak - (peak - 1.2) * p;
+      starA = (1 - 0.55 * p) * starCap;
     } else {
-      starMul = 1.12;
-      starA = 0.38;
+      starMul = 1.3;
+      starA = 0.45 * starCap;
     }
     this._starFlare.scale.set(this._starBaseX * starMul * fx, this._starBaseY * starMul);
     this._starFlare.alpha = starA;
+  }
+
+  /** 炸开瞬间两圈冲击波：外圈档位色、内圈白芯，由厚变薄往外撕 */
+  private _updateShock(style: ComboStyle, timer: number): void {
+    this._shock.clear();
+    if (style.burst < 0.4) return;
+    if (timer < CHARGE_END || timer > CHARGE_END + SHOCK_END) return;
+    const p = (timer - CHARGE_END) / SHOCK_END;
+    const ease = snapEase(p);
+    const r = style.baseSz * (0.28 + ease * burstLerp(2.1, 5.4, style.burst));
+    const a = (1 - p) ** 1.15 * burstLerp(0.38, 0.95, style.burst);
+    const thick = Math.max(1.4, (10 + 6 * style.burst - 12 * p));
+    const tint = fxTint(style.tier);
+    this._shock.lineStyle(thick, tint, a);
+    this._shock.drawEllipse(0, 0, r * 1.45, r * 0.7);
+    this._shock.lineStyle(thick * 0.4, 0xffffff, a * 0.8);
+    this._shock.drawEllipse(0, 0, r * 1.12, r * 0.54);
   }
 
   /** 全屏泛光的矩形。root 挂在棋盘中上部，往四周铺满够一屏即可 */
@@ -680,7 +779,7 @@ export class ComboDisplay {
     const bandW = Math.max(10 * S, this._rowH * 0.28);
     const h = this._rowH * 0.75;
     const skew = h * 0.45;
-    this._shine.beginFill(0xffffff, Math.sin(p * Math.PI) * 0.5);
+    this._shine.beginFill(0xffffff, Math.sin(p * Math.PI) * 0.72);
     this._shine.drawPolygon([
       x - bandW / 2 + skew, -h,
       x + bandW / 2 + skew, -h,
@@ -697,10 +796,10 @@ export class ComboDisplay {
     const p = timer / BANNER_END;
     const h = style.baseSz * 0.5;
     const gapX = style.baseSz * 0.55;
-    const len = style.baseSz * (1.0 + p * 4.0);
+    const len = style.baseSz * (1.2 + p * 6.2);
     const skew = h * 0.9;
     const color = hex(style.mainColor);
-    this._banner.beginFill(color, (1 - p) * 0.45);
+    this._banner.beginFill(color, (1 - p) * 0.62);
     this._banner.drawPolygon([
       gapX + skew, -h, gapX + len + skew, -h, gapX + len - skew, h, gapX - skew, h,
     ]);
@@ -719,8 +818,8 @@ export class ComboDisplay {
     const p = timer / GHOST_END;
     this._ghostRow.visible = true;
     // 起手就比主行大一档：完全重合会 ADD 成一团过曝白，看不出是残影
-    this._ghostRow.scale.set(1.06 + p * (0.7 + style.tier * 0.12));
-    this._ghostRow.alpha = (1 - p) * 0.55;
+    this._ghostRow.scale.set(1.06 + p * burstLerp(0.45, 1.35, style.burst));
+    this._ghostRow.alpha = (1 - p) * burstLerp(0.4, 0.7, style.burst);
   }
 
   /** 逐位入场：多位数时第二位晚 2 帧砸下来，比整体缩放更有打击节奏 */
@@ -756,47 +855,59 @@ export class ComboDisplay {
     const S = dmgFloatScale();
     const flakeTex = comboParticleTex('flake');
 
-    const speedMul = tier >= 4 ? 1.8 : tier >= 3 ? 1.65 : tier >= 2 ? 1.5 : tier >= 1 ? 1.25 : 1.05;
-    const sizeMul = tier >= 4 ? 1.55 : tier >= 3 ? 1.42 : tier >= 2 ? 1.28 : tier >= 1 ? 1.12 : 1;
-    const speed = 420 * S * speedMul;
+    const b = style.burst;
+    const speedMul = burstLerp(0.7, 1.7, b);
+    const sizeMul = burstLerp(0.85, 1.55, b);
     const size = Math.min(9.5 * S * sizeMul, 22);
-    // 0.97 远高于默认阻尼，碎屑要飞得开才像被甩出去而不是原地淡出
-    const drag = 0.97;
+    const motesCount = Math.round(burstLerp(5, 26, b)) + (isTierBreak ? 10 : 0);
 
-    const motesCount = (tier >= 4 ? 24 : tier >= 3 ? 19 : tier >= 2 ? 15 : tier >= 1 ? 11 : 6)
-      + (isTierBreak ? 8 : 0);
+    // 高速破片：破以后才加，2 连只留慢屑，避免一开始就炸满屏
+    if (b >= 0.42) {
+      this._comboFx.burst({
+        x: 0, y: 0,
+        color: fxTint(tier),
+        count: Math.round(motesCount * 0.7),
+        speed: 560 * S * speedMul,
+        speedVar: 0.7,
+        gravity: 80 * S,
+        size: size * 1.1,
+        life: 0.48,
+        alpha: 1,
+        texture: flakeTex,
+        blendMode: PIXI.BLEND_MODES.ADD,
+        drag: 0.91,
+      });
+    }
+    // 慢屑：把「炸开了」留在画面上
     this._comboFx.burst({
-      x: 0,
-      y: 0,
+      x: 0, y: 0,
       color: fxTint(tier),
       count: motesCount,
-      speed,
-      speedVar: 0.6,
-      gravity: 110 * S,
+      speed: 260 * S * speedMul,
+      speedVar: 0.55,
+      gravity: 130 * S,
       size: size * 1.25,
-      life: isTierBreak ? 0.82 : 0.68,
+      life: isTierBreak ? 1.15 : 0.95,
       alpha: 0.95,
       texture: flakeTex,
       blendMode: PIXI.BLEND_MODES.ADD,
-      drag,
+      drag: 0.97,
     });
 
-    const flakeCount = (tier >= 4 ? 18 : tier >= 3 ? 14 : tier >= 2 ? 11 : tier >= 1 ? 8 : 5)
-      + (isTierBreak ? 8 : 0);
+    const flakeCount = Math.round(burstLerp(4, 20, b)) + (isTierBreak ? 8 : 0);
     this._comboFx.burst({
-      x: 0,
-      y: 0,
+      x: 0, y: 0,
       color: 0xfff2d0,
       count: flakeCount,
-      speed: speed * 0.92,
-      speedVar: 0.55,
-      gravity: 95 * S,
+      speed: 480 * S * speedMul,
+      speedVar: 0.6,
+      gravity: 90 * S,
       size,
-      life: isTierBreak ? 0.78 : 0.64,
-      alpha: 0.95,
+      life: isTierBreak ? 0.85 : 0.7,
+      alpha: 1,
       texture: flakeTex,
       blendMode: PIXI.BLEND_MODES.ADD,
-      drag,
+      drag: 0.92,
     });
 
     if (!isTierBreak) return;
@@ -810,15 +921,15 @@ export class ComboDisplay {
         y: 0,
         color: hex(color),
         count: perColor,
-        speed: speed * 1.05,
+        speed: 520 * S * speedMul,
         speedVar: 0.5,
         gravity: 60 * S,
         size: size + 4,
-        life: 0.78,
+        life: 1.1,
         alpha: 0.95,
         texture: starTex,
         blendMode: PIXI.BLEND_MODES.ADD,
-        drag,
+        drag: 0.93,
       });
     }
   }
@@ -831,9 +942,10 @@ export class ComboDisplay {
     this._root.position.set(center.x, center.y);
     this._root.visible = true;
     this._root.alpha = 1;
-    this._spawnVfx(combo);
 
     if (combo < 2) {
+      this._spawnVfx(combo);
+      this._pendingBurst = false;
       this._pop.visible = false;
       this._mul.visible = false;
       this._hideFx();
@@ -854,7 +966,7 @@ export class ComboDisplay {
     this._raysSpin = Math.random() * Math.PI;
 
     const milestone = isComboMilestone(combo);
-    const initScale = milestone ? (style.tier >= 4 ? 4.2 : 3.4) : 3.0;
+    const initScale = burstLerp(2.15, milestone ? 4.8 : 3.6, style.burst);
     this._anim = {
       combo,
       timer: 0,
@@ -869,6 +981,7 @@ export class ComboDisplay {
     this._updateGhost(style, 0);
     this._updateDigits(0);
     this._updateFx(style, 0);
+    this._pendingBurst = true;
     readScale(this._pop)?.set(initScale);
     this._root.alpha = 1;
     this._pop.alpha = style.isLow ? 0.7 : 1;
@@ -876,6 +989,7 @@ export class ComboDisplay {
 
   hide(immediate = false): void {
     this._inBattle = false;
+    this._pendingBurst = false;
     /*
      * 淡出窗口是第 HOLD_END~TOTAL_END 帧，而 hold 期间 timer 照常走到 TOTAL_END 就封顶。
      * 于是 hold 超过一秒再收，timer 早已越过淡出段，退场会「啪」地瞬间消失。把 timer
@@ -899,6 +1013,7 @@ export class ComboDisplay {
       this._flare.visible = false;
       this._hideFx();
       this._comboFx.clear();
+      this._pendingBurst = false;
       this._anim = null;
       this._laidCombo = -1;
     }
@@ -911,6 +1026,7 @@ export class ComboDisplay {
     this._energy.visible = false;
     this._hot.visible = false;
     this._starFlare.visible = false;
+    this._shock.clear();
   }
 
   destroy(): void {
@@ -924,6 +1040,10 @@ export class ComboDisplay {
   update(dt: number): void {
     this._comboFx.update(dt);
     if (!this._anim || !displayAlive(this._root) || !this._root.visible) return;
+    if (this._pendingBurst && this._anim.timer >= CHARGE_END) {
+      this._pendingBurst = false;
+      this._spawnVfx(this._anim.combo);
+    }
 
     const S = dmgFloatScale();
     /*
@@ -945,12 +1065,12 @@ export class ComboDisplay {
 
     if (t <= POP_END) {
       const p = t / POP_END;
-      if (p < 0.25) scale = initScale - (initScale - 0.72) * (p / 0.25);
-      else if (p < 0.52) scale = 0.72 + 0.48 * ((p - 0.25) / 0.27);
-      else if (p < 0.74) scale = 1.2 - 0.24 * ((p - 0.52) / 0.22);
-      else scale = 0.96 + 0.07 * ((p - 0.74) / 0.26);
-      offsetY = p < 0.45 ? (1 - p / 0.45) * 10 * S : 0;
-      if (p < 0.35) stretch = (1 - p / 0.35) * 0.22;
+      if (p < 0.18) scale = initScale - (initScale - 0.6) * (p / 0.18);
+      else if (p < 0.48) scale = 0.6 + 0.68 * ((p - 0.18) / 0.3);
+      else if (p < 0.72) scale = 1.28 - 0.28 * ((p - 0.48) / 0.24);
+      else scale = 1.0 + 0.05 * ((p - 0.72) / 0.28);
+      offsetY = p < 0.4 ? (1 - p / 0.4) * 14 * S : 0;
+      if (p < 0.3) stretch = (1 - p / 0.3) * 0.34;
     } else if (this._inBattle) {
       scale = 1.03;
     } else if (t <= HOLD_END) {
@@ -976,8 +1096,8 @@ export class ComboDisplay {
 
     let jx = 0;
     let jy = 0;
-    if (this._anim.isMilestone && t < JITTER_END) {
-      const k = (1 - t / JITTER_END) * (1.6 + this._anim.tier) * S;
+    if (t < JITTER_END && style.burst >= 0.4) {
+      const k = (1 - t / JITTER_END) * (this._anim.isMilestone ? 1.8 + this._anim.tier : 0.7) * S * style.burst;
       jx = (Math.random() - 0.5) * 2 * k;
       jy = (Math.random() - 0.5) * 2 * k;
     }
@@ -997,6 +1117,6 @@ export class ComboDisplay {
     this._drawShine(t);
     this._updateGhost(style, t);
     this._updateDigits(t);
-    this._updateMilestonePulse(this._inBattle ? Math.min(t, 54) : t);
+    this._updateMilestonePulse(this._inBattle ? Math.min(t, 72) : t);
   }
 }

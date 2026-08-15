@@ -567,17 +567,25 @@ export class BattleScene implements Scene {
   private _burstGroup(group: MatchGroup, combo = 1): void {
     const cell = UI.board.cellSize;
     const color = ORB_COLOR[group.orb];
-    const boost = Math.min(1, (combo - 1) / 11);
-    const count = Math.round(6 + boost * 6);
-    const speed = 320 + boost * 220;
-    const size = 13 + boost * 6;
+    const boost = Math.min(1, Math.max(0, combo - 2) / 10);
+    const count = Math.round(4 + boost * 8);
+    const size = 11 + boost * 8;
     for (const { r, c } of group.cells) {
+      const x = this._layout.boardX + c * cell + cell / 2;
+      const y = this._layout.boardY + r * cell + cell / 2;
+      if (combo >= 3) {
+        this._fx.burst({
+          x, y, color,
+          count: Math.round(count * 0.55),
+          speed: 300 + boost * 280,
+          size: size * 0.8,
+          life: 0.28,
+        });
+      }
       this._fx.burst({
-        x: this._layout.boardX + c * cell + cell / 2,
-        y: this._layout.boardY + r * cell + cell / 2,
-        color,
+        x, y, color,
         count,
-        speed,
+        speed: 160 + boost * 180,
         size,
         life: UI.anim.orbBurst,
       });
@@ -1171,12 +1179,10 @@ export class BattleScene implements Scene {
     const maxHp = Math.max(1, this._ctrl.heroMaxHp);
     const dmgRatio = (damage + absorbed) / maxHp;
 
-    if (absorbed > 0 && damage <= 0) {
-      SfxManager.playBlock();
-    }
-    if (damage > 0) {
+    // 打上只播一记闷击。全额盾挡若走 block.mp3 会变成一声「叮」，
+    // 叠 heroHurt 又会再加一层短嗒，听感都不是砸中。
+    if (damage > 0 || absorbed > 0) {
       SfxManager.playEnemyAttack(dmgRatio);
-      SfxManager.playHeroHurt(dmgRatio);
     }
 
     if (absorbed > 0) {
@@ -1231,6 +1237,9 @@ export class BattleScene implements Scene {
     const battleEnded = await presentSkillCast(deps, petIndex);
     if (battleEnded) return; // 战斗已结束，保持 busy 拦截输入
 
+    this._hud.refreshEnemyHp();
+    this._hud.refreshHeroHp();
+    this._hud.refreshEnemyCd();
     this._refreshSkillUi();
     this._busy = false;
   }

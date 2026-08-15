@@ -275,17 +275,18 @@ class SfxManagerClass {
   playEnemyAttack(dmgRatio?: number): void {
     if (!this.enabled) return;
     const vol = dmgRatio != null
-      ? Math.min(0.8, 0.4 + dmgRatio * 0.6)
-      : 0.5;
+      ? Math.min(0.92, 0.7 + dmgRatio * 0.28)
+      : 0.78;
+    BgmManager.duck(0.18, 220);
     this._playEx(AUDIO.enemyAttack, vol, 1.0);
   }
 
   playHeroHurt(dmgRatio?: number): void {
     if (!this.enabled) return;
     const vol = dmgRatio != null
-      ? Math.min(0.7, 0.3 + dmgRatio * 0.5)
-      : 0.4;
-    this._playEx(AUDIO.heroHurt, vol, 1.0);
+      ? Math.min(0.38, 0.2 + dmgRatio * 0.22)
+      : 0.26;
+    this._playEx(AUDIO.heroHurt, vol, 0.9);
   }
 
   playBlock(): void {

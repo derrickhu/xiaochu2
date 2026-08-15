@@ -314,6 +314,33 @@ export class BattlePetBar {
     });
   }
 
+  /** 放增益技：全队槽位弹一下，让人看见「鼓舞到了每一只」 */
+  flourish(): void {
+    for (const slot of this._slots) {
+      if (!displayAlive(slot)) continue;
+      const scale = readScale(slot);
+      if (!scale) continue;
+      const baseX = scale.x;
+      const baseY = scale.y;
+      TweenManager.cancelTarget(scale);
+      TweenManager.to({
+        target: scale,
+        props: { x: baseX * 1.14, y: baseY * 1.14 },
+        duration: 0.12,
+        ease: Ease.easeOutQuad,
+        onComplete: () => {
+          if (!displayAlive(slot)) return;
+          TweenManager.to({
+            target: scale,
+            props: { x: baseX, y: baseY },
+            duration: 0.2,
+            ease: Ease.easeOutBack,
+          });
+        },
+      });
+    }
+  }
+
   /** 队伍栏整体后撤再弹回（受击方向感） */
   recoil(heavy: boolean): void {
     const offset = heavy ? 16 : 10;

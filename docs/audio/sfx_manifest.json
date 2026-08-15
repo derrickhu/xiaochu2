@@ -125,6 +125,24 @@
       "notes": "沿用 xiao_chu/audio/pet_skill.mp3（★3+ 叠层）。施放主音是 skill.mp3；勿用 ElevenLabs 覆盖。"
     },
     {
+      "name": "enemy_attack",
+      "priority": "p1",
+      "text": "unpitched heavy body slam, sandbag dropped on concrete, deep thud with distorted mid punch, no musical pitch, no bell, no ding, no woodblock, no click, no metal, no chime, no voice, dry studio",
+      "duration": 0.42,
+      "prompt_influence": 0.8,
+      "output": "../../minigame/subpackages/pkg-audio/audio/enemy_hit_v2.mp3",
+      "notes": "敌人打上。要裂纹+中拳，忌纯闷击（哑）和铃/叮（尖）。"
+    },
+    {
+      "name": "hero_hurt",
+      "priority": "p1",
+      "text": "very low muffled body thud, boxing glove hitting a heavy bag, dull dark and short, no treble, no scream, no grunt, no metallic ping, no voice, dry studio",
+      "duration": 0.4,
+      "prompt_influence": 0.72,
+      "output": "../../minigame/subpackages/pkg-audio/audio/hero_hurt.mp3",
+      "notes": "英雄挨打垫层。比 enemy_attack 更闷更低，叠上去只加重量不加尖锐。"
+    },
+    {
       "name": "enemy_charge",
       "priority": "p3",
       "text": "low ominous rumble swelling upward with a tightening metallic tension, threatening build-up, ends without release, no music, no voice",

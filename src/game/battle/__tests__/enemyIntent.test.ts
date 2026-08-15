@@ -111,6 +111,47 @@ function makeCtx(enemy: EnemyUnit): EnemyTurnContext & { tickStatuses: () => voi
   };
 }
 
+describe('眩晕封锁敌人行动', () => {
+  it('眩晕时不放技能、不扣技能 CD', () => {
+    const enemy = bossEnemies()[0].enemy();
+    expect(enemy.skillIds.length).toBeGreaterThan(0);
+    enemy.skillCds = enemy.skillIds.map(() => 0);
+    const cdsBefore = [...enemy.skillCds];
+    const ctx = makeCtx(enemy);
+    ctx.isStunned = () => true;
+
+    const result = runEnemyTurnAction(ctx);
+    expect(result.action).toBe('idle');
+    expect(result.skillName).toBeUndefined();
+    expect(enemy.skillCds).toEqual(cdsBefore);
+  });
+
+  it('眩晕时已起手的蓄力也不释放，蓄力状态保留', () => {
+    const enemy = bossEnemies()[0].enemy();
+    enemy.charging = { mult: 2.4, skillId: enemy.skillIds[0] ?? 'enemy_charge', releaseVfx: 'enemyAttack' };
+    const ctx = makeCtx(enemy);
+    ctx.isStunned = () => true;
+
+    const result = runEnemyTurnAction(ctx);
+    expect(result.action).toBe('idle');
+    expect(enemy.charging).not.toBeNull();
+  });
+
+  it('眩晕预告与实际一致：显示眩晕中，不会预告技能或蓄力', () => {
+    const enemy = bossEnemies()[0].enemy();
+    enemy.skillCds = enemy.skillIds.map(() => 0);
+    enemy.charging = { mult: 2.4, skillId: enemy.skillIds[0] ?? 'enemy_charge', releaseVfx: 'enemyAttack' };
+    const ctx = makeCtx(enemy);
+    ctx.isStunned = () => true;
+
+    const intent = predictEnemyIntent(ctx);
+    const actual = runEnemyTurnAction(ctx);
+    expect(intent?.kind).toBe('idle');
+    expect(intent?.label).toBe('眩晕中');
+    expect(actual.action).toBe('idle');
+  });
+});
+
 describe('Boss 出招预告', () => {
   it('预告的那一招就是真正打出来的那一招', () => {
     const mismatches: string[] = [];

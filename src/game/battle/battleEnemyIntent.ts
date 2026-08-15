@@ -144,6 +144,11 @@ export function predictEnemyIntent(ctx: EnemyIntentContext): EnemyIntent | null 
     };
   }
 
+  // 与 runEnemyTurnAction 一致：眩晕压过蓄力，这一回合什么也不打
+  if (ctx.isStunned()) {
+    return { kind: 'idle', label: '眩晕中', detail: '无法行动，技能与蓄力都放不出', urgent: false };
+  }
+
   if (enemy.charging) {
     const skill = skillForEnemy(enemy.charging.skillId);
     return {
@@ -153,11 +158,6 @@ export function predictEnemyIntent(ctx: EnemyIntentContext): EnemyIntent | null 
       urgent: true,
       skillId: skill.id,
     };
-  }
-
-  // 蓄力中的敌人不受眩晕影响，故这一条排在蓄力之后
-  if (ctx.isStunned()) {
-    return { kind: 'idle', label: '眩晕中', detail: '下回合无法行动，抓紧输出', urgent: false };
   }
 
   const pick = pickEnemySkill(enemy, ctx.enemyCaster(), ctx.runtimeContext(), 1);

@@ -3,11 +3,12 @@
  * （属性刃弹道 / 齐射 / 多段 / DOT / 眩晕 / 破防 / 治疗 / 护盾 / 增伤 / 转珠）。
  *
  * 直伤类与消珠普攻一致，走 fireElementBladeVolley（属性刃 + 命中爆炸），不再飞原始珠子弹道。
+ * 复合技（净世斩 / 破防斩）主分类不是 nuke 时，直伤段由 presentAttachedNuke 补演。
  *
  * 纯演出编排：依赖通过 deps 注入，自身不持有状态。返回 true 表示战斗已在演出中结束
  * （最后一波敌人被击败），编排者据此保留 busy 状态、跳过收尾刷新。
  */
-import { ORB_COLOR, UI } from '@/balance/ui';
+import { ORB_COLOR, FX_ELEMENT_COLOR, UI, ELEMENT_NAME } from '@/balance/ui';
 import {
   SKILL_IMPACT_HEAVY_HP_RATIO,
   SKILL_VFX_MAP,
@@ -24,6 +25,12 @@ import type { BattleFx } from './BattleFx';
 import type { BattleHud } from './BattleHud';
 import type { BattlePetBar } from './BattlePetBar';
 import type { BattleLayout } from './BattleLayout';
+import type { SkillCastResult } from '@/game/battle/battleTypes';
+import { delay } from './battleWidgets';
+import {
+  primaryChannelsOfCast,
+  type PresentChannel,
+} from './skillPresentCoverage';
 
 export interface SkillCastDeps {
   ctrl: BattleController;
@@ -77,6 +84,38 @@ function spawnSkillDamage(
   });
 }
 
+/** 复合技里的转珠段：buff/治疗分类不会走到 orbConvert，必须在主演出后再落地 */
+async function presentOrbConvertIfAny(
+  deps: SkillCastDeps,
+  result: SkillCastResult,
+): Promise<void> {
+  const convertReq = result.boardRequests.find(
+    (b): b is Extract<typeof b, { type: 'convertOrbs' }> => b.type === 'convertOrbs',
+  );
+  if (!convertReq) return;
+  const { fx, board, boardView, layout } = deps;
+  const to = result.to ?? convertReq.to;
+  const cells = result.shape === 'row'
+    ? board.convertRow(to)
+    : result.shape === 'col'
+      ? board.convertCol(to)
+      : result.shape === 'cross'
+        ? board.convertCross(to)
+        : board.convertRandom(to, result.count ?? convertReq.count, convertReq.from);
+  if (cells.length === 0) return;
+  SfxManager.playSkillBoardWave();
+  for (const { r, c } of cells) {
+    const cell = UI.board.cellSize;
+    fx.burst({
+      x: layout.boardX + c * cell + cell / 2,
+      y: layout.boardY + r * cell + cell / 2,
+      color: ORB_COLOR[to],
+      count: 5, speed: 240, size: 12, life: 0.35,
+    });
+  }
+  await boardView.playConvert(cells, to);
+}
+
 /** 从宠槽打出属性刃弹道（与消珠普攻同款效果 UI） */
 function fireSkillBlade(
   fx: BattleFx,
@@ -118,12 +157,188 @@ async function presentSkillEnemyDamage(
   await deps.hud.playSkillImpact(deps.fx, tier);
 }
 
+/**
+ * 复合技附带的直伤段：净化/破防等主分类不会走 projectile，
+ * 不补这一下就会出现「方案写着 450% 伤害、画面只有净化」——血已扣、字不飘、条不刷。
+ * 返回 true 表示这一刀打死了最后一波。
+ */
+async function presentAttachedNuke(
+  deps: SkillCastDeps,
+  petIndex: number,
+  result: SkillCastResult,
+  element: Element,
+  counter: 1 | 0 | -1,
+): Promise<boolean> {
+  const damage = result.damage ?? 0;
+  if (damage <= 0) return false;
+  const { fx, hud, petBar, layout } = deps;
+  await fireSkillBlade(fx, petBar, petIndex, layout.enemyCenterX, layout.enemyCenterY, element);
+  await presentSkillEnemyDamage(deps, element, damage, { counter });
+  hud.refreshEnemyHp();
+  return !!(result.enemyDead && await deps.handleEnemyDefeat());
+}
+
+/** 施法结束强制对账 HUD：逻辑已在 castSkill 落地，条不刷就会显得「下一次攻击才生效」 */
+function syncSkillHud(deps: SkillCastDeps): void {
+  deps.hud.refreshEnemyHp();
+  deps.hud.refreshHeroHp();
+  deps.hud.refreshEnemyCd();
+  deps.refreshSkillUi();
+}
+
+/**
+ * 主 VFX 没播到的效果段：护盾+威吓、增伤+护盾、重力+破防、净世斩直伤等。
+ * shown 来自 primaryChannelsOfCast，必须与上面 switch 实际播的频道一致。
+ */
+async function presentResiduals(
+  deps: SkillCastDeps,
+  petIndex: number,
+  result: SkillCastResult,
+  element: Element,
+  counter: 1 | 0 | -1,
+  shown: Set<PresentChannel>,
+): Promise<boolean> {
+  const { fx, hud, petBar, board, boardView, layout, ctrl } = deps;
+  const {
+    enemyCenterX, enemyCenterY, boardX, boardY, heroBarY,
+    heroAnnounceX, heroAnnounceY, statusAnnounceX, statusAnnounceY,
+  } = layout;
+
+  if (!shown.has('enemyDamage')) {
+    if (await presentAttachedNuke(deps, petIndex, result, element, counter)) return true;
+  }
+
+  if (!shown.has('heal') && (result.healed ?? 0) > 0) {
+    hud.refreshHeroHp();
+    SfxManager.playSkillBuff();
+    fx.spawnAuraRing(Game.logicWidth / 2, heroBarY, 0x8be78b);
+    fx.spawnHeroHealFloat(result.healed ?? 0, heroAnnounceX, heroAnnounceY);
+  }
+
+  if (!shown.has('convert')) {
+    await presentOrbConvertIfAny(deps, result);
+  }
+
+  if (!shown.has('shield')) {
+    const shieldEv = result.statusEvents.find((e) => e.status === 'shield');
+    if (shieldEv) {
+      SfxManager.playSkillBuff();
+      fx.spawnAuraRing(Game.logicWidth / 2, heroBarY, 0x8fd4ff);
+      fx.spawnFloat(`护盾 ${ctrl.shield || result.value || 0}`, heroAnnounceX, heroAnnounceY, 0x8fd4ff, 1.15);
+    }
+  }
+
+  if (!shown.has('purify') && (result.cleanseTeam || result.boardRequests.some((b) => b.type === 'unsealAll'))) {
+    const unsealReq = result.boardRequests.find((b) => b.type === 'unsealAll');
+    if (unsealReq) {
+      const cells = board.unsealAll();
+      for (const { r, c } of cells) {
+        const cell = UI.board.cellSize;
+        fx.burst({
+          x: boardX + c * cell + cell / 2,
+          y: boardY + r * cell + cell / 2,
+          color: 0xfff8e1, count: 6, speed: 220, size: 12, life: 0.4,
+        });
+      }
+      boardView.refreshOrbStates();
+    }
+    SfxManager.playSkillBoardWave();
+    fx.flash(0xfff8e1, 0.22, 0.28);
+    fx.spawnAuraRing(Game.logicWidth / 2, boardY + UI.board.cellSize * 2.5, 0xfff8e1);
+    fx.spawnFloat('净化！', heroAnnounceX, heroAnnounceY, 0xfff8e1, 1.2);
+  }
+
+  if (!shown.has('defenseBreak')) {
+    const ev = result.statusEvents.find((e) => e.status === 'enemyDefenseBreak');
+    if (ev) {
+      fx.spawnFloat(
+        `破防 -${Math.round((ev.value ?? 0) * 100)}% ×${ev.turns ?? 0}`,
+        enemyCenterX, enemyCenterY - 50, 0xff8a65, 1.15,
+      );
+      fx.burst({
+        x: enemyCenterX, y: enemyCenterY,
+        color: 0xff8a65, count: 10, speed: 200, size: 12, life: 0.4,
+      });
+    }
+  }
+
+  if (!shown.has('stun')) {
+    const ev = result.statusEvents.find((e) => e.status === 'stun');
+    if (ev || result.immuneControl) {
+      if (result.immuneControl) {
+        fx.spawnFloat('免疫控制！', enemyCenterX, enemyCenterY - 76, 0xb0bec5, 1.15);
+      } else if (ev) {
+        fx.spawnFloat(`眩晕 ${ev.turns ?? 0} 回合`, enemyCenterX, enemyCenterY - 76, 0xfff176, 1.15);
+      }
+    }
+  }
+
+  if (!shown.has('delayAttack') && (result.enemyAttackDelay ?? 0) > 0) {
+    fx.spawnFloat(
+      result.immuneControl
+        ? '免疫控制！'
+        : `威吓！敌人攻击推迟 ${result.enemyAttackDelay} 回合`,
+      enemyCenterX, enemyCenterY - 50, result.immuneControl ? 0xb0bec5 : 0xffd54f, 1.15,
+    );
+    hud.refreshEnemyCd();
+  }
+
+  if (!shown.has('extraTime')) {
+    const ev = result.statusEvents.find((e) => e.status === 'extraDragTime');
+    if (ev) {
+      fx.spawnFloat(
+        `转珠时间 +${ev.value ?? 0} 秒（${ev.turns ?? 0} 回合）`,
+        heroAnnounceX, heroAnnounceY, 0xffe082, 1.1,
+      );
+    }
+  }
+
+  if (!shown.has('haste') && (result.teamCdDelta ?? 0) > 0) {
+    for (let i = 0; i < ctrl.team.length; i++) {
+      if (i === petIndex) continue;
+      const slot = petBar.slotAt(i);
+      fx.spawnAuraRing(slot.x, slot.y - 20, 0xffd54f);
+    }
+    fx.spawnFloat(`全队技能冷却 -${result.teamCdDelta}`, heroAnnounceX, heroAnnounceY, 0xffd54f, 1.1);
+  }
+
+  if (!shown.has('dot')) {
+    const ev = result.statusEvents.find((e) => e.status === 'dot');
+    if (ev) {
+      fx.spawnFloat(`灼烧 ${ev.value ?? 0}/回合 ×${ev.turns ?? 0}`, enemyCenterX, enemyCenterY - 76, 0xff7043, 1.05);
+    }
+  }
+
+  const extraBuffs: string[] = [];
+  const dmgBuff = result.statusEvents.find((e) => e.status === 'teamDamageBuff');
+  if (!shown.has('dmgBoost') && dmgBuff) {
+    extraBuffs.push(`全队伤害 ×${dmgBuff.value ?? 1}（${dmgBuff.turns ?? 0} 回合）`);
+  }
+  const crit = result.statusEvents.find((e) => e.status === 'guaranteedCrit');
+  if (!shown.has('critBoost') && crit) {
+    extraBuffs.push(`必暴击（${crit.turns ?? 0} 回合）`);
+  }
+  const elBuff = result.statusEvents.find((e) => e.status === 'elementDamageBuff');
+  if (!shown.has('elementBuff') && elBuff) {
+    const elName = elBuff.element ? ELEMENT_NAME[elBuff.element] : '属';
+    extraBuffs.push(`${elName}伤害 ×${elBuff.value ?? 1}（${elBuff.turns ?? 0} 回合）`);
+  }
+  if (extraBuffs.length > 0) {
+    SfxManager.playSkillBuff();
+    petBar.flourish();
+    const glow = FX_ELEMENT_COLOR[element] ?? 0xff8a3c;
+    fx.spawnStatusAnnounceFloat(extraBuffs.join('  '), statusAnnounceX, statusAnnounceY, glow);
+  }
+
+  return false;
+}
+
 /** 返回 true 表示战斗已结束（最后一波敌人被击败）。 */
 export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): Promise<boolean> {
   const { ctrl, fx, hud, petBar, board, boardView, layout } = deps;
   const {
     enemyCenterX, enemyCenterY, boardX, boardY, heroBarY,
-    heroAnnounceX, heroAnnounceY,
+    heroAnnounceX, heroAnnounceY, statusAnnounceX, statusAnnounceY,
   } = layout;
 
   const pet = ctrl.team[petIndex];
@@ -233,6 +448,9 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       break;
     }
     case 'defenseBreak': {
+      // 破军裂阵 / 破岳崩地：主分类是破防，直伤段必须先打出来
+      const el = result.element ?? pet.def.element;
+      if (await presentAttachedNuke(deps, petIndex, result, el, counterOf(el))) return true;
       fx.spawnFloat(
         `破防 -${Math.round((result.value ?? 0) * 100)}% ×${result.turns ?? 0}`,
         enemyCenterX, enemyCenterY - 50, 0xff8a65, 1.2,
@@ -271,8 +489,8 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         : result.type === 'elementBuff'
           ? `${vfx?.floatText ?? ''} ×${result.mult ?? 1}（${result.turns ?? 0} 回合）`
           : `${vfx?.floatText ?? ''}${result.turns ? `（${result.turns} 回合）` : ''}`;
-      if (result.type === 'delayAttack') {
-        // 威吓可附带直伤：先属性刃命中再飘字
+      if (vfx.id === 'delayAttack' || result.type === 'delayAttack' || (result.enemyAttackDelay ?? 0) > 0) {
+        // 威吓可把直伤插在第一段，type 会变成 instantDmg，必须看 vfx / delay 字段
         const damage = result.damage ?? 0;
         if (damage > 0) {
           const el = result.element ?? pet.def.element;
@@ -291,8 +509,19 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         break;
       }
       SfxManager.playSkillBuff();
-      fx.spawnAuraRing(Game.logicWidth / 2, heroBarY, 0xffb74d);
-      fx.spawnFloat(label, heroAnnounceX, heroAnnounceY, 0xffb74d, 1.1);
+      petBar.flourish();
+      const glow = FX_ELEMENT_COLOR[pet.def.element] ?? 0xff8a3c;
+      for (let i = 0; i < ctrl.team.length; i++) {
+        const slot = petBar.slotAt(i);
+        fx.burst({
+          x: slot.x, y: slot.y - 24,
+          color: glow, count: 10, speed: 220, gravity: -180, size: 13, life: 0.55,
+        });
+      }
+      // 长文案必须走屏幕居中的 statusAnnounce，贴 heroAnnounce 右侧会裁出屏
+      fx.spawnStatusAnnounceFloat(label, statusAnnounceX, statusAnnounceY, glow);
+      hud.refreshStatus();
+      await delay(UI.anim.skillBuffHold);
       break;
     }
     case 'gravityCrush': {
@@ -327,6 +556,9 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       break;
     }
     case 'purifyWave': {
+      // 金羽净世：主分类是净化，450% 直伤必须先飞刃再飘字，否则只剩一句「净化」
+      const el = result.element ?? pet.def.element;
+      if (await presentAttachedNuke(deps, petIndex, result, el, counterOf(el))) return true;
       // 净化：白光扫过棋盘解封 + 清除我方 debuff
       const unsealReq = result.boardRequests.find((b) => b.type === 'unsealAll');
       if (unsealReq) {
@@ -359,33 +591,16 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       break;
     }
     case 'orbConvert': {
-      const to = result.to ?? 'heart';
-      const convertReq = result.boardRequests.find(
-        (b): b is Extract<typeof b, { type: 'convertOrbs' }> => b.type === 'convertOrbs',
-      );
-      const cells = result.shape === 'row'
-        ? board.convertRow(to)
-        : result.shape === 'col'
-          ? board.convertCol(to)
-          : result.shape === 'cross'
-            ? board.convertCross(to)
-            : board.convertRandom(to, result.count ?? 0, convertReq?.from);
-      SfxManager.playSkillBoardWave();
-      for (const { r, c } of cells) {
-        const cell = UI.board.cellSize;
-        fx.burst({
-          x: boardX + c * cell + cell / 2,
-          y: boardY + r * cell + cell / 2,
-          color: ORB_COLOR[to],
-          count: 5, speed: 240, size: 12, life: 0.35,
-        });
-      }
-      await boardView.playConvert(cells, to);
+      await presentOrbConvertIfAny(deps, result);
       break;
     }
     default:
       break;
   }
 
+  const shown = new Set(primaryChannelsOfCast(vfx?.kind, result.type, result.vfxEvents[0]));
+  const el = result.element ?? pet.def.element;
+  if (await presentResiduals(deps, petIndex, result, el, counterOf(el), shown)) return true;
+  syncSkillHud(deps);
   return false;
 }

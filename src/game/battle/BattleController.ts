@@ -480,7 +480,7 @@ export class BattleController {
    * 伤害先被护盾吸收，溢出部分才扣 HP。
    */
   enemyAct(): EnemyActResult {
-    const stunnedBefore = this._statuses.isStunned('enemy') && !this.enemy.charging;
+    const stunnedBefore = this._statuses.isStunned('enemy');
     const result = this._enemyTurnAction();
     if (stunnedBefore && result.action === 'idle') result.stunnedSkip = true;
     const dotTicks = this._statuses.tickTurnEnd();
