@@ -13,7 +13,7 @@ import { ObjectPool } from '@/core/ObjectPool';
 import { FxLayer, type BurstOptions } from '@/core/FxLayer';
 import { ScreenShake } from '@/core/ScreenShake';
 import { FlashOverlay } from '@/core/FlashOverlay';
-import { UI, ORB_COLOR } from '@/balance/ui';
+import { UI, ORB_COLOR, FX_ELEMENT_COLOR } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
 import { ELEMENT_BLADE_IMAGES, ELEMENT_IMPACT_IMAGES, ORB_IMAGES, UI_BATTLE_IMAGES, UI_FX_IMAGES } from '@/config/Assets';
 import { applyTextResolution } from '@/ui/text';
@@ -94,9 +94,25 @@ type ScopedPetDamageRuntime = PetDamageFloatRuntime & {
 export type BladeWeight = 'basic' | 'skill' | 'heavy';
 
 function bladeScaleOf(weight: BladeWeight): number {
-  if (weight === 'skill') return 1.28;
-  if (weight === 'heavy') return 1.18;
-  return 0.88;
+  if (weight === 'skill') return 1.14;
+  if (weight === 'heavy') return 1.06;
+  return 0.96;
+}
+
+/**
+ * 弹道节奏：出手快离开宠物、中段匀速让色相可读、末段加速砸进去。
+ * easeInOut 两端都慢，刃会在脚边和脸上各停一拍，又大又飘。
+ */
+function bladeFlightEase(t: number): number {
+  if (t < 0.22) {
+    const p = t / 0.22;
+    return 0.36 * (p * (2 - p));
+  }
+  if (t < 0.66) {
+    return 0.36 + 0.34 * ((t - 0.22) / 0.44);
+  }
+  const p = (t - 0.66) / 0.34;
+  return 0.70 + 0.30 * (p * p);
 }
 
 function impactMulOf(weight: BladeWeight, crit: boolean): number {
@@ -758,7 +774,7 @@ export class BattleFx {
     }
 
     const impactTex = TextureCache.get(ELEMENT_IMPACT_IMAGES[element]);
-    const color = ORB_COLOR[element];
+    const color = FX_ELEMENT_COLOR[element];
     const flyDur = (opts?.duration ?? UI.anim.projectile) * (crit ? 0.92 : 1);
     const impactDur = UI.anim.bladeImpact;
     const scale = bladeScaleOf(weight) * (crit ? 1.08 : 1);
@@ -767,7 +783,7 @@ export class BattleFx {
     const { midX, midY } = bladeArc(fromX, fromY, toX, toY, opts?.lane ?? 0);
     const mote = this._moteTex();
     const trailN = trailCountOf(weight, crit);
-    const ghostEvery = weight === 'skill' ? 2 : 3;
+    const ghostEvery = 2;
 
     this._spawnMuzzle(fromX, fromY, color, weight);
 
@@ -775,15 +791,33 @@ export class BattleFx {
       const done = once(() => resolve());
       minigameFallback(flyDur + (crit ? 0.22 : 0.18), done, 120);
 
+      // 沿速度拉长、垂直方向收薄：业界弹道是一条光带，不是一张跟着飞的贴纸
+      const bladeW = baseW * scale * 1.38;
+      const bladeH = baseH * scale * 0.82;
+
+      // 色晕垫在核下面：同一张刃图放大、染成发光色。
+      // 不能用 mote 做 NORMAL 色板——那张图底是实心黑，一 Normal 就露出黑方框。
+      const glow = new PIXI.Sprite(bladeTex);
+      glow.anchor.set(0.5);
+      glow.blendMode = PIXI.BLEND_MODES.ADD;
+      glow.tint = color;
+      glow.width = bladeW * 1.4;
+      glow.height = bladeH * 1.22;
+      glow.alpha = 0.7;
+      glow.position.set(fromX, fromY);
+
       const blade = new PIXI.Sprite(bladeTex);
       blade.anchor.set(0.5);
       blade.blendMode = PIXI.BLEND_MODES.ADD;
-      blade.width = baseW * scale * 1.15;
-      blade.height = baseH * scale * 0.75;
+      // 核不染色：白热保证轮廓；色相全部交给外圈 glow，五属性才分得开
+      blade.width = bladeW;
+      blade.height = bladeH;
       blade.alpha = 1;
       blade.position.set(fromX, fromY);
       const scopeId = this._scopeId;
+      this._projectiles.set(glow, scopeId);
       this._projectiles.set(blade, scopeId);
+      this._fx.container.addChild(glow);
       this._fx.container.addChild(blade);
 
       const state = { t: 0 };
@@ -792,7 +826,9 @@ export class BattleFx {
 
       const finishBladeAndImpact = once(() => {
         TweenManager.cancelTarget(state);
+        this._projectiles.delete(glow);
         this._projectiles.delete(blade);
+        if (displayAlive(glow)) glow.destroy();
         if (displayAlive(blade)) blade.destroy();
         void this._playElementImpact(toX, toY, element, impactTex, impactDur, hitAngle, weight, crit);
         if (crit) {
@@ -807,7 +843,7 @@ export class BattleFx {
         target: state,
         props: { t: 1 },
         duration: flyDur,
-        ease: Ease.easeInCubic,
+        ease: bladeFlightEase,
         onUpdate: () => {
           if (!displayAlive(blade)) return;
           const t = state.t;
@@ -817,27 +853,37 @@ export class BattleFx {
           const dx = 2 * u * (midX - fromX) + 2 * t * (toX - midX);
           const dy = 2 * u * (midY - fromY) + 2 * t * (toY - midY);
           hitAngle = Math.atan2(dy, dx);
+          // 越飞越快时沿速度再拉长，末段才有「砸进去」的速度感
+          const stretch = t < 0.66 ? 1 : 1 + ((t - 0.66) / 0.34) * 0.32;
           blade.position.set(x, y);
           blade.rotation = hitAngle;
+          blade.width = bladeW * stretch;
+          blade.height = bladeH * (1 - (stretch - 1) * 0.4);
+          if (displayAlive(glow)) {
+            glow.position.set(x, y);
+            glow.rotation = hitAngle;
+            glow.width = blade.width * 1.4;
+            glow.height = blade.height * 1.22;
+          }
           if (++frame % 2 === 0) {
             this._fx.burst({
               x, y, color,
               count: trailN,
-              speed: 36,
+              speed: 28,
               gravity: 0,
-              size: weight === 'skill' ? 16 : 14,
-              life: 0.16,
-              alpha: crit ? 0.85 : 0.72,
+              size: weight === 'skill' ? 12 : 10,
+              life: 0.14,
+              alpha: crit ? 0.8 : 0.68,
               texture: mote,
               blendMode: PIXI.BLEND_MODES.ADD,
               angle: hitAngle + Math.PI,
-              spread: 0.7,
-              drag: 0.86,
+              spread: 0.45,
+              drag: 0.88,
             });
-            this._spawnBladeStreak(x, y, hitAngle, color, mote, scopeId, weight);
+            this._spawnBladeStreak(x, y, hitAngle, color, mote, scopeId, weight, stretch);
           }
           if (frame % ghostEvery === 0) {
-            this._spawnBladeGhost(blade, bladeTex, scopeId);
+            this._spawnBladeGhost(blade, bladeTex, scopeId, color, hitAngle);
           }
         },
         onComplete: finishBladeAndImpact,
@@ -1034,7 +1080,7 @@ export class BattleFx {
     opts: { duration: number; heavy: boolean },
   ): Promise<void> {
     return new Promise((resolve) => {
-      const color = ORB_COLOR[element];
+      const color = FX_ELEMENT_COLOR[element];
       const size = opts.heavy ? 40 : 32;
       const tex = TextureCache.get(ORB_IMAGES[element]);
       const mote = this._moteTex();
@@ -1093,15 +1139,21 @@ export class BattleFx {
       ?? PIXI.Texture.WHITE;
   }
 
-  private _spawnBladeGhost(src: PIXI.Sprite, tex: PIXI.Texture, scopeId: number): void {
+  private _spawnBladeGhost(
+    src: PIXI.Sprite, tex: PIXI.Texture, scopeId: number, tint?: number, angle?: number,
+  ): void {
     const ghost = new PIXI.Sprite(tex);
     ghost.anchor.set(0.5);
     ghost.blendMode = PIXI.BLEND_MODES.ADD;
-    ghost.position.copyFrom(src.position);
+    // 残影沿来向退半步并再拉长一点，才是拖尾而不是叠在弹体上的第二张贴纸
+    const back = 16;
+    const ang = angle ?? src.rotation;
+    ghost.position.set(src.x - Math.cos(ang) * back, src.y - Math.sin(ang) * back);
     ghost.rotation = src.rotation;
-    ghost.width = src.width;
-    ghost.height = src.height;
-    ghost.alpha = 0.4;
+    ghost.width = src.width * 1.12;
+    ghost.height = src.height * 0.78;
+    if (tint !== undefined) ghost.tint = tint;
+    ghost.alpha = 0.38;
     this._scopeChildren.set(ghost, scopeId);
     this._fx.container.addChildAt(ghost, Math.max(0, this._fx.container.getChildIndex(src)));
     const fade = once(() => {
@@ -1109,24 +1161,26 @@ export class BattleFx {
       if (displayAlive(ghost)) ghost.destroy();
     });
     TweenManager.to({
-      target: ghost, props: { alpha: 0 }, duration: 0.12, ease: Ease.easeOutQuad, onComplete: fade,
+      target: ghost, props: { alpha: 0, width: ghost.width * 1.15 },
+      duration: 0.16, ease: Ease.easeOutQuad, onComplete: fade,
     });
   }
 
-  /** 沿速度拉长的软光带，顶上专用光带贴图 */
+  /** 沿速度拉长的软光带：细长才像轨迹，方一块就是噪点 */
   private _spawnBladeStreak(
     x: number, y: number, angle: number, color: number, tex: PIXI.Texture, scopeId: number,
     weight: BladeWeight,
+    stretch = 1,
   ): void {
     const streak = new PIXI.Sprite(tex);
-    streak.anchor.set(0.5);
+    streak.anchor.set(0.85, 0.5);
     streak.blendMode = PIXI.BLEND_MODES.ADD;
     streak.tint = color;
     streak.position.set(x, y);
     streak.rotation = angle;
-    streak.width = weight === 'skill' ? 52 : 36;
-    streak.height = weight === 'skill' ? 14 : 10;
-    streak.alpha = weight === 'skill' ? 0.48 : 0.38;
+    streak.width = (weight === 'skill' ? 150 : 128) * stretch;
+    streak.height = weight === 'skill' ? 14 : 11;
+    streak.alpha = weight === 'skill' ? 0.62 : 0.52;
     this._scopeChildren.set(streak, scopeId);
     this._fx.container.addChild(streak);
     const fade = once(() => {
@@ -1134,7 +1188,7 @@ export class BattleFx {
       if (displayAlive(streak)) streak.destroy();
     });
     TweenManager.to({
-      target: streak, props: { alpha: 0 }, duration: 0.1, ease: Ease.easeOutQuad, onComplete: fade,
+      target: streak, props: { alpha: 0, width: streak.width * 1.2 }, duration: 0.14, ease: Ease.easeOutQuad, onComplete: fade,
     });
   }
 
@@ -1152,7 +1206,7 @@ export class BattleFx {
     return new Promise((resolve) => {
       const done = once(() => resolve());
       minigameFallback(duration + 0.25, done, 140);
-      const color = ORB_COLOR[element];
+      const color = FX_ELEMENT_COLOR[element];
       const mote = this._moteTex();
       const wMul = impactMulOf(weight, crit);
 
@@ -1180,18 +1234,32 @@ export class BattleFx {
         return;
       }
 
+      const halo = new PIXI.Sprite(tex);
+      halo.anchor.set(0.5);
+      halo.blendMode = PIXI.BLEND_MODES.ADD;
+      halo.tint = color;
+      halo.position.set(x, y);
+      halo.rotation = incomingAngle;
+      setScaleSafe(halo, 1.35 * wMul);
+      halo.alpha = 0.7;
+      this._scopeChildren.set(halo, this._scopeId);
+      this._fx.container.addChild(halo);
+
       const sp = new PIXI.Sprite(tex);
       sp.anchor.set(0.5);
       sp.blendMode = PIXI.BLEND_MODES.ADD;
+      sp.tint = color;
       sp.position.set(x, y);
       sp.rotation = incomingAngle;
-      setScaleSafe(sp, 0.7 * wMul);
+      setScaleSafe(sp, 1.0 * wMul);
       sp.alpha = 1;
       this._scopeChildren.set(sp, this._scopeId);
       this._fx.container.addChild(sp);
 
       const cleanup = once(() => {
+        this._scopeChildren.delete(halo);
         this._scopeChildren.delete(sp);
+        if (displayAlive(halo)) halo.destroy();
         if (displayAlive(sp)) sp.destroy();
         done();
       });
@@ -1199,6 +1267,13 @@ export class BattleFx {
       void tweenScale(sp, { x: 1.12 * wMul, y: 1.12 * wMul }, {
         duration: duration * 0.22, ease: Ease.easeOutCubic,
         onComplete: () => {
+          void guardedTween({
+            target: halo,
+            props: { alpha: 0 },
+            duration: duration * 0.4,
+            delay: duration * 0.22,
+            ease: Ease.easeInQuad,
+          });
           void guardedTween({
             target: sp,
             props: { alpha: 0 },

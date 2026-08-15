@@ -22,6 +22,19 @@ export const ORB_COLOR: Readonly<Record<OrbType, number>> = {
   heart: 0xf48fb1,
 };
 
+/**
+ * 弹道 / 尾迹 / 枪口专用发光色。必须和 ORB_COLOR 拆开：
+ * 珠子色是实心、偏暗的，走 ADD 压在亮色场景上等于没加色。
+ * 五属性色相刻意拉开（黄 / 绿 / 蓝 / 红 / 橙），真机上才能一眼分出是哪只宠在打。
+ */
+export const FX_ELEMENT_COLOR: Readonly<Record<Element, number>> = {
+  metal: 0xffe046,
+  wood: 0x14ff50,
+  water: 0x1e96ff,
+  fire: 0xff281e,
+  earth: 0xff8c1e,
+};
+
 export const UI = {
   /** ── 棋盘布局（设计坐标，宽 750） ── */
   board: {
@@ -172,8 +185,8 @@ export const UI = {
     /** Combo 淡出（延迟 + 时长） */
     comboFadeDelay: 0.5,
     comboFade: 0.4,
-    /** 属性刃飞行：能看清轨迹，再长会飘成贴纸 */
-    projectile: 0.38,
+    /** 属性刃飞行：出手快、中段可读、命中加速，再长会飘 */
+    projectile: 0.42,
     /** 敌人刃飞行（略慢于玩家，便于看清来向） */
     enemyProjectile: 0.40,
     enemyProjectileHeavy: 0.46,
