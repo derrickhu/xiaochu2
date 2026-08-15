@@ -48,8 +48,8 @@ export const AUDIO = {
   rolling: `${A}/rolling.mp3`,
   levelup: `${A}/levelup.mp3`,
   attack: `${A}/attack.mp3`,
-  /** 敌人打上：裂纹+中拳+低频。换文件名避开开发者工具按路径缓存旧 mp3 */
-  enemyAttack: `${A}/enemy_hit_v2.mp3`,
+  /** 敌人打上：短脆响（玩家裂纹+鞭拍，切掉落石低频） */
+  enemyAttack: `${A}/enemy_attack.mp3`,
   heroHurt: `${A}/hero_hurt.mp3`,
   block: `${A}/block.mp3`,
   petSkill: `${A}/pet_skill.mp3`,

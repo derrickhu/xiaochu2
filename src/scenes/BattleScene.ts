@@ -1179,7 +1179,7 @@ export class BattleScene implements Scene {
     const maxHp = Math.max(1, this._ctrl.heroMaxHp);
     const dmgRatio = (damage + absorbed) / maxHp;
 
-    // 打上只播一记闷击。全额盾挡若走 block.mp3 会变成一声「叮」，
+    // 打上只播一记短冲击。全额盾挡若走 block.mp3 会变成一声「叮」，
     // 叠 heroHurt 又会再加一层短嗒，听感都不是砸中。
     if (damage > 0 || absorbed > 0) {
       SfxManager.playEnemyAttack(dmgRatio);

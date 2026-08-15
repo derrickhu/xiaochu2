@@ -127,11 +127,11 @@
     {
       "name": "enemy_attack",
       "priority": "p1",
-      "text": "unpitched heavy body slam, sandbag dropped on concrete, deep thud with distorted mid punch, no musical pitch, no bell, no ding, no woodblock, no click, no metal, no chime, no voice, dry studio",
-      "duration": 0.42,
-      "prompt_influence": 0.8,
-      "output": "../../minigame/subpackages/pkg-audio/audio/enemy_hit_v2.mp3",
-      "notes": "敌人打上。要裂纹+中拳，忌纯闷击（哑）和铃/叮（尖）。"
+      "text": "crisp whip crack, instant snap, dry studio, no bass, no thud, no kick drum, no stone, no rock, no falling, no rumble, no whoosh, no voice, no music, no reverb",
+      "duration": 0.26,
+      "prompt_influence": 0.62,
+      "output": "../../minigame/subpackages/pkg-audio/audio/enemy_attack.mp3",
+      "notes": "敌人打上。只要脆响，不要 kick/落石低频。交付是高通后的玩家裂纹+鞭/棍，运行时只加很轻的 combo 闪。"
     },
     {
       "name": "hero_hurt",

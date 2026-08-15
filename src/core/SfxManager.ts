@@ -274,11 +274,13 @@ class SfxManagerClass {
 
   playEnemyAttack(dmgRatio?: number): void {
     if (!this.enabled) return;
+    // 只播一记脆响。再叠低频或 attack 会糊成落石。
     const vol = dmgRatio != null
-      ? Math.min(0.92, 0.7 + dmgRatio * 0.28)
-      : 0.78;
-    BgmManager.duck(0.18, 220);
+      ? Math.min(0.64, 0.50 + dmgRatio * 0.16)
+      : 0.54;
+    BgmManager.duck(0.10, 140);
     this._playEx(AUDIO.enemyAttack, vol, 1.0);
+    this._playComboEx(0.12, 0.48);
   }
 
   playHeroHurt(dmgRatio?: number): void {
