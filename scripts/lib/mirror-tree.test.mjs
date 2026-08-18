@@ -88,6 +88,16 @@ describe('mirrorDir', () => {
     expect(fs.readFileSync(path.join(dest, 'project.private.config.json'), 'utf8')).toContain('keep');
   });
 
+  it('留下 dest 里的上传 zip，避免组装时被 prune', () => {
+    const root = tmpDir();
+    const src = path.join(root, 'src');
+    const dest = path.join(root, 'dest');
+    writeFile(path.join(src, 'a.png'), 'a');
+    writeFile(path.join(dest, 'taptap-V0.1.0.zip'), 'zip');
+    mirrorDir(src, dest);
+    expect(fs.existsSync(path.join(dest, 'taptap-V0.1.0.zip'))).toBe(true);
+  });
+
   it('dest 软链拆掉，写成普通文件且 inode 不同', () => {
     const root = tmpDir();
     const src = path.join(root, 'src');

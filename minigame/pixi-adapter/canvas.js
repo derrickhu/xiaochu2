@@ -9,8 +9,9 @@ let canvas;
 try {
   canvas = platform.createCanvas();
 
-  // iOS 26+：禁用 webgl2，让 Pixi 走 WebGL1（勿在此处 getContext('webgl')，会锁死 canvas）
-  if (platform.getSystemInfoSync().platform === 'ios' && canvas && typeof canvas.getContext === 'function') {
+  // iOS / Tap：禁用 webgl2（勿在此处 getContext('webgl')，会锁死或打崩宿主）
+  const _sysPlat = platform.getSystemInfoSync().platform;
+  if ((_sysPlat === 'ios' || platform.name === 'taptap') && canvas && typeof canvas.getContext === 'function') {
     const origGetContext = canvas.getContext.bind(canvas);
     canvas.getContext = function(type, opts) {
       if (type === 'webgl2') return null;

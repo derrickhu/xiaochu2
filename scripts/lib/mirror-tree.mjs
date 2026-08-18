@@ -181,7 +181,8 @@ export function mirrorDir(from, to, opts = {}) {
       stats.pruned += 1;
       continue;
     }
-    if (KEEP_ALWAYS.has(name) || name.startsWith('.') || keep.has(name) || skip.has(name)) {
+    if (KEEP_ALWAYS.has(name) || name.startsWith('.') || name.endsWith('.zip')
+      || keep.has(name) || skip.has(name)) {
       continue;
     }
     rm(path.join(to, name));

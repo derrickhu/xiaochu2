@@ -5,7 +5,7 @@
 import { ShaderSystem, BaseImageResource, Texture, BaseTexture, extensions } from '@pixi/core';
 import { settings } from '@pixi/settings';
 import { AccessibilityManager } from '@pixi/accessibility';
-import { getNativePlatformApi } from '@/core/PlatformService';
+import { Platform, getNativePlatformApi } from '@/core/PlatformService';
 
 try {
   extensions.remove(AccessibilityManager);
@@ -18,14 +18,74 @@ if (_api) {
   try {
     let _useOffscreen = false;
     try {
-      if (typeof _api.createOffscreenCanvas === 'function') {
+      // Tap Android 探测阶段多开 canvas / getContext 会把 libwebglhost 打崩
+      if (!Platform.isTaptap && typeof _api.createOffscreenCanvas === 'function') {
         const _test = _api.createOffscreenCanvas({ type: '2d', width: 1, height: 1 });
         const _testCtx = _test.getContext('2d');
         if (_testCtx) _useOffscreen = true;
       }
     } catch (_) { /* */ }
 
+    const _isMainCanvas = (c: any): boolean => {
+      try {
+        return !!(c && typeof GameGlobal !== 'undefined' && GameGlobal.canvas && c === GameGlobal.canvas);
+      } catch {
+        return false;
+      }
+    };
+
+    const _measureCanvas = (w?: number, h?: number): any => {
+      const width = w || 1;
+      const height = h || 1;
+      const ctx: any = {
+        fillStyle: '',
+        font: '16px sans-serif',
+        textAlign: 'left',
+        textBaseline: 'alphabetic',
+        measureText: (s: string) => ({ width: String(s || '').length * 10 }),
+        fillRect() {},
+        clearRect() {},
+        fillText() {},
+        drawImage() {},
+        getImageData: (_x: number, _y: number, iw: number, ih: number) => ({
+          data: new Uint8ClampedArray(iw * ih * 4), width: iw, height: ih,
+        }),
+        putImageData() {},
+        save() {},
+        restore() {},
+        scale() {},
+        translate() {},
+        setTransform() {},
+      };
+      const canvas: any = {
+        width,
+        height,
+        style: {},
+        getContext(type: string) {
+          if (type === '2d') return ctx;
+          try {
+            if (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl') {
+              return GameGlobal.__tapGL || null;
+            }
+          } catch { /* */ }
+          return null;
+        },
+        addEventListener() {},
+        removeEventListener() {},
+      };
+      ctx.canvas = canvas;
+      return canvas;
+    };
+
     const _create2DCanvas = (w?: number, h?: number): any => {
+      if (Platform.isTaptap) {
+        let c: any = null;
+        try { c = _api.createCanvas(); } catch { /* */ }
+        if (!c || _isMainCanvas(c)) return _measureCanvas(w, h);
+        if (w !== undefined) c.width = w;
+        if (h !== undefined) c.height = h;
+        return c;
+      }
       let c: any;
       if (_useOffscreen) {
         try {
@@ -44,6 +104,9 @@ if (_api) {
     settings.ADAPTER = {
       createCanvas: _create2DCanvas,
       getCanvasRenderingContext2D: (): any => {
+        if (Platform.isTaptap) {
+          return (typeof GameGlobal !== 'undefined' && GameGlobal.CanvasRenderingContext2D) || Object;
+        }
         try {
           const c = _create2DCanvas(1, 1);
           const ctx = c.getContext('2d');
@@ -51,12 +114,8 @@ if (_api) {
         } catch { return Object; }
       },
       getWebGLRenderingContext: (): any => {
-        try {
-          // 勿对 GameGlobal.canvas 提前 getContext('webgl')，iOS 会只读锁死导致 Pixi 崩溃
-          const c = _api.createCanvas();
-          const gl = c.getContext('webgl', { stencil: true, antialias: true, alpha: true, depth: true });
-          return gl ? gl.constructor : Object;
-        } catch { return Object; }
+        // 探测阶段禁止 createCanvas+getContext('webgl')：Tap Android 会 SIGABRT
+        return (typeof GameGlobal !== 'undefined' && GameGlobal.WebGLRenderingContext) || Object;
       },
       getNavigator: (): any => ({
         userAgent: 'wxgame',

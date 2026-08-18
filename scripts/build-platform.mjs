@@ -52,7 +52,7 @@ function bundleDirOf(platform) {
 function cleanStale(dir) {
   if (!fs.existsSync(dir)) return;
   for (const entry of fs.readdirSync(dir)) {
-    if (KEEP.has(entry) || entry.startsWith('.')) continue;
+    if (KEEP.has(entry) || entry.startsWith('.') || entry.endsWith('.zip')) continue;
     fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
   }
 }

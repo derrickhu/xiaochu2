@@ -121,75 +121,93 @@ if (typeof GameGlobal !== 'undefined') {
 }
 
 // ======== WebGL / Canvas2D 上下文构造函数 ========
-// 对齐 game2D_huahua：用临时 canvas 探测 + patch（勿碰主 canvas）
+// 微信/抖音：用临时 canvas 探测 + patch（勿碰主 canvas）
+// Tap Android：探测阶段 getContext('webgl') 会让 libwebglhost SIGABRT，只取全局构造函数
+function _ctorFromGlobal(name) {
+  try {
+    if (typeof GameGlobal !== 'undefined' && GameGlobal[name]) return GameGlobal[name];
+    if (typeof globalThis !== 'undefined' && globalThis[name]) return globalThis[name];
+  } catch (_) { /* */ }
+  return {};
+}
+
+const isTap = platform.name === 'taptap';
 let _WebGLRenderingContext = {};
-try {
-  const _tmpCanvas = platform.createCanvas();
-  if (_tmpCanvas && typeof _tmpCanvas.getContext === 'function') {
-    var _tmpGl = _tmpCanvas.getContext('webgl', {
-      stencil: true,
-      antialias: true,
-      alpha: true,
-      depth: true,
-      preserveDrawingBuffer: true,
-    });
-    if (_tmpGl) {
-      _WebGLRenderingContext = _tmpGl.constructor || {};
+if (isTap) {
+  _WebGLRenderingContext = _ctorFromGlobal('WebGLRenderingContext');
+} else {
+  try {
+    const _tmpCanvas = platform.createCanvas();
+    if (_tmpCanvas && typeof _tmpCanvas.getContext === 'function') {
+      var _tmpGl = _tmpCanvas.getContext('webgl', {
+        stencil: true,
+        antialias: true,
+        alpha: true,
+        depth: true,
+        preserveDrawingBuffer: true,
+      });
+      if (_tmpGl) {
+        _WebGLRenderingContext = _tmpGl.constructor || {};
 
-      try {
-        var _origGetCtxAttr = _tmpGl.getContextAttributes;
-        if (_origGetCtxAttr) {
-          var _patchProto = Object.getPrototypeOf(_tmpGl);
-          if (_patchProto) {
-            _patchProto.getContextAttributes = function() {
-              var attr = _origGetCtxAttr.call(this);
-              if (attr) {
-                attr.stencil = !!attr.stencil;
-                attr.antialias = !!attr.antialias;
-                attr.alpha = !!attr.alpha;
-                attr.depth = !!attr.depth;
-                attr.preserveDrawingBuffer = !!attr.preserveDrawingBuffer;
-              }
-              return attr;
-            };
+        try {
+          var _origGetCtxAttr = _tmpGl.getContextAttributes;
+          if (_origGetCtxAttr) {
+            var _patchProto = Object.getPrototypeOf(_tmpGl);
+            if (_patchProto) {
+              _patchProto.getContextAttributes = function() {
+                var attr = _origGetCtxAttr.call(this);
+                if (attr) {
+                  attr.stencil = !!attr.stencil;
+                  attr.antialias = !!attr.antialias;
+                  attr.alpha = !!attr.alpha;
+                  attr.depth = !!attr.depth;
+                  attr.preserveDrawingBuffer = !!attr.preserveDrawingBuffer;
+                }
+                return attr;
+              };
+            }
           }
+        } catch (e3) {
+          console.warn('[pixi-adapter] patch getContextAttributes 失败:', e3);
         }
-      } catch (e3) {
-        console.warn('[pixi-adapter] patch getContextAttributes 失败:', e3);
-      }
 
-      try {
-        var _vaoExt = _tmpGl.getExtension('OES_vertex_array_object');
-        if (_vaoExt && typeof _vaoExt.createVertexArrayOES !== 'function') {
-          var _origGetExt = _tmpGl.__proto__.getExtension;
-          _tmpGl.__proto__.getExtension = function(name) {
-            if (name === 'OES_vertex_array_object') return null;
-            return _origGetExt.call(this, name);
-          };
-          console.warn('[pixi-adapter] OES_vertex_array_object 为假扩展，已禁用');
-        }
-      } catch (e4) { /* 忽略 */ }
-    } else {
-      console.warn('[pixi-adapter] WebGL context 获取失败（getContext 返回 null）');
+        try {
+          var _vaoExt = _tmpGl.getExtension('OES_vertex_array_object');
+          if (_vaoExt && typeof _vaoExt.createVertexArrayOES !== 'function') {
+            var _origGetExt = _tmpGl.__proto__.getExtension;
+            _tmpGl.__proto__.getExtension = function(name) {
+              if (name === 'OES_vertex_array_object') return null;
+              return _origGetExt.call(this, name);
+            };
+            console.warn('[pixi-adapter] OES_vertex_array_object 为假扩展，已禁用');
+          }
+        } catch (e4) { /* 忽略 */ }
+      } else {
+        console.warn('[pixi-adapter] WebGL context 获取失败（getContext 返回 null）');
+      }
     }
+  } catch (e) {
+    console.warn('[pixi-adapter] WebGL 初始化异常:', e);
   }
-} catch (e) {
-  console.warn('[pixi-adapter] WebGL 初始化异常:', e);
 }
 
 let _CanvasRenderingContext2D = {};
-try {
-  const _tmpCanvas2 = platform.createCanvas();
-  if (_tmpCanvas2 && typeof _tmpCanvas2.getContext === 'function') {
-    const _tmpCtx = _tmpCanvas2.getContext('2d');
-    if (_tmpCtx) {
-      _CanvasRenderingContext2D = _tmpCtx.constructor || {};
-    } else {
-      console.warn('[pixi-adapter] Canvas2D context 获取失败');
+if (isTap) {
+  _CanvasRenderingContext2D = _ctorFromGlobal('CanvasRenderingContext2D');
+} else {
+  try {
+    const _tmpCanvas2 = platform.createCanvas();
+    if (_tmpCanvas2 && typeof _tmpCanvas2.getContext === 'function') {
+      const _tmpCtx = _tmpCanvas2.getContext('2d');
+      if (_tmpCtx) {
+        _CanvasRenderingContext2D = _tmpCtx.constructor || {};
+      } else {
+        console.warn('[pixi-adapter] Canvas2D context 获取失败');
+      }
     }
+  } catch (e) {
+    console.warn('[pixi-adapter] Canvas2D 初始化异常:', e);
   }
-} catch (e) {
-  console.warn('[pixi-adapter] Canvas2D 初始化异常:', e);
 }
 
 // ======== DOMParser ========

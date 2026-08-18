@@ -55,13 +55,19 @@ class Element {
 
 // 通过 constructor 直接赋值（非 extends），确保 instanceof 正确
 // 鸿蒙等部分设备 createCanvas/createImage 返回对象可能无 constructor，需容错
+// Tap：复用主屏 canvas 的 constructor，避免再开一块 canvas
 let HTMLCanvasElement, HTMLImageElement;
 try {
-  const _tmpCanvas = platform.createCanvas();
-  HTMLCanvasElement = (_tmpCanvas && _tmpCanvas.constructor) ? _tmpCanvas.constructor : Element;
+  const mainCanvas = require('./canvas').canvas;
+  HTMLCanvasElement = (mainCanvas && mainCanvas.constructor) ? mainCanvas.constructor : Element;
 } catch (e) {
-  console.warn('[element] HTMLCanvasElement 获取失败，回退到 Element:', e);
-  HTMLCanvasElement = Element;
+  try {
+    const _tmpCanvas = platform.createCanvas();
+    HTMLCanvasElement = (_tmpCanvas && _tmpCanvas.constructor) ? _tmpCanvas.constructor : Element;
+  } catch (e2) {
+    console.warn('[element] HTMLCanvasElement 获取失败，回退到 Element:', e2);
+    HTMLCanvasElement = Element;
+  }
 }
 try {
   const _tmpImage = platform.createImage();

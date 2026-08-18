@@ -5,20 +5,22 @@
  */
 import * as PIXI from 'pixi.js';
 import { TweenManager } from './TweenManager';
-import { iosPlatform } from './webglContextPatch';
+import {
+  acquireMainWebGLContext,
+  blockWebGL2OnCanvas,
+  capTapDevicePixelRatio,
+  capTapFramebuffer,
+  configurePixiWebGLEnvForPlatform,
+  forcePixiWebGLRenderer,
+  installBlockWebGL2OnPlatform,
+  iosPlatform,
+  minigameRendererOpts,
+  rememberSharedWebGL,
+} from './webglContextPatch';
 import { Platform, getNativePlatformApi } from './PlatformService';
 import { UPDATE_PRIORITY } from '@pixi/ticker';
 
 declare const GameGlobal: any;
-
-/** 小游戏真机 WebGL 初始化选项（对齐 game2D_huahua） */
-const RENDERER_OPTS = {
-  backgroundColor: 0x1a1126,
-  resolution: 1,
-  antialias: true,
-  preserveDrawingBuffer: true,
-  preferWebGLVersion: 1,
-};
 
 class GameClass {
   app!: PIXI.Application;
@@ -66,13 +68,35 @@ class GameClass {
       this.screenWidth = sysInfo.screenWidth ?? this.screenWidth;
       this.screenHeight = sysInfo.screenHeight ?? this.screenHeight;
       this.dpr = sysInfo.pixelRatio || 2;
+      if (Platform.isTaptap) this.dpr = capTapDevicePixelRatio(this.dpr);
     }
 
     this._applySafeArea(_api, sysInfo);
 
+    let realWidth = this.screenWidth * this.dpr;
+    let realHeight = this.screenHeight * this.dpr;
+    if (Platform.isTaptap) {
+      const capped = capTapFramebuffer(realWidth, realHeight);
+      if (capped.scale !== 1) {
+        realWidth = capped.width;
+        realHeight = capped.height;
+        this.dpr *= capped.scale;
+      }
+    }
     this.scale = this.screenWidth / this.designWidth * this.dpr;
-    const realWidth = this.screenWidth * this.dpr;
-    const realHeight = this.screenHeight * this.dpr;
+    const RENDERER_OPTS = minigameRendererOpts(Platform.isTaptap);
+    forcePixiWebGLRenderer();
+    try { (PIXI.utils as { isWebGLSupported: () => boolean }).isWebGLSupported = () => true; } catch { /* */ }
+    blockWebGL2OnCanvas(canvas);
+    configurePixiWebGLEnvForPlatform(sysInfo?.platform);
+    installBlockWebGL2OnPlatform();
+    const sharedGL = acquireMainWebGLContext(canvas);
+    rememberSharedWebGL(sharedGL);
+    if (sharedGL) {
+      try { (GameGlobal as any).__bootDiag?.('gl=ok'); } catch (_) { /* */ }
+    } else {
+      try { (GameGlobal as any).__bootDiag?.('gl=null'); } catch (_) { /* */ }
+    }
 
     try {
       canvas.width = realWidth;
@@ -84,30 +108,35 @@ class GameClass {
     const tryCreateRuntime = (view: any): { app: PIXI.Application | null; renderer: PIXI.IRenderer | null } => {
       let r: PIXI.IRenderer | null = null;
       let a: PIXI.Application | null = null;
-      try {
-        a = new PIXI.Application({
-          view, width: realWidth, height: realHeight, ...RENDERER_OPTS, accessibility: false,
-        } as any);
-      } catch (e) {
-        console.error('[Game] new PIXI.Application 失败:', e);
-        try { (GameGlobal as any).__bootDiag?.('PIXI.Application 失败:' + e); } catch (_) { /* */ }
+      const opts = {
+        view,
+        width: realWidth,
+        height: realHeight,
+        ...RENDERER_OPTS,
+        accessibility: false,
+        hello: false,
+        ...(sharedGL ? { context: sharedGL } : {}),
+      } as any;
+      // Tap：不要走 Application。插件初始化会再 createCanvas/createElement，和宿主互相重入栈溢出。
+      if (!Platform.isTaptap) {
+        try {
+          a = new PIXI.Application(opts);
+        } catch (e) {
+          console.error('[Game] new PIXI.Application 失败:', e);
+          try { (GameGlobal as any).__bootDiag?.('PIXI.Application 失败:' + e); } catch (_) { /* */ }
+        }
+        if (a?.stage && a?.ticker && a?.renderer) {
+          return { app: a, renderer: a.renderer };
+        }
+        if (a?.renderer) r = a.renderer;
       }
-      if (a?.stage && a?.ticker && a?.renderer) {
-        return { app: a, renderer: a.renderer };
-      }
-      if (a?.renderer) r = a.renderer;
       if (!r) {
         try {
-          r = new PIXI.Renderer({ view, width: realWidth, height: realHeight, ...RENDERER_OPTS } as any);
+          r = new PIXI.Renderer(opts);
+          try { (GameGlobal as any).__bootDiag?.('renderer=ok'); } catch (_) { /* */ }
         } catch (e2) {
           console.error('[Game] new PIXI.Renderer 失败:', e2);
-        }
-      }
-      if (!r) {
-        try {
-          r = PIXI.autoDetectRenderer({ view, width: realWidth, height: realHeight, ...RENDERER_OPTS } as any);
-        } catch (e3) {
-          console.error('[Game] autoDetectRenderer 失败:', e3);
+          try { (GameGlobal as any).__bootDiag?.('PIXI.Renderer 失败:' + e2); } catch (_) { /* */ }
         }
       }
       return { app: a, renderer: r };

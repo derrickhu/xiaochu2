@@ -5,6 +5,7 @@
 const platform = require('./platform');
 const Image = require('./Image');
 const { Element } = require('./element');
+const { createMeasureCanvas } = require('./safeCanvas');
 
 const _eventListeners = {};
 
@@ -23,6 +24,7 @@ const document = {
     tag = String(tag || 'div').toLowerCase();
     switch (tag) {
       case 'canvas':
+        if (platform.name === 'taptap') return createMeasureCanvas(1, 1);
         return platform.createCanvas();
       case 'img':
       case 'image':
