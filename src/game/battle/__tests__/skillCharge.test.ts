@@ -8,8 +8,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Element } from '@/balance/combat';
 import {
-  CHARGE_PER_TURN_BASELINE, CHARGE_TURN_CAP_MULT,
-  chargeMaxForCd, turnChargeGain,
+  CHARGE_PER_TURN_BASELINE, CHARGE_TURN_CAP_MULT, HASTE_CHARGE_PCT,
+  chargeMaxForCd, hasteChargeGain, hasteChargePctLabel, turnChargeGain,
 } from '@/balance/skillCharge';
 import { BattleController } from '../BattleController';
 import type { MatchGroup } from '@/game/board/BoardModel';
@@ -108,5 +108,13 @@ describe('消珠充能', () => {
   it('消不到任何有效珠时不给保底充能', () => {
     expect(turnChargeGain(0, 0)).toBe(0);
     expect(turnChargeGain(0, 1)).toBeGreaterThan(0);
+  });
+
+  it('连携按各宠充能条百分比灌能，不再按固定回合折算', () => {
+    expect(HASTE_CHARGE_PCT).toBe(0.2);
+    expect(hasteChargePctLabel(1)).toBe('20%');
+    expect(hasteChargeGain(160, 1)).toBe(32);
+    expect(hasteChargeGain(224, 1)).toBe(45);
+    expect(hasteChargeGain(160, 0)).toBe(0);
   });
 });

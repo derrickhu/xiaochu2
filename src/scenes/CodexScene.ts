@@ -33,6 +33,8 @@ import { ScrollListController } from '@/ui/ScrollList';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { pressFeedback } from '@/ui/motion';
 import { Platform } from '@/core/PlatformService';
+import { SfxManager } from '@/core/SfxManager';
+import { RADIUS } from '@/ui/theme';
 import type { PetDetailEnterData } from './PetDetailScene';
 import { buildLockedCodexCard, buildOwnedCodexCard } from './codexCards';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
@@ -565,6 +567,7 @@ export class CodexScene implements Scene {
       this._openRewardPanel();
       return;
     }
+    SfxManager.playRewardGet();
     Platform.showToast(`收集奖励 · 灵玉 +${granted}`, 'success');
     this._rebuild();
   }
@@ -650,8 +653,13 @@ export class CodexScene implements Scene {
       const row = new PIXI.Container();
       row.position.set(0, rowCenterY);
 
+      const state: 'claimed' | 'claimable' | 'locked' = claimed
+        ? 'claimed'
+        : (claimable ? 'claimable' : 'locked');
       const needLabel = makeText(`集齐 ${need} 只`, {
-        size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+        size: FONT_SIZE.sm,
+        fill: state === 'claimable' ? COLORS.textMain : COLORS.textDisabled,
+        bold: true, anchor: [0, 0.5],
       });
       needLabel.position.set(colNeedX, 0);
       row.addChild(needLabel);
@@ -659,27 +667,21 @@ export class CodexScene implements Scene {
       const reward = makeIconLabel({
         iconPath: UI_IMAGES.iconLingyu, iconSize: 28,
         text: `×${prog.lingyu}`,
-        size: FONT_SIZE.sm, fill: COLORS.accentDeep, bold: true, gap: 4,
+        size: FONT_SIZE.sm,
+        fill: state === 'claimable' ? COLORS.accentDeep : COLORS.textDisabled,
+        bold: true, gap: 4,
       });
       // IconLabel 子节点锚在 y=0 中线，勿再减 height/2
+      reward.alpha = state === 'claimable' ? 1 : 0.5;
       reward.position.set(colRewardX, 0);
       row.addChild(reward);
 
-      const stateLabel = claimed ? '已领取' : (claimable ? '待领取' : '未达成');
-      const btn = makeButton({
-        label: stateLabel,
-        width: btnW,
-        height: 44,
-        variant: claimable ? 'primary' : 'ghost',
-        enabled: claimable,
-        onTap: () => {
-          if (!claimable) return;
-          this._closeRewardPanel();
-          this._claimRewards();
-        },
+      const status = this._makeRewardStatusChip(state, btnW, () => {
+        this._closeRewardPanel();
+        this._claimRewards();
       });
-      btn.position.set(colBtnX, 0);
-      row.addChild(btn);
+      status.position.set(colBtnX, 0);
+      row.addChild(status);
 
       panelHost.addChild(row);
       rowCenterY += rowH;
@@ -699,6 +701,77 @@ export class CodexScene implements Scene {
     overlay.addChild(close);
 
     this.container.addChild(overlay);
+  }
+
+  /**
+   * 收集奖励三态（对齐签到/日常/爬塔业界口径）：
+   * 可领=亮色 CTA；已领=绿勾印章（非按钮）；未达=灰锁胶囊。
+   */
+  private _makeRewardStatusChip(
+    state: 'claimed' | 'claimable' | 'locked',
+    width: number,
+    onClaim: () => void,
+  ): PIXI.Container {
+    const height = 44;
+    if (state === 'claimable') {
+      return makeButton({
+        label: '领取',
+        width,
+        height,
+        variant: 'success',
+        onTap: onClaim,
+      });
+    }
+
+    const chip = new PIXI.Container();
+    const g = new PIXI.Graphics();
+    const radius = Math.min(RADIUS.button, height / 2);
+    if (state === 'claimed') {
+      g.beginFill(COLORS.trackFillFull, 0.18);
+      g.lineStyle(2, COLORS.btnSuccessBorder, 0.85);
+      g.drawRoundedRect(-width / 2, -height / 2, width, height, radius);
+      g.endFill();
+      chip.addChild(g);
+      this._drawCodexCheck(chip, -width / 2 + 18, 0, 10);
+      const claimedLabel = makeText('已领取', {
+        size: FONT_SIZE.xs, fill: COLORS.textPositive, bold: true, anchor: 0.5,
+      });
+      claimedLabel.position.set(10, 0);
+      chip.addChild(claimedLabel);
+    } else {
+      g.beginFill(COLORS.btnDisabledBg, 0.72);
+      g.lineStyle(2, COLORS.btnDisabledBorder, 0.8);
+      g.drawRoundedRect(-width / 2, -height / 2, width, height, radius);
+      g.endFill();
+      chip.addChild(g);
+      this._drawCodexLock(chip, -width / 2 + 18, 0);
+      const lockedLabel = makeText('未达成', {
+        size: FONT_SIZE.xs, fill: COLORS.textDisabled, bold: true, anchor: 0.5,
+      });
+      lockedLabel.position.set(10, 0);
+      chip.addChild(lockedLabel);
+    }
+    chip.eventMode = 'none';
+    return chip;
+  }
+
+  private _drawCodexCheck(parent: PIXI.Container, x: number, y: number, size: number): void {
+    const g = new PIXI.Graphics();
+    g.lineStyle(3.2, COLORS.textPositive, 1);
+    g.moveTo(x - size * 0.45, y);
+    g.lineTo(x - size * 0.08, y + size * 0.38);
+    g.lineTo(x + size * 0.5, y - size * 0.36);
+    parent.addChild(g);
+  }
+
+  private _drawCodexLock(parent: PIXI.Container, x: number, y: number): void {
+    const g = new PIXI.Graphics();
+    g.lineStyle(2, COLORS.textDisabled, 1);
+    g.arc(x, y - 3.2, 3.4, Math.PI * 1.05, -0.05);
+    g.beginFill(COLORS.textDisabled, 0.95);
+    g.drawRoundedRect(x - 4.4, y - 1.4, 8.8, 6.8, 1.6);
+    g.endFill();
+    parent.addChild(g);
   }
 
   private _closeRewardPanel(): void {

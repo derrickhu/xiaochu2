@@ -16,6 +16,7 @@
  * gravity / haste / purify / utility 等类目，不参与该审计。
  */
 import type { Element, OrbType } from '../combat';
+import { hasteChargePctLabel } from '../skillCharge';
 import { ELEMENT_NAME } from '../ui';
 import type {
   ConvertShape,
@@ -114,7 +115,7 @@ function segmentPhrase(seg: SkillSegment): string {
     case 'delayAttack':
       return `威吓敌人，普攻推迟 ${seg.turns} 回合`;
     case 'haste':
-      return `全队其他宠物技能冷却 -${seg.amount} 回合`;
+      return `为其他队友立刻充能 ${hasteChargePctLabel(seg.amount)}`;
     case 'purify':
       return '解除盘面封印珠并清除我方异常';
     case 'extraTime':

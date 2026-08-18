@@ -155,8 +155,9 @@ export type SkillEffectDef =
       pct: number;
     }
   | {
+      /** 连携电池档：1 = 其他队友立刻充能 20% */
       kind: 'haste';
-      /** 全队其他宠物技能 CD -amount（不含施法者） */
+      /** 电池档数（不含施法者） */
       amount: number;
     }
   | {
@@ -276,7 +277,7 @@ export interface SkillDef {
   name: string;
   desc: string;
   category: SkillCategory;
-  /** 冷却回合数（释放后重置为该值） */
+  /** 充能当量（回合）：宠物技换算成充能上限，敌人技仍是回合 CD */
   cd: number;
   owner: SkillOwner;
   trigger: SkillTrigger;

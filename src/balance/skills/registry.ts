@@ -117,7 +117,7 @@ export const SKILLS: readonly SkillDef[] = [
   }),
   makeComposite({
     id: PET_SKILL_IDS.chaosHaste, name: '混沌轮回', category: 'haste', target: 'team', cd: 7,
-    tags: ['缩CD', '治疗', '转珠'], flavor: '逆转混沌之流',
+    tags: ['充能', '治疗', '转珠'], flavor: '逆转混沌之流',
     segments: [
       { kind: 'haste', amount: 1 },
       { kind: 'heal', pct: 0.25 },

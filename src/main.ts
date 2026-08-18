@@ -46,32 +46,56 @@ import {
 } from '@/ui/LoadingScreenOverlay';
 
 declare const GameGlobal: any;
+declare const tap: any;
+
+function bootStep(msg: string): void {
+  try { GameGlobal.__bootStep = msg; } catch { /* */ }
+  try { GameGlobal.__bootDiag?.(msg); } catch { /* */ }
+}
 
 configureWechatShare();
 initAnalytics();
 CloudSyncManager.prewarm();
 
 if (typeof GameGlobal !== 'undefined') {
+  const prevError = GameGlobal.onError;
+  const prevReject = GameGlobal.onUnhandledRejection;
   GameGlobal.onError = (msg: string) => {
     console.error('[GlobalError]', msg);
+    try { prevError?.(msg); } catch { /* */ }
     analytics.trackAppError(msg, { source: 'GameGlobal.onError' });
   };
   GameGlobal.onUnhandledRejection = (ev: any) => {
     console.error('[UnhandledRejection]', ev?.reason || ev);
+    try { prevReject?.(ev); } catch { /* */ }
     analytics.trackAppError(ev?.reason || ev, { source: 'unhandledRejection' });
   };
 }
 
 async function main(): Promise<void> {
-  const canvas = GameGlobal?.canvas ?? null;
+  bootStep('main-start');
+  let canvas = GameGlobal?.canvas ?? null;
+  if (!canvas && typeof tap !== 'undefined' && typeof tap.createCanvas === 'function') {
+    canvas = tap.createCanvas();
+    try { GameGlobal.canvas = canvas; } catch { /* */ }
+    bootStep('canvas-from-tap');
+  }
+  bootStep(
+    'canvas=' + (canvas
+      ? `${canvas.width || 0}x${canvas.height || 0} getContext=${typeof canvas.getContext}`
+      : 'null'),
+  );
   if (!canvas) {
     console.error('[main] 找不到 canvas');
+    try { GameGlobal.__showBootDiag?.(); } catch { /* */ }
     return;
   }
 
   Game.init(canvas as any);
+  bootStep('init rendered=' + !!GameGlobal.__gameRendered + ' renderer=' + !!Game.app?.renderer);
   if (!(Game.app?.renderer)) {
     console.error('[main] 渲染器初始化失败');
+    try { GameGlobal.__showBootDiag?.(); } catch { /* */ }
     return;
   }
 
@@ -202,5 +226,7 @@ async function main(): Promise<void> {
 
 main().catch((e) => {
   console.error('[main] 启动失败:', e);
+  bootStep('main.catch:' + e);
+  try { GameGlobal.__showBootDiag?.(); } catch { /* */ }
   analytics.trackAppError(e, { source: 'main.catch' });
 });

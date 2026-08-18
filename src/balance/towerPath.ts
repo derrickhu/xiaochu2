@@ -2,8 +2,9 @@
  * 通天塔分支路径与事件层（纯数据 + 纯函数，零 UI / 零存档）
  *
  * 只有机缘还不够：如果每一层都是「打一场 → 选一张」，节奏在第 20 层就会固化。
- * 分支让玩家每层都要做一次取舍 —— 精英层更难但机缘更好，事件层不打架但也不给机缘，
- * 休整层拿回血换掉一次成长。跳过战斗的代价是「到达更高层时更弱」，这个交换本身就是玩法。
+ * 分支让玩家每层都要做一次取舍 —— 险径更难但机缘更好；
+ * 奇遇 / 静室是偶发喘息（STS 事件格 / 营地），不打架，也不给「胜后三选一」。
+ * 刚歇过的下一层必须交手，禁止连点奇遇白嫖层数。
  */
 import { TOWER } from './tower';
 
@@ -37,22 +38,22 @@ export const TOWER_FLOOR_KINDS: Readonly<Record<TowerFloorKind, TowerFloorKindDe
   battle: {
     kind: 'battle', name: '寻常道',
     badge: '常规',
-    summary: '打一场普通战',
+    summary: '标准对阵，无额外试炼',
     payoff: '胜后选 1 张机缘',
     combat: true, difficultyMult: 1, extraWaves: 0, coinBonus: 0, richBless: false,
   },
   elite: {
     kind: 'elite', name: '险径',
     badge: '更难',
-    summary: '敌人更强，多打一波',
-    payoff: '更容易出罕有/奇珍 · +10 印记',
-    combat: true, difficultyMult: 1.35, extraWaves: 1, coinBonus: 10, richBless: true,
+    summary: '本层有试炼规则，敌人更强',
+    payoff: '更容易出罕有/奇珍 · +15 印记',
+    combat: true, difficultyMult: 1.35, extraWaves: 1, coinBonus: 15, richBless: true,
   },
   event: {
     kind: 'event', name: '奇遇',
     badge: '不打架',
-    summary: '随机好事或坏事',
-    payoff: '可能回血、掉血、换机缘、得印记',
+    summary: '偶发事件，看运气',
+    payoff: '回血或折损 · 无三选一',
     combat: false, difficultyMult: 1, extraWaves: 0, coinBonus: 0, richBless: false,
   },
   rest: {
@@ -65,7 +66,7 @@ export const TOWER_FLOOR_KINDS: Readonly<Record<TowerFloorKind, TowerFloorKindDe
   guard: {
     kind: 'guard', name: '守关',
     badge: '守关',
-    summary: '镇塔之主当前',
+    summary: '镇塔之主 + 本层试炼',
     payoff: '胜后大补给 · 珍稀机缘更易现身',
     combat: true, difficultyMult: 1, extraWaves: 1, coinBonus: 0, richBless: true,
   },
@@ -77,50 +78,42 @@ export const TOWER_REST_HEAL_PCT = 0.25;
 /** 前若干层不给分支：新手先把「打一层选一张」的基本节奏走顺 */
 export const TOWER_BRANCH_FROM_FLOOR = 4;
 
-/** 每层给出的路径数 */
+/** 每层给出的路径数上限 */
 export const TOWER_PATH_COUNT = 3;
 
-const BRANCH_WEIGHT: Readonly<Record<Exclude<TowerFloorKind, 'guard'>, number>> = {
-  battle: 100,
-  elite: 46,
-  event: 40,
-  rest: 20,
-};
+/** 上一层若是奇遇/静室，本层强制开战 */
+export function towerLastWasSkip(lastKind?: string): boolean {
+  return lastKind === 'event' || lastKind === 'rest';
+}
 
 /**
  * 抽取某层的可选路径。
  *
- * 守关层不给选择；分支层保证至少有一个战斗选项 —— 否则玩家可以靠连续的
- * 事件层与休整层无伤刷层，塔的损耗战定位当场作废。
+ * 业界口径（杀戮尖塔事件格 / 集成战略奇遇）：
+ * - 战斗是主干，奇遇是偶发，不是每层三选里必出的「跳过键」；
+ * - 刚走过非战斗层，下一层只给出手选项。
  */
 export function rollTowerPaths(
   floor: number,
   rng: () => number = Math.random,
+  lastKind?: string,
 ): TowerFloorKind[] {
   if (floor > 0 && floor % TOWER.milestoneEvery === 0) return ['guard'];
   if (floor < TOWER_BRANCH_FROM_FLOOR) return ['battle'];
 
-  const pool = (Object.keys(BRANCH_WEIGHT) as Array<Exclude<TowerFloorKind, 'guard'>>).slice();
-  const picked: TowerFloorKind[] = [];
-  while (picked.length < TOWER_PATH_COUNT && pool.length > 0) {
-    const weights = pool.map((k) => BRANCH_WEIGHT[k]);
-    const total = weights.reduce((a, b) => a + b, 0);
-    let roll = rng() * total;
-    let idx = pool.length - 1;
-    for (let i = 0; i < pool.length; i++) {
-      roll -= weights[i];
-      if (roll <= 0) {
-        idx = i;
-        break;
-      }
-    }
-    picked.push(pool[idx]);
-    pool.splice(idx, 1);
+  if (towerLastWasSkip(lastKind)) {
+    return rng() < 0.55 ? ['battle', 'elite'] : ['elite', 'battle'];
   }
 
-  if (!picked.some((k) => TOWER_FLOOR_KINDS[k].combat)) {
-    picked[picked.length - 1] = rng() < 0.5 ? 'battle' : 'elite';
-  }
+  const picked: TowerFloorKind[] = ['battle'];
+  if (rng() < 0.62) picked.push('elite');
+
+  const skip = rng();
+  if (skip < 0.22) picked.push('event');
+  else if (skip < 0.34) picked.push('rest');
+
+  if (picked.length === 1) picked.push('elite');
+  if (picked.length > TOWER_PATH_COUNT) picked.length = TOWER_PATH_COUNT;
   return picked;
 }
 
@@ -137,6 +130,8 @@ export type TowerEventEffect =
   | { kind: 'gamble'; winChance: number; hpCost: number }
   /** 直接得塔币 */
   | { kind: 'coins'; amount: number }
+  /** 折损生命，可选补偿少量印记（凶兆：坏事件，不送机缘） */
+  | { kind: 'hurt'; pct: number; coins?: number }
   /** 弃掉一道随机机缘，换取 count 道新机缘 */
   | { kind: 'reforge'; count: number };
 
@@ -153,27 +148,29 @@ export interface TowerEventDef {
 export const TOWER_EVENTS: readonly TowerEventDef[] = [
   {
     id: 'ev_spring', name: '灵泉',
-    text: '崖下有泉，饮之神清气爽。回复 30% 生命。',
-    effect: { kind: 'heal', pct: 0.3 }, weight: 100,
+    text: '崖下有泉，饮之神清气爽。',
+    // 低于静室 25%：大回血留给专门的休整格
+    effect: { kind: 'heal', pct: 0.16 }, weight: 100,
   },
   {
     id: 'ev_omen', name: '凶兆',
-    text: '壁画中似有目光注视。折损 12% 生命，换来两道机缘。',
-    effect: { kind: 'trade', count: 2, hpCost: 0.12 }, weight: 70,
+    text: '壁画中似有目光注视。',
+    effect: { kind: 'hurt', pct: 0.12, coins: 8 }, weight: 70,
   },
   {
     id: 'ev_gamble', name: '试炼碑',
-    text: '碑上刻着一道试题。半数机会得一道珍稀机缘，否则折损 18% 生命。',
+    text: '碑上刻着一道试题。',
+    // 赌的是普通机缘，不走守关珍稀倾斜
     effect: { kind: 'gamble', winChance: 0.5, hpCost: 0.18 }, weight: 60,
   },
   {
     id: 'ev_cache', name: '秘藏',
     text: '砖缝里嵌着前人留下的印记。',
-    effect: { kind: 'coins', amount: 40 }, weight: 55,
+    effect: { kind: 'coins', amount: 18 }, weight: 55,
   },
   {
     id: 'ev_reforge', name: '淬炼炉',
-    text: '炉火可熔旧机缘。舍去一道已得机缘，重铸为两道新的。',
+    text: '炉火可熔旧机缘。',
     effect: { kind: 'reforge', count: 2 }, weight: 45,
   },
 ];

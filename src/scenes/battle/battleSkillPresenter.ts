@@ -8,6 +8,7 @@
  * 纯演出编排：依赖通过 deps 注入，自身不持有状态。返回 true 表示战斗已在演出中结束
  * （最后一波敌人被击败），编排者据此保留 busy 状态、跳过收尾刷新。
  */
+import { hasteChargePctLabel } from '@/balance/skillCharge';
 import { ORB_COLOR, FX_ELEMENT_COLOR, UI, ELEMENT_NAME } from '@/balance/ui';
 import {
   SKILL_IMPACT_HEAVY_HP_RATIO,
@@ -299,7 +300,7 @@ async function presentResiduals(
       const slot = petBar.slotAt(i);
       fx.spawnAuraRing(slot.x, slot.y - 20, 0xffd54f);
     }
-    fx.spawnFloat(`全队技能冷却 -${result.teamCdDelta}`, heroAnnounceX, heroAnnounceY, 0xffd54f, 1.1);
+    fx.spawnFloat(`全队充能 +${hasteChargePctLabel(result.teamCdDelta ?? 0)}`, heroAnnounceX, heroAnnounceY, 0xffd54f, 1.1);
   }
 
   if (!shown.has('dot')) {
@@ -538,7 +539,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       break;
     }
     case 'hasteGlow': {
-      // 连携：每个队友槽位金色光环 + 冷却刷新
+      // 连携：每个队友槽位金色光环 + 充能条上涨
       for (let i = 0; i < ctrl.team.length; i++) {
         if (i === petIndex) continue;
         const slot = petBar.slotAt(i);
@@ -549,7 +550,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         });
       }
       fx.spawnFloat(
-        `全队技能冷却 -${result.teamCdDelta ?? 0}`,
+        `全队充能 +${hasteChargePctLabel(result.teamCdDelta ?? 0)}`,
         heroAnnounceX, heroAnnounceY, 0xffd54f, 1.2,
       );
       deps.refreshSkillUi();

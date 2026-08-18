@@ -4,26 +4,30 @@
  * 业务侧跨平台 SDK 入口：所有 wx/tt 差异（存储、登录、分享、生命周期等）
  * 都必须走 Platform，禁止在业务里写 typeof wx / typeof tt。
  *
- * 宿主识别：抖音注入 tt（可同时存在 wx 兼容层）；微信仅 wx。
- * 检测到哪个宿主，就只绑定该宿主原生 API（抖音→tt，微信→wx），互不倒用。
+ * 宿主识别：抖音注入 tt（可同时存在 wx 兼容层）；Tap 注入 tap；微信仅 wx。
+ * Tap 包由 VITE_PLATFORM=taptap 编译，运行时即使误注入 wx 也不会当成微信。
  */
 
 declare const wx: any;
 declare const tt: any;
+declare const tap: any;
 
-export type PlatformName = 'wechat' | 'douyin' | 'unknown';
-export type BackendPlatformCode = 'wx' | 'dy' | 'anon';
+export type PlatformName = 'wechat' | 'douyin' | 'taptap' | 'unknown';
+export type BackendPlatformCode = 'wx' | 'dy' | 'tap' | 'anon';
 
 /** 检测当前小游戏宿主（单一真源，与 minigame/runtime.js 逻辑一致） */
 export function detectMinigamePlatform(): PlatformName {
+  if (import.meta.env.VITE_PLATFORM === 'taptap') return 'taptap';
   if (typeof tt !== 'undefined') return 'douyin';
+  if (typeof tap !== 'undefined') return 'taptap';
   if (typeof wx !== 'undefined') return 'wechat';
   return 'unknown';
 }
 
-/** 指定宿主的原生 API：抖音仅 tt，微信仅 wx */
+/** 指定宿主的原生 API：抖音 tt / Tap tap / 微信 wx */
 export function getNativePlatformApi(platform: PlatformName = detectMinigamePlatform()): any {
   if (platform === 'douyin') return typeof tt !== 'undefined' ? tt : null;
+  if (platform === 'taptap') return typeof tap !== 'undefined' ? tap : null;
   if (platform === 'wechat') return typeof wx !== 'undefined' ? wx : null;
   return null;
 }
@@ -37,6 +41,7 @@ export function resolveMinigameRuntime(): { name: PlatformName; api: any } {
 export function toBackendPlatformCode(name: PlatformName): BackendPlatformCode {
   if (name === 'douyin') return 'dy';
   if (name === 'wechat') return 'wx';
+  if (name === 'taptap') return 'tap';
   return 'anon';
 }
 
@@ -56,7 +61,8 @@ class PlatformServiceClass {
   constructor() {
     this.name = detectMinigamePlatform();
     this._api = getNativePlatformApi(this.name);
-    console.log(`[Platform] 当前平台: ${this.name}, api=${this.name === 'douyin' ? 'tt' : this.name === 'wechat' ? 'wx' : 'none'}`);
+    const apiName = this.name === 'douyin' ? 'tt' : this.name === 'wechat' ? 'wx' : this.name === 'taptap' ? 'tap' : 'none';
+    console.log(`[Platform] 当前平台: ${this.name}, api=${apiName}`);
   }
 
   /** 是否在小游戏环境中 */
@@ -72,7 +78,11 @@ class PlatformServiceClass {
     return this.name === 'douyin';
   }
 
-  /** 后端 login 接口 platform 字段（wx / dy / anon） */
+  get isTaptap(): boolean {
+    return this.name === 'taptap';
+  }
+
+  /** 后端 login 接口 platform 字段（wx / dy / tap / anon） */
   get backendPlatformCode(): BackendPlatformCode {
     return toBackendPlatformCode(this.name);
   }
@@ -219,7 +229,7 @@ class PlatformServiceClass {
     return Promise.reject(new Error('no http transport available'));
   }
 
-  /** 平台登录 code（wx.login / tt.login） */
+  /** 平台登录 code（wx.login / tt.login / tap.login） */
   loginCode(): Promise<string> {
     return new Promise((resolve) => {
       if (!this._api?.login) {
@@ -328,12 +338,25 @@ class PlatformServiceClass {
         return;
       }
 
+      // Tap 真机没有开发桩：空广告位 / 创建失败一律不发奖，避免白给。
+      // 抖音 / 微信本地联调仍走下面的 mock，行为不变。
+      if (this.isTaptap && !adUnitId) {
+        this.showToast('广告位未配置');
+        resolve(false);
+        return;
+      }
+
       let ad: any = null;
       try {
         ad = this._rewardedAd(adUnitId);
       } catch (_) { /* fall through mock */ }
 
       if (!ad) {
+        if (this.isTaptap) {
+          this.showToast('暂无广告');
+          resolve(false);
+          return;
+        }
         this.showToast('广告播放中…');
         setTimeout(() => {
           // 桩结束立刻清掉，避免和业务侧翻倍数额动画叠在一起

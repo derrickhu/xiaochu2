@@ -20,7 +20,7 @@ const document = {
   readyState: 'complete',
 
   createElement(tag) {
-    tag = tag.toLowerCase();
+    tag = String(tag || 'div').toLowerCase();
     switch (tag) {
       case 'canvas':
         return platform.createCanvas();

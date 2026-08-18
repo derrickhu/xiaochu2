@@ -972,12 +972,12 @@ export class BattleHud {
       }
     } else {
       const nextSkill = this._ctrl.nextSkillCountdown();
-      if (nextSkill) {
+      if (enemy.attackCountdown > 1) {
+        // 威吓推迟等：必须先报「这回合不打」，不能被技能倒计时盖掉
+        lines.push(`${enemy.attackCountdown}回合后`, '攻击');
+      } else if (nextSkill) {
         if (nextSkill.turns <= 0) lines.push('即将', '放技能');
         else lines.push(`${nextSkill.turns}回合后`, '技能');
-      } else if (enemy.attackInterval > 1) {
-        // 无技能的慢攻怪：间隔本身才是威胁节奏
-        lines.push(`${enemy.attackCountdown}回合后`, '攻击');
       }
       this._enemyCdText.style.fill = COLORS.battleTagText;
     }

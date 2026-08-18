@@ -10,7 +10,7 @@ const _isDouyin = _platformName === 'douyin';
 const _isWechat = _platformName === 'wechat';
 
 if (!_api) {
-  console.error('[platform] 未检测到小游戏运行环境（wx/tt）');
+  console.error('[platform] 未检测到小游戏运行环境（wx/tt/tap）');
 }
 
 // 安全调用包装：防止鸿蒙等环境中 API 缺失导致崩溃

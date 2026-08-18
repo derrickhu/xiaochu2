@@ -83,11 +83,17 @@ export function runEnemyTurnAction(ctx: EnemyTurnContext): EnemyActResult {
   if (pick) {
     enemy.skillCds[pick.index] = pick.skill.cd;
     enemy.skillRotation = (pick.index + 1) % enemy.skillIds.length;
-    // 白放的减伤：CD 照扣，但这一回合什么也没发生（预告会如实说「按兵不动」）
-    if (pick.wasted) return idle();
+    // 白放的减伤：技能位空过，普攻照打，避免玩家猜「这回合到底出手没有」
+    if (pick.wasted) return strikeBasic(ctx);
     return applyEnemySkillResult(ctx, pick.result);
   }
 
+  return strikeBasic(ctx);
+}
+
+/** 普攻：倒计时仍留给威吓推迟；默认间隔 1 = 每回合打一下 */
+function strikeBasic(ctx: EnemyTurnContext): EnemyActResult {
+  const enemy = ctx.enemy;
   enemy.attackCountdown--;
   if (enemy.attackCountdown > 0) return idle();
   enemy.attackCountdown = enemy.attackInterval;

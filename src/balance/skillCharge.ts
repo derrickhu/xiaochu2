@@ -53,7 +53,8 @@ export const CHARGE_TURN_BASE = 17;
 
 /**
  * 「1 回合」在充能口径下的等价值：cd → 充能上限的换算系数，
- * 也是灵机速咏 / 势如破竹 / 技能「全队减 N 回合冷却」的折算基准。
+ * 也是灵机速咏 / 势如破竹开局加充能的折算基准。
+ * 连携技不再说「减冷却」，按条的百分比灌充能（见 HASTE_CHARGE_PCT）。
  *
  * 注意它不等于任何一档画像的实际每回合充能（中手约 35，比它高约一成，
  * 所以中手的放技间隔略短于 cd）。
@@ -83,9 +84,24 @@ export function chargeMaxForCd(cd: number): number {
   return Math.max(1, Math.round(Math.max(1, cd) * CHARGE_PER_TURN_BASELINE));
 }
 
-/** 回合数 → 等价充能（灵机 / 技能的「减 N 回合冷却」折算） */
+/** 回合数 → 等价充能（开局加成 / 速咏需求，不再给玩家看「减冷却」） */
 export function chargeForTurns(turns: number): number {
   return Math.round(turns * CHARGE_PER_TURN_BASELINE);
+}
+
+/**
+ * 连携电池：amount=1 → 充满条的 20%。
+ * 对齐 FGO「NP+20%」/ 崩铁回能百分比——玩家看见的是条在涨，不是一张已经不存在的 CD 表。
+ */
+export const HASTE_CHARGE_PCT = 0.2;
+
+export function hasteChargeGain(chargeMax: number, amount: number): number {
+  if (amount <= 0 || chargeMax <= 0) return 0;
+  return Math.round(chargeMax * HASTE_CHARGE_PCT * amount);
+}
+
+export function hasteChargePctLabel(amount: number): string {
+  return `${Math.round(HASTE_CHARGE_PCT * Math.max(0, amount) * 100)}%`;
 }
 
 /** 单颗珠对某只宠的充能：本色为主要来源，其余是涓流 */

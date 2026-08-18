@@ -21,11 +21,29 @@ function advanceAfterNonCombat(floor: number, hpPct: number): void {
   reportQuest('towerFloor');
 }
 
+export type TowerDeltaTone = 'loss' | 'gain' | 'neutral';
+
+export interface TowerEventDelta {
+  tone: TowerDeltaTone;
+  label: string;
+}
+
 export interface TowerEventOutcome {
-  /** 展示用结果行 */
+  /** 旁白：只讲故事，不重复数值 */
+  flavor: string;
+  /** 得失条目（UI 按 tone 上色） */
+  deltas: TowerEventDelta[];
+  /** 兼容旧调用：与 deltas.label 同步 */
   lines: string[];
   /** 结算后的续战血量比例 */
   hpPct: number;
+  /** 本层未交手，下一层强制开战 */
+  nextMustFight: boolean;
+}
+
+function addDelta(out: { deltas: TowerEventDelta[]; lines: string[] }, tone: TowerDeltaTone, label: string): void {
+  out.deltas.push({ tone, label });
+  out.lines.push(label);
 }
 
 /**
@@ -38,43 +56,61 @@ export function resolveTowerEvent(
   floor: number,
   rng: () => number = Math.random,
 ): TowerEventOutcome {
-  const lines: string[] = [];
+  const bag: { deltas: TowerEventDelta[]; lines: string[] } = { deltas: [], lines: [] };
   const fx = event.effect;
 
   switch (fx.kind) {
     case 'heal': {
       const before = PlayerData.tower.runHpPct;
       const after = PlayerData.adjustTowerRunHp(fx.pct);
-      lines.push(`生命回复至 ${Math.round(after * 100)}%（+${Math.round((after - before) * 100)}%）`);
+      addDelta(bag, 'gain', `生命 +${Math.round((after - before) * 100)}% · 现为 ${Math.round(after * 100)}%`);
       break;
     }
     case 'trade': {
       PlayerData.adjustTowerRunHp(-fx.hpCost);
       const got = PlayerData.grantRandomTowerBlesses(fx.count, rng);
-      lines.push(`折损 ${Math.round(fx.hpCost * 100)}% 生命`);
-      lines.push(got.length > 0 ? `获得机缘：${got.map((g) => g.name).join('、')}` : '机缘已尽，无所得');
+      addDelta(bag, 'loss', `生命 −${Math.round(fx.hpCost * 100)}%`);
+      if (got.length === 0) addDelta(bag, 'neutral', '机缘已尽，无所得');
+      else for (const g of got) addDelta(bag, 'gain', `机缘 · ${g.name}`);
       break;
     }
     case 'gamble': {
       if (rng() < fx.winChance) {
-        const got = PlayerData.grantRandomTowerBlesses(1, rng, { guardFloor: true });
-        lines.push(got.length > 0 ? `试炼得手 · ${got[0].name}` : '试炼得手，但机缘已尽');
+        const got = PlayerData.grantRandomTowerBlesses(1, rng);
+        if (got.length > 0) addDelta(bag, 'gain', `试炼得手 · ${got[0].name}`);
+        else addDelta(bag, 'neutral', '试炼得手，但机缘已尽');
       } else {
         PlayerData.adjustTowerRunHp(-fx.hpCost);
-        lines.push(`试炼失手 · 折损 ${Math.round(fx.hpCost * 100)}% 生命`);
+        addDelta(bag, 'loss', `试炼失手 · 生命 −${Math.round(fx.hpCost * 100)}%`);
+      }
+      break;
+    }
+    case 'hurt': {
+      PlayerData.adjustTowerRunHp(-fx.pct);
+      addDelta(bag, 'loss', `生命 −${Math.round(fx.pct * 100)}%`);
+      if (fx.coins && fx.coins > 0) {
+        const got = PlayerData.addTowerCoins(fx.coins);
+        addDelta(bag, 'gain', `登塔印记 +${got}`);
       }
       break;
     }
     case 'coins': {
       const got = PlayerData.addTowerCoins(fx.amount);
-      lines.push(`登塔印记 +${got}`);
+      addDelta(bag, 'gain', `登塔印记 +${got}`);
       break;
     }
     case 'reforge': {
       const dropped = PlayerData.dropRandomTowerBless(rng);
+      if (!dropped) {
+        addDelta(bag, 'neutral', '身无机缘可淬，炉火自熄');
+        const got = PlayerData.addTowerCoins(6);
+        if (got > 0) addDelta(bag, 'gain', `登塔印记 +${got}`);
+        break;
+      }
       const got = PlayerData.grantRandomTowerBlesses(fx.count, rng);
-      lines.push(dropped ? `舍去 ${dropped.name}` : '身无机缘可舍，炉火自燃');
-      lines.push(got.length > 0 ? `重铸得：${got.map((g) => g.name).join('、')}` : '重铸无果');
+      addDelta(bag, 'loss', `舍去 ${dropped.name}`);
+      if (got.length === 0) addDelta(bag, 'neutral', '重铸无果');
+      else for (const g of got) addDelta(bag, 'gain', `重铸 · ${g.name}`);
       break;
     }
     default:
@@ -84,7 +120,7 @@ export function resolveTowerEvent(
   const hpPct = PlayerData.tower.runHpPct;
   advanceAfterNonCombat(floor, hpPct);
   analytics.track('tower_event_resolve', { floor, event_id: event.id });
-  return { lines, hpPct };
+  return { flavor: event.text, ...bag, hpPct, nextMustFight: true };
 }
 
 /** 休整层结算：回血并推进层数 */
@@ -93,8 +129,12 @@ export function resolveTowerRest(floor: number): TowerEventOutcome {
   const after = PlayerData.adjustTowerRunHp(TOWER_REST_HEAL_PCT);
   advanceAfterNonCombat(floor, after);
   analytics.track('tower_rest', { floor });
+  const gain = `生命 +${Math.round((after - before) * 100)}% · 现为 ${Math.round(after * 100)}%`;
   return {
-    lines: [`静室调息 · 生命回复至 ${Math.round(after * 100)}%（+${Math.round((after - before) * 100)}%）`],
+    flavor: '静室调息，养伤片刻。',
+    deltas: [{ tone: 'gain', label: gain }],
+    lines: [gain],
     hpPct: after,
+    nextMustFight: true,
   };
 }

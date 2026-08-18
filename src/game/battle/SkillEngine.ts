@@ -169,7 +169,7 @@ export interface SkillResult {
   healEvents: HealEvent[];
   statusEvents: StatusEvent[];
   boardRequests: BoardRequest[];
-  /** haste：全队其他宠物技能 CD 减少量 */
+  /** haste：连携电池档（1 = 队友充能条 +20%） */
   teamCdDelta?: number;
   /** purify：是否清除我方 debuff */
   cleanseTeam?: boolean;

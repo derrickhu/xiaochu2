@@ -1,5 +1,6 @@
 import type { Element, OrbType } from '../combat';
 import { VOID_PIERCE_MATCH_COUNT } from '../damageGates';
+import { hasteChargePctLabel } from '../skillCharge';
 import { ELEMENT_NAME } from '../ui';
 import type {
   ConvertShape,
@@ -241,13 +242,13 @@ export function makeGravity(p: {
   };
 }
 
-/** 连携：全队其他宠物技能 CD -amount（构筑核心，PAD「Haste」；可附带治疗） */
+/** 连携：为其他队友立刻灌充能（FGO/崩铁电池口径；可附带治疗） */
 export function makeHaste(p: {
   id: string; name: string; amount: number; cd: number; flavor?: string;
   healPct?: number;
 }): SkillDef {
   const effects: SkillEffectDef[] = [{ kind: 'haste', amount: p.amount }];
-  let desc = `全队其他宠物的技能冷却 -${p.amount} 回合`;
+  let desc = `为其他队友立刻充能 ${hasteChargePctLabel(p.amount)}`;
   if (p.healPct) {
     effects.push({ kind: 'heal', source: 'teamMaxHp', pct: p.healPct });
     desc += `，并回复最大生命 ${pct(p.healPct)}`;

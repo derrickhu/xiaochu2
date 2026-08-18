@@ -91,12 +91,23 @@ const isDevtools = sysInfo.platform === 'devtools';
 // 在 adapter 模块作用域中它们可用，挂到真正的全局对象。
 ;(function _patchTimers() {
   var pairs = {};
+  var _tap = typeof tap !== 'undefined' ? tap : null;
+  var _wx = typeof wx !== 'undefined' ? wx : null;
+  var _host = _tap || _wx || {};
   if (typeof setTimeout !== 'undefined')              pairs.setTimeout = setTimeout;
+  else if (_host.setTimeout)                          pairs.setTimeout = _host.setTimeout.bind(_host);
   if (typeof clearTimeout !== 'undefined')             pairs.clearTimeout = clearTimeout;
+  else if (_host.clearTimeout)                         pairs.clearTimeout = _host.clearTimeout.bind(_host);
   if (typeof setInterval !== 'undefined')              pairs.setInterval = setInterval;
+  else if (_host.setInterval)                          pairs.setInterval = _host.setInterval.bind(_host);
   if (typeof clearInterval !== 'undefined')            pairs.clearInterval = clearInterval;
+  else if (_host.clearInterval)                        pairs.clearInterval = _host.clearInterval.bind(_host);
   if (typeof requestAnimationFrame !== 'undefined')    pairs.requestAnimationFrame = requestAnimationFrame;
+  else if (GameGlobal.requestAnimationFrame)           pairs.requestAnimationFrame = GameGlobal.requestAnimationFrame;
+  else if (_host.requestAnimationFrame)                pairs.requestAnimationFrame = _host.requestAnimationFrame.bind(_host);
   if (typeof cancelAnimationFrame !== 'undefined')     pairs.cancelAnimationFrame = cancelAnimationFrame;
+  else if (GameGlobal.cancelAnimationFrame)            pairs.cancelAnimationFrame = GameGlobal.cancelAnimationFrame;
+  else if (_host.cancelAnimationFrame)                 pairs.cancelAnimationFrame = _host.cancelAnimationFrame.bind(_host);
   for (var k in pairs) {
     if (typeof _realGlobal[k] === 'undefined') _realGlobal[k] = pairs[k];
     if (typeof GameGlobal[k] === 'undefined')  GameGlobal[k] = pairs[k];
@@ -355,7 +366,7 @@ if (isDevtools) {
   // addEventListener/removeEventListener 必须强制覆盖：
   // 微信框架可能内置了无效版本，PixiJS EventSystem 在 self 上注册
   // pointermove/pointerup 依赖这些函数正确工作
-  var _forceOverwrite = ['addEventListener', 'removeEventListener'];
+  var _forceOverwrite = ['addEventListener', 'removeEventListener', 'document'];
 
   for (const key in _allGlobals) {
     if (key === 'window' || key === 'self') continue;
@@ -379,6 +390,17 @@ if (isDevtools) {
     }
   }
   _forceInstallGlobal('XMLHttpRequest', XMLHttpRequest, [_realGlobal, typeof GameGlobal !== 'undefined' ? GameGlobal : null]);
+  _forceInstallGlobal('document', document, [_realGlobal, typeof GameGlobal !== 'undefined' ? GameGlobal : null]);
+  ;(function _patchHostDocument() {
+    var targets = [_realGlobal, typeof GameGlobal !== 'undefined' ? GameGlobal : null];
+    if (typeof globalThis !== 'undefined') targets.push(globalThis);
+    for (var i = 0; i < targets.length; i++) {
+      var hostDoc = targets[i] && targets[i].document;
+      if (!hostDoc || typeof hostDoc.createElement === 'function') continue;
+      try { hostDoc.createElement = document.createElement.bind(document); } catch (e1) { /* */ }
+      try { hostDoc.createElementNS = document.createElementNS.bind(document); } catch (e2) { /* */ }
+    }
+  })();
 }
 
 // ======== 全局 canvas（对齐 game2D_huahua）========

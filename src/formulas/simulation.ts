@@ -22,7 +22,7 @@ import {
 } from '@/balance/damageGates';
 import type { SkillDef } from '@/balance/skills';
 import {
-  chargeForTurns, chargeMaxForCd, startChargeFor, turnChargeGain,
+  chargeMaxForCd, hasteChargeGain, startChargeFor, turnChargeGain,
 } from '@/balance/skillCharge';
 import { applyDamageReduction, calcHeal } from './damage';
 import { starsFromTurns } from './stars';
@@ -243,7 +243,11 @@ export function simulateBattle(
         }
         const skillResult = runSkill(
           p.skill,
-          { kind: 'pet', atk: p.atk, element: p.def.element, petDef: p.def, critRate: p.critRate, critDamage: p.critDamage },
+          {
+            kind: 'pet', atk: p.atk, element: p.def.element, petDef: p.def,
+            petIndex: team.indexOf(p),
+            critRate: p.critRate, critDamage: p.critDamage,
+          },
           runtimeContext(),
         );
         if (!skillResult) continue;
@@ -539,12 +543,13 @@ export function simulateBattle(
       // 模拟器按期望消珠建模（不掷暴击、不模拟拖珠时长与单宠 CD 封锁），暂不镜像。
     }
 
-    // haste：全队「冷却 -N 回合」= 补 N 回合的期望充能（镜像 reducePetCds）
+    // haste：按各宠充能条百分比灌能（镜像 reducePetCds，施法者自己不吃）
     if (result.teamCdDelta && result.teamCdDelta > 0) {
-      const gain = chargeForTurns(result.teamCdDelta);
-      for (const p of team) {
-        p.charge = Math.min(p.chargeMax, p.charge + gain);
-      }
+      const except = result.caster.kind === 'pet' ? result.caster.petIndex : undefined;
+      team.forEach((p, i) => {
+        if (i === except) return;
+        p.charge = Math.min(p.chargeMax, p.charge + hasteChargeGain(p.chargeMax, result.teamCdDelta!));
+      });
     }
     // purify：清除我方 debuff（镜像 cleanseTeamDebuffs）
     if (result.cleanseTeam) {
@@ -625,15 +630,12 @@ export function simulateBattle(
     if (pick) {
       enemy.skillCds[pick.index] = pick.skill.cd;
       enemy.skillRotation = (pick.index + 1) % enemy.skillIds.length;
-      if (pick.wasted) return 0;
-      applySkillResult(pick.result);
-      const heroHit = pick.result.damageEvents.find((e) => e.target === 'hero');
-      if (heroHit) return heroHit.amount;
-      if (!skillFollowsUpWithAttack(pick.result)) return 0;
-      enemy.attackCountdown--;
-      if (enemy.attackCountdown > 0) return 0;
-      enemy.attackCountdown = enemy.attackInterval;
-      return enemy.atk;
+      if (!pick.wasted) {
+        applySkillResult(pick.result);
+        const heroHit = pick.result.damageEvents.find((e) => e.target === 'hero');
+        if (heroHit) return heroHit.amount;
+        if (!skillFollowsUpWithAttack(pick.result)) return 0;
+      }
     }
 
     enemy.attackCountdown--;

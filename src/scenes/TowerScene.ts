@@ -44,6 +44,11 @@ const MILESTONE_PREVIEW = 4;
 const TOWER_SIDE_PAD = 20;
 const CTA_BTN_W = WARM_GOLD_CTA_SIZE.width;
 const CTA_BTN_H = WARM_GOLD_CTA_SIZE.height;
+/** 主按钮与直登/重置说明的间距 */
+const CTA_HINT_GAP = 8;
+/** 说明行占位，含浅色底托；整块算进 CTA 簇，避免掉进底栏云纹 */
+const CTA_HINT_H = 32;
+const CTA_CLUSTER_H = CTA_BTN_H + CTA_HINT_GAP + CTA_HINT_H;
 /** 字号加大后条/板略增高，塔区靠上方弹性压缩保持不挤 */
 const META_STRIP_H = 58;
 /** 层数 + 起手文案 + 血条三段纵向排布，避免重叠 */
@@ -131,8 +136,8 @@ export class TowerScene implements Scene {
 
     // 自下而上：CTA → 矮里程碑 → 本轮横条 → 层数/血条 → 塔舞台
     const contentTop = Game.safeTop + 72;
-    const contentBottom = h - BOTTOM_NAV_RESERVE - 4;
-    const ctaTop = contentBottom - CTA_BTN_H;
+    const contentBottom = h - BOTTOM_NAV_RESERVE - 20;
+    const ctaTop = contentBottom - CTA_CLUSTER_H;
     const milestoneTop = ctaTop - 10 - MILESTONE_H;
     const metaTop = milestoneTop - 6 - META_STRIP_H;
     const floorHudTop = metaTop - 4 - FLOOR_HUD_H;
@@ -152,7 +157,12 @@ export class TowerScene implements Scene {
    */
   private _buildLegacyEntry(w: number, y: number): void {
     const btn = new PIXI.Container();
-    const bw = 96;
+    const coins = PlayerData.towerCoins;
+    const label = makeText(coins > 0 ? `传承 ${coins}` : '传承', {
+      size: FONT_SIZE.sm, fill: 0x7a5520, bold: false, anchor: 0.5, role: 'title',
+    });
+    try { label.updateText(true); } catch { /* noop */ }
+    const bw = Math.max(108, Math.ceil(label.width) + 28);
     const bh = 34;
     btn.position.set(20, y);
     this.container.addChild(btn);
@@ -163,10 +173,6 @@ export class TowerScene implements Scene {
     bg.drawRoundedRect(0, 0, bw, bh, bh / 2);
     bg.endFill();
     btn.addChild(bg);
-
-    const label = makeText('传承', {
-      size: FONT_SIZE.sm, fill: 0x7a5520, bold: false, anchor: 0.5, role: 'title',
-    });
     label.position.set(bw / 2, bh / 2);
     btn.addChild(label);
 
@@ -211,7 +217,7 @@ export class TowerScene implements Scene {
     this.container.addChild(hud);
 
     const floorTitle = tower.runEnded
-      ? `第 ${PlayerData.towerCheckpointFloor()} 层`
+      ? `将从第 ${PlayerData.towerCheckpointFloor()} 层重来`
       : `第 ${tower.runFloor} 层`;
     const floorText = makeText(floorTitle, {
       size: FONT_SIZE.lg, fill: 0x5c4033, bold: false, anchor: 0.5, role: 'title',
@@ -261,7 +267,7 @@ export class TowerScene implements Scene {
 
     const parts: Array<{ text: string; fill: number; tap?: () => void }> = [
       { text: `最高 ${tower.bestFloor}`, fill: 0x5c4033 },
-      { text: `存档每${TOWER.checkpointEvery}层`, fill: 0x5c4033 },
+      { text: `战败回退每${PlayerData.towerLegacy.checkpointEvery}层`, fill: 0x5c4033 },
       {
         text: blessLabel,
         fill: blessTotal > 0 ? 0x7a5520 : 0x8a6a4a,
@@ -358,7 +364,17 @@ export class TowerScene implements Scene {
       panel.addChild(desc);
 
       y += lineH;
-      if (y > panelH / 2 - 20) break;
+      if (y > panelH / 2 - 36) {
+        const left = owned.length - (owned.indexOf(o) + 1);
+        if (left > 0) {
+          const more = makeText(`还有 ${left} 条…`, {
+            size: FONT_SIZE.xxs, fill: 0x8a6a4a, bold: true, anchor: 0.5,
+          });
+          more.position.set(0, y + 8);
+          panel.addChild(more);
+        }
+        break;
+      }
     }
   }
 
@@ -521,16 +537,20 @@ export class TowerScene implements Scene {
       ring.drawCircle(0, 0, r);
       ring.endFill();
     } else if (state === 'claimed') {
-      ring.beginFill(0xe8e4dc, 1);
-      ring.lineStyle(2, 0xb0aaa0, 0.9);
+      ring.beginFill(0xe4f0dc, 1);
+      ring.lineStyle(2, COLORS.btnSuccessBorder, 0.75);
       ring.drawCircle(0, 0, r);
       ring.endFill();
     } else {
-      // 未达成：冷灰圈，和可领金圈拉开
-      ring.beginFill(0xf0ece4, 1);
-      ring.lineStyle(2, 0xa8a098, 0.85);
+      // 未达成：虚线冷圈，和「已领」绿勾拉开
+      ring.beginFill(0xf4f0ea, 1);
+      ring.lineStyle(2, 0xb8b0a4, 0.7);
       ring.drawCircle(0, 0, r);
       ring.endFill();
+      ring.lineStyle(1.4, 0x9a948c, 0.55);
+      for (let a = 0; a < Math.PI * 2; a += 0.42) {
+        ring.arc(0, 0, r + 3, a, a + 0.2);
+      }
     }
     root.addChild(ring);
 
@@ -553,16 +573,16 @@ export class TowerScene implements Scene {
 
     const tagLabel = state === 'claimed'
       ? '已领'
-      : (state === 'claimable' ? '待领' : `${floor}层`);
+      : (state === 'claimable' ? '待领' : '未达');
     const tagFill = state === 'claimed'
-      ? 0xd8d4cc
+      ? 0xd8f0d0
       : (state === 'claimable' ? 0xffe9a0 : 0xe8e4dc);
     const tagBorder = state === 'claimed'
-      ? 0xa8a098
+      ? COLORS.btnSuccessBorder
       : (state === 'claimable' ? 0xd4a84a : 0xb0aaa0);
     const tagTextFill = state === 'claimed'
-      ? 0x7a7670
-      : (state === 'claimable' ? 0x5c3d24 : 0x8a8680);
+      ? COLORS.textPositive
+      : (state === 'claimable' ? 0x5c3d24 : COLORS.textDisabled);
     const tagW = Math.round(r * (state === 'claimable' ? 1.55 : 1.45));
     const tagH = MILESTONE_TAG_H;
     const tagY = r + MILESTONE_TAG_GAP;
@@ -624,7 +644,7 @@ export class TowerScene implements Scene {
   /** 已领取灰勾 */
   private _drawCheckMark(parent: PIXI.Container, size: number): void {
     const g = new PIXI.Graphics();
-    g.lineStyle(5.5, 0x8a8680, 1);
+    g.lineStyle(5.5, COLORS.textPositive, 1);
     g.moveTo(-size * 0.38, size * 0.02);
     g.lineTo(-size * 0.08, size * 0.32);
     g.lineTo(size * 0.4, -size * 0.3);
@@ -670,7 +690,7 @@ export class TowerScene implements Scene {
       });
       btn.position.set(w / 2, y + CTA_BTN_H / 2);
       this.container.addChild(btn);
-      this._buildSkipHint(w, y + CTA_BTN_H + 14);
+      this._buildSkipHint(w, y + CTA_BTN_H + CTA_HINT_GAP + CTA_HINT_H / 2);
       return;
     }
 
@@ -693,10 +713,10 @@ export class TowerScene implements Scene {
       const start = PlayerData.towerCheckpointFloor();
       const reroll = Math.max(0, start - 1) + PlayerData.towerLegacy.startBlesses;
       const sub = makeText(
-        `从第 ${start} 层满血重来 · 机缘重掷 ${reroll} 道`,
+        `从第 ${start} 层满血重来 · 随机补发 ${reroll} 道机缘`,
         { size: FONT_SIZE.xxs, fill: 0x8a6a4a, bold: true, anchor: 0.5 },
       );
-      sub.position.set(w / 2, y + CTA_BTN_H + 14);
+      sub.position.set(w / 2, y + CTA_BTN_H + CTA_HINT_GAP + CTA_HINT_H / 2);
       this.container.addChild(sub);
     }
   }
@@ -709,19 +729,29 @@ export class TowerScene implements Scene {
     const target = PlayerData.towerSkipTarget;
     if (target == null) return;
 
-    const hint = makeText(`实力已远超本层 · 直登第 ${target} 层`, {
-      size: FONT_SIZE.xxs, fill: 0x9a6a2a, bold: true, anchor: 0.5,
+    const label = makeText(`实力已远超本层 · 直登第 ${target} 层`, {
+      size: FONT_SIZE.xxs, fill: COLORS.textTitle, bold: true, anchor: 0.5,
     });
-    hint.position.set(w / 2, y);
-    hint.eventMode = 'static';
-    hint.cursor = 'pointer';
-    hint.hitArea = new PIXI.Rectangle(
-      -hint.width / 2 - 12, -hint.height / 2 - 8,
-      hint.width + 24, hint.height + 16,
-    );
-    pressFeedback(hint);
-    bindPointerTap(hint, () => void this._skipToEntry(target));
-    this.container.addChild(hint);
+    try { label.updateText(true); } catch { /* noop */ }
+
+    const padX = 16;
+    const chipW = Math.ceil(label.width) + padX * 2;
+    const chipH = CTA_HINT_H;
+    const chip = new PIXI.Container();
+    chip.position.set(w / 2, y);
+    const bg = new PIXI.Graphics();
+    bg.beginFill(COLORS.panelBg, 0.94);
+    bg.lineStyle(1.5, COLORS.panelBorder, 0.9);
+    bg.drawRoundedRect(-chipW / 2, -chipH / 2, chipW, chipH, chipH / 2);
+    bg.endFill();
+    chip.addChild(bg);
+    chip.addChild(label);
+    chip.eventMode = 'static';
+    chip.cursor = 'pointer';
+    chip.hitArea = new PIXI.Rectangle(-chipW / 2 - 8, -chipH / 2 - 6, chipW + 16, chipH + 12);
+    pressFeedback(chip);
+    bindPointerTap(chip, () => void this._skipToEntry(target));
+    this.container.addChild(chip);
   }
 
   private async _skipToEntry(target: number): Promise<void> {
@@ -761,12 +791,14 @@ export class TowerScene implements Scene {
     buildTowerStage(floor, {
       difficultyMult: def.difficultyMult,
       extraWaves: def.extraWaves,
+      kind,
     });
     const context: BattleContext = { kind: 'tower', floor };
     analytics.track('tower_floor_start', {
       floor,
       best_floor: PlayerData.tower.bestFloor,
       hp_pct: Math.round(PlayerData.tower.runHpPct * 100),
+      path: kind,
     });
     Platform.vibrateShort('medium');
     SceneManager.switchTo('team', {

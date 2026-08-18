@@ -549,11 +549,12 @@ export function nextMainlineStage(stageId: string): StageDef | undefined {
 export function formatStageShortLabel(
   stage: Pick<StageDef, 'chapter' | 'index' | 'name'> & { displayLabel?: string; type?: StageType },
 ): string {
+  if (stage.displayLabel) return stage.displayLabel;
   if (stage.type === 'elite') {
     const baseName = stage.name.replace(/\s*·\s*精英$/, '');
     return `${stage.chapter}-${stage.index} ${baseName} · 精英`;
   }
-  return stage.displayLabel ?? `${stage.chapter}-${stage.index} ${stage.name}`;
+  return `${stage.chapter}-${stage.index} ${stage.name}`;
 }
 
 /** 战斗顶栏：章节关卡号 + 名称，Boss / 精英附加标记 */

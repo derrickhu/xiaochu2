@@ -22,7 +22,7 @@ import {
 } from '@/balance/damageGates';
 import { ECONOMY } from '@/balance/economy';
 import {
-  chargeForTurns, chargeMaxForCd, startChargeFor, turnChargeGain,
+  chargeMaxForCd, hasteChargeGain, startChargeFor, turnChargeGain,
 } from '@/balance/skillCharge';
 import { stageDrops } from '@/formulas/economyOutput';
 import {
@@ -607,11 +607,10 @@ export class BattleController {
       setEnemyCharge: (charge) => { this.enemy.charging = charge; },
       syncEnemyStatusMirrors: () => this._syncEnemyStatusMirrors(),
       reducePetCds: (amount, exceptIndex) => {
-        // 「全队冷却 -N 回合」在充能口径下 = 补 N 回合的期望充能
-        const gain = chargeForTurns(amount);
         for (let i = 0; i < this.team.length; i++) {
           if (i === exceptIndex) continue;
-          this.addPetCharge(i, gain);
+          const mate = this.team[i];
+          this.addPetCharge(i, hasteChargeGain(mate.chargeMax, amount));
         }
       },
       cleanseTeamDebuffs: () => this._statuses.cleanseTeamDebuffs(),

@@ -123,20 +123,17 @@ export function showEnemyDetailDialog(
   content.addChild(stats);
   y += stats.height + 6;
 
-  // 行动节奏：优先报下次技能；普攻间隔=1 时不再强调「N 回合后攻击」
+  // 行动节奏：威吓推迟优先于技能预告，避免「报了技能却不打」
   const nextSkill = ctrl.nextSkillCountdown();
   let rhythm: string;
   if (enemy.charging) {
     rhythm = '蓄力中：下回合重击';
+  } else if (enemy.attackCountdown > 1) {
+    rhythm = `攻击推迟 · ${enemy.attackCountdown} 回合后出手`;
   } else if (nextSkill) {
     rhythm = nextSkill.turns <= 0
       ? `下回合将放技能 · ${nextSkill.name}`
       : `${nextSkill.turns} 回合后放技能 · ${nextSkill.name}`;
-  } else if (enemy.attackInterval > 1) {
-    const cdLeft = Math.max(0, enemy.attackCountdown);
-    rhythm = cdLeft <= 0
-      ? `攻击间隔 ${enemy.attackInterval} 回合 · 本回合将行动`
-      : `攻击间隔 ${enemy.attackInterval} 回合 · ${cdLeft} 回合后攻击`;
   } else {
     rhythm = '每回合普攻';
   }

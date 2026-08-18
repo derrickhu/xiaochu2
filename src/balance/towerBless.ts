@@ -116,7 +116,7 @@ const STAT_BLESSES: TowerBlessDef[] = [
   },
   {
     id: 'bless_cd', name: '速咏', category: 'stat', tier: 'rare', maxStacks: 2,
-    desc: (s) => `全队技能冷却 -${s} 回合`,
+    desc: (s) => `主动技充满更快（满充需求约减 ${s} 回合）`,
   },
   ...ELEMENTS.map((el): TowerBlessDef => ({
     id: `bless_element_${el}`,
@@ -165,7 +165,7 @@ const TRIGGER_BLESSES: TowerBlessDef[] = [
   },
   {
     id: 'bless_rush', name: '势如破竹', category: 'trigger', tier: 'common', maxStacks: 2,
-    desc: (s) => `每层首回合全队冷却 -${BLESS_RATE.rushCd * s}`,
+    desc: (s) => `每层开局全队立刻获得额外充能`,
   },
   {
     id: 'bless_thunder', name: '雷霆', category: 'trigger', tier: 'epic', maxStacks: 2,
@@ -221,7 +221,7 @@ export interface TowerRunModifiers {
   damageReductionAdd: number;
   /** 敌人防御削减比例 */
   enemyDefBreak: number;
-  /** 全队技能冷却减免（回合） */
+  /** 速咏：按回合当量降低充能上限 */
   skillCdReduce: number;
   /** 指定属性伤害乘区（缺省 1） */
   elementMult: Readonly<Partial<Record<Element, number>>>;
@@ -233,7 +233,7 @@ export interface TowerRunModifiers {
   lastStandMult: number;
   /** 击杀回复的最大生命比例 */
   killHealPct: number;
-  /** 每层首回合的冷却减免 */
+  /** 每层开局额外充能（按回合当量折算） */
   floorStartCdReduce: number;
   /** 大消除额外真伤占队伍攻击的比例 */
   thunderTrueDamagePct: number;

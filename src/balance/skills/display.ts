@@ -1,4 +1,5 @@
 import type { SkillDef, SkillEffectDef } from './types';
+import { hasteChargePctLabel } from '../skillCharge';
 import { ELEMENT_NAME } from '../ui';
 import { getRaritySkillPower } from '../rarity';
 
@@ -36,7 +37,7 @@ function describeEffect(e: SkillEffectDef): string {
     case 'gravity':
       return `重力 敌当前HP×${pct(e.pct)}`;
     case 'haste':
-      return `队友CD -${e.amount}`;
+      return `队友立刻充能 ${hasteChargePctLabel(e.amount)}`;
     case 'purify':
       return `净化${e.unsealBoard ? ' 解封' : ''}${e.cleanseTeam ? ' 驱散' : ''}`;
     case 'delayEnemyAttack':

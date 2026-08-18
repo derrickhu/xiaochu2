@@ -897,6 +897,9 @@ class PlayerDataClass {
     t.runBlesses = {};
     t.runReachedFloor = 0;
     t.runRerollsLeft = fx.rerollsPerRun;
+    t.runPaths = [];
+    t.runPathsFloor = 0;
+    t.runPathKind = '';
     const compensate = Math.max(0, t.runFloor - 1) + fx.startBlesses;
     for (const def of rollBlessChoices({}, rng, { count: compensate })) {
       this._grantBless(def.id);
@@ -1063,7 +1066,8 @@ class PlayerDataClass {
   towerPaths(rng: () => number = Math.random): TowerFloorKind[] {
     const t = this._data.tower;
     if (t.runPathsFloor !== t.runFloor || t.runPaths.length === 0) {
-      t.runPaths = rollTowerPaths(t.runFloor, rng);
+      const lastKind = t.runPathKind;
+      t.runPaths = rollTowerPaths(t.runFloor, rng, lastKind);
       t.runPathsFloor = t.runFloor;
       t.runPathKind = '';
       this._save();

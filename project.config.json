@@ -21,15 +21,16 @@
       "ignore": [],
       "disablePlugins": [],
       "outputPath": ""
-    }
+    },
+    "compileHotReLoad": true
   },
   "compileType": "game",
-  "miniprogramRoot": "minigame/",
+  "miniprogramRoot": "build/wechat/",
   "isGameTourist": false,
   "appid": "wx53b03390106eff65",
   "editorSetting": {},
   "libVersion": "3.12.1",
-  "description": "灵宠消消塔 2",
+  "description": "灵宠消消塔 2。请先 npm run build，微信工具打开 build/wechat/（或本仓库根目录）。",
   "simulatorPluginLibVersion": {},
   "packOptions": {
     "ignore": [

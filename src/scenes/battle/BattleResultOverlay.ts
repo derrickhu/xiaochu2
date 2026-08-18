@@ -528,16 +528,21 @@ export class BattleResultOverlay {
     tipRow.addChild(makeText('!', {
       size: 17, fill: 0xffffff, bold: true, anchor: 0.5,
     }));
-    const tip = makeText('提示：消除克制属性珠子伤害更高', {
-      size: FONT_SIZE.xs, fill: TITLE_BROWN, bold: true, anchor: [0, 0.5],
+    const tipCopy = context?.kind === 'tower'
+      ? `本轮已中断 · 回塔消耗 1 次重置，从第 ${PlayerData.towerCheckpointFloor()} 层满血重来`
+      : '提示：消除克制属性珠子伤害更高';
+    const tip = makeText(tipCopy, {
+      size: FONT_SIZE.xxs, fill: TITLE_BROWN, bold: true, anchor: [0, 0.5],
       role: 'title',
+      wordWrapWidth: PANEL_W - 88,
     });
     tip.position.set(20, 0);
     tipRow.addChild(tip);
     try { tip.updateText(true); } catch { /* noop */ }
-    tipRow.position.set(-(tip.width + 20) / 2, y + 14);
+    const tipH = Math.max(36, tip.height + 10);
+    tipRow.position.set(-(tip.width + 20) / 2, y + tipH / 2);
     content.addChild(tipRow);
-    y += 36;
+    y += tipH;
 
     if (defeatRefund > 0) {
       const chip = this._makeInfoChip(`保底经验 +${defeatRefund}`, 0xeef8e4, REWARD_GREEN);

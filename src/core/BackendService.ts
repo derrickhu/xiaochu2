@@ -143,10 +143,11 @@ class BackendServiceClass {
 
   private async buildLoginBody(): Promise<{ platform: string; code?: string; anonId?: string }> {
     const platform = Platform.backendPlatformCode;
-    if (platform === 'wx' || platform === 'dy') {
+    if (platform === 'wx' || platform === 'dy' || platform === 'tap') {
       const code = await Platform.loginCode();
       if (!code) {
-        throw new BackendError(0, platform === 'wx' ? 'NO_WX_CODE' : 'NO_TT_CODE', `${platform} login did not return code`);
+        const errCode = platform === 'wx' ? 'NO_WX_CODE' : platform === 'dy' ? 'NO_TT_CODE' : 'NO_TAP_CODE';
+        throw new BackendError(0, errCode, `${platform} login did not return code`);
       }
       return { platform, code };
     }

@@ -1,0 +1,10 @@
+{
+  "description": "灵宠消消塔 2 · TapTap。组装目录 build/taptap/，用 Tap 打包工具打 zip 后上传后台。",
+  "projectname": "灵宠消消塔",
+  "appid": "tapmca67ygmmvlggie",
+  "setting": {
+    "es6": true,
+    "minified": true,
+    "urlCheck": false
+  }
+}

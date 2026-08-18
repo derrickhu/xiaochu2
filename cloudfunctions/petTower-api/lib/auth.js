@@ -33,9 +33,8 @@ async function handleLogin(req) {
   } else if (platform === 'dy') {
     platformUid = await ttCode2Openid(body.code);
   } else if (platform === 'tap') {
-    const id = String(body.taptapUserId || '').trim();
-    if (!id) throw httpError(400, 'NO_TAP_ID', 'taptapUserId 缺失');
-    platformUid = id;
+    const tapSession = await tapCode2Session(body.code);
+    platformUid = tapSession.openid;
   } else if (platform === 'anon') {
     const id = String(body.anonId || '').trim();
     if (!id) throw httpError(400, 'NO_ANON_ID', 'anonId 缺失');
@@ -122,6 +121,22 @@ async function ttCode2Openid(code) {
     throw httpError(401, 'TT_LOGIN_FAIL', `dy code2session 失败: ${JSON.stringify(data || {})}`);
   }
   return data.data.openid;
+}
+
+async function tapCode2Session(code) {
+  const appid = getPlatformCredential('tap', 'APPID');
+  const secret = getPlatformCredential('tap', 'SECRET');
+  if (!appid || !secret) throw httpError(500, 'NO_TAP_CFG', `${gameKeyUpper()}_TAP_APPID/${gameKeyUpper()}_TAP_SECRET 未配置`);
+  if (!code) throw httpError(400, 'NO_CODE', 'tap code 缺失');
+  const url = `https://cloud-miniapp.tapapis.cn/auth/v1/jscode2session?appid=${encodeURIComponent(appid)}&secret=${encodeURIComponent(secret)}&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`;
+  const data = await httpGetJson(url);
+  if (!data || !data.openid || data.errcode) {
+    throw httpError(401, 'TAP_LOGIN_FAIL', `tap code2session 失败: ${JSON.stringify(data || {})}`);
+  }
+  return {
+    openid: data.openid,
+    session_key: typeof data.session_key === 'string' ? data.session_key : '',
+  };
 }
 
 function httpGetJson(url) {

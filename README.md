@@ -12,31 +12,30 @@
 2. [核心玩法循环](docs/01-核心玩法循环.md)
 3. [数值框架](docs/02-数值框架.md)
 4. [技术架构](docs/03-技术架构.md)
+5. [多平台构建](docs/04-多平台构建.md) — 打开 `build/douyin/` / `build/wechat/`
+6. [关键技术点](docs/05-关键技术点.md)
 
 ## 快速开始
 
 ```bash
 npm install
-npm run build      # 产出 minigame/game-bundle.js
-npm test           # 公式层单测（vitest）
-npm run dev        # watch 模式构建
-npm run typecheck  # TS 类型检查
+npm run build          # 组装 build/wechat/ 与 build/douyin/
+npm run build:douyin   # 只出抖音
+npm run build:taptap   # Tap 扫码包
+npm test
+npm run dev
+npm run typecheck
 ```
 
-构建完成后，用**微信开发者工具**导入项目根目录（`project.config.json` 已配置
-`miniprogramRoot: minigame/`，appid 为测试号），即可进入 TitleScene，
-点击「开始战斗」切到 BattleScene 查看 6x6 珠盘渲染。
+构建后用开发者工具打开 **`build/douyin/`**（抖音）或 **`build/wechat/`**（微信），不要打开 `minigame/`。
 
 ## 目录结构
 
 ```
-├── docs/                  # 设计文档
-├── minigame/              # 小游戏发布目录
-│   ├── game.js            # 启动模板（adapter → bundle，带真机诊断弹窗）
-│   ├── game.json
-│   ├── pixi-adapter/      # DOM/canvas/触摸/XHR shim（移植自 game2D_huahua）
-│   ├── game-bundle.js     # 构建产物（不入 git）
-│   └── images/orbs/       # 珠子贴图（复用 xiao_chu 资源）
+├── docs/
+├── minigame/              # 共享内容树（资源唯一真源）
+├── platform/              # 各端 game.json / project.config.json
+├── build/                 # 工具打开目录（不入库）
 ├── src/
 │   ├── main.ts            # 入口：patch → Game.init → 预加载 → TitleScene
 │   ├── core/              # 引擎层（零业务依赖）
@@ -44,7 +43,7 @@ npm run typecheck  # TS 类型检查
 │   │   ├── Game.ts                 # 750 设计宽、DPR、Renderer 三级降级
 │   │   ├── SceneManager.ts / OverlayManager.ts
 │   │   ├── TweenManager.ts / EventBus.ts
-│   │   ├── PlatformService.ts      # wx/tt 双平台抽象
+│   │   ├── PlatformService.ts      # wx/tt/tap 宿主抽象
 │   │   ├── TextureCache.ts         # 纹理缓存 + inflight 去重 + 重试
 │   │   └── ObjectPool.ts           # 通用对象池（珠子/飘字复用）
 │   ├── scenes/            # TitleScene / BattleScene

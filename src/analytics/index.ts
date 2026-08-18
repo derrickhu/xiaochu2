@@ -209,6 +209,7 @@ export const analytics = {
 function mapPlatform(): PlatformName {
   if (Platform.name === 'douyin') return 'douyin';
   if (Platform.name === 'wechat') return 'wechat';
+  if (Platform.name === 'taptap') return 'taptap';
   return Platform.isMinigame ? 'unknown' : 'h5';
 }
 

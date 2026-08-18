@@ -9,7 +9,18 @@ const platform = require('./platform');
 class Element {
   constructor() {
     this.childNodes = [];
-    this.style = { cursor: null };
+    this.style = {
+      cursor: null,
+      width: '',
+      height: '',
+      backgroundColor: '',
+      position: '',
+      zIndex: '',
+      borderStyle: '',
+      pointerEvents: '',
+    };
+    this.type = '';
+    this.title = '';
     this.clientWidth = 0;
     this.clientHeight = 0;
     this._listeners = {};

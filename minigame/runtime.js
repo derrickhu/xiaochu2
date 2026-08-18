@@ -2,11 +2,14 @@
  * 小游戏宿主识别与原生 API 绑定（单一真源，对齐 src/core/PlatformService.ts）
  *
  * - 抖音宿主：注入 tt → 业务只走 tt（同时存在的 wx 仅为宿主兼容层，不可用）
+ * - Tap 宿主：注入 tap（无 tt）
  * - 微信宿主：注入 wx → 业务只走 wx
  */
 
 function detectMinigamePlatform() {
+  // 抖音有 tt，优先于可能存在的兼容层。Tap 包没有 tt/wx，只注入 tap。
   if (typeof tt !== 'undefined') return 'douyin';
+  if (typeof tap !== 'undefined') return 'taptap';
   if (typeof wx !== 'undefined') return 'wechat';
   return 'unknown';
 }
@@ -14,6 +17,7 @@ function detectMinigamePlatform() {
 function getNativePlatformApi(platform) {
   var p = platform || detectMinigamePlatform();
   if (p === 'douyin') return typeof tt !== 'undefined' ? tt : null;
+  if (p === 'taptap') return typeof tap !== 'undefined' ? tap : null;
   if (p === 'wechat') return typeof wx !== 'undefined' ? wx : null;
   return null;
 }

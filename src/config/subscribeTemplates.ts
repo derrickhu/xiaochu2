@@ -34,5 +34,5 @@ export function currentSubscribeTmplIds(): readonly string[] {
   if (platform === 'wechat' || platform === 'douyin') {
     return SUBSCRIBE_TEMPLATES[platform].retention;
   }
-  return SUBSCRIBE_TEMPLATES.douyin.retention;
+  return [];
 }

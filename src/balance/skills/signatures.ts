@@ -59,7 +59,7 @@ export const SIGNATURE_SKILLS: readonly SkillDef[] = [
   // UR：三效招牌技
   makeComposite({
     id: 'pet_sig_wood_worldtree', name: '建木通天', category: 'haste', target: 'team', cd: 7,
-    tags: ['缩CD', '治疗', '转珠'], flavor: '建木贯通天地',
+    tags: ['充能', '治疗', '转珠'], flavor: '建木贯通天地',
     segments: [
       { kind: 'haste', amount: 1 },
       { kind: 'heal', pct: 0.28 },
@@ -96,7 +96,7 @@ export const SIGNATURE_SKILLS: readonly SkillDef[] = [
   }),
   makeComposite({
     id: 'pet_sig_fire_emberflow', name: '流火轮转', category: 'haste', target: 'team', cd: 7,
-    tags: ['缩CD', '治疗'], flavor: '天狐踏出流火之轮',
+    tags: ['充能', '治疗'], flavor: '天狐踏出流火之轮',
     segments: [
       { kind: 'haste', amount: 1 },
       { kind: 'heal', pct: 0.2 },

@@ -2,9 +2,9 @@
  * 珠盘视图：渲染 + 长拖转珠交互 + 消除/下落动画
  *
  * - 珠子 Sprite 走对象池，sprites[r][c] 与 BoardModel.grid 一一对应
- * - 拖拽目标格判定沿用 xiao_chu 验证过的算法：只在「当前格 + 四正交邻格」
- *   中选最近中心，避免整盘 floor 在格缝抖动导致交换误判
- * - 拖珠限时由 update(dt) 驱动，超时强制松手
+ * - 拖拽目标格：当前格 + 四正交邻格，带滞回，避免格缝来回抽
+ * - 真机触摸链成对；起手 cancel 先宽限（同步震动会误触发 touchcancel）
+ * - 拖珠限时由 update(dt) 驱动，单帧 dt 封顶，超时强制松手
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -17,10 +17,18 @@ import { SfxManager } from '@/core/SfxManager';
 import { UI } from '@/balance/ui';
 import { COMBAT, type OrbType } from '@/balance/combat';
 import { ORB_IMAGES } from '@/config/Assets';
+import { getTouchCanvas } from '@/utils/touchCanvas';
 import { BoardModel, type MatchGroup, type FallMove, type Cell } from './BoardModel';
 import { playBoardClear, playBoardConvert, playBoardFall } from './boardAnimations';
 import { buildBoardBackground } from './boardBackground';
 import { drawSealMark } from './boardOrbMarks';
+import {
+  advanceDragTimer,
+  DRAG_CANCEL_GRACE_MS,
+  pickOrthoSwapTarget,
+  shouldDeferDragCancel,
+  shouldKeepDragAfterCancelGrace,
+} from './boardDragMath';
 
 export interface BoardViewCallbacks {
   /** 是否允许开始拖珠（战斗状态机控制） */
@@ -78,6 +86,10 @@ export class BoardView {
   private _dragC = 0;
   private _dragTimer = 0;
   private _didMove = false;
+  private _dragStartMs = 0;
+  private _lastMoveMs = 0;
+  private _cancelMs = 0;
+  private _cancelGraceTimer: ReturnType<typeof setTimeout> | null = null;
   private _floatOrb: PIXI.Sprite | null = null;
   /** 当前交换动画；逻辑锁另用真实时间，避免真机 touchmove 期间 ticker 不推进 */
   private _swapAnim: DragSwapAnim | null = null;
@@ -152,10 +164,9 @@ export class BoardView {
   update(dt: number): void {
     this._advanceSwapAnim();
     if (!this._dragging) return;
-    this._dragTimer += dt;
-    if (this._dragTimer >= this._dragTimeLimit) {
-      this._endDrag();
-    }
+    const stepped = advanceDragTimer(this._dragTimer, dt, this._dragTimeLimit);
+    this._dragTimer = stepped.timer;
+    if (stepped.expired) this._endDrag();
   }
 
   /** 全量重建珠子 Sprite（进场 / 重开时用） */
@@ -231,6 +242,7 @@ export class BoardView {
   }
 
   destroy(): void {
+    this._clearCancelGrace();
     this._detachCanvasMove?.();
     this._detachCanvasMove = null;
     this._releaseAll();
@@ -241,29 +253,21 @@ export class BoardView {
   // ════════════ 内部 ════════════
 
   /**
-   * 对齐 game2D_huahua BoardView：
-   * - pointerdown：Pixi 容器命中（EventSystem patch 后的坐标）
-   * - pointermove/up：直接挂 Game.app.view，绕过 window 上的 EventSystem 丢 move
+   * 真机：canvas touchstart/move/end 成对（勿混 Pixi pointerdown + canvas pointerup）。
+   * 浏览器 / 开发者工具：容器 pointerdown + canvas pointermove/up。
+   * pointercancel / touchcancel 起手阶段先宽限，避免震动把拖珠当场掐死。
    */
   private _setupInteraction(): void {
-    this.container.eventMode = 'static';
-    this.container.hitArea = new PIXI.Rectangle(0, 0, this.boardWidth, this.boardHeight);
-    this.container.interactiveChildren = false;
+    const canvas = getTouchCanvas();
+    const touchMode = Platform.isMinigame && !Platform.isDevtools;
 
-    const onPixiDown = (e: PIXI.FederatedPointerEvent): void => {
-      if (this._dragging) return;
-      if (!this._cb.canDrag()) return;
+    const tryDown = (e: unknown): void => {
+      if (this._dragging || !this._cb.canDrag()) return;
       const p = this._boardLocalFromClient(e);
       if (p.x < 0 || p.y < 0 || p.x > this.boardWidth || p.y > this.boardHeight) return;
+      (e as { preventDefault?: () => void }).preventDefault?.();
       this._onDown(p.x, p.y);
     };
-    this.container.on('pointerdown', onPixiDown);
-
-    const canvas = Game.app.view as unknown as {
-      addEventListener: (type: string, fn: EventListener) => void;
-      removeEventListener: (type: string, fn: EventListener) => void;
-    };
-
     const onMove = (e: Event): void => {
       if (!this._dragging) return;
       (e as { preventDefault?: () => void }).preventDefault?.();
@@ -271,22 +275,48 @@ export class BoardView {
       this._onMove(p.x, p.y);
     };
     const onUp = (): void => {
+      this._clearCancelGrace();
       if (this._dragging) this._onUp();
     };
+    const onCancel = (): void => {
+      this._onCancel();
+    };
 
+    if (touchMode) {
+      this.container.eventMode = 'none';
+      const onTouchStart = ((e: Event) => tryDown(e)) as EventListener;
+      canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+      canvas.addEventListener('touchmove', onMove, { passive: false });
+      canvas.addEventListener('touchend', onUp);
+      canvas.addEventListener('touchcancel', onCancel);
+      this._detachCanvasMove = () => {
+        canvas.removeEventListener('touchstart', onTouchStart);
+        canvas.removeEventListener('touchmove', onMove);
+        canvas.removeEventListener('touchend', onUp);
+        canvas.removeEventListener('touchcancel', onCancel);
+      };
+      return;
+    }
+
+    this.container.eventMode = 'static';
+    this.container.hitArea = new PIXI.Rectangle(0, 0, this.boardWidth, this.boardHeight);
+    this.container.interactiveChildren = false;
+
+    const onPixiDown = (e: PIXI.FederatedPointerEvent): void => {
+      tryDown(e);
+    };
+    this.container.on('pointerdown', onPixiDown);
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerup', onUp);
-    canvas.addEventListener('pointercancel', onUp);
+    canvas.addEventListener('pointercancel', onCancel);
 
     this._detachCanvasMove = () => {
       if (this.container && !this.container.destroyed) {
         this.container.off('pointerdown', onPixiDown);
       }
-      if (canvas?.removeEventListener) {
-        canvas.removeEventListener('pointermove', onMove);
-        canvas.removeEventListener('pointerup', onUp);
-        canvas.removeEventListener('pointercancel', onUp);
-      }
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointercancel', onCancel);
     };
   }
 
@@ -380,6 +410,10 @@ export class BoardView {
     this._dragR = r;
     this._dragC = c;
     this._dragTimer = 0;
+    this._dragStartMs = Date.now();
+    this._lastMoveMs = 0;
+    this._cancelMs = 0;
+    this._clearCancelGrace();
 
     // 原位珠半透明，浮珠跟手
     const sp = this._sprites[r][c];
@@ -392,13 +426,19 @@ export class BoardView {
     this._floatLayer.addChild(float);
     this._floatOrb = float;
 
-    Platform.vibrateShort();
+    // 同步震动会在部分安卓/抖音上触发 touchcancel，表现为刚拿起珠就收手
+    const startedAt = this._dragStartMs;
+    setTimeout(() => {
+      if (this._dragging && this._dragStartMs === startedAt) Platform.vibrateShort();
+    }, 40);
     SfxManager.playPickUp();
     this._cb.onDragStart?.();
   }
 
   private _onMove(x: number, y: number): void {
     if (!this._dragging) return;
+    this._lastMoveMs = Date.now();
+    this._clearCancelGrace();
     // 钳制到棋盘范围
     const px = Math.max(0, Math.min(this.boardWidth, x));
     const py = Math.max(0, Math.min(this.boardHeight, y));
@@ -407,25 +447,16 @@ export class BoardView {
 
     if (this._swapLogicLocked()) return;
 
-    // 目标格：当前格 + 四正交邻格中选最近中心（对齐 xiao_chu / 首版 Demo）
+    const target = pickOrthoSwapTarget(px, py, this._dragR, this._dragC, {
+      rows: this._board.rows,
+      cols: this._board.cols,
+      cell: this._cell,
+      isBlocked: (nr, nc) => this._board.isLocked(nr, nc),
+    });
+    if (!target) return;
+    const { r, c } = target;
     const dr = this._dragR;
     const dc = this._dragC;
-    let r = dr;
-    let c = dc;
-    let bestD = (px - this._cellCenterX(dc)) ** 2 + (py - this._cellCenterY(dr)) ** 2;
-    const neigh = [[dr - 1, dc], [dr + 1, dc], [dr, dc - 1], [dr, dc + 1]];
-    for (const [nr, nc] of neigh) {
-      if (!this._board.inBounds(nr, nc)) continue;
-      if (this._board.isLocked(nr, nc)) continue;
-      const d = (px - this._cellCenterX(nc)) ** 2 + (py - this._cellCenterY(nr)) ** 2;
-      if (d < bestD) {
-        bestD = d;
-        r = nr;
-        c = nc;
-      }
-    }
-
-    if (Math.abs(r - dr) + Math.abs(c - dc) !== 1) return;
 
     const fromR = dr;
     const fromC = dc;
@@ -453,7 +484,35 @@ export class BoardView {
     this._endDrag();
   }
 
+  private _onCancel(): void {
+    if (!this._dragging) return;
+    const age = Date.now() - this._dragStartMs;
+    if (shouldDeferDragCancel(age, this._didMove)) {
+      this._armCancelGrace();
+      return;
+    }
+    this._endDrag();
+  }
+
+  private _armCancelGrace(): void {
+    if (this._cancelGraceTimer != null) return;
+    this._cancelMs = Date.now();
+    this._cancelGraceTimer = setTimeout(() => {
+      this._cancelGraceTimer = null;
+      if (!this._dragging) return;
+      if (shouldKeepDragAfterCancelGrace(this._lastMoveMs, this._cancelMs)) return;
+      this._endDrag();
+    }, DRAG_CANCEL_GRACE_MS);
+  }
+
+  private _clearCancelGrace(): void {
+    if (this._cancelGraceTimer == null) return;
+    clearTimeout(this._cancelGraceTimer);
+    this._cancelGraceTimer = null;
+  }
+
   private _endDrag(): void {
+    this._clearCancelGrace();
     this._dragging = false;
     this._dragTimer = 0;
     this._finishSwapAnim();

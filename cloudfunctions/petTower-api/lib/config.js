@@ -6,6 +6,7 @@ const DEFAULT_MAX_BYTES = 256 * 1024;
 function getPlatformScope(platform) {
   const p = String(platform || '').toLowerCase();
   if (p === 'dy' || p === 'tt' || p === 'douyin') return 'tt';
+  if (p === 'tap' || p === 'taptap') return 'tap';
   return null;
 }
 

@@ -74,16 +74,23 @@ class GameClass {
     const realWidth = this.screenWidth * this.dpr;
     const realHeight = this.screenHeight * this.dpr;
 
-    canvas.width = realWidth;
-    canvas.height = realHeight;
+    try {
+      canvas.width = realWidth;
+      canvas.height = realHeight;
+    } catch (e) {
+      console.warn('[Game] 设置 canvas 尺寸失败:', e);
+    }
 
     const tryCreateRuntime = (view: any): { app: PIXI.Application | null; renderer: PIXI.IRenderer | null } => {
       let r: PIXI.IRenderer | null = null;
       let a: PIXI.Application | null = null;
       try {
-        a = new PIXI.Application({ view, width: realWidth, height: realHeight, ...RENDERER_OPTS } as any);
+        a = new PIXI.Application({
+          view, width: realWidth, height: realHeight, ...RENDERER_OPTS, accessibility: false,
+        } as any);
       } catch (e) {
         console.error('[Game] new PIXI.Application 失败:', e);
+        try { (GameGlobal as any).__bootDiag?.('PIXI.Application 失败:' + e); } catch (_) { /* */ }
       }
       if (a?.stage && a?.ticker && a?.renderer) {
         return { app: a, renderer: a.renderer };
@@ -129,6 +136,8 @@ class GameClass {
 
     if (!renderer) {
       try { (GameGlobal as any).__gameRendered = false; } catch (_) { /* */ }
+      try { (GameGlobal as any).__bootStep = 'no-renderer'; } catch (_) { /* */ }
+      try { (GameGlobal as any).__bootDiag?.('Game.init 无渲染器'); } catch (_) { /* */ }
       console.error('[Game] 渲染器不可用，终止初始化');
       return;
     }

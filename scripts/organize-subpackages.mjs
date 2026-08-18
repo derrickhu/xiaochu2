@@ -1,5 +1,6 @@
 /**
- * 构建后整理 minigame 资源为微信分包目录（主包 ≤4MB，单分包 ≤4MB）。
+ * 构建后整理 minigame 共享内容树的分包目录（主包 ≤4MB，单分包 ≤4MB）。
+ * 之后由 build-platform.mjs 组装进 build/<平台>/。
  *
  * 主包保留：代码 + 棋盘/珠子 + 首页背景 + 基础 UI
  * 子包：pkg-pet / pkg-enemy / pkg-enemy-cr / pkg-scene / pkg-shop / pkg-fx / pkg-audio / pkg-battle

@@ -5,7 +5,7 @@
  * 1. 逻辑位（balance/monetization.ts 的 AdPlacementId）
  *    管玩法：日限、文案、埋点 scene、发什么奖。跨平台共用同一套 id。
  * 2. 物理位（本文件）
- *    管宿主后台申请的 adUnitId。抖音 / 微信各自一套，按平台分流。
+ *    管宿主后台申请的 adUnitId。抖音 / 微信 / Tap 各自一套，按平台分流。
  *
  * ── 抖音商业化 ──
  * - 激励视频：8 个逻辑位共用一个 rewarded 物理位（必填）。
@@ -19,7 +19,9 @@
  * | 灵宠消消塔-插屏             | 插屏广告   | douyin.interstitial   |
  * | 灵宠消消塔-Banner（可选）   | Banner     | douyin.banner         |
  *
- * 空串 = 未配置：激励走开发桩；插屏静默跳过。
+ * 空串 = 未配置：抖音/微信激励走开发桩；Tap 直接失败（不发奖）；插屏静默跳过。
+ *
+ * Tap 广告位在 Dirichlet 建「小游戏」媒体后填 adUnitId，不要接原生聚合 AAR。
  */
 import { detectMinigamePlatform } from '@/core/PlatformService';
 
@@ -35,7 +37,7 @@ export interface PlatformAdUnits {
 /**
  * 各平台物理广告位。拿到后台 adUnitId 后只改这里，不要改业务代码。
  */
-export const AD_UNITS: Readonly<Record<'wechat' | 'douyin', PlatformAdUnits>> = {
+export const AD_UNITS: Readonly<Record<'wechat' | 'douyin' | 'taptap', PlatformAdUnits>> = {
   douyin: {
     rewarded: '36c73jd3mll124aei6',
     banner: '',
@@ -46,12 +48,17 @@ export const AD_UNITS: Readonly<Record<'wechat' | 'douyin', PlatformAdUnits>> = 
     banner: '',
     interstitial: '',
   },
+  taptap: {
+    rewarded: '1062120', // Dirichlet 测试激励视频（竖屏）
+    banner: '',
+    interstitial: '',
+  },
 };
 
 function currentUnits(): PlatformAdUnits {
   const platform = detectMinigamePlatform();
-  if (platform === 'wechat' || platform === 'douyin') return AD_UNITS[platform];
-  return AD_UNITS.douyin;
+  if (platform === 'wechat' || platform === 'douyin' || platform === 'taptap') return AD_UNITS[platform];
+  return { rewarded: '', banner: '', interstitial: '' };
 }
 
 /** 当前平台激励视频 adUnitId（adGate / Platform 播放入口） */

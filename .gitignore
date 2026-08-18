@@ -10,6 +10,9 @@ node_modules/
 npm-debug.log*
 
 # 构建产物
+.bundle/
+.bundle-taptap/
+build/
 minigame/game-bundle.js
 minigame/index.html
 dist/

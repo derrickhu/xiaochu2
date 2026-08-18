@@ -39,7 +39,7 @@ const SKILL_UI = {
   title: 0x1a5f7a,
   cdFill: 0xd4a056,
   cdBorder: 0xb8883a,
-  /** 冷却条：浅青灰底 + 深棕字 */
+  /** 充能胶囊：浅青灰底 + 深棕字 */
   pillFill: 0xb5c4be,
   pillText: 0x463225,
   body: 0x3e260b,

@@ -13,12 +13,14 @@ import {
   rollTowerEvent, TOWER_FLOOR_KINDS,
   type TowerEventDef, type TowerFloorKind,
 } from '@/balance/towerPath';
+import { towerAffixSummary } from '@/balance/towerAffix';
 import { towerPathArt, towerPathPickerAssets } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import { resolveTowerEvent, resolveTowerRest } from '@/game/towerEventResolve';
 import { makePanel } from '@/ui/Panel';
 import { makeText } from '@/ui/text';
-import { FONT_SIZE } from '@/ui/theme';
+import { COLORS, FONT_SIZE, RADIUS, SPACING } from '@/ui/theme';
+import type { TowerEventDelta, TowerEventOutcome } from '@/game/towerEventResolve';
 import { pressFeedback } from '@/ui/motion';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
@@ -129,8 +131,9 @@ export async function showTowerPathPicker(
     title.position.set(0, top + 28);
     panel.addChild(title);
 
-    const sub = makeText('打更难的，机缘更好', {
+    const sub = makeText('险径有试炼 · 静室回血 · 奇遇看运气', {
       size: FONT_SIZE.xxs, fill: 0x8a6a4a, bold: true, anchor: 0.5,
+      wordWrapWidth: panelW - 40, align: 'center',
     });
     sub.position.set(0, top + 52);
     panel.addChild(sub);
@@ -155,7 +158,8 @@ export async function showTowerPathPicker(
       root.addChild(scrimOf());
       root.addChild(buildOutcomePanel(
         event ? event.name : '静室',
-        event ? [event.text, ...outcome.lines] : outcome.lines,
+        kind === 'rest' ? 'rest' : 'event',
+        outcome,
         () => {
           if (!root.destroyed) root.destroy({ children: true });
           resolve({ kind, needsBattle: false });
@@ -166,7 +170,7 @@ export async function showTowerPathPicker(
     const rowY = top + 102;
     let x = -(panelW / 2) + PAD;
     paths.forEach((kind, i) => {
-      const card = buildPathCard(kind, cardW);
+      const card = buildPathCard(kind, cardW, floor);
       card.position.set(x, rowY);
       panel.addChild(card);
       x += cardW + CARD_GAP;
@@ -243,7 +247,15 @@ function scrimOf(): PIXI.Graphics {
   return scrim;
 }
 
-function buildPathCard(kind: TowerFloorKind, w: number): PIXI.Container {
+function measureText(text: PIXI.Text): void {
+  try {
+    text.updateText(true);
+  } catch {
+    /* 字体未就绪时用布局估算，不能让排版停住 */
+  }
+}
+
+function buildPathCard(kind: TowerFloorKind, w: number, floor: number): PIXI.Container {
   const def = TOWER_FLOOR_KINDS[kind];
   const style = KIND_STYLE[kind];
   const card = new PIXI.Container();
@@ -264,19 +276,32 @@ function buildPathCard(kind: TowerFloorKind, w: number): PIXI.Container {
   name.position.set(cx, 48);
   card.addChild(name);
 
-  const summary = makeText(def.summary, {
+  // 说明 / 回报按实测行高往下推，禁止写死 Y：折成两行时不能压住下一句
+  const textW = w - SPACING.sm * 2;
+  const summary = makeText(towerAffixSummary(floor, kind, def.summary), {
     size: FONT_SIZE.xs, fill: 0x4a3a2c, bold: true, anchor: [0.5, 0],
-    wordWrapWidth: w - 20, align: 'center',
+    wordWrapWidth: textW, align: 'center',
   });
-  summary.position.set(cx, 68);
-  card.addChild(summary);
-
   const payoff = makeText(def.payoff, {
-    size: 12, fill: style.border, bold: true, anchor: [0.5, 0],
-    wordWrapWidth: w - 18, align: 'center',
+    size: FONT_SIZE.xxs, fill: style.border, bold: true, anchor: [0.5, 0],
+    wordWrapWidth: textW, align: 'center',
   });
-  payoff.position.set(cx, 96);
-  card.addChild(payoff);
+  measureText(summary);
+  measureText(payoff);
+
+  const textBlock = new PIXI.Container();
+  summary.position.set(w / 2, 0);
+  payoff.position.set(w / 2, summary.height + SPACING.xs);
+  textBlock.addChild(summary, payoff);
+
+  const textTop = 66;
+  const textMaxH = TEXT_ZONE_H - textTop - SPACING.xs;
+  textBlock.pivot.set(w / 2, 0);
+  textBlock.position.set(cx, textTop);
+  if (textBlock.height > textMaxH && textBlock.height > 0) {
+    textBlock.scale.set(textMaxH / textBlock.height);
+  }
+  card.addChild(textBlock);
 
   // 底部水墨插画：圆角裁切贴在卡底，一眼分辨三条路
   const artPad = 6;
@@ -366,70 +391,139 @@ function drawCornerFlourishes(
   parent.addChild(g);
 }
 
+function deltaStyle(tone: TowerEventDelta['tone']): { bg: number; border: number; fill: number; mark: string } {
+  if (tone === 'loss') {
+    return { bg: 0xfde8e4, border: COLORS.btnDangerBorder, fill: COLORS.btnDangerBorder, mark: '−' };
+  }
+  if (tone === 'gain') {
+    return { bg: 0xe8f4e0, border: COLORS.btnSuccessBorder, fill: COLORS.textPositive, mark: '+' };
+  }
+  return { bg: COLORS.panelBg, border: COLORS.panelBorderSoft, fill: COLORS.textSub, mark: '·' };
+}
+
+function buildDeltaRow(delta: TowerEventDelta, width: number): PIXI.Container {
+  const style = deltaStyle(delta.tone);
+  const h = 42;
+  const row = new PIXI.Container();
+  const bg = new PIXI.Graphics();
+  bg.beginFill(style.bg, 0.96);
+  bg.lineStyle(2, style.border, 0.9);
+  bg.drawRoundedRect(-width / 2, -h / 2, width, h, RADIUS.chip);
+  bg.endFill();
+  row.addChild(bg);
+
+  const mark = makeText(style.mark, {
+    size: FONT_SIZE.sm, fill: style.fill, bold: true, anchor: 0.5,
+  });
+  mark.position.set(-width / 2 + 22, 0);
+  row.addChild(mark);
+
+  const label = makeText(delta.label, {
+    size: FONT_SIZE.xs, fill: style.fill, bold: true, anchor: [0, 0.5],
+    wordWrapWidth: width - 56,
+  });
+  measureText(label);
+  label.position.set(-width / 2 + 38, 0);
+  row.addChild(label);
+  return row;
+}
+
 function buildOutcomePanel(
   title: string,
-  lines: readonly string[],
+  artKind: 'event' | 'rest',
+  outcome: TowerEventOutcome,
   onClose: () => void,
 ): PIXI.Container {
-  // 先按内容实测高度再定板高：书法标题 + 自动换行正文不能用固定步进，否则必叠字
-  const panelW = Math.min(480, Game.logicWidth - 56);
-  const textW = panelW - 48;
-  const padTop = 22;
+  const panelW = Math.min(520, Game.logicWidth - 48);
+  const innerW = panelW - 40;
+  const artH = 132;
+  const padTop = 12;
   const padBottom = 18;
-  const titleGap = 16;
-  const lineGap = 10;
-  const btnGap = 18;
-  const btnW = 160;
-  const btnH = 40;
+  const btnW = 220;
+  const btnH = 48;
 
   const head = makeText(title, {
-    size: FONT_SIZE.sm, fill: TITLE_BROWN, bold: true, anchor: [0.5, 0], role: 'title',
+    size: FONT_SIZE.md, fill: TITLE_BROWN, bold: true, anchor: [0.5, 0], role: 'title',
   });
-  const bodyTexts = lines.map((line) => makeText(line, {
-    size: FONT_SIZE.xs, fill: 0x5b4a3c, anchor: [0.5, 0],
-    wordWrapWidth: textW, align: 'center',
-  }));
+  measureText(head);
+  const flavor = makeText(outcome.flavor, {
+    size: FONT_SIZE.xs, fill: COLORS.textSub, anchor: [0.5, 0],
+    wordWrapWidth: innerW, align: 'center',
+  });
+  measureText(flavor);
 
-  const bodyH = bodyTexts.reduce(
-    (sum, t, i) => sum + t.height + (i > 0 ? lineGap : 0),
-    0,
-  );
+  const rows = outcome.deltas.map((d) => buildDeltaRow(d, innerW));
+  const rowGap = 8;
+  const rowsH = rows.length * 42 + Math.max(0, rows.length - 1) * rowGap;
+  const hpH = 28;
+  const warnH = outcome.nextMustFight ? 22 : 0;
   const panelH = Math.ceil(
-    padTop + head.height + titleGap + bodyH + btnGap + btnH + padBottom,
+    padTop + artH + 12 + head.height + 6 + flavor.height + 14
+    + rowsH + 12 + hpH + (warnH ? warnH + 8 : 0) + 16 + btnH + padBottom,
   );
 
   const panel = new PIXI.Container();
   panel.position.set(Game.logicWidth / 2, Game.logicHeight / 2);
   panel.addChild(makePanel({
     width: panelW, height: panelH, radius: 16,
-    bg: 0xfffaf0, bgAlpha: 0.98, border: 0xb08a52, borderWidth: 2,
+    bg: COLORS.panelBg, bgAlpha: 0.98, border: COLORS.panelBorder, borderWidth: 2,
     centered: true,
   }));
+  drawCornerFlourishes(panel, panelW, panelH, COLORS.panelBorder);
 
   let y = -panelH / 2 + padTop;
+  const art = mountPathArt(artKind, innerW, artH);
+  if (art) {
+    art.position.set(-innerW / 2, y);
+    panel.addChild(art);
+  } else {
+    const ph = new PIXI.Graphics();
+    ph.beginFill(COLORS.panelBgAlt, 0.9);
+    ph.drawRoundedRect(-innerW / 2, y, innerW, artH, 10);
+    ph.endFill();
+    panel.addChild(ph);
+  }
+  y += artH + 12;
+
   head.position.set(0, y);
   panel.addChild(head);
-  y += head.height + titleGap;
+  y += head.height + 6;
+  flavor.position.set(0, y);
+  panel.addChild(flavor);
+  y += flavor.height + 14;
 
-  for (const text of bodyTexts) {
-    text.position.set(0, y);
-    panel.addChild(text);
-    y += text.height + lineGap;
+  for (const row of rows) {
+    row.position.set(0, y + 21);
+    panel.addChild(row);
+    y += 42 + rowGap;
   }
-  y += btnGap - lineGap;
+  y += 4;
+
+  const hp = buildHpStrip(innerW, y + 8);
+  panel.addChild(hp);
+  y += hpH + 8;
+
+  if (outcome.nextMustFight) {
+    const warn = makeText('本层未交手 · 下一层必须开战', {
+      size: FONT_SIZE.xxs, fill: COLORS.textTitle, bold: true, anchor: 0.5,
+    });
+    warn.position.set(0, y + 10);
+    panel.addChild(warn);
+    y += warnH + 8;
+  }
+  y += 8;
 
   const btn = new PIXI.Container();
   btn.position.set(0, y + btnH / 2);
   const bg = new PIXI.Graphics();
-  bg.beginFill(0xfff3d8, 1);
-  bg.lineStyle(2, 0xd8a63c, 1);
+  bg.beginFill(COLORS.btnPrimaryBg, 1);
+  bg.lineStyle(2.5, COLORS.btnPrimaryBorder, 1);
   bg.drawRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, btnH / 2);
   bg.endFill();
   btn.addChild(bg);
-  const label = makeText('继续登塔', {
-    size: FONT_SIZE.xs, fill: 0x7a5520, bold: true, anchor: 0.5,
-  });
-  btn.addChild(label);
+  btn.addChild(makeText('继续登塔', {
+    size: FONT_SIZE.sm, fill: COLORS.btnText, bold: true, anchor: 0.5, role: 'title',
+  }));
   btn.eventMode = 'static';
   btn.cursor = 'pointer';
   btn.hitArea = new PIXI.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH);

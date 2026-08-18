@@ -10,18 +10,20 @@ import { detectMinigamePlatform, type PlatformName } from '@/core/PlatformServic
 /** 游戏根标识（CloudBase 函数名 / HTTP 前缀，不含平台段） */
 export const BASE_GAME_KEY = 'petTower';
 
-/** 非微信宿主在 GAME_KEY 与 suffix 之间插入的平台段（当前仅抖音 tt） */
-export type PlatformScopeSegment = 'tt';
+/** 非微信宿主在 GAME_KEY 与 suffix 之间插入的平台段 */
+export type PlatformScopeSegment = 'tt' | 'tap';
 
 const PLATFORM_SCOPE: Partial<Record<PlatformName, PlatformScopeSegment>> = {
   douyin: 'tt',
+  taptap: 'tap',
 };
 
-/** 后端 platform 字段 → 命名空间（wx / dy / anon） */
-export type BackendPlatformCode = 'wx' | 'dy' | 'anon';
+/** 后端 platform 字段 → 命名空间 */
+export type BackendPlatformCode = 'wx' | 'dy' | 'tap' | 'anon';
 
 const BACKEND_SCOPE: Partial<Record<BackendPlatformCode, PlatformScopeSegment>> = {
   dy: 'tt',
+  tap: 'tap',
 };
 
 export function getPlatformScope(platform: PlatformName = detectMinigamePlatform()): PlatformScopeSegment | null {

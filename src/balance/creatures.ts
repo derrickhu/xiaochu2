@@ -270,9 +270,9 @@ const CORE_CREATURES: readonly CreatureDef[] = [
     // 「带个控制宠万事大吉」在这一关第一次行不通。
     id: 'pet_028', name: '归墟玄龟', element: 'earth', rarity: 3, role: 'tank',
     skillId: PET_SKILL_IDS.abyssBulwark,
-    // 去掉 prep 后闸门直接夹在双形态之间；atkScale 从 2.6 略降，避免针对队被蓄力斩穿
+    // 普攻改为每回合出手后，2.3 档会把针对队磨死；略降单下，节奏仍是每回合砍
     monster: monsterPair(10, {
-      atkScale: 2.3,
+      atkScale: 2.0,
       t1Skills: [E.golemGuard],
       t2Skills: [E.golemGuard, E.resolve, E.lionCharge],
     }),

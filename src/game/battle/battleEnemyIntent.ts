@@ -172,11 +172,7 @@ export function predictEnemyIntent(ctx: EnemyIntentContext): EnemyIntent | null 
     };
   }
 
-  // 技能位被占用（白放减伤）时真实回合会空过，普攻倒计时也不推进
-  if (pick?.wasted) {
-    return { kind: 'idle', label: '按兵不动', detail: '护壁已在，下回合不出手', urgent: false };
-  }
-
+  // 白放减伤不再空过：技能位废了，普攻仍打
   if (enemy.attackCountdown - 1 <= 0) {
     return {
       kind: 'attack',
@@ -187,7 +183,7 @@ export function predictEnemyIntent(ctx: EnemyIntentContext): EnemyIntent | null 
   }
   return {
     kind: 'idle',
-    label: '蓄势',
+    label: '攻击推迟',
     detail: `再过 ${enemy.attackCountdown - 1} 回合出手`,
     urgent: false,
   };

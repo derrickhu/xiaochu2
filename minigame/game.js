@@ -1,3 +1,23 @@
+// Tap 真机没有 eval 绑定；Function() 内部会去找 eval，一加载 bundle 就
+// ReferenceError: Can't find variable: eval。必须在 require bundle 之前挂上。
+(function () {
+  var g = (typeof globalThis !== 'undefined' && globalThis)
+    || (typeof global !== 'undefined' && global)
+    || (typeof GameGlobal !== 'undefined' && GameGlobal);
+  if (!g) return;
+  var evalFn = function () { return void 0; };
+  if (typeof g.eval !== 'function') {
+    try {
+      Object.defineProperty(g, 'eval', { value: evalFn, writable: true, configurable: true });
+    } catch (e1) {
+      try { g.eval = evalFn; } catch (e2) {}
+    }
+  }
+  if (typeof GameGlobal !== 'undefined' && typeof GameGlobal.eval !== 'function') {
+    try { GameGlobal.eval = g.eval; } catch (e3) {}
+  }
+})();
+
 // 最早加载：宿主识别 + 原生 API 绑定（须在 share-bootstrap / bundle 之前）
 var _runtime = require('./runtime.js');
 
@@ -11,7 +31,13 @@ function _diag(msg) {
 
 function _showDiag() {
   try {
-    var api = _runtime.getNativePlatformApi();
+    var api = _runtime && _runtime.getNativePlatformApi && _runtime.getNativePlatformApi();
+    if (!api || !api.showModal) {
+      api = (typeof tap !== 'undefined' && tap)
+        || (typeof wx !== 'undefined' && wx)
+        || (typeof tt !== 'undefined' && tt)
+        || null;
+    }
     if (api && api.showModal) {
       var tail = _diagMsgs.length > 28 ? _diagMsgs.slice(-28) : _diagMsgs.slice();
       api.showModal({
@@ -25,6 +51,8 @@ function _showDiag() {
 
 try {
   if (typeof GameGlobal !== 'undefined') {
+    GameGlobal.__bootDiag = _diag;
+    GameGlobal.__showBootDiag = _showDiag;
     GameGlobal.onError = function (msg) {
       _diag('onError:' + msg);
       _showDiag();
@@ -92,6 +120,12 @@ try { require('./share-bootstrap.js'); } catch (e) {
 
 try {
   require('./pixi-adapter/index');
+  var _cv = typeof GameGlobal !== 'undefined' ? GameGlobal.canvas : null;
+  var _doc = typeof document !== 'undefined' ? document : (GameGlobal && GameGlobal.document);
+  _diag('cv=' + (_cv ? ((_cv.width || 0) + 'x' + (_cv.height || 0) + ' getContext=' + (typeof _cv.getContext)) : 'none')
+    + ' createCanvas=' + (typeof tap !== 'undefined' ? typeof tap.createCanvas : 'no-tap')
+    + ' rAF=' + (typeof requestAnimationFrame)
+    + ' createElement=' + (_doc ? typeof _doc.createElement : 'no-doc'));
 } catch (e) {
   _diag('pixi-adapter 失败:' + e);
   _showDiag();
@@ -102,6 +136,13 @@ if (typeof Intl === 'undefined') {
   _g.Intl = {};
 }
 
+_diag('boot=fix5 tap=' + (typeof tap) + ' wx=' + (typeof wx) + ' tt=' + (typeof tt));
+try {
+  require('./tap-pack-stamp.js');
+  _diag('tap-pack=' + (typeof GameGlobal !== 'undefined' ? GameGlobal.__XIAOCHU2_TAP_PACK : '?'));
+} catch (e) {
+  _diag('no-stamp:' + e);
+}
 try {
   require('./game-bundle.js');
 } catch (e) {
@@ -111,7 +152,7 @@ try {
 
 setTimeout(function () {
   if (typeof GameGlobal !== 'undefined' && !GameGlobal.__gameRendered) {
-    _diag('5秒超时 - 游戏未渲染');
+    _diag('5秒超时 step=' + (GameGlobal.__bootStep || '?') + ' rendered=' + GameGlobal.__gameRendered);
     _showDiag();
   }
 }, 5000);

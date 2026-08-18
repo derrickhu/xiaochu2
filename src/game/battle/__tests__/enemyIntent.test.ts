@@ -261,6 +261,34 @@ describe('Boss 出手密度', () => {
   });
 });
 
+describe('每回合普攻', () => {
+  it('没有技能可放时预告普通攻击，并且真的出手', () => {
+    const enemy = bossEnemies()[0].enemy();
+    enemy.skillCds = enemy.skillIds.map(() => 9);
+    enemy.attackCountdown = 1;
+    enemy.attackInterval = 1;
+    const ctx = makeCtx(enemy);
+    const intent = predictEnemyIntent(ctx);
+    const actual = runEnemyTurnAction(ctx);
+    expect(intent?.kind).toBe('attack');
+    expect(actual.action).toBe('attack');
+  });
+
+  it('白放减伤时仍普攻，不按兵不动', () => {
+    const enemy = bossEnemies()[0].enemy();
+    enemy.dmgReduction = { reduction: 0.4, turnsLeft: 2 };
+    enemy.skillCds = enemy.skillIds.map(() => 0);
+    enemy.attackCountdown = 1;
+    enemy.attackInterval = 1;
+    const ctx = makeCtx(enemy);
+    ctx.applySkillResult = () => {};
+    const intent = predictEnemyIntent(ctx);
+    const actual = runEnemyTurnAction(ctx);
+    expect(intent?.kind).not.toBe('idle');
+    expect(actual.action).not.toBe('idle');
+  });
+});
+
 describe('条件技不进预告', () => {
   it('血怒满血不报即将放技能，残血才报', () => {
     const stage = STAGES.find((s) => s.id === 'stage_1_3');

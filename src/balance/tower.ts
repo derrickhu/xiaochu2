@@ -10,6 +10,7 @@ import { ECONOMY } from './economy';
 import { GROWTH } from './growth';
 import type { RewardBundle } from './rewards';
 import { registerExtraStage, type StageDef } from './stages';
+import { resolveTowerAffix, type TowerAffixPath } from './towerAffix';
 
 export const TOWER = {
   /**
@@ -231,15 +232,17 @@ export function towerDailyBaseCap(bestFloor: number): number {
 /**
  * 构造并注册指定层关卡（层数无上限，按需生成）。
  *
- * 难度与波数由调用方按所选路径传入（见 balance/towerPath.ts），
- * 这里不认识「精英层」这个概念，避免两个模块互相 import。
+ * 难度与波数由调用方按所选路径传入（见 balance/towerPath.ts）。
+ * 本层试炼规则见 towerAffix：险径 / 守关必带可见规则，寻常道后期才上轻规则。
  */
 export function buildTowerStage(
   floor: number,
-  opts: { difficultyMult?: number; extraWaves?: number } = {},
+  opts: { difficultyMult?: number; extraWaves?: number; kind?: TowerAffixPath } = {},
 ): StageDef {
   const milestone = isMilestoneFloor(floor);
-  const waves = TOWER.wavesPerFloor + Math.max(0, Math.floor(opts.extraWaves ?? 0));
+  const kind: TowerAffixPath = opts.kind ?? (milestone ? 'guard' : 'battle');
+  const extraWaves = Math.max(0, Math.floor(opts.extraWaves ?? 0));
+  const waves = TOWER.wavesPerFloor + extraWaves;
   const encounters: EncounterRef[] = [];
   for (let i = 0; i < waves; i++) {
     const id = TOWER_MOBS[(floor - 1 + i) % TOWER_MOBS.length];
@@ -248,6 +251,20 @@ export function buildTowerStage(
   if (milestone) {
     const guard = TOWER_GUARDS[(floor / TOWER.milestoneEvery - 1) % TOWER_GUARDS.length];
     encounters.push({ kind: 'mob', id: guard });
+  }
+
+  const affix = resolveTowerAffix(floor, kind);
+  if (affix?.extraMob) {
+    const carrier: EncounterRef = { kind: 'mob', id: affix.extraMob };
+    if (milestone) {
+      const boss = encounters.pop();
+      encounters.push(carrier);
+      if (boss) encounters.push(boss);
+    } else if (extraWaves > 0) {
+      encounters[encounters.length - 1] = carrier;
+    } else {
+      encounters.push(carrier);
+    }
   }
 
   return registerExtraStage({
@@ -264,5 +281,8 @@ export function buildTowerStage(
     isBoss: milestone,
     starTurnLimit: TOWER.starTurnLimit,
     displayLabel: `通天塔 第 ${floor} 层`,
+    mechanics: affix?.mechanics,
+    hintTags: affix ? [affix.name] : undefined,
+    hintText: affix?.hint,
   });
 }

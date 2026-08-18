@@ -41,7 +41,7 @@ export const CDN_CONFIG: CdnConfig = {
   /**
    * 大体积立绘 / 场景底图 / BGM 走 CDN。
    *
-   * 抖音上传靠 minigame/project.config.json 的 packOptions.ignore 排除这些目录，
+   * 上传靠 platform/<端>/project.config.json 的 packOptions.ignore 排除这些目录，
    * 磁盘文件保留（Git 干净，开发者工具预览也能走 CDN）。勿再 cdn:strip 物理删文件。
    * 短音效不在此列：按下即响，全部 SFX 约 276KB，留包内。
    */

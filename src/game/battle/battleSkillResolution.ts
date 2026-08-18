@@ -14,7 +14,7 @@ export interface BattleSkillApplyContext {
   addStatus: (status: StatusInstance) => void;
   setEnemyCharge: (charge: { mult: number; skillId: string; releaseVfx: SkillVfxId }) => void;
   syncEnemyStatusMirrors: () => void;
-  /** haste：全队其他宠物技能 CD -amount（exceptIndex = 施法者） */
+  /** haste：给其他队友灌充能（exceptIndex = 施法者） */
   reducePetCds: (amount: number, exceptIndex?: number) => void;
   /** purify：清除我方全部 debuff，返回被清除的状态 */
   cleanseTeamDebuffs: () => StatusInstance[];

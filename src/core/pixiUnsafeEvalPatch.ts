@@ -2,9 +2,14 @@
  * ShaderSystem 内联 patch + PIXI.settings.ADAPTER 配置（对齐 game2D_huahua）
  * 必须在 new PIXI.Application() 之前执行
  */
-import { ShaderSystem, BaseImageResource, Texture, BaseTexture } from '@pixi/core';
+import { ShaderSystem, BaseImageResource, Texture, BaseTexture, extensions } from '@pixi/core';
 import { settings } from '@pixi/settings';
+import { AccessibilityManager } from '@pixi/accessibility';
 import { getNativePlatformApi } from '@/core/PlatformService';
+
+try {
+  extensions.remove(AccessibilityManager);
+} catch { /* 小游戏无 DOM button，无障碍系统会炸 PIXI.Application */ }
 
 declare const GameGlobal: any;
 

@@ -112,7 +112,7 @@ export function monsterPair(
       baseHp: Math.round(t1Hp * 1.75),
       baseAtk: Math.round(t1Atk * 1.28),
       baseDef: Math.round(t1Def * 1.6) + 12,
-      attackInterval: opts.ai2 ?? 2,
+      attackInterval: opts.ai2 ?? 1,
       skillIds: opts.t2Skills,
       phases: opts.t2Phases,
     },

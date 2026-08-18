@@ -132,34 +132,34 @@ export const MOBS: readonly MobDef[] = [
      * 两层减伤叠在一起把「高防怪」变成了单纯的耐久检查，而不是一道要破防的题。
      */
     id: 'enemy_golem_earth', name: '碎石傀儡', element: 'earth', displayTier: 'elite',
-    baseHp: 1750, baseAtk: 155, baseDef: 52, attackInterval: 2,
+    baseHp: 1750, baseAtk: 155, baseDef: 52, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.golemGuard],
   },
   {
     id: 'enemy_serpent_water', name: '寒潭小蛟', element: 'water', displayTier: 'elite',
-    baseHp: 1440, baseAtk: 205, baseDef: 22, attackInterval: 2,
+    baseHp: 1440, baseAtk: 205, baseDef: 22, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.serpentHeal],
   },
   {
     // 蓄力重击的教学面孔；减伤交给碎石傀儡，这里不重复挂 golemGuard
     id: 'enemy_scorpion_metal', name: '铁壳毒蝎', element: 'metal', displayTier: 'elite',
-    baseHp: 1600, baseAtk: 195, baseDef: 55, attackInterval: 2,
+    baseHp: 1600, baseAtk: 195, baseDef: 55, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.bladeCharge, ENEMY_SKILL_IDS.healBlock],
   },
   {
     id: 'enemy_toad_water', name: '湿苔毒蟾', element: 'water', displayTier: 'elite',
-    baseHp: 1680, baseAtk: 215, baseDef: 20, attackInterval: 2,
+    baseHp: 1680, baseAtk: 215, baseDef: 20, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.serpentHeal],
   },
   // ── 章 Boss 守关波（3）── 具名魔将/巨像，与铺垫杂兵拉开身份
   {
     id: 'enemy_bamboo_tyrant_wood', name: '蛮竹魔将', element: 'wood', displayTier: 'miniBoss',
-    baseHp: 1200, baseAtk: 195, baseDef: 30, attackInterval: 2,
+    baseHp: 1200, baseAtk: 195, baseDef: 30, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal],
   },
   {
     id: 'enemy_crystal_boss_earth', name: '幽晶巨像', element: 'earth', displayTier: 'miniBoss',
-    baseHp: 1250, baseAtk: 265, baseDef: 60, attackInterval: 2,
+    baseHp: 1250, baseAtk: 265, baseDef: 60, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.lionCharge],
   },
   {
@@ -168,7 +168,7 @@ export const MOBS: readonly MobDef[] = [
     // 而该章 rule_no_heal 让我方零回复、锚点首通队仅 6699 血 —— 低手中手同在第 6 回合
     // 被同一击带走，胜负与操作脱钩。降到 285 后蓄力约为血线六成，留出扛一击的空间。
     id: 'enemy_thunderlord_boss_wood', name: '风雷天尊', element: 'wood', displayTier: 'miniBoss',
-    baseHp: 1300, baseAtk: 285, baseDef: 45, attackInterval: 2,
+    baseHp: 1300, baseAtk: 285, baseDef: 45, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.pandaGuard, ENEMY_SKILL_IDS.pandaHeal, ENEMY_SKILL_IDS.lionCharge],
   },
 
@@ -179,19 +179,19 @@ export const MOBS: readonly MobDef[] = [
   // 而不是先上一批占位空图。
   {
     id: 'enemy_golem_bulwark_earth', name: '磐岩傀儡', element: 'earth', displayTier: 'elite',
-    baseHp: 1600, baseAtk: 165, baseDef: 75, attackInterval: 2,
+    baseHp: 1600, baseAtk: 165, baseDef: 75, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.golemGuardHeavy, ENEMY_SKILL_IDS.resolve],
     image: enemyImageOf('enemy_golem_earth'),
   },
   {
     id: 'enemy_thorn_scorpion_metal', name: '荆棘毒蝎', element: 'metal', displayTier: 'elite',
-    baseHp: 1300, baseAtk: 195, baseDef: 55, attackInterval: 2,
+    baseHp: 1300, baseAtk: 195, baseDef: 55, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.counterStrike, ENEMY_SKILL_IDS.golemGuard],
     image: enemyImageOf('enemy_scorpion_metal'),
   },
   {
     id: 'enemy_devour_serpent_water', name: '吞灵寒蛟', element: 'water', displayTier: 'elite',
-    baseHp: 1250, baseAtk: 205, baseDef: 25, attackInterval: 2,
+    baseHp: 1250, baseAtk: 205, baseDef: 25, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.elementAbsorb, ENEMY_SKILL_IDS.serpentHealHeavy],
     image: enemyImageOf('enemy_serpent_water'),
   },
@@ -213,7 +213,7 @@ export const MOBS: readonly MobDef[] = [
     // 灭世一击放在二阶段 addSkillIds 而非初始技能表：重击被血线门控，
     // 不会在开场就打出「抛硬币」式秒杀（第 7/8 章调参教训）。
     id: 'enemy_crystal_warden_earth', name: '幽晶魔像', element: 'earth', displayTier: 'miniBoss',
-    baseHp: 1400, baseAtk: 230, baseDef: 60, attackInterval: 2,
+    baseHp: 1400, baseAtk: 230, baseDef: 60, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.damageVoid],
     image: enemyImageOf('enemy_crystal_boss_earth'),
     phases: [
@@ -234,7 +234,7 @@ export const MOBS: readonly MobDef[] = [
   },
   {
     id: 'enemy_scorpion_king_metal', name: '金甲蝎王', element: 'metal', displayTier: 'miniBoss',
-    baseHp: 1280, baseAtk: 230, baseDef: 70, attackInterval: 2,
+    baseHp: 1280, baseAtk: 230, baseDef: 70, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.golemGuard, ENEMY_SKILL_IDS.counterStrike],
     image: enemyImageOf('enemy_scorpion_metal'),
   },
@@ -246,13 +246,13 @@ export const MOBS: readonly MobDef[] = [
   },
   {
     id: 'enemy_bat_king_fire', name: '焰狱蝠王', element: 'fire', displayTier: 'miniBoss',
-    baseHp: 1150, baseAtk: 255, baseDef: 20, attackInterval: 2,
+    baseHp: 1150, baseAtk: 255, baseDef: 20, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.lionCharge, ENEMY_SKILL_IDS.atkDebuff],
     image: enemyImageOf('enemy_bat_fire'),
   },
   {
     id: 'enemy_serpent_king_water', name: '寒渊蛟王', element: 'water', displayTier: 'miniBoss',
-    baseHp: 1300, baseAtk: 240, baseDef: 30, attackInterval: 2,
+    baseHp: 1300, baseAtk: 240, baseDef: 30, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.serpentHeal, ENEMY_SKILL_IDS.timeSqueeze],
     image: enemyImageOf('enemy_serpent_water'),
   },
@@ -260,7 +260,7 @@ export const MOBS: readonly MobDef[] = [
   // 秘境初阶从第 1 章就开，拿后期技当第二波会把新号直接劝退。
   {
     id: 'enemy_vine_slime_wood', name: '藤蔓妖泥', element: 'wood', displayTier: 'elite',
-    baseHp: 980, baseAtk: 170, baseDef: 18, attackInterval: 2,
+    baseHp: 980, baseAtk: 170, baseDef: 18, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.poisonTeam],
     image: enemyImageOf('enemy_slime_wood'),
   },
@@ -279,53 +279,53 @@ export const MOBS: readonly MobDef[] = [
   {
     // Ch1-2 轻闸门：只要两种属性，第一小时就把「数值不是万能」教到
     id: 'enemy_ward_slime_wood', name: '结界藤泥', element: 'wood', displayTier: 'elite',
-    baseHp: 900, baseAtk: 150, baseDef: 15, attackInterval: 2,
+    baseHp: 900, baseAtk: 150, baseDef: 15, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.elementGateLight],
     image: enemyImageOf('enemy_slime_wood'),
   },
   {
     id: 'enemy_knot_bat_fire', name: '缠丝火蝠', element: 'fire', displayTier: 'elite',
-    baseHp: 760, baseAtk: 175, baseDef: 8, attackInterval: 2,
+    baseHp: 760, baseAtk: 175, baseDef: 8, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.comboGateLight],
     image: enemyImageOf('enemy_bat_fire'),
   },
   {
     // Ch3-6 常规单闸门
     id: 'enemy_wuxing_golem_earth', name: '五行石傀', element: 'earth', displayTier: 'elite',
-    baseHp: 1350, baseAtk: 160, baseDef: 65, attackInterval: 2,
+    baseHp: 1350, baseAtk: 160, baseDef: 65, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.elementGate],
     image: enemyImageOf('enemy_golem_earth'),
   },
   {
     id: 'enemy_chain_serpent_water', name: '锁链寒蛟', element: 'water', displayTier: 'elite',
-    baseHp: 1150, baseAtk: 195, baseDef: 25, attackInterval: 2,
+    baseHp: 1150, baseAtk: 195, baseDef: 25, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.comboGate],
     image: enemyImageOf('enemy_serpent_water'),
   },
   {
     // Ch7-10 反数值堆叠：越堆攻越吃亏，逼玩家去练 5 连
     id: 'enemy_blunt_scorpion_metal', name: '钝锋铁蝎', element: 'metal', displayTier: 'elite',
-    baseHp: 1400, baseAtk: 190, baseDef: 60, attackInterval: 2,
+    baseHp: 1400, baseAtk: 190, baseDef: 60, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.damageVoid],
     image: enemyImageOf('enemy_scorpion_metal'),
   },
   {
     id: 'enemy_grit_golem_earth', name: '不灭岩傀', element: 'earth', displayTier: 'miniBoss',
-    baseHp: 1500, baseAtk: 200, baseDef: 70, attackInterval: 2,
+    baseHp: 1500, baseAtk: 200, baseDef: 70, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.undying, ENEMY_SKILL_IDS.golemGuardHeavy],
     image: enemyImageOf('enemy_golem_earth'),
   },
   {
     // Ch11-14 封主色：逼出第二输出位
     id: 'enemy_sealward_toad_water', name: '封色毒蟾', element: 'water', displayTier: 'elite',
-    baseHp: 1250, baseAtk: 200, baseDef: 25, attackInterval: 2,
+    baseHp: 1250, baseAtk: 200, baseDef: 25, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.counterSeal, ENEMY_SKILL_IDS.healBlock],
     image: enemyImageOf('enemy_toad_water'),
   },
   {
     // Ch11-14 双闸门同场：属性闸 + 不灭，一次考编队宽度与补刀手段
     id: 'enemy_wuxing_tyrant_wood', name: '五行魔将', element: 'wood', displayTier: 'miniBoss',
-    baseHp: 1450, baseAtk: 225, baseDef: 40, attackInterval: 2,
+    baseHp: 1450, baseAtk: 225, baseDef: 40, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.elementGateBoss, ENEMY_SKILL_IDS.undying],
     image: enemyImageOf('enemy_bamboo_tyrant_wood'),
   },
@@ -333,7 +333,7 @@ export const MOBS: readonly MobDef[] = [
     // Ch15-16 复合终局：连锁闸 + 锋锐无效同场，转阶段后再加属性闸。
     // 三条闸门错开 CD，任一时刻最多两条同时生效，保证总有能出输出的窗口。
     id: 'enemy_gatelord_metal', name: '万缚蝎王', element: 'metal', displayTier: 'miniBoss',
-    baseHp: 1600, baseAtk: 240, baseDef: 75, attackInterval: 2,
+    baseHp: 1600, baseAtk: 240, baseDef: 75, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.comboGateBoss, ENEMY_SKILL_IDS.damageVoid],
     image: enemyImageOf('enemy_scorpion_metal'),
     phases: [
@@ -390,13 +390,13 @@ export function creatureMonsterDef(creatureId: string, tier: 'tier1' | 'tier2'):
 
 /** 编队/选关预览用：一行描述敌人行动模式与技能 */
 export function formatEnemyAbility(def: EnemyDef): string {
-  const interval = `每${def.attackInterval}回合`;
-  if (!def.skillIds?.length) return `${interval}普攻`;
+  const rhythm = def.attackInterval <= 1 ? '每回合普攻' : `每${def.attackInterval}回合普攻`;
+  if (!def.skillIds?.length) return rhythm;
   const skills = def.skillIds
     .map((id) => SKILL_MAP.get(id))
     .filter((s): s is NonNullable<typeof s> => !!s);
   const skillPart = skills.map((s) => `${s.name}(${s.desc})`).join('、');
-  return `${interval} · ${skillPart}`;
+  return `${rhythm} · ${skillPart}`;
 }
 
 /** 解析一条遭遇引用为战斗模板 + 收录元信息 */

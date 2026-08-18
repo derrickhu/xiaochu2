@@ -1175,7 +1175,7 @@ export class PetDetailScene implements Scene {
       fallbackGlyph: '长',
     });
     const lTag = this._makeTag('队长', COLORS.accentDeep, 0xfff6e2);
-    const lBody = makeText(`${leader.text}（置于编队首位生效）`, {
+    const lBody = makeText(leader.text, {
       size: FONT_SIZE.sm, fill: COLORS.accentDeep, anchor: [0, 0],
       wordWrapWidth: Math.max(60, textW - lTag.width - 12),
     });

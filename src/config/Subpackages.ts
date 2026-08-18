@@ -21,7 +21,7 @@ export const SUBPACKAGE_ROOT = {
 
 export type SubpackageName = keyof typeof SUBPACKAGE_ROOT;
 
-/** 与 minigame/game.json subpackages[].name / subPackages[].name 一致 */
+/** 与 platform/<端>/game.json 里 subpackages、subPackages 的 name 一致 */
 const PLATFORM_SUBPACKAGE_NAME: Record<SubpackageName, string> = {
   pet: 'pkg-pet',
   enemy: 'pkg-enemy',

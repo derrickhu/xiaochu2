@@ -228,7 +228,8 @@ export class TeamScene implements Scene {
 
     const labelStage = this._baseStage ?? stage;
     const modeSuffix = this._readOnlyModeSuffix();
-    const stageLabel = makeText(`${formatStageShortLabel(labelStage)}${modeSuffix}`, {
+    const ruleTag = stage.hintTags?.length ? ` · ${stage.hintTags.join(' · ')}` : '';
+    const stageLabel = makeText(`${formatStageShortLabel(labelStage)}${modeSuffix}${ruleTag}`, {
       size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5,
     });
     stageLabel.position.set(w / 2, Game.safeHeaderCenterY + 36);
