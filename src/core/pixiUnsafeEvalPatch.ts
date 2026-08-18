@@ -63,11 +63,7 @@ if (_api) {
         style: {},
         getContext(type: string) {
           if (type === '2d') return ctx;
-          try {
-            if (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl') {
-              return GameGlobal.__tapGL || null;
-            }
-          } catch { /* */ }
+          // 量字假 canvas 绝不能把主屏 __tapGL 交出去，否则 Filter/上传会当第二块 WebGL 用
           return null;
         },
         addEventListener() {},

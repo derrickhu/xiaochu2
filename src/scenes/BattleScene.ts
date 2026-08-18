@@ -531,6 +531,11 @@ export class BattleScene implements Scene {
 
       this._maxCombo = Math.max(this._maxCombo, allGroups.length);
 
+      // Tap：连击层 Graphics/粒子还压在场上时立刻开战宠演出，libwebglhost 会直接 abort
+      if (Platform.isTaptap) {
+        this._hud.hideCombo(true);
+      }
+
       if (allGroups.length >= 7) {
         this._fx.flash(0xfff3c8, 0.22, 0.35);
         this._fx.shakeMedium();
@@ -568,12 +573,14 @@ export class BattleScene implements Scene {
     const cell = UI.board.cellSize;
     const color = ORB_COLOR[group.orb];
     const boost = Math.min(1, Math.max(0, combo - 2) / 10);
-    const count = Math.round(4 + boost * 8);
+    const count = Platform.isTaptap
+      ? Math.round(3 + boost * 3)
+      : Math.round(4 + boost * 8);
     const size = 11 + boost * 8;
     for (const { r, c } of group.cells) {
       const x = this._layout.boardX + c * cell + cell / 2;
       const y = this._layout.boardY + r * cell + cell / 2;
-      if (combo >= 3) {
+      if (combo >= 3 && !Platform.isTaptap) {
         this._fx.burst({
           x, y, color,
           count: Math.round(count * 0.55),
@@ -855,7 +862,9 @@ export class BattleScene implements Scene {
     this._hud.snapHpBarsToModel();
     this._fx.clearTransient(scopeId);
     this._boardView?.refreshOrbStates();
-    Game.app?.renderer?.render(Game.stage);
+    if (!Platform.isTaptap) {
+      Game.app?.renderer?.render(Game.stage);
+    }
   }
 
   /** 失败结算：暂不 finish，支持看广告复活后继续本场 */

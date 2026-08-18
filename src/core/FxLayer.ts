@@ -7,6 +7,7 @@
  */
 import * as PIXI from 'pixi.js';
 import { ObjectPool } from './ObjectPool';
+import { Platform } from './PlatformService';
 import { TweenManager } from './TweenManager';
 
 interface Particle {
@@ -86,7 +87,9 @@ export class FxLayer {
 
   /** 粒子爆裂 */
   burst(opts: BurstOptions): void {
-    const count = opts.count ?? 10;
+    const count = Platform.isTaptap
+      ? Math.min(opts.count ?? 10, 6)
+      : (opts.count ?? 10);
     const speed = opts.speed ?? 360;
     const speedVar = opts.speedVar ?? 0.5;
     const gravity = opts.gravity ?? 700;
@@ -178,6 +181,8 @@ export class FxLayer {
  */
 export function flashWhite(target: PIXI.Container, duration: number, strength = 0.85): void {
   if (target.destroyed) return;
+  // ColorMatrixFilter 会分配离屏 FBO，Tap libwebglhost 与第二块 WebGL 一样会 abort
+  if (Platform.isTaptap) return;
   const f = new PIXI.ColorMatrixFilter();
   const k = 1 - strength;
   // out = in × (1-s) + s（向纯白插值）

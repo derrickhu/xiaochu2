@@ -57,12 +57,7 @@ function createMeasureCanvas(w, h) {
     style: {},
     getContext(type) {
       if (type === '2d') return ctx;
-      try {
-        if (typeof GameGlobal !== 'undefined' && GameGlobal.__tapGL
-          && (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl')) {
-          return GameGlobal.__tapGL;
-        }
-      } catch (_) { /* */ }
+      // 禁止把主屏 WebGL 借给量字假 canvas：Pixi 一旦当新 context 用，Tap 会 SIGABRT
       return null;
     },
     addEventListener() {},

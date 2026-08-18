@@ -9,6 +9,7 @@
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
+import { Platform } from '@/core/PlatformService';
 import { TextureCache } from '@/core/TextureCache';
 import { UI } from '@/balance/ui';
 import { COMBAT } from '@/balance/combat';
@@ -513,10 +514,12 @@ export class ComboDisplay {
     }
     this._ghostSuffix.tint = ghostTint;
 
-    this._mul.text = `x${comboMultiplier(combo).toFixed(1)}`;
-    this._mul.style.fontSize = style.baseSz * 0.42;
-    this._mul.style.fill = style.mainColor;
-    this._mul.position.set(0, style.baseSz * 0.72);
+    if (!Platform.isTaptap) {
+      this._mul.text = `x${comboMultiplier(combo).toFixed(1)}`;
+      this._mul.style.fontSize = style.baseSz * 0.42;
+      this._mul.style.fill = style.mainColor;
+      this._mul.position.set(0, style.baseSz * 0.72);
+    }
 
     const milestoneDef = COMBO_MILESTONES.find((m) => m.threshold === combo);
     if (milestoneDef) {
@@ -737,6 +740,8 @@ export class ComboDisplay {
   /** 炸开瞬间两圈冲击波：外圈档位色、内圈白芯，由厚变薄往外撕 */
   private _updateShock(style: ComboStyle, timer: number): void {
     this._shock.clear();
+    // Tap：每帧 tessellate 椭圆会把宿主 WebGL 打崩，连击层只留烘焙贴图
+    if (Platform.isTaptap) return;
     if (style.burst < 0.4) return;
     if (timer < CHARGE_END || timer > CHARGE_END + SHOCK_END) return;
     const p = (timer - CHARGE_END) / SHOCK_END;
@@ -753,9 +758,13 @@ export class ComboDisplay {
 
   /** 全屏泛光的矩形。root 挂在棋盘中上部，往四周铺满够一屏即可 */
   private _drawFlash(): void {
+    this._flash.clear();
+    if (Platform.isTaptap) {
+      this._flash.visible = false;
+      return;
+    }
     const w = Game.logicWidth;
     const h = Game.logicHeight;
-    this._flash.clear();
     this._flash.beginFill(0xffffff, 1);
     this._flash.drawRect(-w / 2, -h, w, h * 2);
     this._flash.endFill();
@@ -767,6 +776,10 @@ export class ComboDisplay {
    */
   private _drawShine(timer: number): void {
     this._shine.clear();
+    if (Platform.isTaptap) {
+      this._shine.visible = false;
+      return;
+    }
     if (timer < SHINE_START || timer > SHINE_END || this._rowH <= 0) {
       this._shine.visible = false;
       return;
@@ -792,6 +805,7 @@ export class ComboDisplay {
   /** 里程碑速度带：两条斜切色带从文字两侧冲出去，制造「撞进画面」的横向动势 */
   private _drawBanner(style: ComboStyle, timer: number, isMilestone: boolean): void {
     this._banner.clear();
+    if (Platform.isTaptap) return;
     if (!isMilestone || timer > BANNER_END) return;
     const p = timer / BANNER_END;
     const h = style.baseSz * 0.5;
@@ -859,7 +873,9 @@ export class ComboDisplay {
     const speedMul = burstLerp(0.7, 1.7, b);
     const sizeMul = burstLerp(0.85, 1.55, b);
     const size = Math.min(9.5 * S * sizeMul, 22);
-    const motesCount = Math.round(burstLerp(5, 26, b)) + (isTierBreak ? 10 : 0);
+    const motesCount = Platform.isTaptap
+      ? Math.round(burstLerp(3, 8, b))
+      : Math.round(burstLerp(5, 26, b)) + (isTierBreak ? 10 : 0);
 
     // 高速破片：破以后才加，2 连只留慢屑，避免一开始就炸满屏
     if (b >= 0.42) {
@@ -894,7 +910,9 @@ export class ComboDisplay {
       drag: 0.97,
     });
 
-    const flakeCount = Math.round(burstLerp(4, 20, b)) + (isTierBreak ? 8 : 0);
+    const flakeCount = Platform.isTaptap
+      ? Math.round(burstLerp(2, 6, b))
+      : Math.round(burstLerp(4, 20, b)) + (isTierBreak ? 8 : 0);
     this._comboFx.burst({
       x: 0, y: 0,
       color: 0xfff2d0,
@@ -910,7 +928,7 @@ export class ComboDisplay {
       drag: 0.92,
     });
 
-    if (!isTierBreak) return;
+    if (!isTierBreak || Platform.isTaptap) return;
 
     const starTex = comboParticleTex('star');
     const palettes = comboPalette(tier);
@@ -957,7 +975,7 @@ export class ComboDisplay {
     const style = comboStyle(combo);
     this._pop.visible = true;
     this._pop.position.set(0, 0);
-    this._mul.visible = true;
+    this._mul.visible = !Platform.isTaptap;
     this._inBattle = true;
 
     // 每连换一种镜像与放射角度：同一张图连着出两次就会被认出来

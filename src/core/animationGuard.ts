@@ -104,13 +104,16 @@ export function startMinigamePresentLoop(opts?: {
     }
     opts?.onUpdate?.(dt);
     for (const listener of frameListeners) listener(dt);
-    presentMinigameFrame();
+    // Tap：ticker 已在 render，连击高峰再补一帧 present 会把 libwebglhost 打崩
+    if (!tickerAdvancing || !Platform.isTaptap) {
+      presentMinigameFrame();
+    }
     setTimeout(tick, frameMs);
   };
   tick();
   return () => {
     stopped = true;
-    presentMinigameFrame();
+    if (!Platform.isTaptap) presentMinigameFrame();
   };
 }
 
