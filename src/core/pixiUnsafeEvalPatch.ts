@@ -6,6 +6,7 @@ import { ShaderSystem, BaseImageResource, Texture, BaseTexture, extensions } fro
 import { settings } from '@pixi/settings';
 import { AccessibilityManager } from '@pixi/accessibility';
 import { Platform, getNativePlatformApi } from '@/core/PlatformService';
+import { installTapTextRaster, shouldInstallTapTextRaster } from '@/core/tapTextRaster';
 
 try {
   extensions.remove(AccessibilityManager);
@@ -73,14 +74,30 @@ if (_api) {
       return canvas;
     };
 
+    const _createTapTextCanvas = shouldInstallTapTextRaster()
+      ? installTapTextRaster(() => {
+        try {
+          if (typeof _api.createOffscreenCanvas === 'function') {
+            const c = _api.createOffscreenCanvas({ type: '2d', width: 64, height: 64 });
+            const ctx = c?.getContext?.('2d');
+            if (ctx && typeof ctx.fillText === 'function') return { canvas: c, ctx };
+          }
+        } catch { /* */ }
+        try {
+          const c = _api.createCanvas();
+          if (c && !_isMainCanvas(c)) {
+            const ctx = c.getContext?.('2d');
+            if (ctx && typeof ctx.fillText === 'function') return { canvas: c, ctx };
+          }
+        } catch { /* */ }
+        return null;
+      })
+      : null;
+
     const _create2DCanvas = (w?: number, h?: number): any => {
       if (Platform.isTaptap) {
-        let c: any = null;
-        try { c = _api.createCanvas(); } catch { /* */ }
-        if (!c || _isMainCanvas(c)) return _measureCanvas(w, h);
-        if (w !== undefined) c.width = w;
-        if (h !== undefined) c.height = h;
-        return c;
+        // 只开一块真实 2D，每个 Text 拿独立包装。禁止每字一块 createCanvas，打一轮就会把血条纹理盖烂
+        return _createTapTextCanvas ? _createTapTextCanvas(w, h) : _measureCanvas(w, h);
       }
       let c: any;
       if (_useOffscreen) {
@@ -244,11 +261,11 @@ if (_isRealDevice) {
       source = source || this.source;
       const result = _origUpload.call(this, renderer, baseTexture, glTexture, source);
 
-      if (_canReadPixels
+      if ((_canReadPixels || Platform.isTaptap)
           && source
           && source.width > 0 && source.height > 0
           && typeof source.getContext === 'function'
-          && typeof source.toTempFilePathSync === 'function') {
+          && (Platform.isTaptap || typeof source.toTempFilePathSync === 'function')) {
         try {
           const ctx = source.getContext('2d');
           if (ctx && typeof ctx.getImageData === 'function') {

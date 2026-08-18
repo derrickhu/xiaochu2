@@ -17,6 +17,7 @@ import { UI, FX_ELEMENT_COLOR, FX_ENEMY_HOSTILE } from '@/balance/ui';
 import type { Element } from '@/balance/combat';
 import { ELEMENT_BLADE_IMAGES, ELEMENT_IMPACT_IMAGES, ORB_IMAGES, UI_BATTLE_IMAGES, UI_FX_IMAGES } from '@/config/Assets';
 import { applyTextResolution } from '@/ui/text';
+import { resolveLatinHudFontFamily } from '@/ui/calligraphyFont';
 import {
   applyDmgRenderStyle,
   buildPetDmgLabel,
@@ -209,6 +210,9 @@ export class BattleFx {
         setScaleSafe(t, 1);
       },
       onRelease: (t) => {
+        TweenManager.cancelTarget(t);
+        const sc = readScale(t);
+        if (sc) TweenManager.cancelTarget(sc);
         t.visible = false;
         if (t.parent) t.parent.removeChild(t);
       },
@@ -392,7 +396,7 @@ export class BattleFx {
     t.style.stroke = 0x101010;
     t.style.strokeThickness = 6;
     t.style.fontWeight = '800';
-    t.style.fontFamily = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
+    t.style.fontFamily = resolveLatinHudFontFamily();
     t.style.align = 'center';
     t.style.wordWrap = true;
     t.style.wordWrapWidth = Math.max(240, Game.logicWidth - 80);
@@ -435,7 +439,7 @@ export class BattleFx {
     t.style.stroke = 0x101010;
     t.style.strokeThickness = kind === 'shield' ? 5 : (heavy ? 7 : 6);
     t.style.fontWeight = '900';
-    t.style.fontFamily = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
+    t.style.fontFamily = resolveLatinHudFontFamily();
     t.style.align = 'center';
     this._floatLayer.addChild(t);
     this._petDmgRuntimes.push({
@@ -467,7 +471,7 @@ export class BattleFx {
     t.style.stroke = 0x2a1040;
     t.style.strokeThickness = 5;
     t.style.fontWeight = '800';
-    t.style.fontFamily = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
+    t.style.fontFamily = resolveLatinHudFontFamily();
     t.style.align = 'center';
     this._floatLayer.addChild(t);
     this._petDmgRuntimes.push({
@@ -496,7 +500,7 @@ export class BattleFx {
     t.style.stroke = 0x101010;
     t.style.strokeThickness = 6;
     t.style.fontWeight = '900';
-    t.style.fontFamily = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
+    t.style.fontFamily = resolveLatinHudFontFamily();
     t.style.align = 'center';
     this._floatLayer.addChild(t);
     this._petDmgRuntimes.push({

@@ -6,7 +6,8 @@ import * as PIXI from 'pixi.js';
 import { LOADING_IMAGES } from '@/config/Assets';
 import { Game } from '@/core/Game';
 import { TextureCache } from '@/core/TextureCache';
-import { COLORS, FONT_FAMILY } from '@/ui/theme';
+import { COLORS } from '@/ui/theme';
+import { resolveSystemFontFamily } from '@/ui/calligraphyFont';
 
 /** Loading 首批资源：专用 splash + 标题（须在主包，勿走 CDN） */
 export const LOADING_SPLASH_IMAGES = [
@@ -76,7 +77,7 @@ export class LoadingScreenOverlay extends PIXI.Container {
     this._pctText = new PIXI.Text('0%', {
       fontSize: 22,
       fill: 0xffffff,
-      fontFamily: FONT_FAMILY,
+      fontFamily: resolveSystemFontFamily(),
       fontWeight: 'bold',
       stroke: COLORS.accentDeep,
       strokeThickness: 5,
@@ -92,7 +93,7 @@ export class LoadingScreenOverlay extends PIXI.Container {
     this._legalText = new PIXI.Text(LOADING_LEGAL_TEXT, {
       fontSize: LEGAL_FONT_SIZE,
       fill: 0xffffff,
-      fontFamily: FONT_FAMILY,
+      fontFamily: resolveSystemFontFamily(),
       align: 'center',
       lineHeight: LEGAL_LINE_HEIGHT,
       wordWrap: true,

@@ -10,8 +10,8 @@
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
-import { resolveBodyFontFamily, resolveCalligraphyFontFamily } from './calligraphyFont';
-import { FONT_FAMILY, COLORS, FONT_SIZE } from './theme';
+import { resolveBodyFontFamily, resolveCalligraphyFontFamily, resolveSystemFontFamily } from './calligraphyFont';
+import { COLORS, FONT_SIZE } from './theme';
 
 /** 文字语义角色 */
 export type TextRole = 'title' | 'body' | 'system';
@@ -98,7 +98,7 @@ function resolveFontFamily(opts: MakeTextOpts): string {
   if (opts.fontFamily) return opts.fontFamily;
   const role = opts.role ?? 'body';
   if (role === 'title') return resolveCalligraphyFontFamily();
-  if (role === 'system') return FONT_FAMILY;
+  if (role === 'system') return resolveSystemFontFamily();
   return resolveBodyFontFamily();
 }
 

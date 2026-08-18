@@ -49,6 +49,10 @@ async function loadOne(def: CustomFontDef, label: string): Promise<string | null
         // 字体在 pkg-shop（随包分包），须先 loadSubpackage 再 loadFont
         await loadSubpackagesForPaths([def.path]);
         family = await Platform.loadFont(def.path, def.family);
+        if (!family && Platform.isTaptap) {
+          await new Promise((r) => setTimeout(r, 200));
+          family = await Platform.loadFont(def.path, def.family);
+        }
       } else {
         family = await injectWebFontFace(def);
       }

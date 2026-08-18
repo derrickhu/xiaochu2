@@ -619,11 +619,15 @@ class PlatformServiceClass {
   loadFont(path: string, family: string): Promise<string | null> {
     if (!this.isMinigame) return Promise.resolve(null);
 
-    // 微信/抖音小游戏：loadFont 最稳，直接返回可用 family 名
+    // 微信/抖音/Tap：loadFont 成功才返回 family。失败是 null，不能改写成请求名
+    // 否则 Text 会只用一个未注册的 family，Tap Android 上数字和汉字都会空白/乱码
     if (typeof this._api?.loadFont === 'function') {
       try {
         const loaded = this._api.loadFont(path) as string | undefined;
-        return Promise.resolve(loaded || family);
+        if (typeof loaded === 'string' && loaded.trim()) {
+          return Promise.resolve(loaded.trim());
+        }
+        console.warn('[Platform] loadFont 未返回 family', path, loaded);
       } catch (e) {
         console.warn('[Platform] loadFont 失败', path, e);
       }

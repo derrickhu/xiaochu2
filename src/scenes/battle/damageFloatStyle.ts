@@ -7,6 +7,7 @@ import { Game } from '@/core/Game';
 import type { Element } from '@/balance/combat';
 import { UI } from '@/balance/ui';
 import { displayAlive, setScaleSafe } from '@/core/animationGuard';
+import { resolveLatinHudFontFamily } from '@/ui/calligraphyFont';
 
 /** xiao_chu main.js: S = W / 375 */
 export function dmgFloatScale(): number {
@@ -473,7 +474,7 @@ export function applyDmgRenderStyle(
   const semantic = resolveDamageFloatColor(styleKey, colorKind);
   const S = dmgFloatScale();
   const RS = DMG_RENDER_STYLES[renderKey];
-  text.style.fontFamily = RS.fontFamily;
+  text.style.fontFamily = resolveLatinHudFontFamily();
   text.style.fontWeight = '900' as PIXI.TextStyleFontWeight;
   // 微信真机 CanvasText 渐变 fill 会崩，用纯色；dropShadow 在真机会出现块状底色
   text.style.dropShadow = false;

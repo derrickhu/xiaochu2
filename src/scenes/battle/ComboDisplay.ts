@@ -27,9 +27,8 @@ import type { BattleFx } from './BattleFx';
 import { dmgFloatScale } from './damageFloatStyle';
 import { displayAlive, readScale, resetScale } from '@/core/animationGuard';
 import { applyTextResolution } from '@/ui/text';
+import { resolveLatinHudFontFamily } from '@/ui/calligraphyFont';
 import { FxLayer } from '@/core/FxLayer';
-
-const COMBO_FONT = '"Avenir Next Condensed","Arial Black","PingFang SC",sans-serif';
 
 export interface ComboMilestone {
   threshold: number;
@@ -249,7 +248,7 @@ function comboParticleTex(kind: 'star' | 'flake'): PIXI.Texture {
 function styledMulText(content: string, fontSize: number, fill: string): PIXI.Text {
   const S = dmgFloatScale();
   const t = new PIXI.Text(content, {
-    fontFamily: COMBO_FONT,
+    fontFamily: resolveLatinHudFontFamily(),
     fontSize,
     fontStyle: 'normal',
     fontWeight: '900',
@@ -514,12 +513,11 @@ export class ComboDisplay {
     }
     this._ghostSuffix.tint = ghostTint;
 
-    if (!Platform.isTaptap) {
-      this._mul.text = `x${comboMultiplier(combo).toFixed(1)}`;
-      this._mul.style.fontSize = style.baseSz * 0.42;
-      this._mul.style.fill = style.mainColor;
-      this._mul.position.set(0, style.baseSz * 0.72);
-    }
+    this._mul.text = `x${comboMultiplier(combo).toFixed(1)}`;
+    this._mul.style.fontSize = style.baseSz * 0.42;
+    this._mul.style.fill = style.mainColor;
+    this._mul.position.set(0, style.baseSz * 0.72);
+    this._mul.style.fontFamily = resolveLatinHudFontFamily();
 
     const milestoneDef = COMBO_MILESTONES.find((m) => m.threshold === combo);
     if (milestoneDef) {
@@ -975,7 +973,7 @@ export class ComboDisplay {
     const style = comboStyle(combo);
     this._pop.visible = true;
     this._pop.position.set(0, 0);
-    this._mul.visible = !Platform.isTaptap;
+    this._mul.visible = true;
     this._inBattle = true;
 
     // 每连换一种镜像与放射角度：同一张图连着出两次就会被认出来
