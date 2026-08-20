@@ -169,12 +169,17 @@ export class GMPanel extends PIXI.Container {
     title.eventMode = 'none';
     this._panelRoot.addChild(title);
 
+    // 关闭必须躲在宿主胶囊左侧：抖音模拟器收起钮是原生层，会盖住右上角抢点击
+    const closeW = 72;
+    const closeH = 40;
+    const closeRight = Math.min(panelX + panelW - PAD, Game.contentRightX(10));
     const closeBtn = new PIXI.Container();
-    closeBtn.position.set(panelX + panelW - PAD - 56, panelY + 12);
-    closeBtn.hitArea = new PIXI.Rectangle(0, 0, 56, 36);
+    closeBtn.position.set(closeRight - closeW, panelY + 10);
+    closeBtn.hitArea = new PIXI.Rectangle(0, 0, closeW, closeH);
     const closeTxt = new PIXI.Text('关闭', {
       fontSize: 20, fill: C.accent, fontFamily: FONT_FAMILY, fontWeight: 'bold',
     });
+    closeTxt.position.set(12, 6);
     closeBtn.addChild(closeTxt);
     bindGmTap(closeBtn, () => this.close());
     this._panelRoot.addChild(closeBtn);

@@ -248,7 +248,7 @@ export class GachaScene implements Scene {
     const plaque = makePageTitlePlaque({ text: label, screenWidth: w });
     plaque.position.set(w / 2, centerY);
     this._page.addChild(plaque);
-    return plaque.plaqueH ?? 104;
+    return plaque.plaqueH ?? 72;
   }
 
   private _buildPullButtons(w: number, h: number): void {

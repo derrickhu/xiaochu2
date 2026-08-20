@@ -603,7 +603,6 @@ export class DailyQuestPanel extends PIXI.Container {
     try {
       if (!PlayerData.markQuestClaimed(chest.id)) return;
       grantReward(chest.reward);
-      SfxManager.playChestOpen();
       analytics.trackDailyQuestClaim(chest.id, {
         questName: `活跃宝箱 ${chest.need}`,
         reward: formatReward(chest.reward),
@@ -647,9 +646,6 @@ export class DailyQuestPanel extends PIXI.Container {
       if (claimed.length === 0) return;
 
       const merged = mergeRewards(claimed);
-      if (claimed.some((r) => r.universal || r.stamina || (r.lingyu ?? 0) >= 40)) {
-        SfxManager.playChestOpen();
-      }
       await this._playClaimFx(merged);
       Platform.showToast(`领取成功 · ${formatReward(merged)}`, 'success');
       EventBus.emit('home:refresh');

@@ -228,11 +228,11 @@ class GMManagerClass {
 
     // ── 养成调试：灵玉 / 经验 / 碎片 / 快速升星（测觉醒头像等）──
     this._commands.push({
-      id: 'lingyu_plus_1k',
+      id: 'coins_plus_10k',
       group: '养成',
-      name: '灵玉 +1000',
-      desc: '测单抽 / 十连召唤',
-      execute: () => this._addLingyu(1_000),
+      name: '灵宠币 +1万',
+      desc: '测商店兑换 / 图鉴招募',
+      execute: () => this._addCoins(10_000),
     });
     this._commands.push({
       id: 'lingyu_plus_10k',
@@ -242,26 +242,11 @@ class GMManagerClass {
       execute: () => this._addLingyu(10_000),
     });
     this._commands.push({
-      id: 'exp_plus_10k',
-      group: '养成',
-      name: '经验 +1万',
-      desc: '全局经验池 +10000',
-      execute: () => {
-        PlayerData.load();
-        PlayerData.addExp(10_000);
-        return `经验 = ${PlayerData.exp}`;
-      },
-    });
-    this._commands.push({
       id: 'exp_plus_100k',
       group: '养成',
       name: '经验 +10万',
-      desc: '全局经验池 +100000',
-      execute: () => {
-        PlayerData.load();
-        PlayerData.addExp(100_000);
-        return `经验 = ${PlayerData.exp}`;
-      },
+      desc: '全局经验池，测灵宠升级',
+      execute: () => this._addExp(100_000),
     });
     this._commands.push({
       id: 'shards_owned_plus_50',
@@ -342,6 +327,22 @@ class GMManagerClass {
     EventBus.emit('home:refresh');
     Platform.showToast(`灵玉 +${amount}`, 'success');
     return `灵玉 = ${PlayerData.lingyu}`;
+  }
+
+  private _addCoins(amount: number): string {
+    PlayerData.load();
+    PlayerData.addCoins(amount);
+    EventBus.emit('home:refresh');
+    Platform.showToast(`灵宠币 +${amount}`, 'success');
+    return `灵宠币 = ${PlayerData.coins}`;
+  }
+
+  private _addExp(amount: number): string {
+    PlayerData.load();
+    PlayerData.addExp(amount);
+    EventBus.emit('home:refresh');
+    Platform.showToast(`经验 +${amount}`, 'success');
+    return `经验 = ${PlayerData.exp}`;
   }
 
   private _addShardsToOwned(amount: number): string {

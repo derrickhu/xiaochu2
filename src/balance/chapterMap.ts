@@ -30,6 +30,22 @@ export const CHAPTER_MAP_PAGE_POINTS = CHAPTER_MAP_PATH;
 
 export type MapPoint = { x: number; y: number };
 
+/**
+ * 地图节点相对视口的下移量：保证最上沿立绘（Boss 头）落在章匾下方。
+ * 高屏 cover 放大后，固定 inset 不够，匾会压到终点 Boss。
+ */
+export function chapterMapChromeInset(opts: {
+  topNodeY: number;
+  scale: number;
+  offsetY: number;
+  chromeBottom: number;
+  artRise: number;
+  minInset: number;
+}): number {
+  const artTop = opts.offsetY + (opts.topNodeY - opts.artRise) * opts.scale;
+  return Math.max(opts.minInset, Math.ceil(opts.chromeBottom - artTop));
+}
+
 /** 9:16 设计稿 cover 铺满视口（等高填满，两侧可裁切，避免顶栏露底色） */
 export function chapterMapDesignFit(
   viewportW: number,

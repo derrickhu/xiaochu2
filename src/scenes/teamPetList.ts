@@ -33,6 +33,7 @@ import {
 } from '@/ui';
 import type { ScrollListController } from '@/ui/ScrollList';
 import { bindPointerTap } from '@/utils/bindPointerTap';
+import { sortPetIdsByGrowthOrder } from './codexSort';
 
 /** 自由编队：较宽横卡 */
 const FREE_CARD_W = 330;
@@ -90,12 +91,12 @@ export function buildTeamPetList(opts: TeamPetListOpts): PIXI.Container | null {
     container.addChild(parent);
   }
 
-  const owned = PlayerData.ownedPets.filter((petId) => {
+  const owned = sortPetIdsByGrowthOrder(PlayerData.ownedPets.filter((petId) => {
     const pet = PET_MAP.get(petId);
     if (!pet) return false;
     if (filter === 'all') return true;
     return pet.element === filter;
-  });
+  }));
 
   let maxBottom = 0;
   owned.forEach((petId, i) => {

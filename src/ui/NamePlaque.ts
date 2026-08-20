@@ -7,7 +7,7 @@
  *
  * 用法：
  * - makeNamePlaque({ text: '星辉灵鹿' })
- * - makeNamePlaque({ text: '灵宠召唤', plate: 'banner', width: 520 })
+ * - makeNamePlaque({ text: '灵宠召唤', plate: 'banner' })
  */
 import * as PIXI from 'pixi.js';
 import { TextureCache } from '@/core/TextureCache';
@@ -115,24 +115,14 @@ const PLATE_STYLE: Record<NamePlaquePlate, PlateStyle> = {
 };
 
 /**
- * 页面主标题匾（灵宠 / 召唤等）：title.png 短匾。
+ * 页面主标题匾（召唤 / 编队等）：与主屏关卡匾同一块 text_banner。
  */
 export function makePageTitlePlaque(opts: {
   text: string;
   screenWidth: number;
   disabled?: boolean;
 }): NamePlaqueView {
-  const maxW = Math.min(640, opts.screenWidth - 90);
-  const minW = Math.min(560, maxW);
-  return makeNamePlaque({
-    text: opts.text,
-    plate: 'title',
-    size: 'lg',
-    height: 104,
-    minWidth: minW,
-    maxWidth: maxW,
-    disabled: opts.disabled,
-  }) as NamePlaqueView;
+  return makeChapterTitlePlaque(opts);
 }
 
 /**

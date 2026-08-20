@@ -37,7 +37,7 @@ import { SfxManager } from '@/core/SfxManager';
 import { RADIUS } from '@/ui/theme';
 import type { PetDetailEnterData } from './PetDetailScene';
 import { buildLockedCodexCard, buildOwnedCodexCard } from './codexCards';
-import { compareCodexPetOrder } from './codexSort';
+import { sortPetsByGrowthOrder } from './codexSort';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 
 function designScale(w: number): number {
@@ -471,22 +471,7 @@ export class CodexScene implements Scene {
     let pool = [...PETS];
     if (this._filter === 'owned') pool = pool.filter((p) => stateOf(p) === 'owned');
     else if (this._filter === 'locked') pool = pool.filter((p) => stateOf(p) === 'locked');
-    pool.sort((a, b) => compareCodexPetOrder(
-      {
-        owned: stateOf(a) === 'owned',
-        star: PlayerData.petStar(a.id),
-        level: PlayerData.petLevel(a.id),
-        rarity: a.rarity,
-        id: a.id,
-      },
-      {
-        owned: stateOf(b) === 'owned',
-        star: PlayerData.petStar(b.id),
-        level: PlayerData.petLevel(b.id),
-        rarity: b.rarity,
-        id: b.id,
-      },
-    ));
+    pool = sortPetsByGrowthOrder(pool);
 
     const content = new PIXI.Container();
     content.position.set(0, startY);

@@ -18,6 +18,8 @@ import {
   rememberSharedWebGL,
 } from './webglContextPatch';
 import { Platform, getNativePlatformApi } from './PlatformService';
+import { EventBus } from './EventBus';
+import { readMenuButtonRect } from './menuButtonRect';
 import { UPDATE_PRIORITY } from '@pixi/ticker';
 
 declare const GameGlobal: any;
@@ -72,6 +74,7 @@ class GameClass {
     }
 
     this._applySafeArea(_api, sysInfo);
+    this._scheduleSafeAreaRetry();
 
     let realWidth = this.screenWidth * this.dpr;
     let realHeight = this.screenHeight * this.dpr;
@@ -261,20 +264,17 @@ class GameClass {
     let capLeftPx = sw;
     let capHeightPx = 32;
 
-    try {
-      const capsule = _api?.getMenuButtonBoundingClientRect?.();
-      // 注意：不能用 capsule.top 真值判断（少数环境 top 可能为 0），以 height 为准
-      if (capsule && typeof capsule.height === 'number' && capsule.height > 0) {
-        capTopPx = Number(capsule.top) || 0;
-        capHeightPx = capsule.height;
-        capBottomPx = Number(capsule.bottom) > 0
-          ? Number(capsule.bottom)
-          : capTopPx + capHeightPx;
-        if (typeof capsule.left === 'number' && capsule.left > 0) {
-          capLeftPx = capsule.left;
-        }
-      }
-    } catch (_) { /* */ }
+    // 微信 BoundingClientRect / 抖音 getMenuButtonLayout；模拟器首帧常返回 0
+    const capsule = readMenuButtonRect(_api);
+    if (capsule) {
+      capTopPx = capsule.top;
+      capHeightPx = capsule.height;
+      capBottomPx = capsule.bottom;
+      // 抖音模拟器偶发 left=0 但 right/width 是准的；left 无效时按右缘反推
+      if (capsule.left > 0) capLeftPx = capsule.left;
+      else if (capsule.right > 0 && capsule.width > 0) capLeftPx = capsule.right - capsule.width;
+      else capLeftPx = sw - Math.max(88, capsule.width) - 8;
+    }
 
     if (capBottomPx <= capTopPx) {
       const statusPx = Number(sysInfo?.statusBarHeight) > 0
@@ -322,6 +322,31 @@ class GameClass {
         + `left=${this.safeCapsuleLeft} screen=${sw}x${sh}`,
       );
     } catch (_) { /* */ }
+  }
+
+  /**
+   * 抖音开发者工具的收起胶囊经常在首帧之后才给出真实坐标（重启模拟器才对准）。
+   * 延迟再读几次，并通知顶栏/GM 入口重排。
+   */
+  refreshSafeArea(): boolean {
+    const api: any = getNativePlatformApi();
+    const before = this._safeAreaStamp();
+    this._applySafeArea(api, api?.getSystemInfoSync?.());
+    const changed = this._safeAreaStamp() !== before;
+    if (changed) EventBus.emit('safearea:updated');
+    return changed;
+  }
+
+  private _safeAreaStamp(): string {
+    return `${this.safeCapsuleTop}|${this.safeCapsuleBottom}|${this.safeCapsuleLeft}|${this.safeTop}`;
+  }
+
+  private _scheduleSafeAreaRetry(): void {
+    if (!Platform.isMinigame) return;
+    const delays = Platform.isDouyin ? [160, 480, 1200] : [300];
+    for (const ms of delays) {
+      setTimeout(() => this.refreshSafeArea(), ms);
+    }
   }
 
   /**

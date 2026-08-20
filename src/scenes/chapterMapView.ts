@@ -7,6 +7,7 @@ import { TextureCache } from '@/core/TextureCache';
 import {
   CHAPTER_MAP_DESIGN,
   chapterMapActiveIndex,
+  chapterMapChromeInset,
   chapterMapDesignFit,
   chapterMapNodePositions,
   chapterMapProgressIndex,
@@ -31,11 +32,11 @@ import { ScrollListController } from '@/ui/ScrollList';
 const NODE_W = 56;
 const NODE_H = 48;
 const NODE_HIT_R = 40;
-/** Boss 守关灵宠立绘边长（放大，放在关卡点左侧） */
-const BOSS_PET_SIZE = 160;
-/** 相对 Boss 关节点：偏左、略上 */
-const BOSS_PET_OFFSET_X = -110;
-const BOSS_PET_OFFSET_Y = -NODE_H * 0.35;
+/** Boss 守关灵宠立绘边长（关卡点左侧，避开章匾） */
+const BOSS_PET_SIZE = 136;
+/** 相对 Boss 关节点：偏左、脚落在石礅附近 */
+const BOSS_PET_OFFSET_X = -124;
+const BOSS_PET_OFFSET_Y = 8;
 /** 通关星：主界面要明显大于石礅（主星 = 普通难度） */
 const NODE_STAR_SIZE = 22;
 const NODE_STAR_GAP = 3;
@@ -65,6 +66,8 @@ export interface TitleScreenWorldOpts {
   stages: readonly StageDef[];
   screenW: number;
   screenH: number;
+  /** 章匾下沿（逻辑像素）；节点/Boss 立绘需落在此线以下 */
+  chromeBottom?: number;
   scroll: ScrollListController;
   onStageTap: (stageId: string) => void;
   /** 指定高亮关；缺省为章内第一未通关 */
@@ -366,7 +369,7 @@ function attachBossGuardianPet(
       strokeColor: 0x8a5a18, strokeWidth: 4,
     });
     // 标在立绘右上，避免挡住宠脸
-    tag.position.set(BOSS_PET_SIZE * 0.38, -BOSS_PET_SIZE * 0.88);
+    tag.position.set(BOSS_PET_SIZE * 0.42, -BOSS_PET_SIZE * 0.78);
     host.addChild(tag);
   };
 
@@ -512,9 +515,18 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
     layoutDesignBackground(world, bgTex, designW, designH);
   }
 
-  // 节点/标记单独下移，与顶栏留呼吸间距；坐标系仍属设计稿
+  // 节点/标记下移：至少留呼吸，并保证终点 Boss 头不钻进章匾
+  const topNodeY = positions.reduce((min, p) => Math.min(min, p.y), designH);
+  const nodeInset = chapterMapChromeInset({
+    topNodeY,
+    scale: fit.scale,
+    offsetY: fit.offsetY,
+    chromeBottom: opts.chromeBottom ?? 0,
+    artRise: BOSS_PET_SIZE - BOSS_PET_OFFSET_Y,
+    minInset: TITLE_MAP_NODE_TOP_INSET,
+  });
   const designLayer = new PIXI.Container();
-  designLayer.position.set(0, TITLE_MAP_NODE_TOP_INSET / fit.scale);
+  designLayer.position.set(0, nodeInset / fit.scale);
   world.addChild(designLayer);
 
   const nodes: PIXI.Container[] = [];

@@ -15,6 +15,7 @@ export class GMEntryButton extends PIXI.Container {
     this._build();
     this._syncVisible();
     EventBus.on('gm:activated', () => this._syncVisible());
+    EventBus.on('safearea:updated', () => this._layout());
   }
 
   private _build(): void {
@@ -47,11 +48,9 @@ export class GMEntryButton extends PIXI.Container {
 
   private _layout(): void {
     const w = 56;
-    const gap = 6;
-    const inset = 8;
-    // 贴屏幕右缘、胶囊正下方，避开章节左右箭头
-    const x = Math.max(8, Game.logicWidth - w - inset);
-    const y = Game.safeCapsuleBottom + gap;
+    // 胶囊右缘正下方（收起圆钮底下），不要左对齐——那会盖住章匾右箭头
+    const x = Game.logicWidth - w - 6;
+    const y = Game.safeCapsuleBottom + 4;
     this.position.set(x, y);
   }
 

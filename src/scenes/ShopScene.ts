@@ -32,6 +32,7 @@ import { pressFeedback } from '@/ui/motion';
 import { ScrollListController } from '@/ui/ScrollList';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { ShopInfoPopup } from '@/scenes/shop/ShopInfoPopup';
+import { sortPetsByGrowthOrder } from './codexSort';
 
 /** 对齐短 Tab 栈 + 双列卡（750 设计宽） */
 const SHOP_UI = {
@@ -291,9 +292,7 @@ export class ShopScene implements Scene {
 
   private _shopPets(): PetDef[] {
     const ids = new Set(PlayerData.shopPoolIds());
-    return PETS.filter((p) => ids.has(p.id)).sort(
-      (a, b) => (b.rarity - a.rarity) || a.name.localeCompare(b.name, 'zh-CN'),
-    );
+    return sortPetsByGrowthOrder(PETS.filter((p) => ids.has(p.id)));
   }
 
   private _contentGeometry(): {

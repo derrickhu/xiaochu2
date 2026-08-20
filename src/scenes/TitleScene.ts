@@ -55,9 +55,14 @@ export class TitleScene implements Scene {
 
   private static readonly BOTTOM_RESERVE = BOTTOM_NAV_RESERVE;
 
-  /** 章节导航贴在顶栏下方 */
+  /** 章节匾中心：紧贴顶栏货币行下方（业界主线地图：标题条薄、地图多） */
   private static chapterNavY(): number {
-    return Game.safeTop + 28;
+    return Game.safeTop + 16;
+  }
+
+  /** 章匾下沿 + 呼吸，地图 Boss 立绘不得越过此线 */
+  private static chapterChromeBottom(): number {
+    return TitleScene.chapterNavY() + 36 + 10;
   }
 
   private _chapter = 1;
@@ -95,6 +100,7 @@ export class TitleScene implements Scene {
     EventBus.on('gm:mapEditToggle', this._onMapEditToggle);
     EventBus.on('gm:focusChapter', this._onFocusChapter);
     EventBus.on('home:refresh', this._onHomeRefresh);
+    EventBus.on('safearea:updated', this._onHomeRefresh);
     const enter = data as TitleEnterData | undefined;
     this._minimalStrip = enter?.minimalStrip;
     if (this._minimalStrip !== 'l7like') {
@@ -155,6 +161,7 @@ export class TitleScene implements Scene {
     EventBus.off('gm:mapEditToggle', this._onMapEditToggle);
     EventBus.off('gm:focusChapter', this._onFocusChapter);
     EventBus.off('home:refresh', this._onHomeRefresh);
+    EventBus.off('safearea:updated', this._onHomeRefresh);
     this._stageEntry?.dismiss();
     this._stageEntry = null;
     this._editorTeardown?.();
@@ -177,6 +184,7 @@ export class TitleScene implements Scene {
       stages,
       screenW: w,
       screenH: h,
+      chromeBottom: TitleScene.chapterChromeBottom(),
       scroll: this._scroll,
       mapEditMode,
       onStageTap: (stageId) => {
