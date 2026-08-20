@@ -26,6 +26,8 @@ describe('starsFromTurns', () => {
 
 describe('starTurnPace / formatBattleStarTurnValue', () => {
   it('战斗胶囊分母钉死三星线，色档随当前回合掉档', () => {
+    expect(formatBattleStarTurnValue(0, 14)).toBe('0/7');
+    expect(starTurnPace(0, 14)).toBe('onTrack');
     expect(formatBattleStarTurnValue(2, 14)).toBe('2/7');
     expect(starTurnPace(2, 14)).toBe('onTrack');
     expect(starTurnPace(7, 14)).toBe('onTrack');

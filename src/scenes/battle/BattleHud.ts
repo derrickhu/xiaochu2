@@ -385,10 +385,9 @@ export class BattleHud {
     return label;
   }
 
-  /** 当前回合序号：玩家回合显示「即将进行」的回合，其余阶段显示已完成回合 */
+  /** 已用回合：进场 0，拖珠发生交换后才 +1，和结算星级同一口径 */
   private _currentTurnNumber(): number {
-    if (this._ctrl.state === 'playerTurn') return this._ctrl.turnsUsed + 1;
-    return Math.max(1, this._ctrl.turnsUsed);
+    return Math.max(0, this._ctrl.turnsUsed);
   }
 
   private _stageSubLabel(): string {

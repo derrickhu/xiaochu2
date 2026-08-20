@@ -47,7 +47,7 @@ export function starTurnPace(currentTurn: number, starTurnLimit: number): StarTu
   return 'oneStar';
 }
 
-/** 战斗胶囊右侧数字：「2/7」= 当前回合 / 三星上限 */
+/** 战斗胶囊右侧数字：「0/7」= 已用回合 / 三星上限（进场为 0） */
 export function formatBattleStarTurnValue(currentTurn: number, starTurnLimit: number): string {
   const { star3 } = starTurnThresholds(starTurnLimit);
   return `${currentTurn}/${star3}`;
