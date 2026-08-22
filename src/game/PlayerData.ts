@@ -7,7 +7,7 @@
 import { Platform } from '@/core/PlatformService';
 import { PersistService } from '@/core/PersistService';
 import { localDateKey } from '@/core/SidebarService';
-import { STAGES, CHAPTER_REWARD_PET, type StageDef } from '@/balance/stages';
+import { STAGES, STAGE_MAP, CHAPTER_REWARD_PET, type StageDef } from '@/balance/stages';
 import {
   PETS, PET_MAP, DEFAULT_TEAM, TEAM_SIZE,
   INITIAL_PET_LEVEL, INITIAL_PET_STAR,
@@ -672,7 +672,7 @@ class PlayerDataClass {
 
     let lingyu = 0;
     if (firstClear) {
-      const stage = STAGES.find((s) => s.id === stageId);
+      const stage = STAGE_MAP.get(stageId);
       lingyu = stage?.isBoss
         ? ECONOMY.milestone.bossFirstClearLingyu
         : ECONOMY.milestone.firstClearLingyu;

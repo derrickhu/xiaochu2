@@ -5,7 +5,8 @@ import {
   PET_MAP,
   TEAM_SIZE,
 } from '@/balance/pets';
-import { STAGES, STAGE_STAR_MIGRATION } from '@/balance/stages';
+import { STAGES, STAGE_MAP, STAGE_STAR_MIGRATION } from '@/balance/stages';
+import { baseStageIdOf, isEliteStageId } from '@/balance/eliteMode';
 import { migrateCreatureId } from '@/balance/creatureIdMigration';
 import { getStarProfile } from '@/balance/growth';
 import { ECONOMY } from '@/balance/economy';
@@ -523,13 +524,22 @@ function migratePetIdsInPartialSave(parsed: Partial<SaveData> & { discovered?: u
   return { ...parsed, ownedPets, pendingShards, team };
 }
 
+function isPersistableStarStageId(id: string, mainlineIds: Set<string>): boolean {
+  if (mainlineIds.has(id) || STAGE_MAP.has(id)) return true;
+  // 精英 / 塔 / 秘境走 registerExtraStage，冷启动时还不在 STAGE_MAP，不能当非法 key 丢掉
+  if (isEliteStageId(id) && mainlineIds.has(baseStageIdOf(id))) return true;
+  if (/^tower_f\d+$/.test(id)) return true;
+  if (/^realm_(metal|wood|water|fire|earth)_t\d+$/.test(id)) return true;
+  return false;
+}
+
 function migrateStageStars(stars: Record<string, number>, fromVersion: number): Record<string, number> {
   const validIds = new Set(STAGES.map((s) => s.id));
   const out: Record<string, number> = {};
   for (const [id, n] of Object.entries(stars)) {
     // v5：旧 Boss 关 id（如 stage_1_5）迁到统一第 8 关；仅升级时跑一次，避免与新铺垫关撞 id
     const mapped = fromVersion < 5 ? (STAGE_STAR_MIGRATION[id] ?? id) : id;
-    if (validIds.has(mapped)) {
+    if (isPersistableStarStageId(mapped, validIds)) {
       out[mapped] = Math.max(out[mapped] ?? 0, typeof n === 'number' ? n : 0);
     }
   }

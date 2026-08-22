@@ -25,6 +25,26 @@ describe('migrateCreatureId', () => {
   });
 });
 
+describe('parseSaveData 保留动态关星级', () => {
+  it('精英 / 通天塔 / 秘境星级不被 STAGES 白名单洗掉', () => {
+    const parsed = parseSaveData({
+      version: 7,
+      stars: {
+        stage_1_1: 3,
+        stage_1_1_elite: 3,
+        tower_f12: 2,
+        realm_wood_t2: 1,
+        garbage_stage: 3,
+      },
+    });
+    expect(parsed.stars.stage_1_1).toBe(3);
+    expect(parsed.stars.stage_1_1_elite).toBe(3);
+    expect(parsed.stars.tower_f12).toBe(2);
+    expect(parsed.stars.realm_wood_t2).toBe(1);
+    expect(parsed.stars.garbage_stage).toBeUndefined();
+  });
+});
+
 describe('parseSaveData 保留量产宠', () => {
   it('ownedPets / team / pendingShards 中的 pet_031+ 不被剥离', () => {
     const parsed = parseSaveData({
