@@ -115,6 +115,8 @@ export function petShowcaseLoadPaths(petId: string, star = 1): readonly string[]
 /** 章节路径地图 UI（主包） */
 export const MAP_UI_IMAGES = {
   nodesSheet: `${IMG}/ui/map/nodes_sheet.png`,
+  /** 精英墩：4 帧（0~3 宝石），与 nodes_sheet 同透视 */
+  eliteNodesSheet: `${IMG}/ui/map/elite_nodes_sheet.png`,
 } as const;
 
 /** 场景背景 */

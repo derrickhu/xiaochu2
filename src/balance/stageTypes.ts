@@ -36,7 +36,8 @@ export const STAGE_TYPE_PROFILES: Readonly<Record<StageType, StageTypeDef>> = {
   elite: {
     // expMult 1.5：精英模式是「同一关再打一次」，经验回报必须明显高于普通关，
     // 否则 3 星后玩家没有任何理由回头挑战（币与碎片的差已由 coinMult/shardMult 给出）
-    type: 'elite', name: '精英', color: 0x4aa3ff,
+    // 紫金：对齐 SSR/UR 顶级档。旧蓝 0x4aa3ff 是 SR 色，地图上再乘金星 tint 会发闷绿。
+    type: 'elite', name: '精英', color: 0xb06bff,
     staminaCost: 9, coinMult: 1.4, expMult: 1.5, shardMult: 1.6, refresh: 'always',
   },
   boss: {

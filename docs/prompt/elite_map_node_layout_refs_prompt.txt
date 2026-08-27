@@ -1,0 +1,24 @@
+Mobile casual game UI concept board, 2x2 equal panels, same cream stone level node in every cell.
+Use the reference image for the stone pedestal, gold stars, tan path, green foliage, red flowers, and Q-version Chinese fantasy style only. Do not copy the old elite banner layout.
+
+Shared node in every panel:
+- Short cream cylindrical stone pedestal with gold rim, dark numeral 1 on top
+- Three large glossy gold stars in a slight arc directly above the stone
+- White caption under the stone: 1. 青苔林边
+- Soft painted tan path and green bushes background, bright casual mobile game look
+
+Four industry layouts, one per panel, equal size, thick cream divider, big latin letter in the corner of each panel:
+
+A top-left — Candy Crush Hard / Royal Match Super Hard:
+Keep the gold stars. Upgrade the STONE itself: ornate purple-gold ring around the pedestal, small shiny gold crown sitting on the rim. Three tiny bright gold gems set into the purple ring to show elite 3-star. No extra plaque, no second floating card.
+
+B top-right — AFK Arena / CN idle RPG dual stars:
+No box, no plaque. Two star rows on the same center axis, same size, 2px gap. Upper row: three glowing purple-violet stars with gold edge (elite). Lower row: three gold stars (normal). Tiny purple word 精英 only as plain text left of the upper row, no background plate.
+
+C bottom-left — Onmyoji / Honkai map medal:
+Gold stars and cream stone unchanged. A small circular purple-gold medal pinned at the upper-right of the stone, containing a mini crown and three tiny gold stars. Same corner every time, like a badge clipped onto the node.
+
+D bottom-right — Summoners War awakened overlay:
+Only ONE star row of three large gold stars. Each star has a bright purple-gold outer halo/ring meaning elite also cleared. No second row, no plaque, no extra box. The stone stays cream.
+
+Clean mockup, high readability, no watermark, no extra UI chrome.

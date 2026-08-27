@@ -40,16 +40,17 @@ const BOSS_PET_OFFSET_Y = 8;
 /** 通关星：主界面要明显大于石礅（主星 = 普通难度） */
 const NODE_STAR_SIZE = 22;
 const NODE_STAR_GAP = 3;
-/** 精英星：次要徽标，略小于普通主星 */
-const NODE_ELITE_STAR_SIZE = 14;
-const NODE_ELITE_STAR_GAP = 2;
-const ELITE_STAR_TINT = 0x4aa3ff;
+/** 精英墩比普通墩略大，给紫金饰和宝石留辨识度 */
+const ELITE_NODE_W = 64;
+const ELITE_NODE_H = 56;
+const ELITE_NODE_COLS = 4;
 /** 关卡路径节点略下移（屏幕像素），背景仍满屏；勿加在 world 上否则顶栏下露底色 */
 const TITLE_MAP_NODE_TOP_INSET = 32;
 
 type NodeKind = 'cleared' | 'active' | 'locked';
 
 const nodeFrameCache = new Map<NodeKind, PIXI.Texture>();
+const eliteNodeFrameCache = new Map<number, PIXI.Texture>();
 
 export interface TitleScreenWorldResult {
   /** 已缩放居中的根容器（背景 + 节点） */
@@ -121,6 +122,19 @@ function nodeShieldTexture(kind: NodeKind): PIXI.Texture | null {
   return frame;
 }
 
+/** 精英墩 4 帧：列 0~3 = 精英星数 */
+function eliteNodeTexture(eliteStars: number): PIXI.Texture | null {
+  const col = Math.max(0, Math.min(ELITE_NODE_COLS - 1, eliteStars));
+  const cached = eliteNodeFrameCache.get(col);
+  if (cached) return cached;
+  const sheet = TextureCache.get(MAP_UI_IMAGES.eliteNodesSheet);
+  if (!sheet) return null;
+  const fw = Math.floor(sheet.width / ELITE_NODE_COLS);
+  const frame = new PIXI.Texture(sheet.baseTexture, new PIXI.Rectangle(col * fw, 0, fw, sheet.height));
+  eliteNodeFrameCache.set(col, frame);
+  return frame;
+}
+
 function resolveNodeKind(unlocked: boolean, stars: number, active: boolean): NodeKind {
   if (!unlocked) return 'locked';
   if (stars > 0) return 'cleared';
@@ -163,7 +177,7 @@ function buildStageNode(
     unlocked: boolean;
     /** 普通难度星（主进度） */
     stars: number;
-    /** 精英难度星（次要徽标；未解锁精英时为 0） */
+    /** 精英难度星（精英墩贴图帧 0~3；未解锁精英时为 0） */
     eliteStars: number;
     active: boolean;
     onTap: () => void;
@@ -177,13 +191,21 @@ function buildStageNode(
   wrap.hitArea = new PIXI.Circle(0, -4, NODE_HIT_R);
 
   const kind = resolveNodeKind(opts.unlocked, opts.stars, opts.active);
-  const nodeTex = nodeShieldTexture(kind);
+  const showElite = !stage.isBoss
+    && opts.unlocked
+    && stage.type === 'normal'
+    && opts.stars >= ELITE_MODE.unlockStars
+    && hasEliteVariant(stage);
+  const eliteTex = showElite ? eliteNodeTexture(opts.eliteStars) : null;
+  const nodeW = eliteTex ? ELITE_NODE_W : NODE_W;
+  const nodeH = eliteTex ? ELITE_NODE_H : NODE_H;
+  const nodeTex = eliteTex ?? nodeShieldTexture(kind);
   if (nodeTex) {
     const node = new PIXI.Sprite(nodeTex);
     // 锚点偏下：圆柱底贴路径
     node.anchor.set(0.5, 0.88);
-    node.width = NODE_W;
-    node.height = NODE_H;
+    node.width = nodeW;
+    node.height = nodeH;
     wrap.addChild(node);
   } else {
     const fallback = new PIXI.Graphics();
@@ -204,16 +226,16 @@ function buildStageNode(
       strokeColor: 0xfff8ec,
       strokeWidth: 3,
     });
-    num.position.set(0, -NODE_H * 0.42);
+    num.position.set(0, -nodeH * (eliteTex ? 0.48 : 0.42));
     wrap.addChild(num);
   } else {
     const lock = makeNodeLockIcon();
-    lock.position.set(0, -NODE_H * 0.42);
+    lock.position.set(0, -nodeH * 0.42);
     wrap.addChild(lock);
   }
 
   // 主星 = 普通难度（解锁链只认这套）
-  const normalStarY = -NODE_H * 0.95 - NODE_STAR_SIZE * 0.15;
+  const normalStarY = -nodeH * 0.95 - NODE_STAR_SIZE * 0.15;
   if (opts.stars > 0) {
     const starLine = makeStarRow({
       star: opts.stars,
@@ -251,13 +273,6 @@ function buildStageNode(
     });
     badge.position.set(-NODE_W * 0.28, -NODE_H * 0.72);
     wrap.addChild(badge);
-  } else if (
-    opts.unlocked
-    && opts.stars >= ELITE_MODE.unlockStars
-    && hasEliteVariant(stage)
-  ) {
-    // 次要：精英角标 + 蓝星（进度独立，不替代普通主星）
-    attachEliteProgress(wrap, opts.eliteStars, normalStarY);
   }
 
   if (opts.active && opts.unlocked && opts.stars === 0) {
@@ -287,48 +302,6 @@ function buildStageNode(
   }
 
   return wrap;
-}
-
-/** 普通满 3 星后：节点上方叠「精英」短牌 + 蓝系小星 */
-function attachEliteProgress(
-  wrap: PIXI.Container,
-  eliteStars: number,
-  normalStarY: number,
-): void {
-  const row = new PIXI.Container();
-  const badge = makeText('精英', {
-    size: FONT_SIZE.xxs,
-    fill: getStageType('elite').color,
-    bold: true,
-    anchor: [0, 0.5],
-    strokeColor: 0x2a3444,
-    strokeWidth: 2,
-  });
-  row.addChild(badge);
-
-  const stars = makeStarRow({
-    star: eliteStars,
-    maxStar: 3,
-    style: 'sprite',
-    starSize: NODE_ELITE_STAR_SIZE,
-    gap: NODE_ELITE_STAR_GAP,
-    anchor: 'left',
-  });
-  // 点亮星改蓝，暗星保持灰
-  for (const child of stars.children) {
-    if (child instanceof PIXI.Sprite && child.alpha >= 0.9) {
-      child.tint = ELITE_STAR_TINT;
-    }
-  }
-  stars.position.set(badge.width + 4, 0);
-  row.addChild(stars);
-
-  const bounds = row.getLocalBounds();
-  row.position.set(
-    -bounds.width / 2 - bounds.x,
-    normalStarY - NODE_STAR_SIZE * 0.55 - NODE_ELITE_STAR_SIZE * 0.5,
-  );
-  wrap.addChild(row);
 }
 
 /**
@@ -468,6 +441,7 @@ function resolveNodePositions(
 /** 全屏 9:16 世界层：修仙背景铺满 + 关卡节点 */
 export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWorldResult {
   nodeFrameCache.clear();
+  eliteNodeFrameCache.clear();
 
   const { width: designW, height: designH } = CHAPTER_MAP_DESIGN;
   const fit = chapterMapDesignFit(opts.screenW, opts.screenH);

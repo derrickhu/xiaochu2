@@ -1,0 +1,36 @@
+ART STYLE (MANDATORY — xiaochu2 brand):
+Unified Q-version cute-chibi xianxia guofeng mobile game UI icon sheet.
+Soft cel-shaded, thin clean outlines, chubby rounded proportions.
+Same family as the attached cream stage cylinders: short cute 圆台, visible side height, flat top disc, soft painted 3D, auspicious cloud relief on the drum wall.
+FORBIDDEN: photorealistic, dark fantasy, neon glow, heavy 3D PBR, cheap vector shapes, hand-drawn scribbles.
+
+Use the reference image for layout/style only.
+Keep the SAME camera, cylinder height, top-face size, and soft drop shadow as the cream nodes.
+Do not copy any existing text from the reference.
+This is the ELITE / Hard upgrade of that exact pedestal (Candy Crush Hard / Royal Match Super Hard).
+
+LAYOUT: single row, exactly 4 equal cells, pure black background, generous padding, each icon centered.
+Cell order LEFT → RIGHT = elite star count 0, 1, 2, 3.
+
+Shared elite pedestal in every cell:
+- Same short cream-white polished top disc as the reference (empty flat top for a number overlay later)
+- Thick warm gold rims on top and bottom
+- Drum wall is rich royal purple (deep imperial purple, NOT neon), with the same chubby cloud relief now tinted purple-gold
+- Small ornate gold crown sitting on the LEFT of the top rim, Q-version, painted, not a flat icon
+- Three diamond gem sockets set into the FRONT of the purple drum, evenly spaced, same size
+- Soft contact shadow under the cylinder
+- NO number, NO stars floating above, NO Chinese/English text, NO extra plaque
+
+Per cell gems only:
+1) 0 stars: three empty dark-amethyst recessed sockets, gold thin rim, unlit
+2) 1 star: LEFT gem lit as a bright faceted gold-amber diamond with highlight; other two empty
+3) 2 stars: LEFT + CENTER gems lit; right empty
+4) 3 stars: all three gems lit; slightly stronger gold rim and a soft warm gold aura around the cylinder (painted in the asset)
+
+REQUIREMENTS:
+- Same size/perspective for all 4
+- Top face kept clear and cream so the game can overlay stage numbers
+- Premium painted game-art, same finish as the cream reference cylinders
+- Transparent or pure black background
+
+NO TEXT, no labels, no captions, no writing, no digits anywhere in the image.
