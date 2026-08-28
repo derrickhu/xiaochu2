@@ -26,7 +26,7 @@
       "installDependency": true,
       "envVariables": {
         "ANALYTICS_COLLECTION": "analytics_events",
-        "ANALYTICS_GAME_KEYS": "hotpot,huahua,caizhu,xiaochu,petTower,petTower_tt"
+        "ANALYTICS_GAME_KEYS": "hotpot,huahua,caizhu,xiaochu,petTower,petTower_tt,cunkou"
       }
     }
   ]
