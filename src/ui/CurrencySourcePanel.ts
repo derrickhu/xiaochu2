@@ -104,7 +104,7 @@ function sourceList(kind: CurrencySourceKind): CurrencySource[] {
       },
       {
         title: '通天塔',
-        hint: '战斗掉落与传承兑换都有灵宠币',
+        hint: '爬塔得印记，商店印记页可兑灵宠币',
         icon: UI_IMAGES.railTower,
         go: { kind: 'scene', scene: 'tower' },
       },
@@ -144,7 +144,7 @@ function sourceList(kind: CurrencySourceKind): CurrencySource[] {
     },
     {
       title: '通天塔',
-      hint: '里程碑与传承均可兑换灵玉',
+      hint: '里程碑给灵玉，印记也可在商店兑换',
       icon: UI_IMAGES.railTower,
       go: { kind: 'scene', scene: 'tower' },
     },

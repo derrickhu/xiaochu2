@@ -149,6 +149,7 @@ export class BattleResultOverlay {
       lingyu: 0,
       universal: result.universal,
       shards: [],
+      towerMarks: 0,
     };
 
     if (context) {
@@ -165,10 +166,15 @@ export class BattleResultOverlay {
       for (const pet of ctrl.team) {
         skillCharges[pet.def.id] = pet.charge;
       }
-      extraLines.push(...settleContextVictory(context, {
+      const settled = settleContextVictory(context, {
         hpPctLeft: ctrl.heroHp / Math.max(1, ctrl.heroMaxHp),
         skillCharges,
-      }));
+      });
+      granted.towerMarks = settled.towerMarks;
+      extraLines.push(...settled.lines);
+      if (context.kind === 'tower' && settled.towerMarks > 0) {
+        void TextureCache.preload([UI_IMAGES.towerCurrencySeal]);
+      }
     } else {
       const repeat = PlayerData.isRepeatClear(ctrl.stage.id);
       // 实发：重复通关币/经验同衰减，翻倍广告必须按「实发」翻
@@ -713,7 +719,7 @@ export class BattleResultOverlay {
       applyAdDouble: (bonus: ConcreteReward) => void;
     };
     const innerW = PANEL_W - 64;
-    type ItemKey = 'coins' | 'exp' | 'shard' | 'universal' | 'lingyu';
+    type ItemKey = 'towerMarks' | 'coins' | 'exp' | 'shard' | 'universal' | 'lingyu';
     const items: {
       key: ItemKey;
       base: number;
@@ -723,7 +729,19 @@ export class BattleResultOverlay {
       amountFill: number;
       holdHint?: string;
       formatAmount?: (n: number) => string;
-    }[] = [
+    }[] = [];
+    if ((granted.towerMarks ?? 0) > 0) {
+      items.push({
+        key: 'towerMarks',
+        base: granted.towerMarks ?? 0,
+        iconPath: UI_IMAGES.towerCurrencySeal,
+        name: '登塔印记',
+        amount: `+${granted.towerMarks}`,
+        amountFill: 0x5c8a4a,
+        holdHint: `持有 ${PlayerData.towerCoins}`,
+      });
+    }
+    items.push(
       {
         key: 'coins',
         base: granted.coins,
@@ -741,7 +759,7 @@ export class BattleResultOverlay {
         amount: `+${granted.exp}`,
         amountFill: REWARD_GREEN,
       },
-    ];
+    );
     for (const shard of granted.shards.slice(0, 1)) {
       items.push({
         key: 'shard',
@@ -819,6 +837,13 @@ export class BattleResultOverlay {
 
     box.applyAdDouble = (bonus) => {
       // 与「奖励 ×2」文案对齐：面板上出现的项都滚到翻倍后总额
+      if ((bonus.towerMarks ?? 0) > 0 && slots.towerMarks) {
+        this._animateRewardDouble(
+          slots.towerMarks,
+          slots.towerMarks.base + (bonus.towerMarks ?? 0),
+          () => `持有 ${PlayerData.towerCoins}`,
+        );
+      }
       if (bonus.coins > 0 && slots.coins) {
         this._animateRewardDouble(
           slots.coins, slots.coins.base + bonus.coins, () => `持有 ${PlayerData.coins}`,

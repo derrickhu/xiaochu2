@@ -3,25 +3,23 @@
  *
  * 视觉对齐 docs/ui-redesign/tower/legacy-ui-v1.png ——
  * 卷轴金玉边框 + 圆形节点图标 + 三列色带 + 人话教学句。
- * 「传承」有限永久解锁；「兑换」不封顶日限出口。
+ * 「传承」有限永久解锁；印记兑换在商店，不在这里另开一口。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { Platform } from '@/core/PlatformService';
 import { TextureCache } from '@/core/TextureCache';
 import { TweenManager, Ease } from '@/core/TweenManager';
-import { formatReward } from '@/balance/rewards';
 import {
   LEGACY_LINE_HINT, LEGACY_LINE_NAME, LEGACY_PANEL_FOOTER, LEGACY_PANEL_INTRO,
-  TOWER_EXCHANGES, TOWER_LEGACY_NODES,
+  TOWER_LEGACY_NODES,
   type LegacyLine, type TowerLegacyNode,
 } from '@/balance/towerLegacy';
 import { UI_IMAGES } from '@/config/Assets';
 import { ensureAssets } from '@/config/Subpackages';
 import { PlayerData } from '@/game/PlayerData';
-import { grantReward } from '@/game/rewardGrant';
 import {
-  COLORS, FONT_SIZE, RADIUS,
+  COLORS, FONT_SIZE,
   bindLazySprite, makeCloseButton, makePanel, makeText, pressFeedback,
 } from '@/ui';
 import { bindPointerTap } from '@/utils/bindPointerTap';
@@ -136,8 +134,6 @@ export function showTowerLegacyPanel(
   };
   bindPointerTap(scrim, close);
 
-  let tab: 'legacy' | 'exchange' = 'legacy';
-
   const render = (): void => {
     for (const u of unbinds) u();
     unbinds.length = 0;
@@ -204,23 +200,12 @@ export function showTowerLegacyPanel(
     intro.position.set(0, contentTop + 46);
     panel.addChild(intro);
 
-    panel.addChild(buildTabs(contentW, contentTop + 72, tab, (next) => {
-      tab = next;
-      render();
-    }));
-
-    const bodyTop = contentTop + 96;
+    const bodyTop = contentTop + 72;
     const footerReserve = 30;
     const bodyBottom = contentBottom - footerReserve;
-    if (tab === 'legacy') {
-      panel.addChild(buildLegacyBody(
-        contentLeft, contentW, bodyTop, bodyBottom, render, unbinds,
-      ));
-    } else {
-      panel.addChild(buildExchangeBody(
-        contentW, bodyTop, bodyBottom - bodyTop, render, unbinds,
-      ));
-    }
+    panel.addChild(buildLegacyBody(
+      contentLeft, contentW, bodyTop, bodyBottom, render, unbinds,
+    ));
 
     // 底栏教学：贴内区底边之上
     const footerY = contentBottom - 12;
@@ -298,50 +283,6 @@ function buildBalanceChip(
   chip.addChild(label);
   chip.position.set(x, y);
   return chip;
-}
-
-function buildTabs(
-  panelW: number,
-  y: number,
-  active: 'legacy' | 'exchange',
-  onSwitch: (tab: 'legacy' | 'exchange') => void,
-): PIXI.Container {
-  const row = new PIXI.Container();
-  row.position.set(0, y);
-  const tabs: Array<{ id: 'legacy' | 'exchange'; label: string }> = [
-    { id: 'legacy', label: '传承' },
-    { id: 'exchange', label: '兑换' },
-  ];
-  const tabW = 120;
-  const tabH = 32;
-  let x = -(tabs.length * tabW + (tabs.length - 1) * 12) / 2 + tabW / 2;
-
-  for (const t of tabs) {
-    const on = t.id === active;
-    const item = new PIXI.Container();
-    item.position.set(x, 0);
-    const bg = new PIXI.Graphics();
-    bg.beginFill(on ? 0xf0d9a8 : 0xf5efe4, 1);
-    bg.lineStyle(1.8, on ? GOLD : 0xd4c8b4, 1);
-    bg.drawRoundedRect(-tabW / 2, -tabH / 2, tabW, tabH, tabH / 2);
-    bg.endFill();
-    item.addChild(bg);
-    const label = makeText(t.label, {
-      size: FONT_SIZE.xs, fill: on ? INK : COLORS.textDisabled, bold: true, anchor: 0.5,
-    });
-    item.addChild(label);
-
-    if (!on) {
-      item.eventMode = 'static';
-      item.cursor = 'pointer';
-      item.hitArea = new PIXI.Rectangle(-tabW / 2, -tabH / 2, tabW, tabH);
-      pressFeedback(item);
-      bindPointerTap(item, () => onSwitch(t.id));
-    }
-    row.addChild(item);
-    x += tabW + 12;
-  }
-  return row;
 }
 
 function buildLegacyBody(
@@ -648,108 +589,4 @@ function buildTag(text: string, line: LegacyLine): PIXI.Container {
   label.position.set(padX, h / 2);
   c.addChild(label);
   return c;
-}
-
-function buildExchangeBody(
-  contentW: number,
-  top: number,
-  bodyH: number,
-  refresh: () => void,
-  unbinds: Array<() => void>,
-): PIXI.Container {
-  const body = new PIXI.Container();
-  const w = contentW;
-  const rowH = 76;
-
-  const intro = makeText('传承点满之后，印记仍可每日兑换资源', {
-    size: FONT_SIZE.xxs, fill: COLORS.textSub, bold: true, anchor: 0.5,
-    wordWrapWidth: w, align: 'center',
-  });
-  intro.position.set(0, top + 8);
-  body.addChild(intro);
-
-  let y = top + 30;
-  for (const opt of TOWER_EXCHANGES) {
-    const left = PlayerData.towerExchangeLeft(opt.id);
-    const affordable = PlayerData.towerCoins >= opt.cost;
-    const enabled = left > 0 && affordable;
-
-    const row = new PIXI.Container();
-    row.position.set(-w / 2, y);
-    body.addChild(row);
-    y += rowH + 10;
-
-    row.addChild(makePanel({
-      width: w, height: rowH, radius: RADIUS.card - 4,
-      bg: enabled ? 0xfdf6e9 : 0xf3efe4, bgAlpha: 1,
-      border: enabled ? 0xd8a63c : 0xd4c8b4, borderWidth: enabled ? 2 : 1.5,
-      centered: false,
-    }));
-
-    const name = makeText(formatReward(opt.reward), {
-      size: FONT_SIZE.xs, fill: enabled ? INK : COLORS.textDisabled, bold: true, anchor: [0, 0.5],
-    });
-    name.position.set(16, 26);
-    row.addChild(name);
-
-    const limit = makeText(`今日剩余 ${left}/${opt.dailyLimit}`, {
-      size: FONT_SIZE.xxs, fill: COLORS.textSub, bold: true, anchor: [0, 0.5],
-    });
-    limit.position.set(16, 52);
-    row.addChild(limit);
-
-    // 价格 chip
-    const priceText = makeText(`${opt.cost}`, {
-      size: FONT_SIZE.xs,
-      fill: enabled ? 0xfffaf0 : 0xb0a496,
-      bold: true, anchor: [0, 0.5],
-    });
-    const sealS = 18;
-    const chipPad = 10;
-    const chipW = chipPad + sealS + 4 + priceText.width + chipPad;
-    const chipH = 30;
-    const chipX = w - 16 - chipW;
-    const chipY = (rowH - chipH) / 2;
-    const chipBg = new PIXI.Graphics();
-    chipBg.beginFill(enabled ? 0x5f8a68 : 0xe8e0d4, 1);
-    chipBg.lineStyle(1, enabled ? 0x3f6a48 : 0xc4b49a, 1);
-    chipBg.drawRoundedRect(chipX, chipY, chipW, chipH, chipH / 2);
-    chipBg.endFill();
-    row.addChild(chipBg);
-
-    const seal = new PIXI.Sprite(PIXI.Texture.EMPTY);
-    seal.anchor.set(0.5);
-    seal.position.set(chipX + chipPad + sealS / 2, rowH / 2);
-    row.addChild(seal);
-    unbinds.push(bindLazySprite(seal, {
-      path: UI_IMAGES.towerCurrencySeal,
-      ensure: true,
-      onApplied: (tex) => {
-        seal.texture = tex;
-        seal.scale.set(sealS / Math.max(tex.width, tex.height));
-      },
-    }));
-    priceText.position.set(chipX + chipPad + sealS + 4, rowH / 2);
-    row.addChild(priceText);
-
-    if (!enabled) continue;
-    row.eventMode = 'static';
-    row.cursor = 'pointer';
-    row.hitArea = new PIXI.Rectangle(0, 0, w, rowH);
-    pressFeedback(row);
-    bindPointerTap(row, () => {
-      const done = PlayerData.consumeTowerExchange(opt.id);
-      if (!done) {
-        Platform.showToast(left <= 0 ? '今日兑换次数已用完' : '登塔印记不足');
-        return;
-      }
-      grantReward(done.reward);
-      analytics.track('tower_exchange', { option_id: opt.id, cost: opt.cost });
-      Platform.showToast(`兑换成功 · ${formatReward(done.reward)}`, 'success');
-      refresh();
-    });
-  }
-
-  if (y > top + bodyH) body.scale.set(Math.max(0.8, bodyH / (y - top)));
-  return body;
 }

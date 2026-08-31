@@ -44,7 +44,7 @@ export const LEGACY_PANEL_INTRO =
   '花印记买永久便利，重置后还在';
 
 export const LEGACY_PANEL_FOOTER =
-  '点条目消耗印记升级 · 点满仍可去「兑换」花印记';
+  '点条目消耗印记升级 · 点满后印记去商店花';
 
 /** 每级「回气」为战斗层追加的回血比例 */
 const REGEN_PER_LEVEL = 0.005;
@@ -78,7 +78,7 @@ export const TOWER_LEGACY_NODES: readonly TowerLegacyNode[] = [
   {
     id: 'legacy_checkpoint', name: '稳固', line: 'root',
     costs: [500, 1200],
-    desc: (lv) => `战败回退更近（存档每 ${Math.max(2, TOWER.checkpointEvery - lv)} 层）`,
+    desc: (lv) => `战败回到更近的层（每 ${Math.max(2, TOWER.checkpointEvery - lv)} 层一个存档）`,
   },
   {
     id: 'legacy_second_wind', name: '续命', line: 'root',
@@ -193,7 +193,7 @@ export function legacyTotalCost(): number {
 
 /**
  * 传承树是有限的（点满即止），塔币若只有这一个出口，满级玩家的产出就彻底作废。
- * 兑换提供不封顶的长期出口，靠每日次数而非总量来限制通胀。
+ * 兑换挂在商店「印记」页，靠每日次数而非总量限制通胀；塔内不再另开兑换口。
  */
 export interface TowerExchangeOption {
   id: string;
@@ -206,11 +206,11 @@ export interface TowerExchangeOption {
 
 export const TOWER_EXCHANGES: readonly TowerExchangeOption[] = [
   {
-    id: 'tex_coins', name: '灵宠币', cost: 60, dailyLimit: 5,
-    reward: { coins: 2000 },
+    id: 'tex_coins', name: '灵宠币', cost: 40, dailyLimit: 5,
+    reward: { coins: 900 },
   },
   {
-    id: 'tex_lingyu', name: '灵玉', cost: 100, dailyLimit: 3,
+    id: 'tex_lingyu', name: '灵玉', cost: 90, dailyLimit: 3,
     reward: { lingyu: 30 },
   },
   {

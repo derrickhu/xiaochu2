@@ -1,5 +1,5 @@
 /**
- * 商店场景：灵宠币定向兑换碎片
+ * 商店场景：灵宠币兑碎片 + 登塔印记兑资源
  *
  * 对齐 game_assets/.../prototypes/ui/shop_bg_interior_compact_v1.png / shop_sidebar_compact_v1.png：
  * 短 Tab 栈（无通栏长轨）+ 右区双列商品卡；洞府货架氛围底。
@@ -16,8 +16,12 @@ import { ensureAssets } from '@/config/Subpackages';
 import { UI } from '@/balance/ui';
 import { PETS, type PetDef } from '@/balance/pets';
 import { ECONOMY } from '@/balance/economy';
+import { formatReward } from '@/balance/rewards';
+import { TOWER_EXCHANGES } from '@/balance/towerLegacy';
 import { PlayerData } from '@/game/PlayerData';
+import { grantReward } from '@/game/rewardGrant';
 import { reportQuest } from '@/game/dailyQuestTracker';
+import { analytics } from '@/analytics';
 import {
   BACKGROUND_IMAGES, UI_IMAGES, UI_SHOP_IMAGES, UI_FX_IMAGES,
 } from '@/config/Assets';
@@ -66,7 +70,12 @@ const SHOP_UI = {
   cardSlice: { left: 48, top: 48, right: 48, bottom: 48 },
 } as const;
 
-type ShopTabId = 'shard' | 'honor' | 'realm' | 'lingyu';
+export type ShopTabId = 'shard' | 'honor' | 'realm' | 'lingyu';
+
+export interface ShopEnterData {
+  tab?: ShopTabId;
+  from?: string;
+}
 
 interface ShopTabDef {
   id: ShopTabId;
@@ -77,7 +86,7 @@ interface ShopTabDef {
 
 const SHOP_TABS: readonly ShopTabDef[] = [
   { id: 'shard', label: '碎片', iconPath: UI_SHOP_IMAGES.tabIconShard, enabled: true },
-  { id: 'honor', label: '荣誉', iconPath: UI_SHOP_IMAGES.tabIconHonor, enabled: false },
+  { id: 'honor', label: '印记', iconPath: UI_SHOP_IMAGES.tabIconHonor, enabled: true },
   { id: 'realm', label: '秘境', iconPath: UI_SHOP_IMAGES.tabIconRealm, enabled: false },
   { id: 'lingyu', label: '灵玉', iconPath: UI_SHOP_IMAGES.tabIconLingyu, enabled: false },
 ];
@@ -165,11 +174,12 @@ function makeCardBuyButton(
   enabled: boolean,
   onTap: () => void,
   blockTap?: () => boolean,
+  iconPath: string = UI_IMAGES.iconCoin,
 ): ShopBuyHandle {
   const { buyH, buyMinW, buyFont, buyCoinIcon } = SHOP_UI;
   const btn = new PIXI.Container() as ShopBuyHandle;
   const priceRow = makeIconLabel({
-    iconPath: UI_IMAGES.iconCoin,
+    iconPath,
     iconSize: buyCoinIcon,
     text: `${cost}`,
     size: buyFont,
@@ -238,12 +248,17 @@ export class ShopScene implements Scene {
   private _fx: SceneFx | null = null;
   private _cards = new Map<string, ShopCardRef>();
   private _tabId: ShopTabId = 'shard';
+  private _from: string | null = null;
   private readonly _enterSeq = new SceneEnterSeq();
   private _infoPopup: ShopInfoPopup | null = null;
 
-  onEnter(): void {
+  onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
+    const enter = data as ShopEnterData | undefined;
+    this._from = typeof enter?.from === 'string' ? enter.from : null;
+    if (enter?.tab === 'honor' || enter?.tab === 'shard') this._tabId = enter.tab;
+    else this._tabId = 'shard';
     const token = this._enterSeq.next();
     this._fx = new SceneFx();
     this._build({ animate: true });
@@ -329,7 +344,10 @@ export class ShopScene implements Scene {
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.shop, w, h));
 
     const back = makeBackButton({
-      onTap: () => SceneManager.switchTo('title', PlayerData.titleEnter()),
+      onTap: () => {
+        if (this._from === 'tower') SceneManager.switchTo('tower');
+        else SceneManager.switchTo('title', PlayerData.titleEnter());
+      },
     });
     back.position.set(56, Game.safeHeaderCenterY);
     this.container.addChild(back);
@@ -340,9 +358,10 @@ export class ShopScene implements Scene {
     this._refreshCoins(header.coinCenterY);
 
     const geo = this._contentGeometry();
-    const hint = makeText('◆  灵宠币兑换定向碎片  ◆', {
-      size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5,
-    });
+    const hint = makeText(
+      this._tabId === 'honor' ? '◆  登塔印记兑换资源  ◆' : '◆  灵宠币兑换定向碎片  ◆',
+      { size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5 },
+    );
     hint.position.set(geo.contentLeft + geo.contentW / 2, header.hintCenterY);
     this.container.addChild(hint);
 
@@ -357,6 +376,8 @@ export class ShopScene implements Scene {
     let contentH = 40;
     if (this._tabId === 'shard') {
       contentH = this._buildShardGrid(content, animTargets, header.listTop);
+    } else if (this._tabId === 'honor') {
+      contentH = this._buildHonorList(content, animTargets);
     } else {
       const empty = makeText('该商店即将开放', {
         size: FONT_SIZE.sm, fill: COLORS.textSub, bold: true, anchor: 0.5,
@@ -419,7 +440,11 @@ export class ShopScene implements Scene {
     card.addChild(zone);
   }
 
-  /** 短 Tab 栈：仅 4 枚芯片，无通栏长轨（避免半截悬空） */
+  /**
+   * 短 Tab 栈：只列已开放页，无通栏长轨（避免半截悬空）。
+   * 未开放的页不占位 —— 灰着摆在那只是让玩家反复点、反复吃「即将开放」toast。
+   * 开放时把 SHOP_TABS 里对应项的 enabled 改 true 即可。
+   */
   private _buildSidebar(listTop: number): void {
     const stack = new PIXI.Container();
     stack.position.set(0, listTop);
@@ -427,6 +452,7 @@ export class ShopScene implements Scene {
 
     let y = 4;
     for (const tab of SHOP_TABS) {
+      if (!tab.enabled) continue;
       const selected = tab.id === this._tabId;
       const tabNode = this._makeTab(tab, selected);
       tabNode.position.set(SHOP_UI.sidebarW / 2, y + SHOP_UI.tabH / 2);
@@ -454,26 +480,20 @@ export class ShopScene implements Scene {
       icon.scale.set(s);
       // 单层底板：图标居中偏上，文案贴底，不再给「底栏」留空
       icon.position.set(0, -12);
-      icon.alpha = tab.enabled ? 1 : 0.45;
       node.addChild(icon);
     }
 
     const label = makeText(tab.label, {
       size: FONT_SIZE.xs,
-      fill: selected ? COLORS.textMain : (tab.enabled ? COLORS.textSub : COLORS.textDisabled),
+      fill: selected ? COLORS.textMain : COLORS.textSub,
       bold: true,
       anchor: 0.5,
       role: 'title',
     });
     label.position.set(0, 28);
-    label.alpha = tab.enabled ? 1 : 0.55;
     node.addChild(label);
 
     bindPointerTap(node, () => {
-      if (!tab.enabled) {
-        Platform.showToast(`${tab.label}商店即将开放`);
-        return;
-      }
       if (tab.id === this._tabId) return;
       this._tabId = tab.id;
       this._build({ animate: false });
@@ -483,6 +503,75 @@ export class ShopScene implements Scene {
     node.cursor = 'pointer';
     pressFeedback(node);
     return node;
+  }
+
+  /** 印记兑换：三档日限货，单列卡，和碎片页同一套底板 */
+  private _buildHonorList(content: PIXI.Container, animTargets: PIXI.Container[]): number {
+    const geo = this._contentGeometry();
+    const rowH = 148;
+    let y = 0;
+    for (const opt of TOWER_EXCHANGES) {
+      const cardX = geo.contentLeft + geo.contentW / 2;
+      const cardY = y + rowH / 2;
+      const card = this._buildHonorCard(opt.id, geo.contentW, rowH);
+      card.position.set(cardX, cardY);
+      content.addChild(card);
+      animTargets.push(card);
+      y += rowH + SHOP_UI.cardGapY;
+    }
+    return y;
+  }
+
+  private _buildHonorCard(optionId: string, cardW: number, cardH: number): PIXI.Container {
+    const opt = TOWER_EXCHANGES.find((e) => e.id === optionId);
+    const card = new PIXI.Container();
+    if (!opt) return card;
+    addNineSliceBg(card, UI_SHOP_IMAGES.cardPanel, cardW, cardH, SHOP_UI.cardSlice)
+      || addScaledSprite(card, UI_SHOP_IMAGES.cardPanel, cardW, cardH);
+
+    const left = PlayerData.towerExchangeLeft(opt.id);
+    const affordable = PlayerData.towerCoins >= opt.cost;
+    const enabled = left > 0 && affordable;
+
+    const name = makeText(formatReward(opt.reward), {
+      size: SHOP_UI.nameSize, fill: COLORS.textMain, bold: true, anchor: [0, 0.5], role: 'title',
+    });
+    name.position.set(-cardW / 2 + 28, -22);
+    card.addChild(name);
+
+    const limit = makeText(`今日剩余 ${left}/${opt.dailyLimit}`, {
+      size: SHOP_UI.subSize, fill: COLORS.textSub, bold: true, anchor: [0, 0.5],
+    });
+    limit.position.set(-cardW / 2 + 28, 8);
+    card.addChild(limit);
+
+    const buy = makeCardBuyButton(
+      opt.cost,
+      enabled,
+      () => this._onBuyHonor(opt.id),
+      () => this._scroll.moved,
+      UI_IMAGES.towerCurrencySeal,
+    );
+    buy.position.set(cardW / 2 - 86, 0);
+    card.addChild(buy);
+    return card;
+  }
+
+  private _onBuyHonor(optionId: string): void {
+    const left = PlayerData.towerExchangeLeft(optionId);
+    const done = PlayerData.consumeTowerExchange(optionId);
+    if (!done) {
+      SfxManager.playDenied();
+      Platform.showToast(left <= 0 ? '今日兑换次数已用完' : '登塔印记不足');
+      return;
+    }
+    grantReward(done.reward);
+    Platform.vibrateShort('light');
+    SfxManager.playShopPurchase();
+    analytics.track('tower_exchange', { option_id: optionId, cost: done.cost });
+    Platform.showToast(`兑换成功 · ${formatReward(done.reward)}`, 'success');
+    reportQuest('shopBuy');
+    this._build({ animate: false });
   }
 
   /** 双列平铺：通用碎片 + 全部灵宠，无分段推荐 */
@@ -751,10 +840,11 @@ export class ShopScene implements Scene {
     const { coinIconSize, coinBarH, coinBarMinW, coinBarPadX } = SHOP_UI;
     const holder = new PIXI.Container();
 
+    const honor = this._tabId === 'honor';
     const coins = makeIconLabel({
-      iconPath: UI_IMAGES.iconCoin,
+      iconPath: honor ? UI_IMAGES.towerCurrencySeal : UI_IMAGES.iconCoin,
       iconSize: coinIconSize,
-      text: `${PlayerData.coins}`,
+      text: honor ? `${PlayerData.towerCoins}` : `${PlayerData.coins}`,
       size: 26,
       fill: COLORS.textMain,
       bold: true,

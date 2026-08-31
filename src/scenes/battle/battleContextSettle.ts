@@ -45,14 +45,20 @@ export interface ContextSettleInput {
   rng?: () => number;
 }
 
-/** 副玩法胜利结算；返回展示用提示行 */
+export interface ContextSettleResult {
+  lines: string[];
+  /** 本场实发印记（已落账）；秘境为 0 */
+  towerMarks: number;
+}
+
+/** 副玩法胜利结算；返回展示用提示行与印记实发 */
 export function settleContextVictory(
   context: BattleContext,
   input: ContextSettleInput,
-): string[] {
+): ContextSettleResult {
   const rng = input.rng ?? Math.random;
   if (context.kind === 'realm') {
-    return settleRealmVictory(context.realmId, context.tier, rng);
+    return { lines: settleRealmVictory(context.realmId, context.tier, rng), towerMarks: 0 };
   }
   return settleTowerVictory(context.floor, input.hpPctLeft, input.skillCharges ?? {});
 }
@@ -79,7 +85,7 @@ function settleTowerVictory(
   floor: number,
   hpPctLeft: number,
   skillCharges: Record<string, number>,
-): string[] {
+): ContextSettleResult {
   const lines: string[] = [];
   // 塔币要在 towerAdvance 刷新 bestFloor 之前结算，否则突破奖励恒为 0
   const guardFirstClear = isMilestoneFloor(floor) && !PlayerData.isTowerMilestoneClaimed(floor);
@@ -100,11 +106,9 @@ function settleTowerVictory(
     lines.push(`第 ${floor} 层里程碑 · ${formatReward(TOWER_MILESTONE_REWARD)}`);
   }
 
-  if (coins.total > 0) {
-    const detail = coins.breakthrough > 0 || coins.guard > 0
-      ? `（含突破 ${coins.breakthrough + coins.guard}）`
-      : '';
-    lines.push(`登塔印记 +${coins.total}${detail}`);
+  // 印记进结算主奖励区，这里只留突破/守关构成，避免和主格重复写 +N
+  if (coins.breakthrough > 0 || coins.guard > 0) {
+    lines.push(`印记含突破 ${coins.breakthrough + coins.guard}`);
   }
 
   reportQuest('towerFloor');
@@ -113,5 +117,5 @@ function settleTowerVictory(
     best_floor: PlayerData.tower.bestFloor,
     tower_coins: coins.total,
   });
-  return lines;
+  return { lines, towerMarks: coins.total };
 }

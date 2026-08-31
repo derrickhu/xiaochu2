@@ -1,13 +1,15 @@
 /**
  * 通天塔（布局方案 A：塔为舞台）
  *
- * 顶栏：返回 + 匾「通天塔」+ 重置/印记
+ * 顶栏：返回 + 居中匾「通天塔」
+ * 匾下资源行：传承入口 | 重置 · 印记
  * 中央宝塔 + 五行环（无侧栏遮挡）
  * 塔下：层数浮标 + 起手血条 → 本轮信息横条 → 矮里程碑 → CTA
  *
  * 与主线差异：HP / 技能 CD 跨层继承；战败回落存档点，需消耗每日重置续爬。
  */
 import * as PIXI from 'pixi.js';
+import { EventBus } from '@/core/EventBus';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
@@ -23,6 +25,7 @@ import { TOWER_LEGACY_NODES } from '@/balance/towerLegacy';
 import { TOWER_FLOOR_KINDS, type TowerFloorKind } from '@/balance/towerPath';
 import { showTowerLegacyPanel } from './tower/TowerLegacyPanel';
 import { showTowerSkipDialog } from './tower/TowerSkipDialog';
+import { showTowerResetDialog } from './tower/TowerResetDialog';
 import { showTowerPathPicker } from './tower/TowerPathPicker';
 import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
@@ -42,6 +45,8 @@ import { analytics } from '@/analytics';
 const MILESTONE_PREVIEW = 4;
 /** 状态条 / 里程碑左右边距一致，横向占满内容区 */
 const TOWER_SIDE_PAD = 20;
+/** 匾下方资源行（传承 / 重置 / 印记）行高 */
+const RESOURCE_ROW_H = 34;
 const CTA_BTN_W = WARM_GOLD_CTA_SIZE.width;
 const CTA_BTN_H = WARM_GOLD_CTA_SIZE.height;
 /** 主按钮与直登/重置说明的间距 */
@@ -73,6 +78,7 @@ export class TowerScene implements Scene {
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
+    EventBus.on('safearea:updated', this._onSafeArea);
     this._build();
     void TextureCache.preload([
       BACKGROUND_IMAGES.tower,
@@ -83,16 +89,22 @@ export class TowerScene implements Scene {
       UI_IMAGES.btnBack,
       UI_IMAGES.iconLingyu,
       UI_IMAGES.iconShard,
+      UI_IMAGES.towerCurrencySeal,
     ]);
     void Game.warmScenePresent();
   }
 
   onExit(): void {
+    EventBus.off('safearea:updated', this._onSafeArea);
     this._buildSeq++;
     this.container.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
     });
   }
+
+  private _onSafeArea = (): void => {
+    if (SceneManager.current?.name === 'tower') this._build();
+  };
 
   private _build(): void {
     const w = Game.logicWidth;
@@ -118,21 +130,7 @@ export class TowerScene implements Scene {
     plaque.position.set(w / 2, Game.safeHeaderCenterY);
     this.container.addChild(plaque);
 
-    const resets = makeText(
-      `重置 ${PlayerData.towerResetsLeft}/${TOWER.dailyResets}`,
-      { size: FONT_SIZE.xs, fill: COLORS.textTitle, bold: true, anchor: [1, 0.5], role: 'body' },
-    );
-    resets.position.set(w - 22, Game.safeHeaderCenterY - 11);
-    this.container.addChild(resets);
-
-    const coins = makeText(
-      `登塔印记 ${PlayerData.towerCoins}`,
-      { size: FONT_SIZE.xs, fill: 0x8a6a4a, bold: true, anchor: [1, 0.5], role: 'body' },
-    );
-    coins.position.set(w - 22, Game.safeHeaderCenterY + 11);
-    this.container.addChild(coins);
-
-    this._buildLegacyEntry(w, Game.safeTop + 84);
+    this._buildResourceRow(w, Game.safeTop + 22);
 
     // 自下而上：CTA → 矮里程碑 → 本轮横条 → 层数/血条 → 塔舞台
     const contentTop = Game.safeTop + 72;
@@ -152,19 +150,98 @@ export class TowerScene implements Scene {
   }
 
   /**
-   * 传承入口挂在左侧、塔身之外：它是跨轮的长线目标，不该和「本轮状态」混在一起。
+   * 资源行：匾下方独立一行，左传承入口 / 右重置 + 印记。
+   *
+   * 不和匾挤同一行：匾居中固定占 380 宽（右缘 565），右侧又必须避开胶囊
+   * （contentRightX≈554），750 设计宽下两者必然重叠。挪到胶囊下方后整屏宽可用。
+   * 印记数字只在这里出现一次，传承入口不再重复同一个 towerCoins。
+   * 印记点进商店「印记」页，不在塔里另开兑换。
+   */
+  private _buildResourceRow(w: number, y: number): void {
+    const cy = y + RESOURCE_ROW_H / 2;
+    this._buildLegacyEntry(TOWER_SIDE_PAD, y);
+
+    const chip = new PIXI.Container();
+    const label = makeText(`印记 ${PlayerData.towerCoins}`, {
+      size: FONT_SIZE.xs, fill: 0x5c4033, bold: true, anchor: [0, 0.5], role: 'body',
+    });
+    try { label.updateText(true); } catch { /* noop */ }
+    const padX = 10;
+    const iconS = 20;
+    const chipH = 28;
+    const chipW = padX + iconS + 6 + label.width + padX;
+    const bg = new PIXI.Graphics();
+    bg.beginFill(0xfff3d8, 0.96);
+    bg.lineStyle(1.6, 0xb08a52, 1);
+    bg.drawRoundedRect(0, -chipH / 2, chipW, chipH, chipH / 2);
+    bg.endFill();
+    chip.addChild(bg);
+
+    const icon = new PIXI.Sprite(TextureCache.get(UI_IMAGES.towerCurrencySeal) ?? PIXI.Texture.EMPTY);
+    icon.anchor.set(0.5);
+    if (icon.texture.width > 1) {
+      icon.scale.set(iconS / Math.max(icon.texture.width, icon.texture.height));
+    }
+    icon.position.set(padX + iconS / 2, 0);
+    chip.addChild(icon);
+    label.position.set(padX + iconS + 6, 0);
+    chip.addChild(label);
+
+    const chipLeft = w - TOWER_SIDE_PAD - chipW;
+    chip.position.set(chipLeft, cy);
+    chip.eventMode = 'static';
+    chip.cursor = 'pointer';
+    chip.hitArea = new PIXI.Rectangle(0, -chipH / 2, chipW, chipH);
+    pressFeedback(chip);
+    bindPointerTap(chip, () => SceneManager.switchTo('shop', { tab: 'honor', from: 'tower' }));
+    this.container.addChild(chip);
+
+    const left = PlayerData.towerResetsLeft;
+    const resetChip = new PIXI.Container();
+    const resetLabel = makeText(left > 0 ? `重置 ${left}次 ›` : '重置 已用完', {
+      size: FONT_SIZE.xs,
+      fill: left > 0 ? 0x5c4033 : COLORS.textDisabled,
+      bold: true, anchor: [0, 0.5], role: 'body',
+    });
+    try { resetLabel.updateText(true); } catch { /* noop */ }
+    const resetPad = 10;
+    const resetH = 28;
+    const resetW = resetPad * 2 + resetLabel.width;
+    const resetBg = new PIXI.Graphics();
+    resetBg.beginFill(0xfff3d8, left > 0 ? 0.96 : 0.7);
+    resetBg.lineStyle(1.6, left > 0 ? 0xb08a52 : 0xc4b49a, 1);
+    resetBg.drawRoundedRect(0, -resetH / 2, resetW, resetH, resetH / 2);
+    resetBg.endFill();
+    resetChip.addChild(resetBg);
+    resetLabel.position.set(resetPad, 0);
+    resetChip.addChild(resetLabel);
+    resetChip.position.set(chipLeft - 12 - resetW, cy);
+    resetChip.eventMode = 'static';
+    resetChip.cursor = left > 0 ? 'pointer' : 'default';
+    resetChip.hitArea = new PIXI.Rectangle(0, -resetH / 2, resetW, resetH);
+    if (left > 0) {
+      pressFeedback(resetChip);
+      bindPointerTap(resetChip, () => void this._offerReset());
+    } else {
+      bindPointerTap(resetChip, () => Platform.showToast('今日重置次数已用完'));
+    }
+    this.container.addChild(resetChip);
+  }
+
+  /**
+   * 传承入口挂在资源行左端：它是跨轮的长线目标，不该和「本轮状态」混在一起。
+   * 数字交给同行右侧的印记胶囊，这里只做入口，避免同屏两处显示同一个 towerCoins。
    * 有可负担的升级时点一下金点，避免玩家攒了一堆印记却不知道能花。
    */
-  private _buildLegacyEntry(w: number, y: number): void {
+  private _buildLegacyEntry(x: number, y: number): void {
     const btn = new PIXI.Container();
-    const coins = PlayerData.towerCoins;
-    const label = makeText(coins > 0 ? `传承 ${coins}` : '传承', {
+    const label = makeText('传承 ›', {
       size: FONT_SIZE.sm, fill: 0x7a5520, bold: false, anchor: 0.5, role: 'title',
     });
     try { label.updateText(true); } catch { /* noop */ }
     const bw = Math.max(108, Math.ceil(label.width) + 28);
-    const bh = 34;
-    btn.position.set(20, y);
+    const bh = RESOURCE_ROW_H;
+    btn.position.set(x, y);
     this.container.addChild(btn);
 
     const bg = new PIXI.Graphics();
@@ -265,9 +342,10 @@ export class TowerScene implements Scene {
     const healPct = Math.round(TOWER.healPctPerFloor * 100);
     const guardPct = Math.round(TOWER.healPctPerGuard * 100);
 
+    const checkpoint = PlayerData.towerCheckpointFloor();
     const parts: Array<{ text: string; fill: number; tap?: () => void }> = [
       { text: `最高 ${tower.bestFloor}`, fill: 0x5c4033 },
-      { text: `战败回退每${PlayerData.towerLegacy.checkpointEvery}层`, fill: 0x5c4033 },
+      { text: `战败回到\n第${checkpoint}层`, fill: 0x5c4033 },
       {
         text: blessLabel,
         fill: blessTotal > 0 ? 0x7a5520 : 0x8a6a4a,
@@ -704,7 +782,7 @@ export class TowerScene implements Scene {
       width: CTA_BTN_W,
       height: CTA_BTN_H,
       enabled: canReset,
-      onTap: () => void this._reset(needsAd),
+      onTap: () => void this._offerReset(),
     });
     btn.position.set(w / 2, y + CTA_BTN_H / 2);
     this.container.addChild(btn);
@@ -806,6 +884,25 @@ export class TowerScene implements Scene {
       context,
       backScene: 'tower',
     } satisfies TeamEnterData);
+  }
+
+  private async _offerReset(): Promise<void> {
+    if (PlayerData.towerResetsLeft <= 0) {
+      Platform.showToast('今日重置次数已用完');
+      return;
+    }
+    const start = PlayerData.towerCheckpointFloor();
+    const seq = this._buildSeq;
+    const ok = await showTowerResetDialog(this.container, {
+      startFloor: start,
+      reroll: Math.max(0, start - 1) + PlayerData.towerLegacy.startBlesses,
+      needsAd: PlayerData.towerResetNeedsAd,
+      midRun: !PlayerData.towerRunEnded,
+      left: PlayerData.towerResetsLeft,
+      total: TOWER.dailyResets + PlayerData.towerLegacy.bonusFreeResets,
+    });
+    if (!ok || seq !== this._buildSeq) return;
+    await this._reset(PlayerData.towerResetNeedsAd);
   }
 
   private async _reset(needsAd: boolean): Promise<void> {

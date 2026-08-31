@@ -122,6 +122,7 @@ export const SHOP_SHELL_IMAGES: readonly string[] = [
   UI_SHOP_IMAGES.tabIconHonor,
   UI_SHOP_IMAGES.tabIconRealm,
   UI_SHOP_IMAGES.tabIconLingyu,
+  UI_IMAGES.towerCurrencySeal,
   UI_FX_IMAGES.particleSpark,
 ];
 

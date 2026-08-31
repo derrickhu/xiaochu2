@@ -31,14 +31,17 @@ export interface ConcreteReward {
   lingyu: number;
   universal: number;
   shards: { petId: string; count: number }[];
+  /** 通天塔印记；主线 / 秘境为 0 */
+  towerMarks?: number;
 }
 
 export function emptyConcreteReward(): ConcreteReward {
-  return { coins: 0, exp: 0, lingyu: 0, universal: 0, shards: [] };
+  return { coins: 0, exp: 0, lingyu: 0, universal: 0, shards: [], towerMarks: 0 };
 }
 
 export function concreteRewardHasValue(r: ConcreteReward): boolean {
-  return r.coins > 0 || r.exp > 0 || r.lingyu > 0 || r.universal > 0 || r.shards.some((s) => s.count > 0);
+  return r.coins > 0 || r.exp > 0 || r.lingyu > 0 || r.universal > 0
+    || (r.towerMarks ?? 0) > 0 || r.shards.some((s) => s.count > 0);
 }
 
 /** 按倍率放大具体奖励包（结算广告翻倍用；mult=1 原样返回） */
@@ -50,6 +53,7 @@ export function scaleConcreteReward(r: ConcreteReward, mult: number): ConcreteRe
     exp: scale(r.exp),
     lingyu: scale(r.lingyu),
     universal: scale(r.universal),
+    towerMarks: scale(r.towerMarks ?? 0),
     shards: r.shards
       .map((s) => ({ petId: s.petId, count: scale(s.count) }))
       .filter((s) => s.count > 0),
@@ -62,6 +66,7 @@ export function grantConcreteReward(r: ConcreteReward): void {
   if (r.exp > 0) PlayerData.addExp(r.exp);
   if (r.lingyu > 0) PlayerData.addLingyu(r.lingyu);
   if (r.universal > 0) PlayerData.addUniversalShards(r.universal);
+  if ((r.towerMarks ?? 0) > 0) PlayerData.addTowerCoins(r.towerMarks ?? 0);
   for (const s of r.shards) {
     if (s.count > 0) PlayerData.addShards(s.petId, s.count);
   }
@@ -70,6 +75,7 @@ export function grantConcreteReward(r: ConcreteReward): void {
 /** 按钮副标题：前两项明细，其余「等」收口 */
 export function formatConcreteRewardBrief(r: ConcreteReward, maxParts = 2): string {
   const parts: string[] = [];
+  if ((r.towerMarks ?? 0) > 0) parts.push(`印记 +${r.towerMarks}`);
   if (r.coins > 0) parts.push(`灵宠币 +${r.coins}`);
   if (r.exp > 0) parts.push(`经验 +${r.exp}`);
   if (r.lingyu > 0) parts.push(`灵玉 +${r.lingyu}`);
