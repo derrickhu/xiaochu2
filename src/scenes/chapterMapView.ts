@@ -490,7 +490,7 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
   }
 
   // 节点/标记下移：至少留呼吸，并保证终点 Boss 头不钻进章匾
-  const topNodeY = positions.reduce((min, p) => Math.min(min, p.y), designH);
+  const topNodeY = positions.reduce<number>((min, p) => Math.min(min, p.y), designH);
   const nodeInset = chapterMapChromeInset({
     topNodeY,
     scale: fit.scale,

@@ -158,16 +158,18 @@ export function buildTeamEnemyIntelCard(opts: {
     addStat('hp', stats.hp);
     addStat('atk', stats.atk);
 
+    // 珠在前、文字在后：与战斗内的克制/抵抗标签同序（见 BattleHud._makeElementCounterTag）
     const addRel = (label: string, el: ReturnType<typeof counterElementOf>): void => {
+      const orbSize = 20;
+      const o = makeElementOrb(el, orbSize);
+      o.position.set(x + orbSize / 2, mid);
+      infoHost.addChild(o);
       const lab = makeText(label, {
         size: FONT_SIZE.xxs, fill: COLORS.textSub, bold: true, anchor: [0, 0.5],
       });
-      lab.position.set(x, mid);
+      lab.position.set(x + orbSize + 6, mid);
       infoHost.addChild(lab);
-      const o = makeElementOrb(el, 20);
-      o.position.set(x + lab.width + 14, mid);
-      infoHost.addChild(o);
-      x += lab.width + 28;
+      x += orbSize + 6 + lab.width + 14;
     };
     addRel('克制', counterElementOf(def.element));
     addRel('抵抗', resistedElementOf(def.element));
