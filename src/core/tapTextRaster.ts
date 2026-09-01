@@ -22,12 +22,23 @@ interface Host2d {
   ctx: any;
 }
 
+/**
+ * 假 canvas 的像素全靠这块真实 host 画出来，拿不到就只能上传全透明纹理
+ * （画面在、文字没了）。排查时要能一眼看出是哪种。
+ */
+let _hostState: 'pending' | 'ok' | 'null' = 'pending';
+
+export function tapTextHostState(): string {
+  return _hostState;
+}
+
 export function installTapTextRaster(acquireHost: () => Host2d | null): (w?: number, h?: number) => any {
   let host: Host2d | null | undefined;
 
   const getHost = (): Host2d | null => {
     if (host !== undefined) return host;
     host = acquireHost();
+    _hostState = host ? 'ok' : 'null';
     return host;
   };
 
@@ -36,6 +47,8 @@ export function installTapTextRaster(acquireHost: () => Host2d | null): (w?: num
       w: Math.max(1, w || 1),
       h: Math.max(1, h || 1),
       snap: null as Uint8ClampedArray | null,
+      // 给 canvas.width 赋值本该清空内容并复位变换（真实 canvas 的规范行为）
+      pendingReset: true,
     };
 
     const syncSize = (): Host2d | null => {
@@ -43,6 +56,13 @@ export function installTapTextRaster(acquireHost: () => Host2d | null): (w?: num
       if (!h2) return null;
       if (h2.canvas.width !== state.w) h2.canvas.width = state.w;
       if (h2.canvas.height !== state.h) h2.canvas.height = state.h;
+      if (state.pendingReset) {
+        state.pendingReset = false;
+        // 尺寸恰好和上一个 Text 相同时 host canvas 不会被重设，变换矩阵就残留着，
+        // Text.updateText 每次的 scale(resolution) 会叠加，字被放大画到画布外
+        try { h2.ctx.setTransform(1, 0, 0, 1, 0, 0); } catch { /* */ }
+        try { h2.ctx.clearRect(0, 0, state.w, state.h); } catch { /* */ }
+      }
       return h2;
     };
 
@@ -118,8 +138,10 @@ export function installTapTextRaster(acquireHost: () => Host2d | null): (w?: num
         if (state.snap && state.snap.length === iw * ih * 4) {
           return { data: state.snap, width: iw, height: ih };
         }
-        const h2 = syncSize();
-        if (h2) {
+        // 没有快照时不能走 syncSize：它会重设 host canvas，
+        // 把其它 Text 刚画好、还没抓走的像素一起清掉
+        const h2 = getHost();
+        if (h2 && h2.canvas.width === iw && h2.canvas.height === ih) {
           try { return h2.ctx.getImageData(0, 0, iw, ih); } catch { /* */ }
         }
         return { data: new Uint8ClampedArray(iw * ih * 4), width: iw, height: ih };
@@ -132,15 +154,18 @@ export function installTapTextRaster(acquireHost: () => Host2d | null): (w?: num
       __tapTextWrap: true,
       style: {},
       get width() { return state.w; },
-      set width(v: number) { state.w = Math.max(1, v | 0); state.snap = null; },
+      set width(v: number) { state.w = Math.max(1, v | 0); state.snap = null; state.pendingReset = true; },
       get height() { return state.h; },
-      set height(v: number) { state.h = Math.max(1, v | 0); state.snap = null; },
+      set height(v: number) { state.h = Math.max(1, v | 0); state.snap = null; state.pendingReset = true; },
       getContext(type: string) { return type === '2d' ? ctx : null; },
       addEventListener() {},
       removeEventListener() {},
       __tapSnap() {
-        const h2 = syncSize();
+        const h2 = getHost();
         if (!h2) return;
+        // 绘制刚结束，host 尺寸应当还等于本 wrap；不等说明中途被别的 Text 抢占过，
+        // 这时抓到的是别人的像素，宁可留着上一张快照
+        if (h2.canvas.width !== state.w || h2.canvas.height !== state.h) return;
         try {
           const img = h2.ctx.getImageData(0, 0, state.w, state.h);
           state.snap = new Uint8ClampedArray(img.data);

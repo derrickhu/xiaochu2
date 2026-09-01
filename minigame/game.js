@@ -136,10 +136,10 @@ if (typeof Intl === 'undefined') {
   _g.Intl = {};
 }
 
-_diag('boot=fix5 tap=' + (typeof tap) + ' wx=' + (typeof wx) + ' tt=' + (typeof tt));
+_diag('boot tap=' + (typeof tap) + ' wx=' + (typeof wx) + ' tt=' + (typeof tt));
 try {
   require('./tap-pack-stamp.js');
-  _diag('tap-pack=' + (typeof GameGlobal !== 'undefined' ? GameGlobal.__XIAOCHU2_TAP_PACK : '?'));
+  _diag('pack=' + (typeof GameGlobal !== 'undefined' ? GameGlobal.__XIAOCHU2_TAP_VERSION : '?'));
 } catch (e) {
   _diag('no-stamp:' + e);
 }

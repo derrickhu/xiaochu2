@@ -8,6 +8,8 @@
  * Tap 包由 VITE_PLATFORM=taptap 编译，运行时即使误注入 wx 也不会当成微信。
  */
 
+import { shimImageDomContract } from './imageDomShim';
+
 declare const wx: any;
 declare const tt: any;
 declare const tap: any;
@@ -251,7 +253,7 @@ class PlatformServiceClass {
 
   /** 创建平台 Image 对象（加载本地/网络图片用） */
   createImage(): any {
-    if (this._api?.createImage) return this._api.createImage();
+    if (this._api?.createImage) return shimImageDomContract(this._api.createImage());
     if (typeof Image !== 'undefined') return new Image();
     return null;
   }

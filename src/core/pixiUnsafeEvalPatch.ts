@@ -7,6 +7,7 @@ import { settings } from '@pixi/settings';
 import { AccessibilityManager } from '@pixi/accessibility';
 import { Platform, getNativePlatformApi } from '@/core/PlatformService';
 import { installTapTextRaster, shouldInstallTapTextRaster } from '@/core/tapTextRaster';
+import { isSyntheticCanvas, uploadCanvasPixels } from '@/core/tapTextureUpload';
 
 try {
   extensions.remove(AccessibilityManager);
@@ -236,6 +237,7 @@ if (_isRealDevice) {
 
   const _origUpload = BaseImageResource.prototype.upload;
   let _inUpload = false;
+  let _uploadFailLogged = false;
 
   let _canReadPixels = false;
   try {
@@ -259,29 +261,33 @@ if (_isRealDevice) {
 
     try {
       source = source || this.source;
-      const result = _origUpload.call(this, renderer, baseTexture, glTexture, source);
 
-      if ((_canReadPixels || Platform.isTaptap)
+      // 假 canvas 是纯 JS 对象，交给 texImage2D 的 DOM 重载宿主必抛，直接走像素通道
+      if (Platform.isTaptap && isSyntheticCanvas(source)) {
+        return uploadCanvasPixels(renderer, baseTexture, glTexture, source);
+      }
+
+      let result = false;
+      try {
+        result = _origUpload.call(this, renderer, baseTexture, glTexture, source);
+      } catch (e) {
+        // 宿主拒收这个 source 类型。能读像素就退像素通道，否则当作未上传——
+        // 绝不让异常冒到 render，否则 ticker 每帧同处再抛，画面永久黑屏。
+        if (uploadCanvasPixels(renderer, baseTexture, glTexture, source)) return true;
+        if (!_uploadFailLogged) {
+          _uploadFailLogged = true;
+          const kind = source?.__tapTextWrap ? 'wrap' : typeof source?.getContext === 'function' ? 'canvas' : 'image';
+          console.error(`[pixiPatch] 纹理上传失败 kind=${kind} ${(e as any)?.message || e}`);
+        }
+        return false;
+      }
+
+      // 微信真机上 canvas 纹理偶发上传不全，补一次像素覆盖
+      if (_canReadPixels
           && source
           && source.width > 0 && source.height > 0
-          && typeof source.getContext === 'function'
-          && (Platform.isTaptap || typeof source.toTempFilePathSync === 'function')) {
-        try {
-          const ctx = source.getContext('2d');
-          if (ctx && typeof ctx.getImageData === 'function') {
-            const w = source.width;
-            const h = source.height;
-            const imageData = ctx.getImageData(0, 0, w, h);
-            const pixels = new Uint8Array(imageData.data.buffer);
-            const gl = renderer.gl;
-            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,
-              baseTexture.alphaMode > 0 ? 1 : 0);
-            gl.texImage2D(gl.TEXTURE_2D, 0, glTexture.internalFormat,
-              w, h, 0, baseTexture.format, glTexture.type, pixels);
-          }
-        } catch (_e) {
-          /* 回退到原始 upload 结果 */
-        }
+          && typeof source.toTempFilePathSync === 'function') {
+        uploadCanvasPixels(renderer, baseTexture, glTexture, source);
       }
 
       return result;

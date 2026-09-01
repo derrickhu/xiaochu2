@@ -8,6 +8,7 @@ import { TextureCache } from '@/core/TextureCache';
 import { BgmManager } from '@/core/BgmManager';
 import { loadAudioSettings } from '@/core/AudioSettings';
 import { Platform } from '@/core/PlatformService';
+import { tapTextHostState } from '@/core/tapTextRaster';
 import { SettingsPanel } from '@/ui/SettingsPanel';
 import { BackendService } from '@/core/BackendService';
 import { configureWechatShare } from '@/core/ShareService';
@@ -155,6 +156,7 @@ async function main(): Promise<void> {
     loadingOverlay.setProgress(0.28 + ratio * 0.67);
   });
   await fontsReady;
+  bootStep(`${TextureCache.healthReport()} textHost=${tapTextHostState()}`);
   loadingOverlay.setProgress(0.97);
 
   SceneManager.register(new TitleScene());

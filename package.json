@@ -1,6 +1,7 @@
 {
   "name": "xiaochu2",
   "version": "0.1.0",
+  "tapVersion": "1.2.6",
   "type": "module",
   "description": "灵宠消消塔 2 - 转珠消除+灵宠养成小游戏（微信/抖音）",
   "scripts": {

@@ -18,6 +18,7 @@ import {
   rememberSharedWebGL,
 } from './webglContextPatch';
 import { Platform, getNativePlatformApi } from './PlatformService';
+import { describeError, describeRenderFailure } from './renderDiagnostics';
 import { EventBus } from './EventBus';
 import { readMenuButtonRect } from './menuButtonRect';
 import { UPDATE_PRIORITY } from '@pixi/ticker';
@@ -54,6 +55,7 @@ class GameClass {
   safeCapsuleBottom = 32;
 
   private _initialized = false;
+  private _renderFailSeen = new Set<string>();
 
   constructor() {
     this.stage = new PIXI.Container();
@@ -159,7 +161,7 @@ class GameClass {
       this.ticker = new PIXI.Ticker();
       this.ticker.start();
       if (renderer) {
-        this.ticker.add(() => { renderer!.render(this.stage); });
+        this.ticker.add(() => { this._renderGuarded(renderer!); });
       } else {
         console.error('[Game] 所有渲染器创建均失败，画面将无法渲染');
       }
@@ -367,7 +369,31 @@ class GameClass {
   syncFrameToScreen(): void {
     const renderer = this.app?.renderer;
     if (!renderer || !this.stage) return;
-    renderer.render(this.stage);
+    this._renderGuarded(renderer);
+  }
+
+  /**
+   * render 一旦抛异常，ticker 每帧都会在同一处再抛，画面就永久停在黑屏，
+   * 而堆栈只指到 Pixi 内部、看不出是哪个对象。这里首次失败就扫出现场。
+   */
+  private _renderGuarded(renderer: PIXI.IRenderer): void {
+    try {
+      renderer.render(this.stage);
+    } catch (e) {
+      this._reportRenderFailure(e);
+    }
+  }
+
+  /** 按错误内容去重上报：同一帧反复崩不刷屏，但换了错误要能看见 */
+  private _reportRenderFailure(e: unknown): void {
+    const desc = describeError(e);
+    if (this._renderFailSeen.has(desc) || this._renderFailSeen.size >= 3) return;
+    this._renderFailSeen.add(desc);
+
+    const line = `render-fail ${desc} | ${describeRenderFailure(this.stage)}`;
+    console.error(`[Game] ${line}`);
+    try { (GameGlobal as any).__bootDiag?.(line); } catch (_) { /* */ }
+    try { (GameGlobal as any).__showBootDiag?.(); } catch (_) { /* */ }
   }
 
   /** iOS 真机：场景 build 后多帧 present，避免首帧空白 */

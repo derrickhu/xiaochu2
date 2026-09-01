@@ -9,6 +9,7 @@ import * as PIXI from 'pixi.js';
 import { CdnAssetService } from '@/core/CdnAssetService';
 import { EventBus } from '@/core/EventBus';
 import { Platform } from './PlatformService';
+import { isImageShimApplied, isImageUploadable } from './imageDomShim';
 
 const PRELOAD_BATCH_SIZE = 6;
 export const TEXTURE_LOADED_EVENT = 'texture:loaded';
@@ -16,6 +17,9 @@ export const TEXTURE_LOADED_EVENT = 'texture:loaded';
 class TextureCacheClass {
   private _cache: Map<string, PIXI.Texture> = new Map();
   private _inflight: Map<string, Promise<PIXI.Texture>> = new Map();
+  private _uploadWarned = false;
+  /** 宿主 Image 是否需要补标准属性；off 说明 imageDomShim 是死代码，可以摘掉 */
+  private _imgShim: '?' | 'on' | 'off' = '?';
 
   /** 同步取缓存（未加载返回 null；CDN miss 时静默 kickoff 加载） */
   get(path: string): PIXI.Texture | null {
@@ -128,6 +132,25 @@ class TextureCacheClass {
     return this._cache.size;
   }
 
+  /**
+   * 纹理健康度摘要，进主场景前打一次。
+   * valid 远小于 tex 就是纹理没能上 GPU（宿主 Image 契约问题），
+   * nullBase 非 0 则是 texture 被 destroy 后还留在缓存里。
+   */
+  healthReport(): string {
+    let valid = 0;
+    let nullBase = 0;
+    for (const tex of this._cache.values()) {
+      const base = tex.baseTexture;
+      if (!base) {
+        nullBase += 1;
+        continue;
+      }
+      if (base.valid) valid += 1;
+    }
+    return `tex=${this._cache.size} valid=${valid} nullBase=${nullBase} imgShim=${this._imgShim}`;
+  }
+
   private async _loadResolved(logicalPath: string): Promise<PIXI.Texture> {
     const src = await CdnAssetService.resolveOrDownload(logicalPath);
     return this._loadImage(src);
@@ -142,6 +165,8 @@ class TextureCacheClass {
       }
       img.onload = () => {
         try {
+          if (this._imgShim === '?') this._imgShim = isImageShimApplied(img) ? 'on' : 'off';
+          this._warnIfNotUploadable(img, src);
           const base = PIXI.BaseTexture.from(img as any);
           resolve(new PIXI.Texture(base));
         } catch (e) {
@@ -151,6 +176,21 @@ class TextureCacheClass {
       img.onerror = (e: any) => reject(e);
       img.src = src;
     });
+  }
+
+  /**
+   * 宿主 Image 缺 complete/naturalWidth 时，Pixi 会静默拒绝上传纹理——
+   * 加载全部“成功”但一张都上不了屏。只报一次，避免刷屏。
+   */
+  private _warnIfNotUploadable(img: any, src: string): void {
+    if (this._uploadWarned || isImageUploadable(img)) return;
+    this._uploadWarned = true;
+    const detail = `complete=${img.complete} naturalWidth=${img.naturalWidth} `
+      + `size=${img.width}x${img.height} shim=${isImageShimApplied(img)}`;
+    console.error(`[TextureCache] 宿主 Image 不满足 Pixi 上传条件，纹理将全部为空: ${src} ${detail}`);
+    try {
+      (globalThis as any).GameGlobal?.__bootDiag?.(`tex-unuploadable ${detail}`);
+    } catch { /* 诊断失败不影响加载 */ }
   }
 }
 
