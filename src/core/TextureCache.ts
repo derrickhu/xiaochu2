@@ -9,15 +9,22 @@ import * as PIXI from 'pixi.js';
 import { CdnAssetService } from '@/core/CdnAssetService';
 import { EventBus } from '@/core/EventBus';
 import { Platform } from './PlatformService';
-import { isImageShimApplied, isImageUploadable } from './imageDomShim';
+import { isImageShimApplied, isImageUploadable, markImageLoaded } from './imageDomShim';
 
 const PRELOAD_BATCH_SIZE = 6;
+/**
+ * 单张图等宿主回调的上限。
+ * Tap 部分机型（荣耀/华为）宿主 Image 的 onload/onerror 一个都不来，
+ * 没有这道闸首屏 await 会永久挂起，画面停在进度 0% —— 准入直接判黑白屏。
+ */
+const IMAGE_LOAD_TIMEOUT_MS = 6000;
 export const TEXTURE_LOADED_EVENT = 'texture:loaded';
 
 class TextureCacheClass {
   private _cache: Map<string, PIXI.Texture> = new Map();
   private _inflight: Map<string, Promise<PIXI.Texture>> = new Map();
   private _uploadWarned = false;
+  private _timeoutCount = 0;
   /** 宿主 Image 是否需要补标准属性；off 说明 imageDomShim 是死代码，可以摘掉 */
   private _imgShim: '?' | 'on' | 'off' = '?';
 
@@ -59,7 +66,11 @@ class TextureCacheClass {
     if (inflight) return inflight;
 
     const promise = this._loadResolved(path)
-      .catch(() => this._loadResolved(path))
+      .catch((e) => {
+        // 超时是宿主回调机制坏了，重试同样等不到，别把首屏再堵一个超时窗口
+        if ((e as any)?.__noRetry) throw e;
+        return this._loadResolved(path);
+      })
       .then((tex) => {
         this._cache.set(path, tex);
         this._inflight.delete(path);
@@ -148,7 +159,8 @@ class TextureCacheClass {
       }
       if (base.valid) valid += 1;
     }
-    return `tex=${this._cache.size} valid=${valid} nullBase=${nullBase} imgShim=${this._imgShim}`;
+    return `tex=${this._cache.size} valid=${valid} nullBase=${nullBase} `
+      + `imgShim=${this._imgShim} timeout=${this._timeoutCount}`;
   }
 
   private async _loadResolved(logicalPath: string): Promise<PIXI.Texture> {
@@ -163,9 +175,29 @@ class TextureCacheClass {
         reject(new Error('createImage 不可用'));
         return;
       }
+
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        this._warnTimeout(img, src);
+        const e: any = new Error(`图片加载超时 ${IMAGE_LOAD_TIMEOUT_MS}ms: ${src}`);
+        e.__noRetry = true;
+        reject(e);
+      }, IMAGE_LOAD_TIMEOUT_MS);
+
       img.onload = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         try {
-          if (this._imgShim === '?') this._imgShim = isImageShimApplied(img) ? 'on' : 'off';
+          // shim 不碰宿主 onload，complete/naturalWidth 靠这里转正，必须在 Pixi 读之前
+          markImageLoaded(img);
+          if (this._imgShim === '?') {
+            this._imgShim = isImageShimApplied(img) ? 'on' : 'off';
+            console.log(`[TextureCache] 首图就绪 shim=${this._imgShim} `
+              + `${img.width}x${img.height} ${src}`);
+          }
           this._warnIfNotUploadable(img, src);
           const base = PIXI.BaseTexture.from(img as any);
           resolve(new PIXI.Texture(base));
@@ -173,9 +205,29 @@ class TextureCacheClass {
           reject(e);
         }
       };
-      img.onerror = (e: any) => reject(e);
+      img.onerror = (e: any) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(e);
+      };
       img.src = src;
     });
+  }
+
+  /**
+   * 宿主 onload/onerror 都没来。只报前两条：这种故障是全局性的，刷屏没意义，
+   * 但一条都不报就等于下次拿到日志还是查不出。
+   */
+  private _warnTimeout(img: any, src: string): void {
+    this._timeoutCount += 1;
+    if (this._timeoutCount > 2) return;
+    console.error(`[TextureCache] 宿主 Image 回调未触发（超时 ${IMAGE_LOAD_TIMEOUT_MS}ms）: ${src} `
+      + `shim=${isImageShimApplied(img)} size=${img?.width}x${img?.height} `
+      + `onloadKept=${typeof img?.onload === 'function'}`);
+    try {
+      (globalThis as any).GameGlobal?.__bootDiag?.(`img-timeout ${src}`);
+    } catch { /* 诊断失败不影响加载 */ }
   }
 
   /**

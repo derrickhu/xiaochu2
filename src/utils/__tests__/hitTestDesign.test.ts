@@ -17,7 +17,7 @@ vi.mock('@/core/Game', () => ({
 }));
 
 // eslint-disable-next-line import/first
-import { pickTopmostHit } from '../hitTestDesign';
+import { containsDesignPoint, pickTopmostHit } from '../hitTestDesign';
 
 function zone(x: number, y: number, w: number, h: number): PIXI.Container {
   const c = new PIXI.Container();
@@ -71,6 +71,41 @@ describe('pickTopmostHit', () => {
     panel.addChild(child);
 
     expect(pickTopmostHit([panel, child], 50, 50)).toBe(child);
+  });
+
+  /**
+   * 图鉴进详情时整棵图鉴树被暂存（removeChild 但不销毁），
+   * 其卡片一度仍参与 hitTest：点详情底栏「升级」命中的是同位置的图鉴卡片，
+   * 表现为「第一次点升级变成切宠，再点没反应」。
+   */
+  it('已脱离 stage 的旧场景子树不可点', () => {
+    const parked = new PIXI.Container();
+    stage.addChild(parked);
+    const card = zone(0, 1400, 400, 200);
+    parked.addChild(card);
+    expect(containsDesignPoint(card, 100, 1500)).toBe(true);
+
+    stage.removeChild(parked);
+    expect(card.parent).toBe(parked);
+    expect(card.visible).toBe(true);
+    expect(containsDesignPoint(card, 100, 1500)).toBe(false);
+    expect(pickTopmostHit([card], 100, 1500)).toBeNull();
+  });
+
+  it('脱离 stage 后不再抢当前场景同位置的按钮', () => {
+    const parked = new PIXI.Container();
+    stage.addChild(parked);
+    for (let i = 0; i < 30; i++) parked.addChild(new PIXI.Container());
+    const card = zone(0, 1400, 400, 200);
+    parked.addChild(card);
+    stage.removeChild(parked);
+
+    const scene = new PIXI.Container();
+    stage.addChild(scene);
+    const upgradeBtn = zone(0, 1400, 400, 200);
+    scene.addChild(upgradeBtn);
+
+    expect(pickTopmostHit([card, upgradeBtn], 100, 1500)).toBe(upgradeBtn);
   });
 
   it('未命中的候选一律忽略', () => {

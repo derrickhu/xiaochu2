@@ -28,6 +28,11 @@ export interface ActionButtonOpts {
   /** 标题是否加粗；书法体默认 false */
   titleBold?: boolean;
   onTap: () => void;
+  /**
+   * false 时只画样子、不进 tap 路由。
+   * 详情邻页预览必须关：否则禁用升级钮会盖住当前页，第二次点击被静默吞掉。
+   */
+  listenTap?: boolean;
 }
 
 const PLATE_PATH: Record<ActionButtonVariant, string> = {
@@ -176,7 +181,10 @@ export function makeActionButton(opts: ActionButtonOpts): ActionButtonHandle {
     paint();
   };
 
-  bindPointerTap(btn, onTap, { guard: () => enabled });
+  if (opts.listenTap !== false) {
+    // 禁用态也放行：由业务 onTap 自己 toast（经验不足），避免「点了没反应」
+    bindPointerTap(btn, onTap);
+  }
   btn.hitArea = new PIXI.Rectangle(-width / 2, -height / 2, width, height);
   btn.interactiveChildren = false;
   pressFeedback(btn);

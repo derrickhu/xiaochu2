@@ -41,6 +41,11 @@ function clearHoldTimer(): void {
   }
 }
 
+/** 设计坐标上是否落在已注册按钮里（详情横滑用来避开升级/返回） */
+export function hitCanvasTapTarget(dx: number, dy: number): boolean {
+  return pickBinding(dx, dy) != null;
+}
+
 function pickBinding(dx: number, dy: number): TapBinding | null {
   _bindings = _bindings.filter((b) => b.target.parent);
   // 禁用态也要参与 hitTest，否则会穿透点到下层按钮（抽卡结果页点「确定」误触底层十连）

@@ -36,8 +36,10 @@ import { ScrollListController } from '@/ui/ScrollList';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { clientEventToDesign } from '@/utils/clientEventToDesign';
+import { hitCanvasTapTarget } from '@/utils/canvasTapRouter';
 import { containsDesignPoint } from '@/utils/hitTestDesign';
 import { getTouchCanvas } from '@/utils/touchCanvas';
+import { isPetDetailSwipeStartBlocked } from './petDetailSwipe';
 
 export interface PetDetailEnterData {
   petId: string;
@@ -108,6 +110,9 @@ export class PetDetailScene implements Scene {
   private _rawSwipeDown: ((e: unknown) => void) | null = null;
   private _rawSwipeMove: ((e: unknown) => void) | null = null;
   private _rawSwipeUp: ((e: unknown) => void) | null = null;
+  /** 顶栏下方 / 底栏上方，只有这一段才认左右滑切宠 */
+  private _swipeHeaderBottom = 0;
+  private _swipeDockTop = 0;
 
   onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
@@ -298,6 +303,10 @@ export class PetDetailScene implements Scene {
     );
 
     const dockH = this._preview ? 0 : 168;
+    if (live) {
+      this._swipeHeaderBottom = Game.safeTop;
+      this._swipeDockTop = this._preview ? h : h - dockH;
+    }
     const dockGap = 12;
     const sheetTop = heroBottom + 16;
     const sheetBottom = h - dockH - (this._preview ? 24 : dockGap);
@@ -634,8 +643,14 @@ export class PetDetailScene implements Scene {
     this._rawSwipeDown = (e: unknown) => {
       if (this._switching) return;
       const p = clientEventToDesign(e);
-      // 点在左右箭头上：交给 canvasTapRouter，勿进入横滑状态
-      if (this._heroArrows.some((a) => a.parent && containsDesignPoint(a, p.x, p.y))) {
+      // 顶栏 / 底栏升级升星 / 任何已注册按钮：交给 tap，绝不进横滑
+      if (isPetDetailSwipeStartBlocked({
+        y: p.y,
+        headerBottom: this._swipeHeaderBottom,
+        dockTop: this._swipeDockTop,
+        hitsTapTarget: hitCanvasTapTarget(p.x, p.y)
+          || this._heroArrows.some((a) => a.parent && containsDesignPoint(a, p.x, p.y)),
+      })) {
         return;
       }
       this._swipeDragging = true;
@@ -1243,6 +1258,7 @@ export class PetDetailScene implements Scene {
       subtitle: starSub,
       variant: 'cream',
       enabled: this._buildLive && canStar,
+      listenTap: this._buildLive,
       onTap: () => this._onStarUp(),
     });
     starBtn.position.set(marginX + btnW / 2, cy);
@@ -1257,6 +1273,7 @@ export class PetDetailScene implements Scene {
       subtitle: lvSub,
       variant: 'success',
       enabled: this._buildLive && canLv,
+      listenTap: this._buildLive,
       onTap: () => this._onLevelUp(),
     });
     lvBtn.position.set(marginX + btnW + gap + btnW / 2, cy);

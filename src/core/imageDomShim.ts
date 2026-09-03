@@ -13,11 +13,10 @@
 
 interface ShimState {
   loaded: boolean;
-  userOnload: ((...args: unknown[]) => void) | null;
-  userOnerror: ((...args: unknown[]) => void) | null;
 }
 
 const SHIM_FLAG = '__domContractShim';
+const SHIM_STATE = '__domContractState';
 
 /** 宿主是否已按标准实现，无需接管 */
 function hasNativeContract(img: any): boolean {
@@ -25,10 +24,14 @@ function hasNativeContract(img: any): boolean {
 }
 
 /**
- * 补齐 complete / naturalWidth / naturalHeight，并接管 onload/onerror 转发。
+ * 补齐 complete / naturalWidth / naturalHeight 三个只读属性。
  *
  * 必须原地改造、返回同一个对象：Pixi 用 `source instanceof HTMLImageElement` 做分支，
  * 换成包装对象会让 instanceof 失效，反而走进更糟的路径。
+ *
+ * 绝不能碰 onload / onerror：宿主可能在赋值那一刻就把回调登记进原生侧，
+ * 用 defineProperty 覆盖 setter 会让它永远收不到回调，图片加载直接挂死。
+ * loaded 状态改由加载方在自己的 onload 里调 markImageLoaded 落地。
  *
  * @returns 传入的同一个 img；宿主对象不可扩展时原样返回（此时 shim 无效）
  */
@@ -37,16 +40,7 @@ export function shimImageDomContract(img: any): any {
   if (img[SHIM_FLAG]) return img;
   if (hasNativeContract(img)) return img;
 
-  const state: ShimState = { loaded: false, userOnload: null, userOnerror: null };
-
-  // 宿主读到的永远是这层包装：先落 loaded 再转发，保证业务回调里 complete 已为 true
-  const hostOnload = (...args: unknown[]): void => {
-    state.loaded = true;
-    state.userOnload?.(...args);
-  };
-  const hostOnerror = (...args: unknown[]): void => {
-    state.userOnerror?.(...args);
-  };
+  const state: ShimState = { loaded: false };
 
   try {
     Object.defineProperty(img, 'complete', {
@@ -61,14 +55,8 @@ export function shimImageDomContract(img: any): any {
       get: () => (state.loaded ? img.height || 0 : 0),
       configurable: true,
     });
-    Object.defineProperty(img, 'onload', {
-      get: () => hostOnload,
-      set: (fn: any) => { state.userOnload = typeof fn === 'function' ? fn : null; },
-      configurable: true,
-    });
-    Object.defineProperty(img, 'onerror', {
-      get: () => hostOnerror,
-      set: (fn: any) => { state.userOnerror = typeof fn === 'function' ? fn : null; },
+    Object.defineProperty(img, SHIM_STATE, {
+      value: state,
       configurable: true,
     });
     Object.defineProperty(img, SHIM_FLAG, {
@@ -81,6 +69,12 @@ export function shimImageDomContract(img: any): any {
   }
 
   return img;
+}
+
+/** 加载方拿到宿主 onload 后调一次，complete / naturalWidth 才会转正 */
+export function markImageLoaded(img: any): void {
+  const state = img?.[SHIM_STATE] as ShimState | undefined;
+  if (state) state.loaded = true;
 }
 
 /** shim 是否真的挂上了（宿主对象可能拒绝 defineProperty） */

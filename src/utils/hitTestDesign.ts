@@ -61,9 +61,30 @@ function insideAncestorMasks(target: PIXI.Container, dx: number, dy: number): bo
   return true;
 }
 
+/**
+ * 是否真的挂在当前 stage 下。
+ *
+ * SceneManager 切场景只 removeChild、不销毁 container（图鉴进详情更是刻意暂存整棵树，
+ * 避免真机同帧拆 100 张卡）。这些游离子树的 parent 仍在、visible 仍是 true，
+ * Pixi 的 worldVisible 沿父链只看 visible 标志，一路走到游离根都为真——于是旧页按钮
+ * 继续参与 hitTest：点灵宠详情底栏「升级」，命中的却是图鉴页残留在同一位置的卡片，
+ * 表现为「第一次点升级变成切换灵宠，再点就没反应」。
+ */
+function isOnStage(target: PIXI.Container): boolean {
+  const stage = Game.stage;
+  if (!stage) return true;
+  let cur: PIXI.Container | null = target;
+  while (cur) {
+    if (cur === stage) return true;
+    cur = cur.parent;
+  }
+  return false;
+}
+
 export function containsDesignPoint(target: PIXI.Container, dx: number, dy: number): boolean {
   if (!target.parent || !target.visible || target.worldVisible === false) return false;
   if (target.eventMode === 'none') return false;
+  if (!isOnStage(target)) return false;
   if (!insideAncestorMasks(target, dx, dy)) return false;
 
   const local = designPointToContainerLocal(target, dx, dy);

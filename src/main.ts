@@ -52,6 +52,8 @@ declare const tap: any;
 function bootStep(msg: string): void {
   try { GameGlobal.__bootStep = msg; } catch { /* */ }
   try { GameGlobal.__bootDiag?.(msg); } catch { /* */ }
+  // Tap 准入测试只回传 console 落盘的 js_log.log，光进 __bootDiag 数组等于没有
+  console.log(`[boot] ${msg}`);
 }
 
 configureWechatShare();
@@ -108,10 +110,12 @@ async function main(): Promise<void> {
   const fontsReady = warmupCustomFonts();
 
   // 先出 Loading 底图/标题，避免云同步等待时黑屏
+  bootStep('splash-preload');
   await TextureCache.preload([...LOADING_SPLASH_IMAGES]);
   loadingOverlay.applySplashTexture();
   loadingOverlay.applyTitleTexture();
   loadingOverlay.setProgress(0.08);
+  bootStep(`splash-done ${TextureCache.healthReport()}`);
 
   let initialSaveLoaded = false;
   PersistService.subscribeCloudImport((info) => {
