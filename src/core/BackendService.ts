@@ -8,6 +8,7 @@ import {
   BACKEND_TOKEN_KEY,
 } from '@/config/CloudConfig';
 import { Platform } from '@/core/PlatformService';
+import { didHostIdentityChange } from '@/core/hostIdentity';
 
 export interface BackendPullResult {
   userId: string;
@@ -43,6 +44,11 @@ interface StoredToken {
   expiresAt: number;
 }
 
+export interface EnsureTokenResult extends StoredToken {
+  previousUserId: string;
+  identityChanged: boolean;
+}
+
 export class BackendError extends Error {
   readonly status: number;
   readonly code: string;
@@ -69,10 +75,16 @@ class BackendServiceClass {
     return this.stored?.userId || '';
   }
 
-  async ensureToken(): Promise<StoredToken> {
+  async ensureToken(opts?: { refreshIdentity?: boolean }): Promise<EnsureTokenResult> {
+    const previousUserId = this.stored?.userId || this.loadTokenFromStorage()?.userId || '';
+
+    if (opts?.refreshIdentity) {
+      return this.refreshIdentity(previousUserId);
+    }
+
     if (this.stored && this.stored.expiresAt - Date.now() > 60_000) {
       if (this.isTokenForCurrentPlatform(this.stored)) {
-        return this.stored;
+        return this.withIdentityFlags(this.stored, previousUserId);
       }
       console.warn(`[Backend] 缓存 token 平台不匹配(${this.stored.platform}→${this.expectedPlatform()})，重新登录`);
       this.clearToken();
@@ -81,18 +93,13 @@ class BackendServiceClass {
     if (cached && cached.expiresAt - Date.now() > 60_000) {
       if (this.isTokenForCurrentPlatform(cached)) {
         this.stored = cached;
-        return cached;
+        return this.withIdentityFlags(cached, previousUserId);
       }
       console.warn(`[Backend] 本地 token 平台不匹配(${cached.platform}→${this.expectedPlatform()})，重新登录`);
       this.clearToken();
     }
-    if (this.loginInflight) {
-      return this.loginInflight;
-    }
-    this.loginInflight = this.login().finally(() => {
-      this.loginInflight = null;
-    });
-    return this.loginInflight;
+    const stored = await this.loginShared();
+    return this.withIdentityFlags(stored, previousUserId);
   }
 
   pullSave(): Promise<BackendPullResult> {
@@ -106,6 +113,49 @@ class BackendServiceClass {
   clearToken(): void {
     this.stored = null;
     Platform.removeStorageSync(BACKEND_TOKEN_KEY);
+  }
+
+  private withIdentityFlags(stored: StoredToken, previousUserId: string): EnsureTokenResult {
+    return {
+      ...stored,
+      previousUserId,
+      identityChanged: didHostIdentityChange(previousUserId, stored.userId),
+    };
+  }
+
+  /**
+   * 冷启动向宿主重新要 code。JWT 没过期也必须走，否则 Tap 换号后会继续用旧票。
+   * 重新登录失败则退回未过期的本地票，避免弱网把人挡在门外。
+   */
+  private async refreshIdentity(previousUserId: string): Promise<EnsureTokenResult> {
+    try {
+      const stored = await this.loginShared();
+      const result = this.withIdentityFlags(stored, previousUserId);
+      if (result.identityChanged) {
+        console.warn(`[Backend] 宿主账号变更 ${previousUserId} → ${stored.userId}`);
+      } else {
+        console.log(`[Backend] login refresh ok userId=${stored.userId}`);
+      }
+      return result;
+    } catch (error) {
+      const cached = this.stored || this.loadTokenFromStorage();
+      if (cached && cached.expiresAt - Date.now() > 60_000 && this.isTokenForCurrentPlatform(cached)) {
+        this.stored = cached;
+        console.warn('[Backend] 刷新身份失败，沿用本地 token', error);
+        return this.withIdentityFlags(cached, previousUserId);
+      }
+      throw error;
+    }
+  }
+
+  private loginShared(): Promise<StoredToken> {
+    if (this.loginInflight) {
+      return this.loginInflight;
+    }
+    this.loginInflight = this.login().finally(() => {
+      this.loginInflight = null;
+    });
+    return this.loginInflight;
   }
 
   private async login(): Promise<StoredToken> {

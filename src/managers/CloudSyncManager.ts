@@ -148,11 +148,17 @@ class CloudSyncManagerClass {
     }
     this.initPromise = (async () => {
       try {
-        await BackendService.ensureToken();
-        this.cloudReady = !!BackendService.userId;
+        const token = await BackendService.ensureToken({ refreshIdentity: true });
+        this.cloudReady = !!token.userId;
         if (!this.cloudReady) {
           this.enterCacheOnly('no-user-id');
           return;
+        }
+        if (token.identityChanged) {
+          PersistService.clearLocalForAccountSwitch();
+          console.warn(
+            `[CloudSync] 账号切换 ${token.previousUserId} → ${token.userId}，已清本地存档`,
+          );
         }
         await this.pullFromCloudOnStartup();
       } catch (error) {

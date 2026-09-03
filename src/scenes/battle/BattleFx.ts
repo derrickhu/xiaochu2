@@ -657,6 +657,15 @@ export class BattleFx {
     }
   }
 
+  /**
+   * 槽位伤害 recap：与转珠普攻回合末同一套字号 / 运动 / 停留。
+   * 直伤技能打完后也走这里，避免玩家只在敌人身上找到数字。
+   */
+  showPetSlotDamageRecap(pet: TurnPetDamageSummary): void {
+    if (pet.damage <= 0) return;
+    this._pushTurnRecapFloat(pet, () => {});
+  }
+
   /** 回合末：单只宠物本回合累计伤害（槽位常驻） */
   private _pushTurnRecapFloat(pet: TurnPetDamageSummary, onDone: () => void): void {
     const anchor = petSlotDamageAnchor(pet.slotX, pet.slotY, 'main');

@@ -2,6 +2,7 @@ import {
   CLOUD_SYNC_ALLOWLIST,
   CLOUD_SYNC_META_KEY,
   CLOUD_SYNC_SCHEMA_VERSION,
+  LEGACY_SAVE_KEY,
 } from '@/config/CloudConfig';
 import { Platform } from '@/core/PlatformService';
 
@@ -147,6 +148,25 @@ class PersistServiceClass {
 
   hasAnyLocalCloudData(): boolean {
     return CLOUD_SYNC_ALLOWLIST.some((key) => this.readRaw(key) !== null);
+  }
+
+  /**
+   * 宿主换号：清掉上一号的本地档和云同步基线，且不标 dirty。
+   * 必须在用新 token pull 之前调用，否则会把旧档推到新号上。
+   */
+  clearLocalForAccountSwitch(): void {
+    this.withSuppressedDirtyTracking(() => {
+      for (const key of CLOUD_SYNC_ALLOWLIST) {
+        Platform.removeStorageSync(key);
+      }
+      Platform.removeStorageSync(LEGACY_SAVE_KEY);
+      this.writeMeta({
+        updatedAt: 0,
+        dirty: false,
+        lastSyncAt: 0,
+        remoteUpdatedAt: 0,
+      });
+    });
   }
 
   exportCloudSnapshot(): PersistSnapshot {

@@ -106,7 +106,7 @@ async function main(): Promise<void> {
   const loadingOverlay = new LoadingScreenOverlay();
   Game.stage.addChild(loadingOverlay);
 
-  // 自定义字体与 Loading 图并行预热，进主场景前 await，避免首屏落系统体
+  // 字体后台预热：Title 已有系统体回退，进主界面不再空等（Tap 中端机 loadFont 能拖 1～3s）
   const fontsReady = warmupCustomFonts();
 
   // 先出 Loading 底图/标题，避免云同步等待时黑屏
@@ -155,13 +155,23 @@ async function main(): Promise<void> {
   await loadSubpackagesForPaths(MAIN_PRELOAD_IMAGES);
   loadingOverlay.setProgress(0.28);
 
-  await TextureCache.preload([...MAIN_PRELOAD_IMAGES], (loaded, total) => {
+  // Tap 冷启动口径是「进程起来 → 首次可交互」。中端 ColorOS 解码主包图很慢，
+  // 全等齐再进 Title 会到 10s+，准入直接判不达标。预算到了先出主界面，其余后台补。
+  const TITLE_PRELOAD_BUDGET_MS = 2800;
+  const t0 = Date.now();
+  const preloadDone = TextureCache.preload([...MAIN_PRELOAD_IMAGES], (loaded, total) => {
     const ratio = total > 0 ? loaded / total : 1;
     loadingOverlay.setProgress(0.28 + ratio * 0.67);
   });
-  await fontsReady;
-  bootStep(`${TextureCache.healthReport()} textHost=${tapTextHostState()}`);
+  await Promise.race([
+    preloadDone,
+    new Promise<void>((resolve) => setTimeout(resolve, TITLE_PRELOAD_BUDGET_MS)),
+  ]);
+  bootStep(`title-enter ${TextureCache.healthReport()} textHost=${tapTextHostState()} `
+    + `preloadMs=${Date.now() - t0}`);
   loadingOverlay.setProgress(0.97);
+  void preloadDone.catch(() => null);
+  void fontsReady.catch(() => null);
 
   SceneManager.register(new TitleScene());
   SceneManager.register(new BattleScene());

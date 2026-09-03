@@ -22,7 +22,7 @@ import type { BattleController } from '@/game/battle/BattleController';
 import type { BoardModel } from '@/game/board/BoardModel';
 import type { BoardView } from '@/game/board/BoardView';
 import type { Element } from '@/balance/combat';
-import type { BattleFx } from './BattleFx';
+import type { BattleFx, TurnPetDamageSummary } from './BattleFx';
 import type { BattleHud } from './BattleHud';
 import type { BattlePetBar } from './BattlePetBar';
 import type { BattleLayout } from './BattleLayout';
@@ -43,8 +43,13 @@ export interface SkillCastDeps {
   layout: BattleLayout;
   /** 刷新槽位 CD + buff 状态行 */
   refreshSkillUi: () => void;
-  /** 敌人死亡处理，返回 true = 战斗结束 */
-  handleEnemyDefeat: () => Promise<boolean>;
+  /** 敌人死亡处理，返回 true = 战斗结束；直伤击杀时带上施法宠槽位 recap */
+  handleEnemyDefeat: (turnRecap?: {
+    total: number;
+    combo: number;
+    hitCount: number;
+    petSummaries: TurnPetDamageSummary[];
+  }) => Promise<boolean>;
 }
 
 interface SkillDamageOpts {
@@ -57,6 +62,44 @@ interface SkillDamageOpts {
 }
 
 /** 本次命中该不该停拍：够狠才停，小段命中停拍会变成掉帧 */
+/** 施法宠头像上的伤害 recap，样式与转珠普攻回合末同一套 */
+function skillCasterRecap(
+  deps: SkillCastDeps,
+  petIndex: number,
+  result: SkillCastResult,
+): TurnPetDamageSummary | null {
+  const damage = result.damage ?? 0;
+  if (damage <= 0) return null;
+  const slot = deps.petBar.slotAt(petIndex);
+  if (!slot || slot.destroyed) return null;
+  return {
+    slotX: slot.x,
+    slotY: slot.y,
+    element: result.element ?? deps.ctrl.team[petIndex].def.element,
+    damage,
+  };
+}
+
+function showSkillPetRecap(deps: SkillCastDeps, petIndex: number, result: SkillCastResult): void {
+  const recap = skillCasterRecap(deps, petIndex, result);
+  if (recap) deps.fx.showPetSlotDamageRecap(recap);
+}
+
+async function finishIfSkillKilled(
+  deps: SkillCastDeps,
+  petIndex: number,
+  result: SkillCastResult,
+): Promise<boolean> {
+  if (!result.enemyDead) return false;
+  const recap = skillCasterRecap(deps, petIndex, result);
+  return deps.handleEnemyDefeat(recap ? {
+    total: recap.damage,
+    combo: 0,
+    hitCount: 1,
+    petSummaries: [recap],
+  } : undefined);
+}
+
 function impactTierOf(damage: number, enemyMaxHp: number): SkillImpactTier {
   const ratio = enemyMaxHp > 0 ? damage / enemyMaxHp : 0;
   return ratio >= SKILL_IMPACT_HEAVY_HP_RATIO ? 'heavy' : 'light';
@@ -176,7 +219,7 @@ async function presentAttachedNuke(
   await fireSkillBlade(fx, petBar, petIndex, layout.enemyCenterX, layout.enemyCenterY, element);
   await presentSkillEnemyDamage(deps, element, damage, { counter });
   hud.refreshEnemyHp();
-  return !!(result.enemyDead && await deps.handleEnemyDefeat());
+  return finishIfSkillKilled(deps, petIndex, result);
 }
 
 /** 施法结束强制对账 HUD：逻辑已在 castSkill 落地，条不刷就会显得「下一次攻击才生效」 */
@@ -365,7 +408,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
       await presentSkillEnemyDamage(deps, el, damage, { counter: counterOf(el) });
       hud.refreshEnemyHp();
-      if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
+      if (await finishIfSkillKilled(deps, petIndex, result)) return true;
       break;
     }
     case 'teamVolley': {
@@ -376,7 +419,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       ));
       await presentSkillEnemyDamage(deps, pet.def.element, damage);
       hud.refreshEnemyHp();
-      if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
+      if (await finishIfSkillKilled(deps, petIndex, result)) return true;
       break;
     }
     case 'multiHit': {
@@ -402,7 +445,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         });
       }
       hud.refreshEnemyHp();
-      if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
+      if (await finishIfSkillKilled(deps, petIndex, result)) return true;
       break;
     }
     case 'dotApply': {
@@ -421,7 +464,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         color: 0xff7043, count: 12, speed: 200, gravity: -120, size: 13, life: 0.6,
       });
       hud.refreshEnemyHp();
-      if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
+      if (await finishIfSkillKilled(deps, petIndex, result)) return true;
       break;
     }
     case 'stun': {
@@ -445,7 +488,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
         fx.shakeLight();
       }
       hud.refreshEnemyHp();
-      if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
+      if (await finishIfSkillKilled(deps, petIndex, result)) return true;
       break;
     }
     case 'defenseBreak': {
@@ -498,7 +541,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
           await fireSkillBlade(fx, petBar, petIndex, enemyCenterX, enemyCenterY, el);
           await presentSkillEnemyDamage(deps, el, damage, { counter: counterOf(el) });
           hud.refreshEnemyHp();
-          if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
+          if (await finishIfSkillKilled(deps, petIndex, result)) return true;
         }
         fx.spawnFloat(
           result.immuneControl
@@ -535,7 +578,7 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
       await hud.playEnemyGravityCrush(fx);
       await presentSkillEnemyDamage(deps, pet.def.element, damage, { noImpact: true });
       hud.refreshEnemyHp();
-      if (result.enemyDead && await deps.handleEnemyDefeat()) return true;
+      if (await finishIfSkillKilled(deps, petIndex, result)) return true;
       break;
     }
     case 'hasteGlow': {
@@ -603,5 +646,9 @@ export async function presentSkillCast(deps: SkillCastDeps, petIndex: number): P
   const el = result.element ?? pet.def.element;
   if (await presentResiduals(deps, petIndex, result, el, counterOf(el), shown)) return true;
   syncSkillHud(deps);
+  if ((result.damage ?? 0) > 0 && !result.enemyDead) {
+    if (UI.anim.turnTotalLeadIn > 0) await delay(UI.anim.turnTotalLeadIn);
+    showSkillPetRecap(deps, petIndex, result);
+  }
   return false;
 }

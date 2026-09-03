@@ -1241,7 +1241,7 @@ export class BattleScene implements Scene {
       boardView: this._boardView!,
       layout: this._layout,
       refreshSkillUi: () => this._refreshSkillUi(),
-      handleEnemyDefeat: () => this._handleEnemyDefeat(() => false),
+      handleEnemyDefeat: (turnRecap) => this._handleEnemyDefeat(() => false, turnRecap),
     };
     const battleEnded = await presentSkillCast(deps, petIndex);
     if (battleEnded) return; // 战斗已结束，保持 busy 拦截输入
