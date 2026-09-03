@@ -724,15 +724,34 @@ export const ELEMENT_IMPACT_IMAGES: Readonly<Record<Element, string>> = {
   earth: UI_FX_IMAGES.earthImpact,
 };
 
-/** 启动主包预加载（Title + 导航 + 棋盘珠 + 统一宠物星贴图） */
+/**
+ * 启动首屏预加载：只放章节地图这一屏真会上屏的图（背景 + 节点图集 + 全局 UI/导航）。
+ *
+ * 冷启动是 Tap 准入的硬指标，而这里每加一张都是所有玩家每次冷启动的等待。
+ * 两条硬约束：
+ * - 不许出现 `subpackages/` 路径。启动会 `loadSubpackagesForPaths` 整包下载解包，
+ *   一张 19KB 的图能拖来一个 MB 级分包（曾因 petStar 白等 pkg-battle 2.2MB）。
+ * - 首屏用不到的图放 DEFERRED_PRELOAD_IMAGES，别放这儿。
+ * 违反第一条有 assetPreloadBudget 回归测试兜着。
+ */
 export const MAIN_PRELOAD_IMAGES: readonly string[] = [
-  BOARD_IMAGES.dark,
-  BOARD_IMAGES.light,
-  BACKGROUND_IMAGES.home,
   BACKGROUND_IMAGES.titleScreen,
   ...Object.values(MAP_UI_IMAGES),
   // 主包预加载仅本地首屏资源；CDN 路径由场景/面板按需拉取
   ...Object.values(UI_IMAGES).filter((p) => !p.startsWith('subpackages/')),
+];
+
+/**
+ * 进 Title 之后后台补的图：兜底底图、战斗/编队/详情共用件。
+ *
+ * 这些都另有场景级 shell 预加载兜着（battlePreloadImages / TEAM_SHELL_IMAGES /
+ * PET_DETAIL_SHELL_IMAGES），后台没补完也不会缺图，最坏是进场景时多等一下。
+ */
+export const DEFERRED_PRELOAD_IMAGES: readonly string[] = [
+  // chapterMapView 在 titleScreen 未命中时回落它，正常路径用不到
+  BACKGROUND_IMAGES.home,
+  BOARD_IMAGES.dark,
+  BOARD_IMAGES.light,
   ...Object.values(PET_FRAME_IMAGES),
   ...Object.values(ORB_IMAGES),
   UI_BATTLE_IMAGES.petStar,

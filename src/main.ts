@@ -17,7 +17,7 @@ import { SAVE_KEY } from '@/config/CloudConfig';
 import { PersistService } from '@/core/PersistService';
 import { CloudSyncManager } from '@/managers/CloudSyncManager';
 import { PlayerData } from '@/game/PlayerData';
-import { MAIN_PRELOAD_IMAGES } from '@/config/Assets';
+import { DEFERRED_PRELOAD_IMAGES, MAIN_PRELOAD_IMAGES } from '@/config/Assets';
 import { ensureAudioSubpackage, loadSubpackagesForPaths } from '@/config/Subpackages';
 import { warmupCommonSubpackages } from '@/config/SubpackageWarmup';
 import { warmupCdnAssets } from '@/config/CdnWarmup';
@@ -75,6 +75,16 @@ if (typeof GameGlobal !== 'undefined') {
   };
 }
 
+/** Title 首帧之后再补首屏用不到的图；失败也不影响游戏，场景 shell 会再拉一次 */
+async function warmupDeferredImages(): Promise<void> {
+  try {
+    await loadSubpackagesForPaths(DEFERRED_PRELOAD_IMAGES);
+    await TextureCache.preload([...DEFERRED_PRELOAD_IMAGES]);
+  } catch (e) {
+    console.warn('[main] 延后图预热失败', e);
+  }
+}
+
 async function main(): Promise<void> {
   bootStep('main-start');
   let canvas = GameGlobal?.canvas ?? null;
@@ -106,7 +116,7 @@ async function main(): Promise<void> {
   const loadingOverlay = new LoadingScreenOverlay();
   Game.stage.addChild(loadingOverlay);
 
-  // 字体后台预热：Title 已有系统体回退，进主界面不再空等（Tap 中端机 loadFont 能拖 1～3s）
+  // 自定义字体与 Loading 图并行预热，进主场景前 await，避免首屏落系统体
   const fontsReady = warmupCustomFonts();
 
   // 先出 Loading 底图/标题，避免云同步等待时黑屏
@@ -152,26 +162,23 @@ async function main(): Promise<void> {
   initialSaveLoaded = true;
   loadingOverlay.setProgress(0.2);
 
+  // 首屏这两段是冷启动的主要可控开销，分开计时，真机 js_log 里能直接看出瓶颈在哪段
+  const pkgStartAt = Date.now();
   await loadSubpackagesForPaths(MAIN_PRELOAD_IMAGES);
+  const pkgMs = Date.now() - pkgStartAt;
   loadingOverlay.setProgress(0.28);
 
-  // Tap 冷启动口径是「进程起来 → 首次可交互」。中端 ColorOS 解码主包图很慢，
-  // 全等齐再进 Title 会到 10s+，准入直接判不达标。预算到了先出主界面，其余后台补。
-  const TITLE_PRELOAD_BUDGET_MS = 2800;
-  const t0 = Date.now();
-  const preloadDone = TextureCache.preload([...MAIN_PRELOAD_IMAGES], (loaded, total) => {
+  const preloadStartAt = Date.now();
+  await TextureCache.preload([...MAIN_PRELOAD_IMAGES], (loaded, total) => {
     const ratio = total > 0 ? loaded / total : 1;
     loadingOverlay.setProgress(0.28 + ratio * 0.67);
   });
-  await Promise.race([
-    preloadDone,
-    new Promise<void>((resolve) => setTimeout(resolve, TITLE_PRELOAD_BUDGET_MS)),
-  ]);
-  bootStep(`title-enter ${TextureCache.healthReport()} textHost=${tapTextHostState()} `
-    + `preloadMs=${Date.now() - t0}`);
+  const imgMs = Date.now() - preloadStartAt;
+  const fontStartAt = Date.now();
+  await fontsReady;
+  bootStep(`${TextureCache.healthReport()} textHost=${tapTextHostState()} `
+    + `pkgMs=${pkgMs} imgMs=${imgMs} fontMs=${Date.now() - fontStartAt}`);
   loadingOverlay.setProgress(0.97);
-  void preloadDone.catch(() => null);
-  void fontsReady.catch(() => null);
 
   SceneManager.register(new TitleScene());
   SceneManager.register(new BattleScene());
@@ -210,6 +217,7 @@ async function main(): Promise<void> {
   warmupCommonSubpackages();
   // CDN：不 await，manifest + 拥有灵宠/BGM 后台预热，不挡首屏与 BGM 起播
   warmupCdnAssets();
+  void warmupDeferredImages();
 
   await ensureAudioSubpackage();
   // 先落用户音量偏好，再起播——否则会先以默认量轰一声再被调低
