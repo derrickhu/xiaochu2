@@ -38,8 +38,9 @@ import {
 import { DEV_LEGACY_SAVE_KEYS } from '@/config/CloudConfig';
 import { CHECKIN_CYCLE_DAYS } from '@/balance/checkin';
 import {
-  checkpointFloorOf, towerDailyBaseCap, towerEntryFloor, towerHealPctFor,
-  TOWER, TOWER_COIN,
+  checkpointFloorOf, towerBreakthroughCoins, towerCoinsForRange,
+  towerDailyBaseCap, towerEntryFloor, towerGuardFirstClearCoins, towerHealPctFor,
+  TOWER,
 } from '@/balance/tower';
 import {
   aggregateBlessModifiers, getBless, rollBlessChoices,
@@ -1125,17 +1126,17 @@ class PlayerDataClass {
 
     let base = 0;
     if (floor > t.runReachedFloor) {
-      const want = (floor - t.runReachedFloor) * TOWER_COIN.perFloor;
+      const want = towerCoinsForRange(t.runReachedFloor, floor);
       base = Math.min(want, this.towerCoinBaseLeft);
       t.runReachedFloor = floor;
       t.coinBaseToday += base;
     }
 
     const breakthrough = floor > prevBest
-      ? (floor - prevBest) * TOWER_COIN.perBreakthrough
+      ? towerBreakthroughCoins(prevBest, floor)
       : 0;
     // 险径的额外印记与守关首过同档：都属于「选了更难的路」的直接回报
-    const guard = (opts.guardFirstClear ? TOWER_COIN.perGuardFirstClear : 0)
+    const guard = (opts.guardFirstClear ? towerGuardFirstClearCoins(floor) : 0)
       + Math.max(0, Math.floor(opts.bonus ?? 0));
 
     const total = Math.floor((base + breakthrough + guard) * mult);

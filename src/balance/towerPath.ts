@@ -46,7 +46,7 @@ export const TOWER_FLOOR_KINDS: Readonly<Record<TowerFloorKind, TowerFloorKindDe
     kind: 'elite', name: '险径',
     badge: '更难',
     summary: '本层有试炼规则，敌人更强',
-    payoff: '更容易出罕有/奇珍 · +15 印记',
+    payoff: '更容易出罕有/奇珍 · 额外印记',
     combat: true, difficultyMult: 1.35, extraWaves: 1, coinBonus: 15, richBless: true,
   },
   event: {

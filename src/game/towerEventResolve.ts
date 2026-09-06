@@ -4,6 +4,7 @@
  * 事件层不打架，但也不白给 —— 每个事件都在「生命 / 机缘 / 印记」三者之间做交换。
  * 结算完直接推进层数，因此这里同时负责调用 towerAdvance。
  */
+import { towerScaledFlatCoins } from '@/balance/tower';
 import { TOWER_REST_HEAL_PCT, type TowerEventDef } from '@/balance/towerPath';
 import { PlayerData } from './PlayerData';
 import { reportQuest } from './dailyQuestTracker';
@@ -89,13 +90,13 @@ export function resolveTowerEvent(
       PlayerData.adjustTowerRunHp(-fx.pct);
       addDelta(bag, 'loss', `生命 −${Math.round(fx.pct * 100)}%`);
       if (fx.coins && fx.coins > 0) {
-        const got = PlayerData.addTowerCoins(fx.coins);
+        const got = PlayerData.addTowerCoins(towerScaledFlatCoins(fx.coins, floor));
         addDelta(bag, 'gain', `登塔印记 +${got}`);
       }
       break;
     }
     case 'coins': {
-      const got = PlayerData.addTowerCoins(fx.amount);
+      const got = PlayerData.addTowerCoins(towerScaledFlatCoins(fx.amount, floor));
       addDelta(bag, 'gain', `登塔印记 +${got}`);
       break;
     }
@@ -103,7 +104,7 @@ export function resolveTowerEvent(
       const dropped = PlayerData.dropRandomTowerBless(rng);
       if (!dropped) {
         addDelta(bag, 'neutral', '身无机缘可淬，炉火自熄');
-        const got = PlayerData.addTowerCoins(6);
+        const got = PlayerData.addTowerCoins(towerScaledFlatCoins(6, floor));
         if (got > 0) addDelta(bag, 'gain', `登塔印记 +${got}`);
         break;
       }

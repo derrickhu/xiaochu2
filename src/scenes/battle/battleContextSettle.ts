@@ -5,7 +5,7 @@
  * 这里给出各自的发奖与进度推进，返回给结算浮层展示的提示行。
  */
 import { REALM_MAP, resolveRealmTier } from '@/balance/secretRealm';
-import { isMilestoneFloor, TOWER, TOWER_MILESTONE_REWARD } from '@/balance/tower';
+import { isMilestoneFloor, TOWER, towerMilestoneReward, towerScaledFlatCoins } from '@/balance/tower';
 import { TOWER_FLOOR_KINDS } from '@/balance/towerPath';
 import { formatReward } from '@/balance/rewards';
 import type { BattleContext } from '@/game/battleContext';
@@ -92,7 +92,7 @@ function settleTowerVictory(
   const path = TOWER_FLOOR_KINDS[PlayerData.towerPathKind];
   const coins = PlayerData.towerSettleCoins(floor, {
     guardFirstClear,
-    bonus: path.coinBonus,
+    bonus: towerScaledFlatCoins(path.coinBonus, floor),
   });
 
   // 战斗层只回一小口血，守关层多给一些：HP 是塔里最稀缺的资源
@@ -102,8 +102,9 @@ function settleTowerVictory(
   }
 
   if (isMilestoneFloor(floor) && PlayerData.claimTowerMilestone(floor)) {
-    grantReward(TOWER_MILESTONE_REWARD);
-    lines.push(`第 ${floor} 层里程碑 · ${formatReward(TOWER_MILESTONE_REWARD)}`);
+    const milestone = towerMilestoneReward(floor);
+    grantReward(milestone);
+    lines.push(`第 ${floor} 层里程碑 · ${formatReward(milestone)}`);
   }
 
   // 印记进结算主奖励区，这里只留突破/守关构成，避免和主格重复写 +N

@@ -87,15 +87,16 @@ export const TOWER = {
  */
 export const TOWER_COIN = {
   /**
-   * 本 run 每首次抵达一层 +N（累计即等于最高层）。
+   * 本 run 每首次抵达一层的基础印记。真实发放 = perFloor + 层段加成，
+   * 见 towerCoinsPerFloor：难度按 1.033^n 涨，奖励不能永远 +2。
    *
    * 印记的日用出口在商店，最便宜一档 40。1/层时两轮爬到 20 层只有 40，
    * 卡在日限边缘；2/层后 F15 日限 45、F20 日限 60，都能换到一档灵宠币。
    */
   perFloor: 2,
-  /** 超过历史最高纪录的层，每层额外 +N（一次性） */
+  /** 超过历史最高纪录的层，每层额外基础（再加层段） */
   perBreakthrough: 3,
-  /** 每个守关层首次通过一次性 +N */
+  /** 每个守关层首次通过的基础（再加层段） */
   perGuardFirstClear: 30,
   /** 每日基础结算上限倍率：上限 = 历史最高层 × N（突破与守关奖励不受此限） */
   dailyBaseCapMult: 3,
@@ -103,11 +104,67 @@ export const TOWER_COIN = {
   dailyBaseCapFloor: 30,
 } as const;
 
-export const TOWER_MILESTONE_REWARD: RewardBundle = {
-  lingyu: 60,
-  shards: 12,
-  universal: ECONOMY.universal.towerMilestone,
-};
+/** 每 10 层一段：F1-10=0，F11-20=1，F41-50=4。用来给后期奖励跟上难度。 */
+export function towerFloorBand(floor: number): number {
+  return Math.max(0, Math.floor((Math.max(1, floor) - 1) / TOWER.milestoneEvery));
+}
+
+/** 本 run 首次抵达该层的基础印记（不含突破 / 守关 / 险径） */
+export function towerCoinsPerFloor(floor: number): number {
+  return TOWER_COIN.perFloor + towerFloorBand(floor);
+}
+
+/** (from, to] 区间内各层基础印记之和；重置后一次性补发也走这里 */
+export function towerCoinsForRange(fromExclusive: number, toInclusive: number): number {
+  const from = Math.max(0, Math.floor(fromExclusive));
+  const to = Math.floor(toInclusive);
+  if (to <= from) return 0;
+  let sum = 0;
+  for (let f = from + 1; f <= to; f++) sum += towerCoinsPerFloor(f);
+  return sum;
+}
+
+/** 突破历史最高的额外印记（按层段累加，一次性、不吃日限） */
+export function towerBreakthroughCoins(fromExclusive: number, toInclusive: number): number {
+  const from = Math.max(0, Math.floor(fromExclusive));
+  const to = Math.floor(toInclusive);
+  if (to <= from) return 0;
+  let sum = 0;
+  for (let f = from + 1; f <= to; f++) {
+    sum += TOWER_COIN.perBreakthrough + towerFloorBand(f);
+  }
+  return sum;
+}
+
+/** 该守关层首次通过的印记（F10=30，F40=60） */
+export function towerGuardFirstClearCoins(floor: number): number {
+  return TOWER_COIN.perGuardFirstClear + 10 * towerFloorBand(floor);
+}
+
+/**
+ * 险径 / 事件上的固定印记随层段放大。
+ * F1 仍是原值，F41 约为 2 倍，避免后期「多打一波精英只多 15 点」。
+ */
+export function towerScaledFlatCoins(base: number, floor: number): number {
+  if (base <= 0) return 0;
+  return Math.floor(base * (1 + 0.25 * towerFloorBand(floor)));
+}
+
+/**
+ * 里程碑按守关段递增。F10 维持旧档（60 灵玉 / 12 碎片 / 12 通用），
+ * F40 提到 120 / 24 / 24——这一层等效主线约第 11 章，不该和 F10 领同一包。
+ */
+export function towerMilestoneReward(floor: number): RewardBundle {
+  const t = Math.max(1, Math.floor(floor / TOWER.milestoneEvery));
+  return {
+    lingyu: 40 + 20 * t,
+    shards: 8 + 4 * t,
+    universal: ECONOMY.universal.towerMilestone + 4 * (t - 1),
+  };
+}
+
+/** @deprecated 用 towerMilestoneReward(floor)；保留 F10 快照给旧调用 */
+export const TOWER_MILESTONE_REWARD: RewardBundle = towerMilestoneReward(TOWER.milestoneEvery);
 
 /**
  * 塔内循环用的杂兵池，按属性轮换保证玩家不能只带一种属性。

@@ -18,7 +18,7 @@ import { UI } from '@/balance/ui';
 import { formatReward } from '@/balance/rewards';
 import {
   buildTowerStage,
-  TOWER, TOWER_MILESTONE_REWARD, towerStageId,
+  TOWER, towerMilestoneReward, towerStageId,
 } from '@/balance/tower';
 import { describeOwnedBlesses } from '@/balance/towerBless';
 import { TOWER_LEGACY_NODES } from '@/balance/towerLegacy';
@@ -679,8 +679,9 @@ export class TowerScene implements Scene {
       pressFeedback(root);
       bindPointerTap(root, () => {
         if (!PlayerData.claimTowerMilestone(floor)) return;
-        grantReward(TOWER_MILESTONE_REWARD);
-        Platform.showToast(`领取成功 · ${formatReward(TOWER_MILESTONE_REWARD)}`, 'success');
+        const milestone = towerMilestoneReward(floor);
+        grantReward(milestone);
+        Platform.showToast(`领取成功 · ${formatReward(milestone)}`, 'success');
         this._build();
       });
     }
