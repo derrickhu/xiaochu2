@@ -20,6 +20,40 @@ import { stageLevelId } from './stageLevel';
 export { EVENT_NAMES };
 export type AnalyticsParams = Record<string, EventParamValue>;
 
+/**
+ * 新手漏斗 step_id（顺序即漏斗顺序）。
+ *
+ * 这套埋点的价值高于引导本身：它是唯一能证明「示意到底有没有必要、有没有被嫌烦」的东西。
+ * 第一版做了一整套引导却没有漏斗，改了几轮方向全靠猜，最后留下两套死代码。
+ */
+export const TUTORIAL_STEPS = {
+  /** 首页欢迎卡曝光 */
+  homeStartShown: 'home_start_shown',
+  /** 欢迎卡点了继续，进入圈选指路 */
+  homeWelcomeContinue: 'home_welcome_continue',
+  /** 玩家按指路点进了关卡 */
+  homeStartTapped: 'home_start_tapped',
+  /** 首次进入战斗场景（新号第一次看到棋盘） */
+  battleEnterFirst: 'battle_enter_first',
+  /** 长拖示意曝光（附 times = 第几次播放） */
+  dragHintShown: 'drag_hint_shown',
+  /** 示意收场（附 reason：touch = 玩家自己上手 / exhausted = 播完上限没动静） */
+  dragHintDismissed: 'drag_hint_dismissed',
+  /** 首次落指到棋盘上 —— 卡在这里说明玩家根本不知道要碰棋盘 */
+  firstTouch: 'first_touch',
+  /** 首次成功消除 —— 长拖手势学会的判据，本漏斗最关键的一格 */
+  firstMatch: 'first_match',
+  /**
+   * 卡关指路后选择去编队。
+   *
+   * 比「首次改动编队」更贴体验目标：它直接测量「卡关 → 换队」这一跳，
+   * 也就是 docs/00-体验目标.md 审视清单第 1 条要的那条更短路径到底有没有被走。
+   */
+  coachTeamPick: 'coach_team_pick',
+  /** 局内 / 编队点破（附 topic / kind） */
+  coachHint: 'coach_hint',
+} as const;
+
 declare const __APP_VERSION__: string;
 
 let inited = false;
@@ -137,6 +171,19 @@ export const analytics = {
       turns_used: Math.max(0, Math.floor(params.turnsUsed)),
       reason: params.reason || 'defeat',
     });
+  },
+
+  // ── 新手漏斗（见 docs/06-新手引导.md）──
+
+  /**
+   * 教学步骤漏斗。step_id 串成漏斗，见 TUTORIAL_STEPS。
+   *
+   * 前 3 关的通关节点**故意不在这里重复埋**：level_clear 已带 level_name=stage_1_1，
+   * 漏斗直接拼它即可，两套口径并存只会让后面的人不知道该信哪个。
+   * 这里只报 level_clear 覆盖不到的：进战斗、第一次落指、第一次消除、示意曝光、改编队。
+   */
+  trackTutorialStep(stepId: string, params: AnalyticsParams = {}): void {
+    track(EVENT_NAMES.TUTORIAL_STEP, { step_id: stepId, ...params });
   },
 
   // ── 留存玩法（日循环 / 长线内容）──

@@ -361,6 +361,17 @@ export function towerPathPickerAssets(kinds: readonly string[] = []): string[] {
   return [...set];
 }
 
+/**
+ * 新手引导贴图：小灵头像（沿用 xiao_chu 的交付图，256×256 已 rembg + trim）。
+ *
+ * 必须放主包：首页一进来就要说话，挂 pkg-battle 等于新号先下 2MB 分包才看得到指路。
+ * 仍然**不进任何预加载清单**——文件在主包里冷启动就能读，不必再排进首屏队列。
+ * 首屏预算有 config/__tests__/assetPreloadBudget.test.ts 盯着。
+ */
+export const UI_GUIDE_IMAGES = {
+  xiaoling: `${IMG}/ui/guide/xiaoling.png`,
+} as const;
+
 /** 战斗 HUD 专用贴图（pkg-battle，对齐 battle_ui_mockup；进战斗按需加载） */
 export const UI_BATTLE_IMAGES = {
   stageBanner: `${PKG.battle}/images/ui/battle/battle_stage_banner.png`,

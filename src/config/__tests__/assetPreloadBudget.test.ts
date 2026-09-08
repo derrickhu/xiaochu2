@@ -6,6 +6,7 @@ import {
   ORB_IMAGES,
   PET_FRAME_IMAGES,
   UI_BATTLE_IMAGES,
+  UI_GUIDE_IMAGES,
 } from '@/config/Assets';
 import {
   PET_DETAIL_SHELL_IMAGES,
@@ -49,5 +50,13 @@ describe('首屏预加载预算', () => {
       UI_BATTLE_IMAGES.petStar,
     ].filter((p) => !covered.has(p));
     expect(orphan).toEqual([]);
+  });
+
+  it('小灵头像不进任何预加载清单：只有真新号首战看一次，不该让所有人冷启动多等', () => {
+    const guide = Object.values(UI_GUIDE_IMAGES);
+    expect(guide.filter((p) => MAIN_PRELOAD_IMAGES.includes(p))).toEqual([]);
+    expect(guide.filter((p) => DEFERRED_PRELOAD_IMAGES.includes(p))).toEqual([]);
+    const battleShell = battlePreloadImages('stage_1_1', []);
+    expect(guide.filter((p) => battleShell.includes(p))).toEqual([]);
   });
 });

@@ -24,6 +24,7 @@ import { GMManager } from '@/core/GMManager';
 import { EventBus } from '@/core/EventBus';
 import type { TeamEnterData } from './TeamScene';
 import { showStageEntryDialog, type StageEntryDialogHandle } from './StageEntryDialog';
+import { HomeStartGuide } from './HomeStartGuide';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { buildTitleScreenWorld } from './chapterMapView';
 import { attachChapterMapEditor } from './chapterMapEditor';
@@ -73,6 +74,7 @@ export class TitleScene implements Scene {
   private _worldRoot: PIXI.Container | null = null;
   private _dialogLayer: PIXI.Container | null = null;
   private _stageEntry: StageEntryDialogHandle | null = null;
+  private _homeGuide: HomeStartGuide | null = null;
   private _mapEditMode = false;
   private _editorTeardown: (() => void) | null = null;
   private _onMapEditToggle = (): void => {
@@ -122,6 +124,8 @@ export class TitleScene implements Scene {
   private _rebuild(): void {
     this._stageEntry?.dismiss();
     this._stageEntry = null;
+    this._homeGuide?.destroy();
+    this._homeGuide = null;
     this._editorTeardown?.();
     this._editorTeardown = null;
     this._scroll.detach();
@@ -164,6 +168,8 @@ export class TitleScene implements Scene {
     EventBus.off('safearea:updated', this._onHomeRefresh);
     this._stageEntry?.dismiss();
     this._stageEntry = null;
+    this._homeGuide?.destroy();
+    this._homeGuide = null;
     this._editorTeardown?.();
     this._editorTeardown = null;
     this._mapEditMode = false;
@@ -222,12 +228,20 @@ export class TitleScene implements Scene {
     // 弹层置顶：盖住地图与导航
     this._dialogLayer = new PIXI.Container();
     this.container.addChild(this._dialogLayer);
+
+    // 新号一进来就指路：盖在地图上，但不挡点关（eventMode none）
+    if (!mapEditMode && HomeStartGuide.needed && mapWorld.activeScreenPos) {
+      this._homeGuide = new HomeStartGuide({ target: mapWorld.activeScreenPos });
+      this._homeGuide.build(this._dialogLayer);
+    }
   }
 
   /** 点关 → 详情弹层 → 确认后再进编队 */
   private _openStageEntry(stageId: string): void {
     const stage = STAGE_MAP.get(stageId);
     if (!stage || !this._dialogLayer) return;
+    this._homeGuide?.complete();
+    this._homeGuide = null;
     this._stageEntry?.dismiss();
     this._stageEntry = showStageEntryDialog(this._dialogLayer, stage, {
       onConfirm: (id) => {

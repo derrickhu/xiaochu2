@@ -11,6 +11,7 @@ import { migrateCreatureId } from '@/balance/creatureIdMigration';
 import { getStarProfile } from '@/balance/growth';
 import { ECONOMY } from '@/balance/economy';
 import { emptyStaminaState, type StaminaState } from './staminaService';
+import { sanitizeTutorial } from './tutorialFlags';
 
 import {
   DEV_LEGACY_SAVE_KEYS,
@@ -19,7 +20,7 @@ import {
 } from '@/config/CloudConfig';
 
 export { SAVE_KEY, LEGACY_SAVE_KEY } from '@/config/CloudConfig';
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 /** 单只灵宠的养成进度 */
 export interface OwnedPet {
@@ -142,6 +143,11 @@ export interface SaveData {
   /** 体力（惰性恢复，见 game/staminaService.ts），v7 起 */
   stamina: StaminaState;
   /**
+   * 新手引导已完成的 flag（见 game/tutorialFlags.ts），v8 起。
+   * 老档缺失时按「已有通关记录 = 老玩家」整体豁免，不补引导。
+   */
+  tutorial: Record<string, boolean>;
+  /**
    * 主页落点章：最近主线对战 / 章节切换。
    * 0 = 未记过，回主页时落到最新已解锁章。
    */
@@ -231,6 +237,7 @@ export function initialData(): SaveData {
     checkin: emptyCheckinState(),
     tower: emptyTowerState(),
     stamina: emptyStaminaState(),
+    tutorial: {},
     homeChapter: 0,
     homeStageId: '',
   };
@@ -240,12 +247,19 @@ export function initialData(): SaveData {
  * 解析存档，缺字段回退默认；v3 起迁移灵宠 ID，v5 起 Boss 关统一到第 8 关，
  * v6 起补齐 daily/checkin/tower（老档直接吃缺省空态，等价于「今天还没开始玩」），
  * v7 起补齐 gachaSinceUr / universalShards / stamina（缺失即从 0 与满瓶起算）。
+ * v8 起补齐 tutorial：老档缺字段时按「有通关记录 = 老玩家」整体标完成，只有真新号才吃引导。
  */
 export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown }): SaveData {
   const migrated = migratePetIdsInPartialSave(parsed);
   const owned = sanitizeOwned(migrated.ownedPets);
   const ownedCount = Object.keys(owned).length;
   const fromVersion = typeof migrated.version === 'number' ? migrated.version : 0;
+  const stars = migrateStageStars(
+    migrated.stars && typeof migrated.stars === 'object' ? migrated.stars : {},
+    fromVersion,
+  );
+  // 有任何通关记录 = 老玩家，v8 前的档没有 tutorial 字段，不能让他们重吃 1-1 的引导
+  const veteran = Object.keys(stars).length > 0;
   return {
     version: SAVE_VERSION,
     coins: typeof migrated.coins === 'number' ? migrated.coins : 0,
@@ -259,10 +273,7 @@ export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown
       ? Math.max(0, Math.floor(migrated.universalShards))
       : 0,
     exp: typeof migrated.exp === 'number' ? migrated.exp : 0,
-    stars: migrateStageStars(
-      migrated.stars && typeof migrated.stars === 'object' ? migrated.stars : {},
-      fromVersion,
-    ),
+    stars,
     ownedPets: owned,
     pendingShards: sanitizeShardLedger(migrated.pendingShards, owned),
     team: sanitizeTeam(migrated.team, owned),
@@ -284,6 +295,7 @@ export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown
     checkin: sanitizeCheckin(migrated.checkin),
     tower: sanitizeTower(migrated.tower),
     stamina: sanitizeStamina(migrated.stamina),
+    tutorial: sanitizeTutorial(migrated.tutorial, veteran),
     homeChapter: typeof migrated.homeChapter === 'number' && Number.isFinite(migrated.homeChapter)
       ? Math.max(0, Math.floor(migrated.homeChapter))
       : 0,

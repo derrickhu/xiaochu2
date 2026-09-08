@@ -44,7 +44,8 @@ import { AD_REWARD_MULT } from '@/balance/monetization';
 import type { BattleEnterData } from '../BattleScene';
 import type { TeamEnterData } from '../TeamScene';
 import { battleProgressHint } from './battleProgressHints';
-import { analytics } from '@/analytics';
+import { defeatCoaching } from './defeatCoaching';
+import { analytics, TUTORIAL_STEPS } from '@/analytics';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
 /**
@@ -534,9 +535,15 @@ export class BattleResultOverlay {
     tipRow.addChild(makeText('!', {
       size: 17, fill: 0xffffff, bold: true, anchor: 0.5,
     }));
+    // 连败第 2 次起把通用句换成指名克制的那一句，并把「编队」摆进引导首位
+    const coaching = defeatCoaching({
+      element: ctrl.stage.element,
+      fails,
+      isMainline: !context,
+    });
     const tipCopy = context?.kind === 'tower'
       ? `本轮已中断 · 回塔消耗 1 次重置，从第 ${PlayerData.towerCheckpointFloor()} 层满血重来`
-      : '提示：消除克制属性珠子伤害更高';
+      : coaching.tip;
     const tip = makeText(tipCopy, {
       size: FONT_SIZE.xxs, fill: TITLE_BROWN, bold: true, anchor: [0, 0.5],
       role: 'title',
@@ -559,8 +566,19 @@ export class BattleResultOverlay {
 
     y += 6;
     const guide = this._buildGrowthGuide((scene) => {
-      commitDefeat(() => SceneManager.switchTo(scene));
-    });
+      commitDefeat(() => {
+        // 编队页已拆掉自由入口，必须带 stageId 才进得去（否则黑屏在编队页）
+        if (scene === 'team') {
+          analytics.trackTutorialStep(TUTORIAL_STEPS.coachTeamPick, {
+            level_name: ctrl.stage.id,
+            fails,
+          });
+          SceneManager.switchTo('team', { stageId: ctrl.stage.id } satisfies TeamEnterData);
+          return;
+        }
+        SceneManager.switchTo(scene);
+      });
+    }, coaching);
     guide.position.set(0, y + guide.boxH / 2);
     content.addChild(guide);
     y += guide.boxH + 16;
@@ -1027,6 +1045,7 @@ export class BattleResultOverlay {
 
   private _buildGrowthGuide(
     onPick: (scene: string) => void,
+    coaching?: { guideHead: string; offerTeam: boolean },
   ): PIXI.Container & { boxH: number } {
     const box = new PIXI.Container() as PIXI.Container & { boxH: number };
     const innerW = PANEL_W - 72;
@@ -1040,7 +1059,7 @@ export class BattleResultOverlay {
       centered: true,
     }));
 
-    const head = makeText('卡关了？试试提升战力', {
+    const head = makeText(coaching?.guideHead ?? '卡关了？试试提升战力', {
       size: FONT_SIZE.sm, fill: TITLE_BROWN, bold: true, anchor: 0.5,
       role: 'title',
     });
@@ -1052,6 +1071,11 @@ export class BattleResultOverlay {
       { label: '商店', icon: UI_IMAGES.navShop, scene: 'shop' },
       { label: '灵宠', icon: UI_IMAGES.navPet, scene: 'codex' },
     ];
+    if (coaching?.offerTeam) {
+      // 换队摆首位、并挤掉「商店」：卡关的第一反应该是调搭配，不是先被推去掏钱
+      entries.splice(1, 1);
+      entries.unshift({ label: '编队', icon: UI_IMAGES.navTeam, scene: 'team' });
+    }
     const gap = 128;
     const startX = -((entries.length - 1) * gap) / 2;
     const ringR = 46;

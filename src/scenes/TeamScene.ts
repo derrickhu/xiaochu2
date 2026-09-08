@@ -20,8 +20,9 @@ import {
   baseStageIdOf, hasEliteVariant, isEliteStageId,
 } from '@/balance/eliteMode';
 import type { TeamMember } from '@/formulas/team';
-import { BACKGROUND_IMAGES, UI_IMAGES } from '@/config/Assets';
+import { BACKGROUND_IMAGES, UI_GUIDE_IMAGES, UI_IMAGES } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
+import { TUTORIAL_FLAGS } from '@/game/tutorialFlags';
 import type { BattleContext } from '@/game/battleContext';
 import { checkStaminaFor } from '@/game/staminaGate';
 import { stageStaminaCost } from '@/game/staminaService';
@@ -59,6 +60,9 @@ import {
   showSkillPreviewBubble,
   type PetSkillPreviewHandle,
 } from './battle/PetSkillPreviewBubble';
+import { teamOrbLine } from './battle/battleCoach';
+import { makeLingGuideBubble } from '@/ui/LingGuideBubble';
+import { analytics, TUTORIAL_STEPS } from '@/analytics';
 
 /** 战前编队：传入 stageId 时展示本关敌人，确认后进入战斗；缺省为自由编队 */
 export interface TeamEnterData {
@@ -215,6 +219,9 @@ export class TeamScene implements Scene {
 
     // 技能气泡必须在所有 UI 之上
     this.container.addChild(this._previewLayer);
+
+    // 只在进场那一次说：hydrate 重建会再走 _build，别闪第二次
+    if (animate) this._tryShowTeamCoach();
 
     if (animate) {
       staggerIn([...this._listItems.values()], { stepDelay: 0.03, offsetY: 16, duration: 0.3 });
@@ -447,6 +454,26 @@ export class TeamScene implements Scene {
     Platform.showToast(`${pet.name} 已任队长 · ${skill.text}`, 'success');
     this._refreshTeamUi();
     if (Platform.isMinigame) Game.syncFrameToScreen();
+  }
+
+  private _tryShowTeamCoach(): void {
+    if (this._context || !this._prepStage) return;
+    if (PlayerData.isTutorialDone(TUTORIAL_FLAGS.teamOrb)) return;
+    const line = teamOrbLine(this._prepStage, this._teamDefs().map((p) => p.element));
+    if (!line) return;
+    const bubble = makeLingGuideBubble({ text: line.text, maxWidth: 380 });
+    bubble.root.position.set(Game.logicWidth / 2, Game.logicHeight * 0.36);
+    bubble.root.eventMode = 'none';
+    this.container.addChild(bubble.root);
+    popIn(bubble.root, { fromScale: 0.9, duration: 0.24 });
+    void ensureAssets([UI_GUIDE_IMAGES.xiaoling])
+      .then(() => bubble.applyPortrait())
+      .catch(() => { /* 降级纯文字 */ });
+    PlayerData.markTutorialDone(TUTORIAL_FLAGS.teamOrb);
+    analytics.trackTutorialStep(TUTORIAL_STEPS.coachHint, {
+      topic: line.topic,
+      kind: line.kind,
+    });
   }
 
   /** 当前上阵灵宠定义（空槽位过滤掉） */

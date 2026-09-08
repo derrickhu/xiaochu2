@@ -60,6 +60,8 @@ export interface TitleScreenWorldResult {
   nodes: PIXI.Container[];
   marker: PIXI.Container | null;
   activeIndex: number;
+  /** 当前进度关在逻辑屏幕上的中心（首页指路用）；没有高亮关则为 null */
+  activeScreenPos: { x: number; y: number } | null;
 }
 
 export interface TitleScreenWorldOpts {
@@ -526,7 +528,14 @@ export function buildTitleScreenWorld(opts: TitleScreenWorldOpts): TitleScreenWo
     designLayer.addChild(marker);
   }
 
-  return { world: root, designLayer, nodes, marker, activeIndex: activeIdx };
+  const activeScreenPos = activePos
+    ? {
+      x: fit.offsetX + activePos.x * fit.scale,
+      y: fit.offsetY + nodeInset + activePos.y * fit.scale,
+    }
+    : null;
+
+  return { world: root, designLayer, nodes, marker, activeIndex: activeIdx, activeScreenPos };
 }
 
 /** @deprecated 兼容旧调用，内部转 buildTitleScreenWorld */

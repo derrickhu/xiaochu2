@@ -32,6 +32,7 @@ import {
   type TowerState,
 } from './playerSave';
 import { ensureDailyFresh, isConsecutiveDay } from './dailyReset';
+import type { TutorialFlag } from './tutorialFlags';
 import {
   msToFull, msToNextPoint, settleStamina, staminaCap,
 } from './staminaService';
@@ -599,6 +600,19 @@ class PlayerDataClass {
     if (this._data.homeStageId === stage.id && this._data.homeChapter === stage.chapter) return;
     this._data.homeStageId = stage.id;
     this._data.homeChapter = stage.chapter;
+    this._save();
+  }
+
+  // ═══════════ 新手引导 ═══════════
+
+  isTutorialDone(flag: TutorialFlag): boolean {
+    return this._data.tutorial[flag] === true;
+  }
+
+  /** 幂等：已完成不重复写盘，顺带堵住「每帧 mark」退化成刷盘的路 */
+  markTutorialDone(flag: TutorialFlag): void {
+    if (this._data.tutorial[flag] === true) return;
+    this._data.tutorial[flag] = true;
     this._save();
   }
 

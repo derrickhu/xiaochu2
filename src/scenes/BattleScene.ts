@@ -40,6 +40,7 @@ import { BoardView } from '@/game/board/BoardView';
 import { BattleController, type PetAttack, type TurnResolution } from '@/game/battle/BattleController';
 import type { EnemyActResult } from '@/game/battle/battleTypes';
 import { PlayerData } from '@/game/PlayerData';
+import { TUTORIAL_FLAGS } from '@/game/tutorialFlags';
 import type { BattleContext } from '@/game/battleContext';
 import { consumeStaminaFor } from '@/game/staminaGate';
 import { TOWER } from '@/balance/tower';
@@ -50,6 +51,15 @@ import { BattleHud } from './battle/BattleHud';
 import { BattleStatusIcons } from './battle/BattleStatusIcons';
 import { BattlePetBar } from './battle/BattlePetBar';
 import { BattleResultOverlay, type BattleResultOptions } from './battle/BattleResultOverlay';
+import { BattleDragHint } from './battle/BattleDragHint';
+import { BattleCoachHint } from './battle/BattleCoachHint';
+import {
+  emptyCoachMemory,
+  isCoachStage,
+  nextCoach,
+  type CoachLine,
+  type CoachMemory,
+} from './battle/battleCoach';
 import {
   showEnemyDetailDialog,
   type EnemyDetailHandle,
@@ -57,7 +67,7 @@ import {
 import { presentSkillCast, type SkillCastDeps } from './battle/battleSkillPresenter';
 import { EnemyStunHalo } from './battle/EnemyStunHalo';
 import { showTowerBlessPicker } from './battle/TowerBlessPicker';
-import { analytics } from '@/analytics';
+import { analytics, TUTORIAL_STEPS } from '@/analytics';
 import { SceneEnterSeq, deferSceneBuild } from '@/utils/sceneEnterSeq';
 import {
   guardedPromise, guardedTween, minigameFallback, once, startMinigamePresentLoop,
@@ -143,6 +153,14 @@ export class BattleScene implements Scene {
   private _context: BattleContext | undefined;
   /** 本场最高 Combo（日常任务「单场 N 连击」判定） */
   private _maxCombo = 0;
+  /** 长拖手势示意（仅新号首战建；见 battle/BattleDragHint.ts） */
+  private _dragHint: BattleDragHint | null = null;
+  private _coachHint: BattleCoachHint | null = null;
+  private _coachMem: CoachMemory = emptyCoachMemory();
+  private _pendingCoach: CoachLine | null = null;
+  /** 新手漏斗本场只报一次，避免同一场反复拖珠把漏斗刷花 */
+  private _firstTouchReported = false;
+  private _firstMatchReported = false;
 
   onEnter(data?: unknown): void {
     PlayerData.load();
@@ -151,6 +169,8 @@ export class BattleScene implements Scene {
     const stageId = enter?.stageId ?? STAGES[0].id;
     this._context = enter?.context;
     this._maxCombo = 0;
+    this._coachMem = emptyCoachMemory();
+    this._pendingCoach = null;
     this._ctrl = new BattleController(stageId, PlayerData.team, Math.random,
       (id) => ({ level: PlayerData.petLevel(id), star: PlayerData.petStar(id) }),
       this._context?.kind === 'tower' ? PlayerData.towerRunModifiers() : undefined);
@@ -159,6 +179,10 @@ export class BattleScene implements Scene {
     // 主线开打记下这一关；回主页时若已通关，落到下一关
     if (!this._context) {
       PlayerData.setHomeStage(this._ctrl.stage.id);
+      // 已经走进第一关：首页指路完成（没看到也算会了，回来别再挡路）
+      if (this._ctrl.stage.id === STAGES[0].id) {
+        PlayerData.markTutorialDone(TUTORIAL_FLAGS.homeStart);
+      }
     }
     if (this._context?.kind === 'realm') {
       PlayerData.consumeRealmRun();
@@ -223,6 +247,13 @@ export class BattleScene implements Scene {
       this._alive = true;
       this._battleStartedAt = Date.now();
       analytics.trackLevelStart(this._ctrl.stage.id, this._ctrl.stage.name);
+      // 新手漏斗第一格：只有引导未完成的号才报，老玩家进战斗不该混进漏斗。
+      // 同一新号失败重进会多报几次，按 uv 统计漏斗不受影响。
+      if (this._wantsDragHint) {
+        analytics.trackTutorialStep(TUTORIAL_STEPS.battleEnterFirst, {
+          level_name: this._ctrl.stage.id,
+        });
+      }
       GMManager.registerInstantClearHandler(this._gmInstantClear);
       this._hud.refreshEnemy(false);
       this._hud.refreshHeroHp();
@@ -257,6 +288,10 @@ export class BattleScene implements Scene {
     this._boardView?.cancelDrag();
     this._boardView?.destroy();
     this._boardView = null;
+    this._dragHint?.destroy();
+    this._dragHint = null;
+    this._coachHint?.destroy();
+    this._coachHint = null;
     this._statusIcons?.destroy();
     this._stunHalo?.destroy();
     // 须在容器整体销毁之前，否则探针里的引用会指向已销毁的显示对象
@@ -320,6 +355,7 @@ export class BattleScene implements Scene {
     // 珠盘（须在 FX 之上；输入走 canvas touchstart，不依赖 Pixi 层级）
     this._boardView = new BoardView(this._board, {
       canDrag: () => !this._busy && this._ctrl.state === 'playerTurn',
+      onDragStart: () => { this._onDragStart(); },
       onDragEnd: (didMove) => {
         void this._onDragEnd(didMove);
       },
@@ -329,6 +365,33 @@ export class BattleScene implements Scene {
     this._boardView.container.position.set(this._layout.boardX, this._layout.boardY);
     this.container.addChild(this._boardView.container);
 
+    // 长拖手势示意：珠盘之上、Combo 与结算层之下；只有真新号首战才建
+    if (this._wantsDragHint) {
+      this._dragHint = new BattleDragHint({
+        board: this._board,
+        cellPos: (cell) => this._boardView!.worldPosOf(cell),
+        canPlay: () => this._alive
+          && !this._busy
+          && !this._resultOpen
+          && this._ctrl.state === 'playerTurn'
+          && !this._boardView?.dragging,
+        isUseful: (orb) => orb === 'heart' || this._ctrl.teamElementSet.has(orb as Element),
+        // 压在宠物栏上沿：字要够大，宁可靠近队伍也不要再缩成一条看不清的细条
+        tipAnchor: {
+          x: Game.logicWidth / 2,
+          y: this._layout.petBarPanelY - this._layout.petBarPanelH / 2 + 8,
+        },
+      });
+      this._dragHint.build(this.container);
+    }
+    if (this._wantsCoach) {
+      this._coachHint = new BattleCoachHint({
+        x: Game.logicWidth / 2,
+        y: this._layout.petBarPanelY - this._layout.petBarPanelH / 2 + 8,
+      });
+      this._coachHint.build(this.container);
+    }
+
     // 转珠倒计时条（叠在棋盘 cream 框顶边之上）
     this._hud.buildDragBar(this.container);
 
@@ -337,6 +400,9 @@ export class BattleScene implements Scene {
 
     // 关卡号顶栏（最后绘制，保证不被敌人区背景遮挡）
     this._hud.buildStageHeader(this.container);
+    // 示意提到 HUD 之上，否则大气泡会被连击字 / 顶栏盖住
+    this._dragHint?.raise(this.container);
+    this._coachHint?.raise(this.container);
 
     // 怪物详情浮层（结算层之下；点怪打开）
     this._enemyDetailLayer = new PIXI.Container();
@@ -377,6 +443,66 @@ export class BattleScene implements Scene {
     this._refreshSkillUi();
   }
 
+  /** 连击 / 克制点破只盯主线前 3 关 */
+  private get _wantsCoach(): boolean {
+    return !this._context && isCoachStage(this._ctrl.stage);
+  }
+
+  private _noteCoach(groups: readonly MatchGroup[]): void {
+    if (!this._wantsCoach) return;
+    const result = nextCoach(
+      this._coachMem,
+      {
+        combo: groups.length,
+        orbs: groups.map((g) => g.orb),
+        enemyElement: this._ctrl.enemy.def.element,
+      },
+      {
+        combo: PlayerData.isTutorialDone(TUTORIAL_FLAGS.comboHint),
+        counter: PlayerData.isTutorialDone(TUTORIAL_FLAGS.counterHint),
+      },
+    );
+    this._coachMem = result.mem;
+    this._pendingCoach = result.line;
+  }
+
+  private _flushCoach(): void {
+    const line = this._pendingCoach;
+    this._pendingCoach = null;
+    if (!line || this._resultOpen || this._ctrl.isFinished) return;
+    this._coachHint?.show(line);
+  }
+
+  /** 手势示意只服务真新号的主线首关：副玩法与后续关卡都不该出现 */
+  private get _wantsDragHint(): boolean {
+    return !this._context
+      && this._ctrl.stage.id === STAGES[0].id
+      && BattleDragHint.needed;
+  }
+
+  /** 玩家碰了棋盘：收起示意（知道要碰 ≠ 会拖，所以还不算学会） */
+  private _onDragStart(): void {
+    this._dragHint?.notifyTouch();
+    this._coachHint?.dismiss();
+    if (!this._firstTouchReported && this._wantsDragHint) {
+      this._firstTouchReported = true;
+      analytics.trackTutorialStep(TUTORIAL_STEPS.firstTouch, {
+        level_name: this._ctrl.stage.id,
+      });
+    }
+  }
+
+  /** 玩家自己消掉一次 = 长拖学会了，示意永久收起 */
+  private _onMatched(): void {
+    if (!this._firstMatchReported && this._wantsDragHint) {
+      this._firstMatchReported = true;
+      analytics.trackTutorialStep(TUTORIAL_STEPS.firstMatch, {
+        level_name: this._ctrl.stage.id,
+      });
+    }
+    this._dragHint?.notifyMatched();
+  }
+
   private _openEnemyDetail(): void {
     if (!this._alive || this._resultOpen) return;
     this._petBar.dismissSkillPreview();
@@ -394,6 +520,8 @@ export class BattleScene implements Scene {
   private _update(dt = Game.ticker.deltaMS / 1000): void {
     if (!this._alive) return;
     this._boardView?.update(dt);
+    this._dragHint?.update(dt);
+    this._coachHint?.update(dt);
     this._fx.update(dt);
     this._petBar.update(dt);
     this._stunHalo.update(dt);
@@ -472,6 +600,7 @@ export class BattleScene implements Scene {
         this._ctrl.beginPlayerTurn();
         this._hud.refreshStageHeader();
       }
+      this._flushCoach();
     }
   }
 
@@ -530,6 +659,10 @@ export class BattleScene implements Scene {
       if (isStale()) return;
 
       this._maxCombo = Math.max(this._maxCombo, allGroups.length);
+      if (allGroups.length > 0) {
+        this._onMatched();
+        this._noteCoach(allGroups);
+      }
 
       // Tap：连击层 Graphics/粒子还压在场上时立刻开战宠演出，libwebglhost 会直接 abort
       if (Platform.isTaptap) {
