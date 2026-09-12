@@ -3,6 +3,7 @@ import {
   capTapDevicePixelRatio,
   capTapFramebuffer,
   minigameRendererOpts,
+  resolveHuaweiViewSize,
   tapWebGLContextAttempts,
 } from '../webglContextPatch';
 
@@ -35,6 +36,34 @@ describe('tapWebGLContextAttempts', () => {
     expect(first.antialias).toBe(false);
     expect(first.stencil).toBe(false);
     expect(first.preserveDrawingBuffer).toBe(false);
+  });
+});
+
+describe('resolveHuaweiViewSize', () => {
+  it('有宿主主屏尺寸时跟宿主走，不压到 dpr=2', () => {
+    expect(resolveHuaweiViewSize({
+      canvasWidth: 1084,
+      canvasHeight: 2412,
+      screenWidth: 425.1,
+      screenHeight: 945.9,
+      pixelRatio: 2.55,
+    })).toEqual({
+      width: 1084,
+      height: 2412,
+      dpr: 1084 / 425.1,
+    });
+  });
+
+  it('没有宿主尺寸时用 screen * pixelRatio，不封顶', () => {
+    expect(resolveHuaweiViewSize({
+      screenWidth: 425,
+      screenHeight: 946,
+      pixelRatio: 2.55,
+    })).toEqual({
+      width: Math.round(425 * 2.55),
+      height: Math.round(946 * 2.55),
+      dpr: 2.55,
+    });
   });
 });
 

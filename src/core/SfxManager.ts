@@ -54,6 +54,19 @@ const SINGLE_SHOT: ReadonlySet<string> = new Set([
 const UI_TAP_POOL_SIZE = 2;
 const UI_TAPS: ReadonlySet<string> = new Set([AUDIO.uiClick, AUDIO.uiBack, AUDIO.uiTab]);
 
+/** 短音效放完的大致时长；超过就不必再 stop/seek */
+const SFX_RESTART_WINDOW_MS = 1500;
+
+/**
+ * 池里的实例只有「可能还在播」时才需要 stop+seek 掐掉重来。
+ * 华为对空实例的 stop/seek 每次都刷一条 `currently is no music` 警告，
+ * 连点几下就是几十条，既吵又费 JSB 往返。
+ */
+export function shouldRestartPooledSfx(playedAt: number | undefined, now: number): boolean {
+  if (!playedAt) return false;
+  return now - playedAt < SFX_RESTART_WINDOW_MS;
+}
+
 /**
  * 启动时预建池的范围：进首页就可能触发的。
  * 其余（抽卡、升星、闸门…）留给首次播放时懒建 —— 那些场合都有动画铺垫，
@@ -623,8 +636,13 @@ class SfxManagerClass {
     const a = this._getPooled(src, poolSize);
     if (!a) return;
     a.volume = Math.max(0, Math.min(1, volume * this._masterVolume));
-    try { a.stop(); } catch (_) {}
-    try { a.seek(0); } catch (_) {}
+    const marked = a as WechatMinigame.InnerAudioContext & { __xcPlayAt?: number };
+    const now = Date.now();
+    if (shouldRestartPooledSfx(marked.__xcPlayAt, now)) {
+      try { a.stop(); } catch (_) {}
+      try { a.seek(0); } catch (_) {}
+    }
+    marked.__xcPlayAt = now;
     const rate = Math.max(0.5, Math.min(2.0, playbackRate));
     a.playbackRate = rate;
     a.play();

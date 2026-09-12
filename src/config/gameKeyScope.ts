@@ -1,9 +1,12 @@
 /**
- * GameKey 平台命名空间 — 多平台数据隔离标准
+ * GameKey 平台命名空间 — 多平台数据隔离标准（其它游戏可原样复用）
  *
- * - 微信：petTower_{suffix}（与历史一致）
- * - 抖音：petTower_tt_{suffix}
- * - CloudBase API 路由仍用 BASE_GAME_KEY（petTower-api），集合/存档/JWT 用 SCOPED_GAME_KEY
+ * - 微信：{gameKey}_{suffix}
+ * - 抖音：{gameKey}_tt_{suffix}
+ * - Tap：{gameKey}_tap_{suffix}
+ * - 华为：{gameKey}_hw_{suffix}
+ * 后端 platform 字段：wx / dy / tap / hw / anon
+ * CloudBase API 路由仍用 BASE_GAME_KEY（petTower-api），集合/存档/JWT 用 SCOPED_GAME_KEY
  */
 import { detectMinigamePlatform, type PlatformName } from '@/core/PlatformService';
 
@@ -11,19 +14,21 @@ import { detectMinigamePlatform, type PlatformName } from '@/core/PlatformServic
 export const BASE_GAME_KEY = 'petTower';
 
 /** 非微信宿主在 GAME_KEY 与 suffix 之间插入的平台段 */
-export type PlatformScopeSegment = 'tt' | 'tap';
+export type PlatformScopeSegment = 'tt' | 'tap' | 'hw';
 
 const PLATFORM_SCOPE: Partial<Record<PlatformName, PlatformScopeSegment>> = {
   douyin: 'tt',
   taptap: 'tap',
+  huawei: 'hw',
 };
 
 /** 后端 platform 字段 → 命名空间 */
-export type BackendPlatformCode = 'wx' | 'dy' | 'tap' | 'anon';
+export type BackendPlatformCode = 'wx' | 'dy' | 'tap' | 'hw' | 'anon';
 
 const BACKEND_SCOPE: Partial<Record<BackendPlatformCode, PlatformScopeSegment>> = {
   dy: 'tt',
   tap: 'tap',
+  hw: 'hw',
 };
 
 export function getPlatformScope(platform: PlatformName = detectMinigamePlatform()): PlatformScopeSegment | null {

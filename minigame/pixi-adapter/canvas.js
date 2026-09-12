@@ -5,13 +5,20 @@
 
 const platform = require('./platform');
 
+function _usable(c) {
+  return !!(c && typeof c.getContext === 'function');
+}
+
 let canvas;
 try {
   canvas = platform.createCanvas();
+  if (!_usable(canvas) && typeof GameGlobal !== 'undefined' && _usable(GameGlobal.__hostCanvas)) {
+    canvas = GameGlobal.__hostCanvas;
+  }
 
   // iOS / Tap：禁用 webgl2（勿在此处 getContext('webgl')，会锁死或打崩宿主）
   const _sysPlat = platform.getSystemInfoSync().platform;
-  if ((_sysPlat === 'ios' || platform.name === 'taptap') && canvas && typeof canvas.getContext === 'function') {
+  if ((_sysPlat === 'ios' || platform.name === 'taptap' || platform.name === 'huawei') && canvas && typeof canvas.getContext === 'function') {
     const origGetContext = canvas.getContext.bind(canvas);
     canvas.getContext = function(type, opts) {
       if (type === 'webgl2') return null;
@@ -20,7 +27,9 @@ try {
   }
 } catch (e) {
   console.error('[canvas] createCanvas 失败:', e);
-  canvas = { width: 0, height: 0, getContext: function() { return null; } };
+  canvas = (typeof GameGlobal !== 'undefined' && _usable(GameGlobal.__hostCanvas))
+    ? GameGlobal.__hostCanvas
+    : { width: 0, height: 0, getContext: function() { return null; } };
 }
 
 module.exports = { canvas };

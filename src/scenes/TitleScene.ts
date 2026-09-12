@@ -32,6 +32,7 @@ import { ensurePetAvatars, titleHomePetAvatarEntries } from '@/config/assetPrelo
 import { UI_IMAGES } from '@/config/Assets';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
+import { describeError } from '@/core/renderDiagnostics';
 
 declare const GameGlobal: any;
 
@@ -115,7 +116,12 @@ export class TitleScene implements Scene {
     // 只把章写回：高亮关是展示结果，写回会把「已通关→下一关」跨章结果存进档，下次返回就粘在进度章
     PlayerData.setHomeChapter(display.chapter);
     if (SceneManager.current?.name !== 'title') return;
-    this._rebuild();
+    try {
+      this._rebuild();
+    } catch (e) {
+      try { GameGlobal.__bootDiag?.('title-rebuild.fail:' + describeError(e)); } catch { /* */ }
+      throw e;
+    }
     reportQuest('login');
     void ensurePetAvatars(titleHomePetAvatarEntries(this._chapter));
     void Game.warmScenePresent();

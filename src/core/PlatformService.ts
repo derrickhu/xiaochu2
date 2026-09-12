@@ -1,35 +1,66 @@
 /**
- * 平台服务抽象层 - 统一封装微信/抖音双平台 API
+ * 平台服务抽象层 - 统一封装微信 / 抖音 / Tap / 华为快游戏 API
  *
  * 业务侧跨平台 SDK 入口：所有 wx/tt 差异（存储、登录、分享、生命周期等）
  * 都必须走 Platform，禁止在业务里写 typeof wx / typeof tt。
  *
- * 宿主识别：抖音注入 tt（可同时存在 wx 兼容层）；Tap 注入 tap；微信仅 wx。
- * Tap 包由 VITE_PLATFORM=taptap 编译，运行时即使误注入 wx 也不会当成微信。
+ * 宿主识别：抖音注入 tt（可同时存在 wx 兼容层）；Tap 注入 tap；
+ * 华为快游戏注入 qg（快应用残留才是 qa；运行时也可能再塞 wx 兼容层）——必须先认华为，不能只看 wx。
+ * Tap / 华为包由 VITE_PLATFORM 编译锁定，运行时即使误注入 wx 也不会当成微信。
  */
 
+import { waitMs } from '@/utils/hostTimeout';
+import { coerceToArrayBuffer } from './cdnAssetFallback';
+import { parseHuaweiLoginData, readHuaweiAppId, type HuaweiAccount } from './huaweiAccount';
+import { readHostStorage, removeHostStorage, resolveHostLocalStorage, writeHostStorage } from './hostStorage';
 import { shimImageDomContract } from './imageDomShim';
 
 declare const wx: any;
 declare const tt: any;
 declare const tap: any;
+declare const qa: any;
+declare const qg: any;
+declare const __wxConfig: any;
+declare const GameGlobal: any;
 
-export type PlatformName = 'wechat' | 'douyin' | 'taptap' | 'unknown';
-export type BackendPlatformCode = 'wx' | 'dy' | 'tap' | 'anon';
+export type PlatformName = 'wechat' | 'douyin' | 'taptap' | 'huawei' | 'unknown';
+export type BackendPlatformCode = 'wx' | 'dy' | 'tap' | 'hw' | 'anon';
+
+/** 华为快游戏原生是 qg；快应用才是 qa；转换层可能只剩 wx 壳 */
+export function isHuaweiQuickGameHost(): boolean {
+  if (typeof qg !== 'undefined') return true;
+  if (typeof qa !== 'undefined') return true;
+  try {
+    if (typeof GameGlobal !== 'undefined' && (GameGlobal.__wx2huawei || GameGlobal.qa || GameGlobal.qg)) return true;
+  } catch { /* */ }
+  if (typeof wx === 'undefined') return false;
+  if (typeof __wxConfig !== 'undefined') return false;
+  if (typeof wx.getAccountInfoSync === 'function') return false;
+  return true;
+}
+
+function resolveHuaweiApi(): any {
+  if (typeof qg !== 'undefined') return qg;
+  if (typeof qa !== 'undefined') return qa;
+  return typeof wx !== 'undefined' ? wx : null;
+}
 
 /** 检测当前小游戏宿主（单一真源，与 minigame/runtime.js 逻辑一致） */
 export function detectMinigamePlatform(): PlatformName {
   if (import.meta.env.VITE_PLATFORM === 'taptap') return 'taptap';
+  if (import.meta.env.VITE_PLATFORM === 'huawei') return 'huawei';
   if (typeof tt !== 'undefined') return 'douyin';
   if (typeof tap !== 'undefined') return 'taptap';
+  if (isHuaweiQuickGameHost()) return 'huawei';
   if (typeof wx !== 'undefined') return 'wechat';
   return 'unknown';
 }
 
-/** 指定宿主的原生 API：抖音 tt / Tap tap / 微信 wx */
+/** 指定宿主的原生 API：抖音 tt / Tap tap / 华为 qa（或转换层 wx） / 微信 wx */
 export function getNativePlatformApi(platform: PlatformName = detectMinigamePlatform()): any {
   if (platform === 'douyin') return typeof tt !== 'undefined' ? tt : null;
   if (platform === 'taptap') return typeof tap !== 'undefined' ? tap : null;
+  if (platform === 'huawei') return resolveHuaweiApi();
   if (platform === 'wechat') return typeof wx !== 'undefined' ? wx : null;
   return null;
 }
@@ -44,6 +75,7 @@ export function toBackendPlatformCode(name: PlatformName): BackendPlatformCode {
   if (name === 'douyin') return 'dy';
   if (name === 'wechat') return 'wx';
   if (name === 'taptap') return 'tap';
+  if (name === 'huawei') return 'hw';
   return 'anon';
 }
 
@@ -63,7 +95,11 @@ class PlatformServiceClass {
   constructor() {
     this.name = detectMinigamePlatform();
     this._api = getNativePlatformApi(this.name);
-    const apiName = this.name === 'douyin' ? 'tt' : this.name === 'wechat' ? 'wx' : this.name === 'taptap' ? 'tap' : 'none';
+    const apiName = this.name === 'douyin' ? 'tt'
+      : this.name === 'wechat' ? 'wx'
+      : this.name === 'taptap' ? 'tap'
+      : this.name === 'huawei' ? (typeof qg !== 'undefined' ? 'qg' : typeof qa !== 'undefined' ? 'qa' : 'wx')
+      : 'none';
     console.log(`[Platform] 当前平台: ${this.name}, api=${apiName}`);
   }
 
@@ -84,14 +120,34 @@ class PlatformServiceClass {
     return this.name === 'taptap';
   }
 
-  /** 后端 login 接口 platform 字段（wx / dy / tap / anon） */
+  get isHuawei(): boolean {
+    return this.name === 'huawei';
+  }
+
+  /**
+   * Tap / 华为快游戏：宿主 createCanvas 会和 document.createElement 互相重入。
+   * 禁止再走 PIXI.Application，量字 canvas 也必须用假画布。
+   */
+  get isCanvasHostGuarded(): boolean {
+    return this.name === 'taptap' || this.name === 'huawei';
+  }
+
+  /** 后端 login 接口 platform 字段（wx / dy / tap / hw / anon） */
   get backendPlatformCode(): BackendPlatformCode {
     return toBackendPlatformCode(this.name);
   }
 
-  /** 是否具备 HTTP 能力（小游戏 request 或浏览器 fetch） */
+  /**
+   * 是否具备 HTTP 能力。
+   *
+   * 必须和 request() 真正用的三条通路一致：宿主 request → 适配器覆盖前的宿主 XHR → fetch。
+   * 华为真机 qg 既没有 request 也没有全局 fetch，只剩宿主 XHR；漏掉它就会把云同步整体关掉
+   * （症状：经分照样有数，但 user_id 恒为空、云存档一条不写）。
+   */
   get canUseBackend(): boolean {
-    return typeof this._api?.request === 'function' || typeof fetch === 'function';
+    return typeof this._api?.request === 'function'
+      || !!this._hostXHR()
+      || typeof this._hostFetch() === 'function';
   }
 
   /** 开发者工具（非真机） */
@@ -112,34 +168,26 @@ class PlatformServiceClass {
   // ═══════════════ 存储 ═══════════════
 
   getStorageSync(key: string): string | null {
-    try {
-      return this._api?.getStorageSync(key) || null;
-    } catch (_) {
-      return null;
-    }
+    return readHostStorage(this._api, key, resolveHostLocalStorage());
   }
 
   setStorageSync(key: string, value: string): void {
-    try {
-      this._api?.setStorageSync(key, value);
-    } catch (_) {}
+    writeHostStorage(this._api, key, value, resolveHostLocalStorage());
   }
 
   /** 异步写入本地存储（避免阻塞主线程） */
   setStorageAsync(key: string, value: string): void {
+    const hostLs = resolveHostLocalStorage();
+    writeHostStorage(this._api, key, value, hostLs);
     try {
-      if (this._api?.setStorage) {
-        this._api.setStorage({ key, data: value, fail() {} });
-      } else {
-        this._api?.setStorageSync(key, value);
+      if (typeof this._api?.setStorage === 'function') {
+        this._api.setStorage({ key, data: value, value, fail() {} });
       }
-    } catch (_) {}
+    } catch { /* */ }
   }
 
   removeStorageSync(key: string): void {
-    try {
-      this._api?.removeStorageSync(key);
-    } catch (_) {}
+    removeHostStorage(this._api, key, resolveHostLocalStorage());
   }
 
   getSystemInfoSync(): Record<string, unknown> {
@@ -159,10 +207,10 @@ class PlatformServiceClass {
     timeoutMs?: number;
   }): Promise<{ statusCode: number; data: unknown }> {
     const method = (opts.method || 'POST').toUpperCase();
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      ...(opts.headers || {}),
-    };
+    const headers: Record<string, string> = { ...(opts.headers || {}) };
+    if (method !== 'GET' && !headers['content-type'] && !headers['Content-Type']) {
+      headers['content-type'] = 'application/json';
+    }
     const timeoutMs = opts.timeoutMs && opts.timeoutMs > 0 ? opts.timeoutMs : 10000;
     const payload = opts.data === undefined || typeof opts.data === 'string'
       ? opts.data
@@ -203,6 +251,24 @@ class PlatformServiceClass {
             reject(e);
           }
         }
+      });
+    }
+
+    // 只用适配器覆盖前保存的宿主 XHR。覆盖后的 XMLHttpRequest 会再去调 qg.request。
+    const HostXHR = this._hostXHR();
+    if (HostXHR) {
+      return this._hostXhrRequest(HostXHR, {
+        url: opts.url,
+        method,
+        headers,
+        payload: payload as string | undefined,
+        timeoutMs,
+        responseType: 'text',
+      }).then((res) => {
+        const text = String(res.text || '');
+        let data: unknown = text;
+        try { data = text ? JSON.parse(text) : null; } catch { /* keep text */ }
+        return { statusCode: res.statusCode, data };
       });
     }
 
@@ -249,6 +315,86 @@ class PlatformServiceClass {
     });
   }
 
+  /**
+   * 华为帐号。先静默取缓存 playerId，没有再调 gameLoginWithReal（可能弹华为帐号框）。
+   * 宿主没有这些 API 时返回 null，由后端走设备匿名号。
+   */
+  loginHuaweiAccount(): Promise<HuaweiAccount | null> {
+    if (!this.isHuawei || !this._api) return Promise.resolve(null);
+    return this._qgGetCachePlayerId().then((cached) => cached || this._qgGameLogin());
+  }
+
+  private _qgGetCachePlayerId(): Promise<HuaweiAccount | null> {
+    const api = this._api;
+    if (typeof api?.getCachePlayerId !== 'function') return Promise.resolve(null);
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (account: HuaweiAccount | null): void => {
+        if (done) return;
+        done = true;
+        resolve(account);
+      };
+      void waitMs(1500).then(() => finish(null));
+      try {
+        api.getCachePlayerId({
+          success: (res: unknown) => {
+            const parsed = parseHuaweiLoginData(res);
+            if (parsed) console.log(`[Platform] 华为缓存帐号 playerId=${parsed.playerId}`);
+            finish(parsed);
+          },
+          fail: () => finish(null),
+        });
+      } catch {
+        finish(null);
+      }
+    });
+  }
+
+  private _qgGameLogin(): Promise<HuaweiAccount | null> {
+    const api = this._api;
+    const loginFn = (typeof api?.gameLoginWithReal === 'function' && api.gameLoginWithReal)
+      || (typeof api?.gameLogin === 'function' && api.gameLogin)
+      || null;
+    if (!loginFn) {
+      console.warn('[Platform] 华为无 gameLoginWithReal / gameLogin，回退设备匿名号');
+      return Promise.resolve(null);
+    }
+    const appid = readHuaweiAppId(api);
+    const via = typeof api.gameLoginWithReal === 'function' ? 'gameLoginWithReal' : 'gameLogin';
+    console.log(`[Platform] 华为登录 via=${via} appid=${appid || '(empty)'}`);
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (account: HuaweiAccount | null): void => {
+        if (done) return;
+        done = true;
+        resolve(account);
+      };
+      void waitMs(8000).then(() => finish(null));
+      try {
+        loginFn.call(api, {
+          forceLogin: 1,
+          appid,
+          success: (data: unknown) => {
+            const parsed = parseHuaweiLoginData(data);
+            if (parsed) {
+              console.log(`[Platform] 华为登录 ok playerId=${parsed.playerId}`);
+            } else {
+              console.warn('[Platform] 华为登录成功但无 playerId', data);
+            }
+            finish(parsed);
+          },
+          fail: (data: unknown, code?: number) => {
+            console.warn(`[Platform] 华为登录失败 code=${code ?? '?'}`, data);
+            finish(null);
+          },
+        });
+      } catch (e) {
+        console.warn('[Platform] 华为登录异常', e);
+        finish(null);
+      }
+    });
+  }
+
   // ═══════════════ 创建资源 ═══════════════
 
   /** 创建平台 Image 对象（加载本地/网络图片用） */
@@ -258,31 +404,163 @@ class PlatformServiceClass {
     return null;
   }
 
+  /** 原生 downloadFile / download 是否可用（华为 1078 真机常常没有） */
+  get hasNativeDownload(): boolean {
+    return typeof this._api?.downloadFile === 'function' || typeof this._api?.download === 'function';
+  }
+
+  get hasBinaryHttp(): boolean {
+    return this.hasNativeDownload || !!this._hostXHR() || typeof this._hostFetch() === 'function';
+  }
+
   /** 下载远程文件到临时路径（CDN 资源用） */
   downloadFile(url: string): Promise<{ tempFilePath?: string; statusCode?: number }> {
-    return new Promise((resolve, reject) => {
-      if (!this._api?.downloadFile) {
-        reject(new Error('downloadFile unavailable'));
-        return;
-      }
-      this._api.downloadFile({
+    return this._invokeNativeDownload('downloadFile', url)
+      .catch(() => this._invokeNativeDownload('download', url));
+  }
+
+  /**
+   * 拉二进制。华为原生常无 downloadFile，走捕获的宿主 XHR / fetch。
+   * 适配器假 XHR 会再调不存在的 qg.request，不能用。
+   */
+  fetchBinary(url: string, timeoutMs = 30000): Promise<{ data: ArrayBuffer; statusCode: number }> {
+    const HostXHR = this._hostXHR();
+    if (HostXHR) {
+      return this._hostXhrRequest(HostXHR, {
         url,
-        success: (res: { tempFilePath?: string; statusCode?: number }) => {
-          const statusCode = Number(res?.statusCode || 0);
-          if (statusCode > 0 && (statusCode < 200 || statusCode >= 300)) {
-            reject(new Error(`downloadFile status=${statusCode} url=${url}`));
-            return;
-          }
-          if (!res?.tempFilePath) {
-            reject(new Error(`downloadFile missing tempFilePath url=${url}`));
-            return;
-          }
-          resolve(res);
-        },
-        fail: (err: any) => {
-          reject(new Error(err?.errMsg || err?.message || String(err)));
-        },
+        method: 'GET',
+        headers: {},
+        timeoutMs,
+        responseType: 'arraybuffer',
+      }).then((res) => {
+        if (res.statusCode > 0 && (res.statusCode < 200 || res.statusCode >= 300)) {
+          throw new Error(`xhr status=${res.statusCode} url=${url}`);
+        }
+        const data = coerceToArrayBuffer(res.buffer) || coerceToArrayBuffer(res.text);
+        if (!data) {
+          throw new Error(`xhr empty body url=${url}`);
+        }
+        return { data, statusCode: res.statusCode || 200 };
       });
+    }
+
+    const hostFetch = this._hostFetch();
+    if (hostFetch) {
+      return hostFetch(url).then(async (res: Response) => {
+        if (!res.ok) throw new Error(`fetch status=${res.status} url=${url}`);
+        const data = await res.arrayBuffer();
+        return { data, statusCode: res.status };
+      });
+    }
+
+    return Promise.reject(new Error('no binary http transport'));
+  }
+
+  private _hostXHR(): any {
+    try {
+      if (typeof GameGlobal !== 'undefined' && GameGlobal.__hostXMLHttpRequest) {
+        return GameGlobal.__hostXMLHttpRequest;
+      }
+    } catch { /* */ }
+    return null;
+  }
+
+  /**
+   * 宿主 XHR。华为真机经常既不 onload 也不 onerror，xhr.timeout 也不响。
+   * 必须再用 waitMs（setTimeout + rAF）硬切，否则 login 会把启动卡在 splash-done。
+   */
+  private _hostXhrRequest(
+    HostXHR: any,
+    opts: {
+      url: string;
+      method: string;
+      headers: Record<string, string>;
+      payload?: string;
+      timeoutMs: number;
+      responseType: 'text' | 'arraybuffer';
+    },
+  ): Promise<{ statusCode: number; text: string; buffer: unknown }> {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      let xhr: any;
+      const finish = (fn: () => void): void => {
+        if (done) return;
+        done = true;
+        fn();
+      };
+      void waitMs(opts.timeoutMs).then(() => {
+        finish(() => {
+          try { xhr?.abort?.(); } catch { /* */ }
+          reject(new Error(`request timeout: ${opts.url}`));
+        });
+      });
+      try {
+        xhr = new HostXHR();
+        xhr.open(opts.method, opts.url);
+        if (opts.responseType === 'arraybuffer') {
+          try { xhr.responseType = 'arraybuffer'; } catch { /* 部分 JSB 不认 */ }
+        }
+        if (typeof xhr.timeout === 'number') xhr.timeout = opts.timeoutMs;
+        for (const key of Object.keys(opts.headers)) {
+          try { xhr.setRequestHeader(key, opts.headers[key]); } catch { /* */ }
+        }
+        xhr.onload = () => finish(() => resolve({
+          statusCode: Number(xhr.status || 0),
+          text: String(xhr.responseText || ''),
+          buffer: xhr.response,
+        }));
+        xhr.onerror = () => finish(() => reject(new Error(`xhr error: ${opts.url}`)));
+        xhr.ontimeout = () => finish(() => reject(new Error(`request timeout: ${opts.url}`)));
+        xhr.send(opts.payload);
+      } catch (e) {
+        finish(() => reject(e));
+      }
+    });
+  }
+
+  private _hostFetch(): ((input: string) => Promise<Response>) | null {
+    try {
+      if (typeof GameGlobal !== 'undefined' && typeof GameGlobal.__hostFetch === 'function') {
+        return GameGlobal.__hostFetch.bind(GameGlobal);
+      }
+    } catch { /* */ }
+    if (typeof fetch === 'function') return fetch;
+    return null;
+  }
+
+  private _invokeNativeDownload(
+    method: 'downloadFile' | 'download',
+    url: string,
+  ): Promise<{ tempFilePath?: string; statusCode?: number }> {
+    const fn = this._api?.[method];
+    if (typeof fn !== 'function') {
+      return Promise.reject(new Error(`${method} unavailable`));
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        fn.call(this._api, {
+          url,
+          success: (res: { tempFilePath?: string; filePath?: string; uri?: string; statusCode?: number }) => {
+            const statusCode = Number(res?.statusCode || 0);
+            if (statusCode > 0 && (statusCode < 200 || statusCode >= 300)) {
+              reject(new Error(`${method} status=${statusCode} url=${url}`));
+              return;
+            }
+            const tempFilePath = res?.tempFilePath || res?.filePath || res?.uri;
+            if (!tempFilePath) {
+              reject(new Error(`${method} missing tempFilePath url=${url}`));
+              return;
+            }
+            resolve({ tempFilePath, statusCode });
+          },
+          fail: (err: { errMsg?: string; message?: string } | string) => {
+            const msg = typeof err === 'string' ? err : (err?.errMsg || err?.message || String(err));
+            reject(new Error(msg));
+          },
+        });
+      } catch (e) {
+        reject(e);
+      }
     });
   }
 

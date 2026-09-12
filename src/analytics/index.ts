@@ -257,6 +257,7 @@ function mapPlatform(): PlatformName {
   if (Platform.name === 'douyin') return 'douyin';
   if (Platform.name === 'wechat') return 'wechat';
   if (Platform.name === 'taptap') return 'taptap';
+  if (Platform.name === 'huawei') return 'huawei';
   return Platform.isMinigame ? 'unknown' : 'h5';
 }
 

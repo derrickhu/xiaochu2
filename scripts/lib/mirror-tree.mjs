@@ -12,7 +12,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const KEEP_ALWAYS = new Set(['project.private.config.json']);
+const KEEP_ALWAYS = new Set([
+  'project.private.config.json',
+  // 华为快游戏助手会在 build/huawei/ 写下这些，增量组装时不能剪掉
+  'settings',
+  'sign',
+  'dist',
+]);
 const TMP_SUFFIX = '.xiaochu2-tmp';
 const COPY_RETRIES = 4;
 const RETRY_WAIT_MS = 40;
@@ -182,6 +188,7 @@ export function mirrorDir(from, to, opts = {}) {
       continue;
     }
     if (KEEP_ALWAYS.has(name) || name.startsWith('.') || name.endsWith('.zip')
+      || name.endsWith('.rpk')
       || keep.has(name) || skip.has(name)) {
       continue;
     }

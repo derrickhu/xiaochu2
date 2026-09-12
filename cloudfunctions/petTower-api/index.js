@@ -7,13 +7,23 @@ const ROUTES = {
   'GET /health': async () => ({
     ok: true,
     gameKey: getGameKey(),
-    scopedGameKeys: { wx: getScopedGameKey('wx'), dy: getScopedGameKey('dy'), tap: getScopedGameKey('tap') },
+    scopedGameKeys: {
+      wx: getScopedGameKey('wx'),
+      dy: getScopedGameKey('dy'),
+      tap: getScopedGameKey('tap'),
+      hw: getScopedGameKey('hw'),
+    },
     ts: Date.now(),
   }),
   'POST /health': async () => ({
     ok: true,
     gameKey: getGameKey(),
-    scopedGameKeys: { wx: getScopedGameKey('wx'), dy: getScopedGameKey('dy'), tap: getScopedGameKey('tap') },
+    scopedGameKeys: {
+      wx: getScopedGameKey('wx'),
+      dy: getScopedGameKey('dy'),
+      tap: getScopedGameKey('tap'),
+      hw: getScopedGameKey('hw'),
+    },
     ts: Date.now(),
   }),
   'POST /login': handleLogin,

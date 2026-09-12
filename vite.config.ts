@@ -63,11 +63,11 @@ function pixiUnsafeEvalPlugin(): Plugin {
         if (next !== patched) applied.push(name);
         patched = next;
       }
-      if (process.env.VITE_PLATFORM === 'taptap') {
+      if (process.env.VITE_PLATFORM === 'taptap' || process.env.VITE_PLATFORM === 'huawei') {
         const strictIife = '(function(){"use strict";';
         if (patched.startsWith(strictIife)) {
           patched = `(function(){var eval=function(){return void 0};${patched.slice(strictIife.length)}`;
-          applied.push('tap-local-eval');
+          applied.push(`${process.env.VITE_PLATFORM}-local-eval`);
         }
       }
       if (patched !== code) {
@@ -86,8 +86,10 @@ function pixiUnsafeEvalPlugin(): Plugin {
   };
 }
 
-const isTap = process.env.VITE_PLATFORM === 'taptap';
-const BUNDLE_DIR = isTap ? '.bundle-taptap' : '.bundle';
+const vitePlatform = process.env.VITE_PLATFORM || '';
+const isTap = vitePlatform === 'taptap';
+const isHuawei = vitePlatform === 'huawei';
+const BUNDLE_DIR = isTap ? '.bundle-taptap' : isHuawei ? '.bundle-huawei' : '.bundle';
 
 /**
  * 只在 `vite build --watch` 里组装。一次性 build 由 npm script 在 organize 之后跑 CLI，
@@ -100,7 +102,9 @@ function assemblePlatformsPlugin(): Plugin {
   let stopWatch: (() => void) | undefined;
   let queue: Promise<void> = Promise.resolve();
 
-  const target = () => (isTap ? 'taptap' : (process.env.XIAOCHU2_PLATFORM ?? 'all'));
+  const target = () => (
+    isTap ? 'taptap' : isHuawei ? 'huawei' : (process.env.XIAOCHU2_PLATFORM ?? 'all')
+  );
 
   const enqueue = (reason: string) => {
     queue = queue
@@ -139,6 +143,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     'import.meta.env.VITE_PLATFORM': JSON.stringify(process.env.VITE_PLATFORM || ''),
+    'import.meta.env.VITE_HUAWEI_APPID': JSON.stringify(process.env.VITE_HUAWEI_APPID || ''),
   },
   resolve: {
     alias: {

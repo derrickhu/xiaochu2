@@ -6,6 +6,7 @@
 import { CdnAssetService } from '@/core/CdnAssetService';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
+import { waitMs } from '@/utils/hostTimeout';
 
 export const SUBPACKAGE_ROOT = {
   pet: 'subpackages/pkg-pet',
@@ -39,6 +40,46 @@ const NAME_BY_PREFIX = (Object.entries(SUBPACKAGE_ROOT) as [SubpackageName, stri
 const loaded = new Set<SubpackageName>();
 const inflight = new Map<SubpackageName, Promise<void>>();
 
+/** 华为官方字段是 subpackage，微信/抖音是 name。两边都带上。 */
+export function buildLoadSubpackageOptions(pkgName: string): Record<string, string> {
+  return { name: pkgName, subpackage: pkgName };
+}
+
+function waitHuaweiSubpackage(name: SubpackageName): Promise<void> {
+  const pkgName = PLATFORM_SUBPACKAGE_NAME[name];
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (why: string): void => {
+      if (done) return;
+      done = true;
+      loaded.add(name);
+      console.log(`[Subpackage] 华为 ${pkgName} ${why}`);
+      resolve();
+    };
+    const api = Platform.api;
+    const loadPkg = api?.loadSubpackage;
+    if (typeof loadPkg !== 'function') {
+      finish('no-api');
+      return;
+    }
+    try {
+      loadPkg.call(api, {
+        ...buildLoadSubpackageOptions(pkgName),
+        success: () => finish('ok'),
+        fail: (err: unknown) => {
+          console.warn(`[Subpackage] 华为失败 ${pkgName}`, err);
+          finish('fail-continue');
+        },
+      });
+    } catch (e) {
+      console.warn(`[Subpackage] 华为异常 ${pkgName}`, e);
+      finish('throw-continue');
+      return;
+    }
+    void waitMs(2500).then(() => finish('timeout-continue'));
+  });
+}
+
 /** 由资源路径反查所属分包（主包资源返回 null） */
 export function subpackageForPath(assetPath: string): SubpackageName | null {
   for (const { name, prefix } of NAME_BY_PREFIX) {
@@ -56,13 +97,23 @@ export function loadSubpackage(name: SubpackageName): Promise<void> {
     loaded.add(name);
     return Promise.resolve();
   }
+  // 华为：qg.loadSubpackage 常常不回调。最多等 2.5s，避免再卡 splash；
+  // 成功前不能标 loaded，否则战斗 HUD 会去读还没挂上的分包。
+  if (Platform.isHuawei) {
+    const promise = waitHuaweiSubpackage(name).finally(() => {
+      inflight.delete(name);
+    });
+    inflight.set(name, promise);
+    return promise;
+  }
   const api = Platform.api;
   const loadPkg = api?.loadSubpackage;
   if (!loadPkg) {
     loaded.add(name);
     return Promise.resolve();
   }
-  const promise = new Promise<void>((resolve, reject) => {
+
+  const start = (): Promise<void> => new Promise<void>((resolve, reject) => {
     let settled = false;
     const finish = (fn: () => void) => {
       if (settled) return;
@@ -75,18 +126,25 @@ export function loadSubpackage(name: SubpackageName): Promise<void> {
       console.error(err.message);
       finish(() => reject(err));
     }, 45000);
-    loadPkg.call(api, {
-      name: PLATFORM_SUBPACKAGE_NAME[name],
-      success: () => {
-        loaded.add(name);
-        finish(resolve);
-      },
-      fail: (err: unknown) => {
-        console.error(`[Subpackage] 加载失败 ${PLATFORM_SUBPACKAGE_NAME[name]}`, err);
-        finish(() => reject(err));
-      },
-    });
-  }).finally(() => {
+    const pkgName = PLATFORM_SUBPACKAGE_NAME[name];
+    try {
+      loadPkg.call(api, {
+        ...buildLoadSubpackageOptions(pkgName),
+        success: () => {
+          loaded.add(name);
+          finish(resolve);
+        },
+        fail: (err: unknown) => {
+          console.error(`[Subpackage] 加载失败 ${pkgName}`, err);
+          finish(() => reject(err));
+        },
+      });
+    } catch (e) {
+      finish(() => reject(e));
+    }
+  });
+
+  const promise = start().finally(() => {
     inflight.delete(name);
   });
   inflight.set(name, promise);

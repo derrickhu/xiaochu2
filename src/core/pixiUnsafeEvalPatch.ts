@@ -14,6 +14,8 @@ try {
 } catch { /* 小游戏无 DOM button，无障碍系统会炸 PIXI.Application */ }
 
 declare const GameGlobal: any;
+declare const qg: any;
+declare const qa: any;
 
 const _api: any = getNativePlatformApi();
 if (_api) {
@@ -21,7 +23,7 @@ if (_api) {
     let _useOffscreen = false;
     try {
       // Tap Android 探测阶段多开 canvas / getContext 会把 libwebglhost 打崩
-      if (!Platform.isTaptap && typeof _api.createOffscreenCanvas === 'function') {
+      if (!Platform.isCanvasHostGuarded && typeof _api.createOffscreenCanvas === 'function') {
         const _test = _api.createOffscreenCanvas({ type: '2d', width: 1, height: 1 });
         const _testCtx = _test.getContext('2d');
         if (_testCtx) _useOffscreen = true;
@@ -75,28 +77,56 @@ if (_api) {
       return canvas;
     };
 
-    const _createTapTextCanvas = shouldInstallTapTextRaster()
-      ? installTapTextRaster(() => {
-        try {
-          if (typeof _api.createOffscreenCanvas === 'function') {
-            const c = _api.createOffscreenCanvas({ type: '2d', width: 64, height: 64 });
-            const ctx = c?.getContext?.('2d');
-            if (ctx && typeof ctx.fillText === 'function') return { canvas: c, ctx };
-          }
-        } catch { /* */ }
-        try {
-          const c = _api.createCanvas();
+    const _tryHost2d = (api: any): { canvas: any; ctx: any } | null => {
+      if (!api) return null;
+      try {
+        if (typeof api.createOffscreenCanvas === 'function') {
+          const c = api.createOffscreenCanvas({ type: '2d', width: 64, height: 64 });
+          const ctx = c?.getContext?.('2d');
+          if (ctx && typeof ctx.fillText === 'function') return { canvas: c, ctx };
+        }
+      } catch { /* */ }
+      try {
+        if (typeof api.createCanvas === 'function') {
+          const c = api.createCanvas();
           if (c && !_isMainCanvas(c)) {
             const ctx = c.getContext?.('2d');
             if (ctx && typeof ctx.fillText === 'function') return { canvas: c, ctx };
           }
-        } catch { /* */ }
-        return null;
+        }
+      } catch { /* */ }
+      return null;
+    };
+
+    const _tryHuawei2d = (): { canvas: any; ctx: any } | null => {
+      const fromApi = _tryHost2d(typeof qg !== 'undefined' ? qg : typeof qa !== 'undefined' ? qa : null);
+      if (fromApi) return fromApi;
+      try {
+        const runtime = typeof GameGlobal !== 'undefined' ? GameGlobal.__xiaochu2Runtime : null;
+        const c = (typeof runtime?.createHuaweiOffscreenCanvas === 'function'
+          ? runtime.createHuaweiOffscreenCanvas()
+          : null)
+          || (typeof GameGlobal !== 'undefined' && GameGlobal.__hostDocument
+            ? GameGlobal.__hostDocument.createElement('canvas')
+            : null);
+        if (c && !_isMainCanvas(c)) {
+          const ctx = c.getContext?.('2d');
+          if (ctx && typeof ctx.fillText === 'function') return { canvas: c, ctx };
+        }
+      } catch { /* */ }
+      return null;
+    };
+
+    const _createTapTextCanvas = shouldInstallTapTextRaster()
+      ? installTapTextRaster(() => {
+        // 华为原生 qg 没有 createCanvas；离屏 2D 走宿主 document.createElement
+        if (Platform.isHuawei) return _tryHuawei2d();
+        return _tryHost2d(_api);
       })
       : null;
 
     const _create2DCanvas = (w?: number, h?: number): any => {
-      if (Platform.isTaptap) {
+      if (Platform.isCanvasHostGuarded) {
         // 只开一块真实 2D，每个 Text 拿独立包装。禁止每字一块 createCanvas，打一轮就会把血条纹理盖烂
         return _createTapTextCanvas ? _createTapTextCanvas(w, h) : _measureCanvas(w, h);
       }
@@ -118,7 +148,7 @@ if (_api) {
     settings.ADAPTER = {
       createCanvas: _create2DCanvas,
       getCanvasRenderingContext2D: (): any => {
-        if (Platform.isTaptap) {
+        if (Platform.isCanvasHostGuarded) {
           return (typeof GameGlobal !== 'undefined' && GameGlobal.CanvasRenderingContext2D) || Object;
         }
         try {
@@ -263,7 +293,7 @@ if (_isRealDevice) {
       source = source || this.source;
 
       // 假 canvas 是纯 JS 对象，交给 texImage2D 的 DOM 重载宿主必抛，直接走像素通道
-      if (Platform.isTaptap && isSyntheticCanvas(source)) {
+      if (Platform.isCanvasHostGuarded && isSyntheticCanvas(source)) {
         return uploadCanvasPixels(renderer, baseTexture, glTexture, source);
       }
 

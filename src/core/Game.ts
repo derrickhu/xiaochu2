@@ -11,6 +11,7 @@ import {
   capTapDevicePixelRatio,
   capTapFramebuffer,
   configurePixiWebGLEnvForPlatform,
+  resolveHuaweiViewSize,
   forcePixiWebGLRenderer,
   installBlockWebGL2OnPlatform,
   iosPlatform,
@@ -80,7 +81,18 @@ class GameClass {
 
     let realWidth = this.screenWidth * this.dpr;
     let realHeight = this.screenHeight * this.dpr;
-    if (Platform.isTaptap) {
+    if (Platform.isHuawei) {
+      const view = resolveHuaweiViewSize({
+        canvasWidth: canvas?.width,
+        canvasHeight: canvas?.height,
+        screenWidth: this.screenWidth,
+        screenHeight: this.screenHeight,
+        pixelRatio: this.dpr,
+      });
+      realWidth = view.width;
+      realHeight = view.height;
+      this.dpr = view.dpr;
+    } else if (Platform.isTaptap) {
       const capped = capTapFramebuffer(realWidth, realHeight);
       if (capped.scale !== 1) {
         realWidth = capped.width;
@@ -89,7 +101,7 @@ class GameClass {
       }
     }
     this.scale = this.screenWidth / this.designWidth * this.dpr;
-    const RENDERER_OPTS = minigameRendererOpts(Platform.isTaptap);
+    const RENDERER_OPTS = minigameRendererOpts(Platform.isCanvasHostGuarded);
     forcePixiWebGLRenderer();
     try { (PIXI.utils as { isWebGLSupported: () => boolean }).isWebGLSupported = () => true; } catch { /* */ }
     blockWebGL2OnCanvas(canvas);
@@ -104,11 +116,30 @@ class GameClass {
     }
 
     try {
-      canvas.width = realWidth;
-      canvas.height = realHeight;
+      if (Platform.isHuawei) {
+        // 华为主屏 canvas 设小了会缩在一角；只允许放大到目标像素，绝不缩小
+        if ((canvas.width || 0) < realWidth) canvas.width = realWidth;
+        if ((canvas.height || 0) < realHeight) canvas.height = realHeight;
+        realWidth = canvas.width || realWidth;
+        realHeight = canvas.height || realHeight;
+      } else {
+        canvas.width = realWidth;
+        canvas.height = realHeight;
+      }
     } catch (e) {
       console.warn('[Game] 设置 canvas 尺寸失败:', e);
     }
+    try {
+      if (canvas.style) {
+        canvas.style.width = `${this.screenWidth}px`;
+        canvas.style.height = `${this.screenHeight}px`;
+      }
+    } catch { /* 宿主可能没有 style */ }
+    try {
+      (GameGlobal as any).__bootDiag?.(
+        `view=${realWidth}x${realHeight} dpr=${Number(this.dpr).toFixed(2)} logical=${this.screenWidth}x${this.screenHeight}`,
+      );
+    } catch { /* */ }
 
     const tryCreateRuntime = (view: any): { app: PIXI.Application | null; renderer: PIXI.IRenderer | null } => {
       let r: PIXI.IRenderer | null = null;
@@ -122,8 +153,8 @@ class GameClass {
         hello: false,
         ...(sharedGL ? { context: sharedGL } : {}),
       } as any;
-      // Tap：不要走 Application。插件初始化会再 createCanvas/createElement，和宿主互相重入栈溢出。
-      if (!Platform.isTaptap) {
+      // Tap / 华为快游戏：不要走 Application。插件初始化会再 createCanvas/createElement，和宿主互相重入栈溢出。
+      if (!Platform.isCanvasHostGuarded) {
         try {
           a = new PIXI.Application(opts);
         } catch (e) {

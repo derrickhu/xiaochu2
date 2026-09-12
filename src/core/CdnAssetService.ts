@@ -6,6 +6,15 @@
  * - manifest 用 request 拉文本，避免 downloadFile 解析 JSON 坑。
  */
 import { CDN_CONFIG, type CdnConfig } from '@/config/CdnConfig';
+import {
+  arrayBufferToDataUrl,
+  buildCdnUrl,
+  cdnLoadCandidates,
+  huaweiBundledLoadCandidates,
+  mimeFromAssetPath,
+  packagePathCandidates,
+  resolveUserDataPath,
+} from '@/core/cdnAssetFallback';
 import { Platform } from '@/core/PlatformService';
 
 export interface CdnManifestFile {
@@ -24,11 +33,19 @@ type ProgressCallback = (loaded: number, total: number) => void;
 
 /** 真机 wx.downloadFile / request 合计并发约 10；自建队列避免瞬间打满后超时失败 */
 const DOWNLOAD_CONCURRENCY = 4;
+/**
+ * 无文件系统（华为快游戏）时只能把字节留在内存。base64 比原文件还大 1/3，
+ * 大图一律不进内存，交给 createImage(https) 直连；小图才缓存，且限量。
+ */
+const MEMORY_CACHE_MAX_BYTES = 256 * 1024;
+const MEMORY_CACHE_MAX_ENTRIES = 24;
 
 class CdnAssetServiceClass {
   private readonly _config: CdnConfig = CDN_CONFIG;
   private readonly _cdnPrefixes = this._config.cdnDirs.map((d) => this._prefix(d));
   private readonly _bundledPrefixes = this._config.bundledDirs.map((d) => this._prefix(d));
+  private readonly _embeddedPrefixes = (this._config.huaweiEmbeddedDirs || [])
+    .map((d) => this._prefix(d));
   private _manifest: CdnManifest | null = null;
   private _manifestReady = false;
   /**
@@ -43,6 +60,9 @@ class CdnAssetServiceClass {
   private _localExistsCache = new Map<string, boolean>();
   private _accessLog = new Map<string, number>();
   private _accessFrame = 0;
+  /** 无 FS 时把二进制留在内存（data URL），给 Image / Audio 用 */
+  private _memorySrc = new Map<string, string>();
+  private _remoteOnlyLogged = false;
 
   get enabled(): boolean {
     return this._config.enabled;
@@ -54,6 +74,15 @@ class CdnAssetServiceClass {
 
   get manifest(): CdnManifest | null {
     return this._manifest;
+  }
+
+  /**
+   * 能否落盘缓存。华为即使后来露出 getFileSystemManager / downloadFile，
+   * 路径和回调也不稳；批量预下载只会把启动卡死，继续走 createImage(https)。
+   */
+  get canCacheLocally(): boolean {
+    if (Platform.isHuawei) return false;
+    return !!this._getFs() && !!this._getUserDataPath();
   }
 
   isCdnPath(path: string): boolean {
@@ -83,9 +112,52 @@ class CdnAssetServiceClass {
     if (!this.isCdnPath(logicalPath)) return logicalPath;
 
     this._touch(logicalPath);
+    const memory = this._memorySrc.get(logicalPath);
+    if (memory) return memory;
     if (this._isCacheValid(logicalPath)) return this._getCachePath(logicalPath);
     if (this._packageFileExists(logicalPath)) return logicalPath;
     return null;
+  }
+
+  /** 云端直链；华为用 createImage(src=https) 代替 downloadFile */
+  remoteUrl(path: string): string | null {
+    const logicalPath = this._normalize(path);
+    if (!this.isCdnPath(logicalPath) || !this._config.baseUrl) return null;
+    return this._getCdnUrl(logicalPath);
+  }
+
+  /** 构建时已打进华为 rpk 的目录（读包内比走网快，也不怕断网） */
+  isHuaweiEmbeddedPath(path: string): boolean {
+    const normalized = this._normalize(path);
+    return this._embeddedPrefixes.some((prefix) => normalized.startsWith(prefix));
+  }
+
+  /** 候选顺序：包内已嵌的先读本地，其余先走 https，data URL 垫底 */
+  loadCandidates(path: string): string[] {
+    const logicalPath = this._normalize(path);
+    if (!this.isCdnPath(logicalPath)) {
+      if (Platform.isHuawei && logicalPath.startsWith('subpackages/')) {
+        return huaweiBundledLoadCandidates(logicalPath, this._bundledRemoteUrl(logicalPath));
+      }
+      return [logicalPath];
+    }
+    return cdnLoadCandidates({
+      preferRemote: !this.canCacheLocally && !this.isHuaweiEmbeddedPath(logicalPath),
+      logicalPath,
+      remoteUrl: this.remoteUrl(logicalPath),
+      memorySrc: this._memorySrc.get(logicalPath) ?? null,
+      cachePath: this._isCacheValid(logicalPath) ? this._getCachePath(logicalPath) : null,
+    });
+  }
+
+  /** 无 downloadFile 时把文件拉成 data URL（绕过 CDN attachment 头） */
+  async ensureMemorySrc(path: string): Promise<string | null> {
+    const logicalPath = this._normalize(path);
+    const cached = this._memorySrc.get(logicalPath);
+    if (cached) return cached;
+    if (!this.isCdnPath(logicalPath) || !this._config.baseUrl) return null;
+    const ok = await this.download(logicalPath);
+    return ok ? (this._memorySrc.get(logicalPath) ?? null) : null;
   }
 
   async resolveOrDownload(path: string): Promise<string> {
@@ -95,6 +167,20 @@ class CdnAssetServiceClass {
 
     if (!this.isCdnPath(logicalPath)) return logicalPath;
 
+    /**
+     * 华为没有 downloadFile/FS：直接把 https 交给 createImage，别在后台再抓一份二进制。
+     * 抓一份等于同一张图下两遍，还要转 base64——真机上就是点了有音、页面半天不出。
+     */
+    if (!this.canCacheLocally) {
+      if (this.isHuaweiEmbeddedPath(logicalPath)) return logicalPath;
+      const remote = this.remoteUrl(logicalPath);
+      if (remote && !this._remoteOnlyLogged) {
+        this._remoteOnlyLogged = true;
+        console.log(`[CDN] 宿主无本地缓存，改走 createImage(https): ${remote}`);
+      }
+      return remote || logicalPath;
+    }
+
     // manifest 尚未就绪时先拉一次，避免空清单把下载误杀
     if (!this._manifestReady) {
       await this.fetchManifest().catch(() => false);
@@ -102,9 +188,14 @@ class CdnAssetServiceClass {
 
     const ok = await this.download(logicalPath);
     if (ok && this._isCacheValid(logicalPath)) return this._getCachePath(logicalPath);
+    if (ok && this._memorySrc.has(logicalPath)) return this._memorySrc.get(logicalPath)!;
 
     // 分包可能在 CDN 下载期间才 load 完：包内存在性不做「永久 false」缓存，这里再探一次
     if (this._packageFileExists(logicalPath)) return logicalPath;
+
+    if (Platform.isHuawei || !this._getFs() || !Platform.hasNativeDownload) {
+      return this.remoteUrl(logicalPath) || logicalPath;
+    }
     throw new Error(`[CDN] 下载失败且包内无文件: ${logicalPath}`);
   }
 
@@ -259,6 +350,11 @@ class CdnAssetServiceClass {
 
   /** 静默预下载；超时后仍 resolve，后台任务可继续 */
   async preloadPaths(paths: readonly string[], onProgress?: ProgressCallback): Promise<void> {
+    // 不能落盘就没有「预」可言：批量抓字节只会堆内存，按需 https 直连即可
+    if (!this.canCacheLocally) {
+      onProgress?.(paths.length, paths.length);
+      return;
+    }
     if (!this._manifestReady) {
       await this.fetchManifest().catch(() => false);
     }
@@ -326,21 +422,29 @@ class CdnAssetServiceClass {
   }
 
   private async _downloadWithRetry(logicalPath: string): Promise<boolean> {
+    if (!this._config.baseUrl) return false;
+    const url = this._getCdnUrl(logicalPath);
     const fs = this._getFs();
-    if (!fs || !this._config.baseUrl) return false;
     const cachePath = this._getCachePath(logicalPath);
-    this._ensureCacheDir(cachePath);
+    if (fs) this._ensureCacheDir(cachePath);
 
     for (let attempt = 0; attempt <= this._config.downloadRetry; attempt++) {
       try {
-        const res = await Platform.downloadFile(this._getCdnUrl(logicalPath));
-        if (!res.tempFilePath) throw new Error('downloadFile missing tempFilePath');
+        if (Platform.hasNativeDownload) {
+          const res = await Platform.downloadFile(url);
+          if (!res.tempFilePath) throw new Error('downloadFile missing tempFilePath');
+          if (!fs) throw new Error('getFileSystemManager unavailable');
+          fs.copyFileSync(res.tempFilePath, cachePath);
+          this._rememberCachedFile(logicalPath, cachePath);
+          return true;
+        }
 
-        fs.copyFileSync(res.tempFilePath, cachePath);
-        this._localExistsCache.set(cachePath, true);
-        const hash = this._manifest?.files?.[logicalPath]?.hash || '';
-        try { fs.writeFileSync(`${cachePath}.meta`, hash, 'utf-8'); } catch (_) { /* ignore */ }
-        return true;
+        const bin = await Platform.fetchBinary(url, this._config.downloadTimeoutMs);
+        if (fs && cachePath && this._writeCacheBytes(cachePath, bin.data)) {
+          this._rememberCachedFile(logicalPath, cachePath);
+          return true;
+        }
+        return this._rememberMemoryBytes(logicalPath, bin.data);
       } catch (e) {
         if (attempt >= this._config.downloadRetry) {
           console.warn(`[CDN] 下载失败 ${logicalPath}:`, e);
@@ -352,36 +456,54 @@ class CdnAssetServiceClass {
     return false;
   }
 
-  private _requestText(url: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const api = Platform.api;
-      if (!api?.request) {
-        reject(new Error('request unavailable'));
-        return;
-      }
-      api.request({
-        url,
-        method: 'GET',
-        responseType: 'text',
-        dataType: 'text',
-        timeout: this._config.downloadTimeoutMs,
-        success: (res: any) => {
-          const statusCode = Number(res?.statusCode || 0);
-          if (statusCode < 200 || statusCode >= 300) {
-            reject(new Error(`request status=${statusCode || 'unknown'} url=${url}`));
-            return;
-          }
-          const data = res?.data;
-          const text = typeof data === 'string' ? data : (data ? JSON.stringify(data) : '');
-          resolve(text);
-        },
-        fail: (err: any) => {
-          const msg = err?.errMsg || err?.message || String(err);
-          console.warn(`[CDN] request fail: ${url}, ${msg}`);
-          reject(new Error(msg));
-        },
-      });
+  /** 无盘可写时的最后一招：小图转 data URL 留在内存，限量限大小 */
+  private _rememberMemoryBytes(logicalPath: string, data: ArrayBuffer): boolean {
+    if (data.byteLength > MEMORY_CACHE_MAX_BYTES) {
+      console.warn(`[CDN] ${logicalPath} 超过内存缓存上限，仅用 https 直连`);
+      return false;
+    }
+    if (this._memorySrc.size >= MEMORY_CACHE_MAX_ENTRIES) {
+      const oldest = this._memorySrc.keys().next().value;
+      if (oldest) this._memorySrc.delete(oldest);
+    }
+    this._memorySrc.set(logicalPath, arrayBufferToDataUrl(data, mimeFromAssetPath(logicalPath)));
+    return true;
+  }
+
+  private _rememberCachedFile(logicalPath: string, cachePath: string): void {
+    const fs = this._getFs();
+    this._localExistsCache.set(cachePath, true);
+    const hash = this._manifest?.files?.[logicalPath]?.hash || '';
+    try { fs?.writeFileSync(`${cachePath}.meta`, hash, 'utf-8'); } catch (_) { /* ignore */ }
+  }
+
+  private _writeCacheBytes(cachePath: string, data: ArrayBuffer): boolean {
+    const fs = this._getFs();
+    if (!fs) return false;
+    try {
+      fs.writeFileSync(cachePath, data, 'binary');
+      return true;
+    } catch { /* */ }
+    try {
+      fs.writeFileSync({ filePath: cachePath, data, encoding: 'binary' });
+      return true;
+    } catch { /* */ }
+    return false;
+  }
+
+  private async _requestText(url: string): Promise<string> {
+    const res = await Platform.request({
+      url,
+      method: 'GET',
+      headers: { accept: 'application/json,text/plain,*/*' },
+      timeoutMs: this._config.downloadTimeoutMs,
     });
+    const statusCode = Number(res?.statusCode || 0);
+    if (statusCode < 200 || statusCode >= 300) {
+      throw new Error(`request status=${statusCode || 'unknown'} url=${url}`);
+    }
+    const data = res?.data;
+    return typeof data === 'string' ? data : (data ? JSON.stringify(data) : '');
   }
 
   private _loadCachedManifest(): void {
@@ -419,13 +541,14 @@ class CdnAssetServiceClass {
   private _packageFileExists(logicalPath: string): boolean {
     const fs = this._getFs();
     if (!fs) return false;
-    try {
-      fs.accessSync(logicalPath);
-      this._localExistsCache.set(logicalPath, true);
-      return true;
-    } catch {
-      return false;
+    for (const candidate of packagePathCandidates(logicalPath)) {
+      try {
+        fs.accessSync(candidate);
+        this._localExistsCache.set(logicalPath, true);
+        return true;
+      } catch { /* 试下一个前缀 */ }
     }
+    return false;
   }
 
   private _localFileExists(path: string): boolean {
@@ -468,8 +591,13 @@ class CdnAssetServiceClass {
   }
 
   private _getCdnUrl(logicalPath: string): string {
-    const base = this._config.baseUrl.replace(/\/+$/, '');
-    return `${base}/${this._config.filePrefix}/${logicalPath}`;
+    return buildCdnUrl(this._config.baseUrl, this._config.filePrefix, logicalPath);
+  }
+
+  /** 随包资源在华为上也可能被传到同一套 CDN，本地分包未挂载时拿来垫底 */
+  private _bundledRemoteUrl(logicalPath: string): string | null {
+    if (!this._config.baseUrl) return null;
+    return this._getCdnUrl(logicalPath);
   }
 
   private _getCachePath(logicalPath: string): string {
@@ -504,7 +632,7 @@ class CdnAssetServiceClass {
   }
 
   private _getUserDataPath(): string {
-    return Platform.api?.env?.USER_DATA_PATH || '';
+    return resolveUserDataPath(Platform.api);
   }
 
   private _touch(logicalPath: string): void {

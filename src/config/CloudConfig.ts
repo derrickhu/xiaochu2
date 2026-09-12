@@ -1,7 +1,8 @@
 /**
  * 统一 HTTP 后端 / 经分 / 云同步配置（CloudBase HTTP 访问服务）
  *
- * 多游戏复用时改 BASE_GAME_KEY；多平台数据隔离见 gameKeyScope.ts（抖音 petTower_tt_*）。
+ * 多游戏复用时改 BASE_GAME_KEY；多平台数据隔离见 gameKeyScope.ts
+ * （抖音 petTower_tt_* / Tap petTower_tap_* / 华为 petTower_hw_*）。
  */
 import {
   BASE_GAME_KEY,
@@ -26,7 +27,7 @@ export const ANALYTICS_ENDPOINT = `${BACKEND_BASE_URL}${ANALYTICS_INGEST_PATH}`;
 
 export const BACKEND_REQUEST_TIMEOUT_MS = 10000;
 
-/** 经分 / JWT / 云存档命名空间（运行时按宿主：微信 petTower，抖音 petTower_tt） */
+/** 经分 / JWT / 云存档命名空间（微信 petTower / 抖音 _tt / Tap _tap / 华为 _hw） */
 export const GAME_KEY = getScopedGameKey();
 
 export const BACKEND_TOKEN_KEY = scopedStorageKey('token');

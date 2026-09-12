@@ -25,6 +25,12 @@ export interface CdnConfig {
   downloadTimeoutMs: number;
   cdnDirs: readonly string[];
   bundledDirs: readonly string[];
+  /**
+   * 华为快游戏没有 downloadFile / 文件系统，构建时把这些目录直接打进 rpk
+   * （见 scripts/lib/embed-huawei-cdn-assets.mjs）。运行时据此优先读包内，
+   * 名单外的仍走 https 直连。
+   */
+  huaweiEmbeddedDirs: readonly string[];
   ignoreFiles: readonly string[];
 }
 
@@ -61,6 +67,10 @@ export const CDN_CONFIG: CdnConfig = {
     'subpackages/pkg-fx',
     'subpackages/pkg-shop',
     'subpackages/pkg-audio/audio',
+  ],
+  /** 场景/秘境/通天塔底图与按钮：华为进页就要，靠网拉会整页空白 */
+  huaweiEmbeddedDirs: [
+    'subpackages/pkg-scene/images',
   ],
   ignoreFiles: ['game.js', '.DS_Store', 'Thumbs.db'],
 };

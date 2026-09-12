@@ -3,12 +3,13 @@
  *
  * 业界对齐：Cocos / Unity / Laya / code_1 —— 源一份，build/<端> 是生成物（普通文件树）。
  *
- *   CLI：node scripts/build-platform.mjs [wechat|douyin|taptap|all] [--full]
+ *   CLI：node scripts/build-platform.mjs [wechat|douyin|taptap|huawei|all] [--full]
  *   仅 `vite build --watch` 会在插件里组装；一次性 `vite build` 不组装，
  *   留给后面的 organize + 本脚本，避免先拷未整理的树再整树删。
  *
  * 增量镜像见 scripts/lib/mirror-tree.mjs。
  */
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +20,7 @@ import {
   lstatOrNull,
   mirrorDir,
 } from './lib/mirror-tree.mjs';
+import { wrapHuaweiCjsTree } from './lib/wrap-huawei-cjs.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const CONTENT_DIR = path.join(rootDir, 'minigame');
@@ -26,16 +28,19 @@ export const PLATFORM_DIR = path.join(rootDir, 'platform');
 export const BUILD_DIR = path.join(rootDir, 'build');
 export const BUNDLE_DIR = path.join(rootDir, '.bundle');
 export const BUNDLE_TAPTAP_DIR = path.join(rootDir, '.bundle-taptap');
+export const BUNDLE_HUAWEI_DIR = path.join(rootDir, '.bundle-huawei');
 
-export const PLATFORMS = ['wechat', 'douyin', 'taptap'];
+export const PLATFORMS = ['wechat', 'douyin', 'taptap', 'huawei'];
 export const WX_TT_PLATFORMS = ['wechat', 'douyin'];
 
 const KEEP = new Set(['project.private.config.json']);
 const SKIP_FROM_CONTENT = new Set([
   'game-bundle.js',
   'tap-pack-stamp.js',
+  'huawei-pack-stamp.js',
   'index.html',
   'game.json',
+  'manifest.json',
   'project.config.json',
   'project.private.config.json',
   '.cdn_stripped',
@@ -46,13 +51,16 @@ function fail(msg) {
 }
 
 function bundleDirOf(platform) {
-  return platform === 'taptap' ? BUNDLE_TAPTAP_DIR : BUNDLE_DIR;
+  if (platform === 'taptap') return BUNDLE_TAPTAP_DIR;
+  if (platform === 'huawei') return BUNDLE_HUAWEI_DIR;
+  return BUNDLE_DIR;
 }
 
 function cleanStale(dir) {
   if (!fs.existsSync(dir)) return;
   for (const entry of fs.readdirSync(dir)) {
-    if (KEEP.has(entry) || entry.startsWith('.') || entry.endsWith('.zip')) continue;
+    if (KEEP.has(entry) || entry.startsWith('.') || entry.endsWith('.zip') || entry.endsWith('.rpk')) continue;
+    if (entry === 'settings' || entry === 'sign' || entry === 'dist') continue;
     fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
   }
 }
@@ -144,11 +152,55 @@ export function assemble(platform, { quiet = false, bundleDir, full = false } = 
       fail('build/taptap/game-bundle.js 仍含 "%eval%":eval，先检查 pixi-unsafe-eval-patch');
     }
   }
+  if (platform === 'huawei') {
+    const stamp = path.join(out, 'huawei-pack-stamp.js');
+    const stampSrc = "GameGlobal.__XIAOCHU2_HUAWEI_VERSION='native';\n";
+    if (!fs.existsSync(stamp) || fs.readFileSync(stamp, 'utf8') !== stampSrc) {
+      fs.writeFileSync(stamp, stampSrc);
+    }
+    const assembled = fs.readFileSync(path.join(out, 'game-bundle.js'), 'utf8');
+    if (assembled.includes('"%eval%":eval')) {
+      fail('build/huawei/game-bundle.js 仍含 "%eval%":eval，先检查 pixi-unsafe-eval-patch');
+    }
+    const cjs = wrapHuaweiCjsTree(out);
+    if (!quiet) console.log(`[build-platform] huawei CJS wrap ${cjs.wrapped} files`);
+    const embed = spawnSync(
+      process.execPath,
+      [path.join(rootDir, 'scripts/lib/embed-huawei-cdn-assets.mjs'), out],
+      { cwd: rootDir, stdio: 'inherit' },
+    );
+    if ((embed.status || 0) !== 0) {
+      fail('华为 CDN 场景图嵌入失败');
+    }
+  }
   mirrorDir(platformSrc, out, {
     skip: new Set(['project.config.json']),
     prune: false,
     stats,
   });
+  if (platform === 'huawei') {
+    if (!fs.existsSync(path.join(out, 'manifest.json'))) {
+      fail('build/huawei/ 缺少 manifest.json');
+    }
+    if (!fs.existsSync(path.join(out, 'img/icon.png'))) {
+      fail('build/huawei/ 缺少 img/icon.png');
+    }
+    const settingsPath = path.join(out, 'settings', 'project.json');
+    let settings = {};
+    if (fs.existsSync(settingsPath)) {
+      try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch { settings = {}; }
+    }
+    const nextSettings = {
+      ...settings,
+      projectType: 'fastgame',
+      appId: settings.appId || process.env.VITE_HUAWEI_APPID || '',
+    };
+    delete nextSettings.isWxGameSource;
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    const renderedSettings = `${JSON.stringify(nextSettings, null, 2)}\n`;
+    const prevSettings = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, 'utf8') : '';
+    if (prevSettings !== renderedSettings) fs.writeFileSync(settingsPath, renderedSettings, 'utf8');
+  }
   if (config) {
     const rendered = `${JSON.stringify(config, null, 2)}\n`;
     const prev = fs.existsSync(outConfig) ? fs.readFileSync(outConfig, 'utf8') : '';

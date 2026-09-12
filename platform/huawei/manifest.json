@@ -1,0 +1,32 @@
+{
+  "package": "com.luckygua.xiaochu2",
+  "appType": "fastgame",
+  "name": "灵宠消消塔",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "minPlatformVersion": 1103,
+  "icon": "/img/icon.png",
+  "router": {},
+  "permissions": [
+    {
+      "origin": "*"
+    }
+  ],
+  "subpackages": [
+    { "name": "pkg-pet", "resource": "subpackages/pkg-pet" },
+    { "name": "pkg-enemy", "resource": "subpackages/pkg-enemy" },
+    { "name": "pkg-enemy-cr", "resource": "subpackages/pkg-enemy-cr" },
+    { "name": "pkg-scene", "resource": "subpackages/pkg-scene" },
+    { "name": "pkg-shop", "resource": "subpackages/pkg-shop" },
+    { "name": "pkg-fx", "resource": "subpackages/pkg-fx" },
+    { "name": "pkg-audio", "resource": "subpackages/pkg-audio" },
+    { "name": "pkg-battle", "resource": "subpackages/pkg-battle" }
+  ],
+  "config": {
+    "logLevel": "log"
+  },
+  "display": {
+    "orientation": "portrait",
+    "fullScreen": true
+  }
+}

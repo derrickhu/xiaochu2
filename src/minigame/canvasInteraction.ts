@@ -38,6 +38,18 @@ export interface CanvasPointerMoveHandle {
 
 const useMinigameTouch = (): boolean => Platform.isMinigame && !Platform.isDevtools;
 
+/**
+ * 华为快游戏宿主只派发 touch 系事件，pointermove / pointerup 一次都不来。
+ * BoardView / canvasTapRouter / ScrollList 本来就只听 touch，所以它们在华为上是好的；
+ * 唯独这里混用了 touchstart + pointermove，宠物栏上划与技能气泡才整条失效。
+ * 微信 / 抖音 / Tap 的 pointer 链已在真机验证过，不跟着改道。
+ */
+function minigameMoveUpEvents(): { move: string; up: string; cancel: string } {
+  return Platform.isHuawei
+    ? { move: 'touchmove', up: 'touchend', cancel: 'touchcancel' }
+    : { move: 'pointermove', up: 'pointerup', cancel: 'pointercancel' };
+}
+
 function attachCanvasMoveUp(
   canvas: TouchCanvasLike,
   opts: CanvasPointerMoveOptions,
@@ -52,15 +64,16 @@ function attachCanvasMoveUp(
   const onUp = ((e: Event) => opts.onUp(e)) as EventListener;
 
   if (useMinigameTouch()) {
+    const { move, up, cancel } = minigameMoveUpEvents();
     if (onDown) canvas.addEventListener('touchstart', onDown, { passive: true });
-    canvas.addEventListener('pointermove', onMove, { passive: false });
-    canvas.addEventListener('pointerup', onUp);
-    canvas.addEventListener('pointercancel', onUp);
+    canvas.addEventListener(move, onMove, { passive: false });
+    canvas.addEventListener(up, onUp);
+    canvas.addEventListener(cancel, onUp);
     return () => {
       if (onDown) canvas.removeEventListener('touchstart', onDown);
-      canvas.removeEventListener('pointermove', onMove);
-      canvas.removeEventListener('pointerup', onUp);
-      canvas.removeEventListener('pointercancel', onUp);
+      canvas.removeEventListener(move, onMove);
+      canvas.removeEventListener(up, onUp);
+      canvas.removeEventListener(cancel, onUp);
     };
   }
 

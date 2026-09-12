@@ -8,6 +8,7 @@
 import * as PIXI from 'pixi.js';
 import { CdnAssetService } from '@/core/CdnAssetService';
 import { EventBus } from '@/core/EventBus';
+import { imageLoadTimeoutMs } from '@/core/cdnAssetFallback';
 import { Platform } from './PlatformService';
 import { isImageShimApplied, isImageUploadable, markImageLoaded } from './imageDomShim';
 
@@ -25,6 +26,7 @@ class TextureCacheClass {
   private _inflight: Map<string, Promise<PIXI.Texture>> = new Map();
   private _uploadWarned = false;
   private _timeoutCount = 0;
+  private _cdnViaLogged = false;
   /** 宿主 Image 是否需要补标准属性；off 说明 imageDomShim 是死代码，可以摘掉 */
   private _imgShim: '?' | 'on' | 'off' = '?';
 
@@ -164,8 +166,37 @@ class TextureCacheClass {
   }
 
   private async _loadResolved(logicalPath: string): Promise<PIXI.Texture> {
-    const src = await CdnAssetService.resolveOrDownload(logicalPath);
-    return this._loadImage(src);
+    const primary = await CdnAssetService.resolveOrDownload(logicalPath);
+    const candidates = [primary, ...CdnAssetService.loadCandidates(logicalPath)];
+    const tried = new Set<string>();
+    let last: unknown;
+    for (const src of candidates) {
+      if (!src || tried.has(src)) continue;
+      tried.add(src);
+      try {
+        const tex = await this._loadImage(src);
+        this._logCdnVia(logicalPath, src);
+        return tex;
+      } catch (e) {
+        last = e;
+      }
+    }
+    const memory = await CdnAssetService.ensureMemorySrc(logicalPath);
+    if (memory && !tried.has(memory)) {
+      const tex = await this._loadImage(memory);
+      this._logCdnVia(logicalPath, memory);
+      return tex;
+    }
+    throw last ?? new Error(`纹理加载失败: ${logicalPath}`);
+  }
+
+  private _logCdnVia(logicalPath: string, src: string): void {
+    if (this._cdnViaLogged || !CdnAssetService.isCdnPath(logicalPath)) return;
+    this._cdnViaLogged = true;
+    const via = src.startsWith('data:')
+      ? 'xhr-data'
+      : /^https?:\/\//i.test(src) ? 'https' : 'local';
+    console.log(`[TextureCache] CDN via=${via} ${logicalPath}`);
   }
 
   private _loadImage(src: string): Promise<PIXI.Texture> {
@@ -176,15 +207,16 @@ class TextureCacheClass {
         return;
       }
 
+      const timeoutMs = imageLoadTimeoutMs(src);
       let settled = false;
       const timer = setTimeout(() => {
         if (settled) return;
         settled = true;
-        this._warnTimeout(img, src);
-        const e: any = new Error(`图片加载超时 ${IMAGE_LOAD_TIMEOUT_MS}ms: ${src}`);
+        this._warnTimeout(img, src, timeoutMs);
+        const e: any = new Error(`图片加载超时 ${timeoutMs}ms: ${src}`);
         e.__noRetry = true;
         reject(e);
-      }, IMAGE_LOAD_TIMEOUT_MS);
+      }, timeoutMs);
 
       img.onload = () => {
         if (settled) return;
@@ -219,10 +251,10 @@ class TextureCacheClass {
    * 宿主 onload/onerror 都没来。只报前两条：这种故障是全局性的，刷屏没意义，
    * 但一条都不报就等于下次拿到日志还是查不出。
    */
-  private _warnTimeout(img: any, src: string): void {
+  private _warnTimeout(img: any, src: string, timeoutMs = IMAGE_LOAD_TIMEOUT_MS): void {
     this._timeoutCount += 1;
     if (this._timeoutCount > 2) return;
-    console.error(`[TextureCache] 宿主 Image 回调未触发（超时 ${IMAGE_LOAD_TIMEOUT_MS}ms）: ${src} `
+    console.error(`[TextureCache] 宿主 Image 回调未触发（超时 ${timeoutMs}ms）: ${src} `
       + `shim=${isImageShimApplied(img)} size=${img?.width}x${img?.height} `
       + `onloadKept=${typeof img?.onload === 'function'}`);
     try {

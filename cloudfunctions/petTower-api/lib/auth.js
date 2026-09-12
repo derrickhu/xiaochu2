@@ -9,7 +9,8 @@ const {
   getPlatformCredential,
 } = require('./config');
 
-const SUPPORTED_PLATFORMS = new Set(['wx', 'dy', 'tap', 'anon']);
+const SUPPORTED_PLATFORMS = new Set(['wx', 'dy', 'tap', 'hw', 'anon']);
+const DEVICE_ID_PLATFORMS = new Set(['hw', 'anon']);
 
 function getJwtSecret() {
   const secret = readJwtSecret();
@@ -35,7 +36,16 @@ async function handleLogin(req) {
   } else if (platform === 'tap') {
     const tapSession = await tapCode2Session(body.code);
     platformUid = tapSession.openid;
-  } else if (platform === 'anon') {
+  } else if (platform === 'hw') {
+    const playerId = String(body.playerId || '').trim();
+    const anonId = String(body.anonId || '').trim();
+    const id = playerId || anonId;
+    if (!id) throw httpError(400, 'NO_HW_ID', '华为 playerId / anonId 缺失');
+    if (!/^[A-Za-z0-9_\-:.]{8,128}$/.test(id)) {
+      throw httpError(400, 'BAD_HW_ID', '华为帐号 id 非法');
+    }
+    platformUid = id;
+  } else if (DEVICE_ID_PLATFORMS.has(platform)) {
     const id = String(body.anonId || '').trim();
     if (!id) throw httpError(400, 'NO_ANON_ID', 'anonId 缺失');
     if (!/^[A-Za-z0-9_\-:.]{8,128}$/.test(id)) {

@@ -58,6 +58,32 @@ export function capTapDevicePixelRatio(pixelRatio: number): number {
   return Math.min(dpr, 2);
 }
 
+/**
+ * 华为 1078+：主屏 canvas 设得比屏幕像素小，画面会缩在一角，不会像微信那样拉伸铺满。
+ * 优先用宿主已经开好的主屏尺寸，绝不能再往小了改。
+ */
+export function resolveHuaweiViewSize(opts: {
+  canvasWidth?: number;
+  canvasHeight?: number;
+  screenWidth: number;
+  screenHeight: number;
+  pixelRatio: number;
+}): { width: number; height: number; dpr: number } {
+  const sw = Math.max(1, Number(opts.screenWidth) || 375);
+  const sh = Math.max(1, Number(opts.screenHeight) || 667);
+  const dpr = Number(opts.pixelRatio) > 0 ? Number(opts.pixelRatio) : 2;
+  const hostW = Number(opts.canvasWidth) || 0;
+  const hostH = Number(opts.canvasHeight) || 0;
+  if (hostW >= 2 && hostH >= 2) {
+    return { width: hostW, height: hostH, dpr: hostW / sw };
+  }
+  return {
+    width: Math.round(sw * dpr),
+    height: Math.round(sh * dpr),
+    dpr,
+  };
+}
+
 export function capTapFramebuffer(
   width: number,
   height: number,
@@ -87,7 +113,7 @@ export function acquireMainWebGLContext(canvas: unknown): any {
     getContext?: (type: string, opts?: object) => unknown;
   } | null;
   if (!c?.getContext) return null;
-  const attempts = Platform.isTaptap
+  const attempts = Platform.isCanvasHostGuarded
     ? tapWebGLContextAttempts()
     : [
       { antialias: true, preserveDrawingBuffer: true, stencil: true, depth: true, alpha: true },
@@ -119,7 +145,7 @@ export function rememberSharedWebGL(gl: unknown): void {
 
 /** iOS / Tap：强制 Pixi 走 WebGL1 */
 export function configurePixiWebGLEnvForPlatform(platform?: string): void {
-  if (platform !== 'ios' && !iosPlatform() && !Platform.isTaptap) return;
+  if (platform !== 'ios' && !iosPlatform() && !Platform.isCanvasHostGuarded) return;
   settings.PREFER_ENV = ENV.WEBGL;
 }
 
@@ -141,7 +167,7 @@ export function blockWebGL2OnCanvas(canvas: unknown): void {
 
 /** 只包 iOS 的 createCanvas。Tap 上包一层会和 document.createElement 互相重入，直接栈溢出。 */
 export function installBlockWebGL2OnPlatform(): void {
-  if (!iosPlatform() || Platform.isTaptap) return;
+  if (!iosPlatform() || Platform.isCanvasHostGuarded) return;
 
   const api = platformApi();
   if (!api?.createCanvas || api.__webgl2BlockedCreateCanvas) return;

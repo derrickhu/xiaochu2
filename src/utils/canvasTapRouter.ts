@@ -2,11 +2,13 @@
  * 微信真机：tap 走 canvas touchstart/touchend + 设计坐标 hitTest（勿混 pointerdown，会覆盖 _active）。
  * 可选长按：按住达阈值且位移未超 slop 时触发 onLongPress，松手不再发 tap。
  */
+import { Game } from '@/core/Game';
 import { Platform } from '@/core/PlatformService';
-import { clientEventToDesign } from './clientEventToDesign';
+import { clientEventToDesign, rawClientPoint } from './clientEventToDesign';
 import { containsDesignPoint, pickTopmostHit } from './hitTestDesign';
 import { deferAfterPointerEvent } from './deferAfterPointer';
 import { getTouchCanvas } from './touchCanvas';
+import { readHostCanvasRect } from './hostCanvasRect';
 
 const TAP_SLOP = 14;
 const DEFAULT_LONG_PRESS_MS = 450;
@@ -33,6 +35,25 @@ let _longPressed = false;
 let _onStart: EventListener | null = null;
 let _onMove: EventListener | null = null;
 let _onEnd: EventListener | null = null;
+
+/** 只报开头几次：坐标/命中链一坏就是全局坏，刷屏无意义，一条不报又查不出来 */
+let _diagLeft = 6;
+
+function logTapDiag(
+  phase: 'down' | 'up', e: unknown, p: { x: number; y: number }, hit: boolean,
+): void {
+  if (_diagLeft <= 0) return;
+  _diagLeft -= 1;
+  const raw = rawClientPoint(e);
+  const rect = readHostCanvasRect();
+  const rectInfo = rect
+    ? `${Math.round(rect.width)}x${Math.round(rect.height)}@${Math.round(rect.left)},${Math.round(rect.top)}`
+    : 'none';
+  console.log(`[tap] ${phase} raw=${Math.round(raw.x)},${Math.round(raw.y)} `
+    + `design=${Math.round(p.x)},${Math.round(p.y)} rect=${rectInfo} `
+    + `logic=${Game.designWidth}x${Math.round(Game.logicHeight)} `
+    + `hit=${hit ? 'yes' : 'no'} bindings=${_bindings.length}`);
+}
 
 function clearHoldTimer(): void {
   if (_holdTimer != null) {
@@ -90,6 +111,7 @@ function ensureInstalled(): void {
     const binding = pickBinding(p.x, p.y);
     _active = binding ? { binding, x: p.x, y: p.y } : null;
     if (binding) armLongPress(binding);
+    logTapDiag('down', e, p, binding != null);
   }) as EventListener;
 
   _onMove = ((e: Event) => {
@@ -117,6 +139,7 @@ function ensureInstalled(): void {
     const p = clientEventToDesign(e);
     const dx = p.x - act.x;
     const dy = p.y - act.y;
+    logTapDiag('up', e, p, true);
     if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) return;
     if (!containsDesignPoint(b.target, p.x, p.y)) return;
     if (b.sync) {

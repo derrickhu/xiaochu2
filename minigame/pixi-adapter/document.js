@@ -8,6 +8,7 @@ const { Element } = require('./element');
 const { createMeasureCanvas } = require('./safeCanvas');
 
 const _eventListeners = {};
+let _creatingCanvas = false;
 
 const body = new Element();
 body.clientWidth = 0;
@@ -24,8 +25,15 @@ const document = {
     tag = String(tag || 'div').toLowerCase();
     switch (tag) {
       case 'canvas':
-        if (platform.name === 'taptap') return createMeasureCanvas(1, 1);
-        return platform.createCanvas();
+        if (platform.name === 'taptap' || platform.name === 'huawei') return createMeasureCanvas(1, 1);
+        // wx2huawei 的 wx.createCanvas 常会再调 document.createElement，无此守卫必栈溢出
+        if (_creatingCanvas) return createMeasureCanvas(1, 1);
+        _creatingCanvas = true;
+        try {
+          return platform.createCanvas();
+        } finally {
+          _creatingCanvas = false;
+        }
       case 'img':
       case 'image':
         return platform.createImage();

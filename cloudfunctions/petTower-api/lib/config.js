@@ -2,11 +2,12 @@ const DEFAULT_GAME_KEY = 'petTower';
 const DEFAULT_TTL_SEC = 7 * 24 * 3600;
 const DEFAULT_MAX_BYTES = 256 * 1024;
 
-/** 后端 platform 字段 → 命名空间段（与客户端 gameKeyScope 一致） */
+/** 后端 platform 字段 → 命名空间段（与客户端 gameKeyScope 一致，其它游戏可复用） */
 function getPlatformScope(platform) {
   const p = String(platform || '').toLowerCase();
   if (p === 'dy' || p === 'tt' || p === 'douyin') return 'tt';
   if (p === 'tap' || p === 'taptap') return 'tap';
+  if (p === 'hw' || p === 'huawei') return 'hw';
   return null;
 }
 
@@ -19,7 +20,7 @@ function getGameKey() {
   return v;
 }
 
-/** 存档 / 集合 / JWT gk 使用的命名空间：微信 petTower，抖音 petTower_tt */
+/** 存档 / 集合 / JWT gk：微信 petTower，抖音 _tt，Tap _tap，华为 _hw */
 function getScopedGameKey(platform) {
   const base = getGameKey();
   const scope = getPlatformScope(platform);

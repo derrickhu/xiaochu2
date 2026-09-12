@@ -84,11 +84,43 @@ export function describeRenderFailure(stage: any): string {
  * e.message 只给 "Type error"。取两者里信息量大的那个。
  */
 export function describeError(e: unknown): string {
-  const err = e as { name?: string; message?: string; stack?: string } | null;
-  const asString = String(e);
-  const composed = `${err?.name || 'Error'}: ${err?.message || ''}`;
-  const head = asString.length >= composed.length ? asString : composed;
-  const stack = err?.stack ? ` @${String(err.stack).split('\n').slice(0, 2).join(' ')}` : '';
-  return `${head}${stack}`.slice(0, 220);
+  if (e == null) return String(e);
+  if (typeof e === 'string') return e.slice(0, 220);
+
+  const err = e as {
+    name?: string;
+    message?: string;
+    errMsg?: string;
+    msg?: string;
+    stack?: string;
+    errCode?: unknown;
+    code?: unknown;
+  };
+
+  let head = '';
+  try {
+    const asString = String(e);
+    if (asString && asString !== '[object Object]') head = asString;
+  } catch { /* */ }
+
+  if (!head) {
+    const detail = err.message || err.errMsg || err.msg || '';
+    const composed = `${err.name || 'Error'}: ${detail}`;
+    if (detail) head = composed;
+  }
+
+  if (!head) {
+    try {
+      const json = JSON.stringify(e);
+      if (json && json !== '{}') head = json;
+    } catch { /* */ }
+  }
+
+  if (!head) head = 'unknown-error';
+
+  const code = err.errCode ?? err.code;
+  const codeBit = code != null && !head.includes(String(code)) ? ` code=${code}` : '';
+  const stack = err.stack ? ` @${String(err.stack).split('\n').slice(0, 2).join(' ')}` : '';
+  return `${head}${codeBit}${stack}`.slice(0, 220);
 }
 

@@ -10,6 +10,7 @@ import {
 import { BackendError, BackendService } from '@/core/BackendService';
 import { PersistService } from '@/core/PersistService';
 import { Platform } from '@/core/PlatformService';
+import { waitMs } from '@/utils/hostTimeout';
 
 export type CloudAuthorityState = 'disabled' | 'unknown' | 'confirmedRemote' | 'cacheOnly';
 
@@ -70,16 +71,10 @@ class CloudSyncManagerClass {
     if (!this.startupPromise) {
       return { status: 'disabled', reason: 'startup-missing' };
     }
-    let timer: ReturnType<typeof setTimeout> | null = null;
     const result = await Promise.race([
       this.startupPromise.then(() => 'done' as const).catch(() => 'done' as const),
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, timeoutMs);
-      }).then(() => 'timeout' as const),
+      waitMs(timeoutMs).then(() => 'timeout' as const),
     ]);
-    if (timer) {
-      clearTimeout(timer);
-    }
     if (result === 'timeout') {
       return { status: 'cache-only', reason: 'startup-timeout' };
     }

@@ -191,7 +191,13 @@ class BackendServiceClass {
     return actual === expected;
   }
 
-  private async buildLoginBody(): Promise<{ platform: string; code?: string; anonId?: string }> {
+  private async buildLoginBody(): Promise<{
+    platform: string;
+    code?: string;
+    anonId?: string;
+    playerId?: string;
+    displayName?: string;
+  }> {
     const platform = Platform.backendPlatformCode;
     if (platform === 'wx' || platform === 'dy' || platform === 'tap') {
       const code = await Platform.loginCode();
@@ -200,6 +206,18 @@ class BackendServiceClass {
         throw new BackendError(0, errCode, `${platform} login did not return code`);
       }
       return { platform, code };
+    }
+    if (platform === 'hw') {
+      const account = await Platform.loginHuaweiAccount();
+      if (account?.playerId) {
+        return {
+          platform: 'hw',
+          playerId: account.playerId,
+          displayName: account.displayName,
+        };
+      }
+      // 宿主没有帐号 API / 玩家取消时，仍按 hw 集合隔离，用设备匿名号
+      return { platform: 'hw', anonId: this.getOrCreateAnonId() };
     }
     return { platform: 'anon', anonId: this.getOrCreateAnonId() };
   }

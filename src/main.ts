@@ -8,7 +8,9 @@ import { TextureCache } from '@/core/TextureCache';
 import { BgmManager } from '@/core/BgmManager';
 import { loadAudioSettings } from '@/core/AudioSettings';
 import { Platform } from '@/core/PlatformService';
+import { isUsableCanvas, pickCanvasFromHost } from '@/core/hostCanvas';
 import { tapTextHostState } from '@/core/tapTextRaster';
+import { describeError } from '@/core/renderDiagnostics';
 import { SettingsPanel } from '@/ui/SettingsPanel';
 import { BackendService } from '@/core/BackendService';
 import { configureWechatShare } from '@/core/ShareService';
@@ -18,10 +20,11 @@ import { PersistService } from '@/core/PersistService';
 import { CloudSyncManager } from '@/managers/CloudSyncManager';
 import { PlayerData } from '@/game/PlayerData';
 import { DEFERRED_PRELOAD_IMAGES, MAIN_PRELOAD_IMAGES } from '@/config/Assets';
-import { ensureAudioSubpackage, loadSubpackagesForPaths } from '@/config/Subpackages';
+import { ensureAudioSubpackage, loadSubpackage, loadSubpackagesForPaths } from '@/config/Subpackages';
 import { warmupCommonSubpackages } from '@/config/SubpackageWarmup';
 import { warmupCdnAssets } from '@/config/CdnWarmup';
 import { warmupCustomFonts } from '@/core/FontService';
+import { waitMs } from '@/utils/hostTimeout';
 import { TitleScene } from '@/scenes/TitleScene';
 import { BattleScene } from '@/scenes/BattleScene';
 import { TeamScene } from '@/scenes/TeamScene';
@@ -48,6 +51,9 @@ import {
 
 declare const GameGlobal: any;
 declare const tap: any;
+declare const qg: any;
+declare const qa: any;
+declare const wx: any;
 
 function bootStep(msg: string): void {
   try { GameGlobal.__bootStep = msg; } catch { /* */ }
@@ -87,18 +93,50 @@ async function warmupDeferredImages(): Promise<void> {
 
 async function main(): Promise<void> {
   bootStep('main-start');
-  let canvas = GameGlobal?.canvas ?? null;
-  if (!canvas && typeof tap !== 'undefined' && typeof tap.createCanvas === 'function') {
+  let canvas = isUsableCanvas(GameGlobal?.canvas) ? GameGlobal.canvas : null;
+  if (!isUsableCanvas(canvas) && typeof tap !== 'undefined' && typeof tap.createCanvas === 'function') {
     canvas = tap.createCanvas();
     try { GameGlobal.canvas = canvas; } catch { /* */ }
     bootStep('canvas-from-tap');
+  }
+  if (!isUsableCanvas(canvas) && typeof qg !== 'undefined' && typeof qg.createCanvas === 'function') {
+    canvas = qg.createCanvas();
+    try { GameGlobal.canvas = canvas; } catch { /* */ }
+    bootStep('canvas-from-qg');
+  }
+  if (!isUsableCanvas(canvas) && typeof qa !== 'undefined' && typeof qa.createCanvas === 'function') {
+    canvas = qa.createCanvas();
+    try { GameGlobal.canvas = canvas; } catch { /* */ }
+    bootStep('canvas-from-qa');
+  }
+  if (!isUsableCanvas(canvas) && typeof wx !== 'undefined' && typeof wx.createCanvas === 'function') {
+    canvas = wx.createCanvas();
+    try { GameGlobal.canvas = canvas; } catch { /* */ }
+    bootStep('canvas-from-wx');
+  }
+  if (!isUsableCanvas(canvas)) {
+    const g = (typeof globalThis !== 'undefined' ? globalThis : {}) as Record<string, any>;
+    const picked = pickCanvasFromHost({
+      hostCanvas: GameGlobal?.__hostCanvas,
+      canvas: g.canvas,
+      screencanvas: g.screencanvas,
+      document: typeof document !== 'undefined' ? document : GameGlobal?.__hostDocument,
+      createCanvas: typeof qg !== 'undefined' && typeof qg.createCanvas === 'function'
+        ? () => qg.createCanvas()
+        : undefined,
+    });
+    if (isUsableCanvas(picked)) {
+      canvas = picked;
+      try { GameGlobal.canvas = canvas; } catch { /* */ }
+      bootStep('canvas-from-host src=' + (GameGlobal?.__hostCanvasSrc || 'pick'));
+    }
   }
   bootStep(
     'canvas=' + (canvas
       ? `${canvas.width || 0}x${canvas.height || 0} getContext=${typeof canvas.getContext}`
       : 'null'),
   );
-  if (!canvas) {
+  if (!isUsableCanvas(canvas)) {
     console.error('[main] 找不到 canvas');
     try { GameGlobal.__showBootDiag?.(); } catch { /* */ }
     return;
@@ -135,14 +173,21 @@ async function main(): Promise<void> {
     PlayerData.reloadFromStorage(`cloud-import:${info.reason}`);
   });
 
+  bootStep('cloud-sync-wait');
+  if (Platform.isHuawei) {
+    void loadSubpackage('battle');
+    void loadSubpackage('shop');
+  }
   const startupSync = await CloudSyncManager.awaitStartupSync();
+  bootStep(`cloud-sync ${startupSync.status}/${startupSync.reason}`);
   console.log(
     `[main] 云同步启动结果: ${startupSync.status}, reason=${startupSync.reason}, platform=${Platform.name}`,
   );
   loadingOverlay.setProgress(0.16);
 
   let resolvedUserId = CloudSyncManager.userId;
-  if (!resolvedUserId && BackendService.available) {
+  // 超时说明 login 还在飞；再 await ensureToken 会跟同一条 Promise 一起挂死
+  if (!resolvedUserId && BackendService.available && startupSync.reason !== 'startup-timeout') {
     try {
       await BackendService.ensureToken();
       resolvedUserId = BackendService.userId;
@@ -163,6 +208,7 @@ async function main(): Promise<void> {
   loadingOverlay.setProgress(0.2);
 
   // 首屏这两段是冷启动的主要可控开销，分开计时，真机 js_log 里能直接看出瓶颈在哪段
+  bootStep('main-preload');
   const pkgStartAt = Date.now();
   await loadSubpackagesForPaths(MAIN_PRELOAD_IMAGES);
   const pkgMs = Date.now() - pkgStartAt;
@@ -174,12 +220,18 @@ async function main(): Promise<void> {
     loadingOverlay.setProgress(0.28 + ratio * 0.67);
   });
   const imgMs = Date.now() - preloadStartAt;
+  bootStep(`preload-done pkgMs=${pkgMs} imgMs=${imgMs}`);
   const fontStartAt = Date.now();
-  await fontsReady;
+  bootStep('fonts-wait');
+  await Promise.race([
+    fontsReady,
+    waitMs(Platform.isHuawei ? 800 : 4000),
+  ]);
   bootStep(`${TextureCache.healthReport()} textHost=${tapTextHostState()} `
     + `pkgMs=${pkgMs} imgMs=${imgMs} fontMs=${Date.now() - fontStartAt}`);
   loadingOverlay.setProgress(0.97);
 
+  bootStep('scenes-register');
   SceneManager.register(new TitleScene());
   SceneManager.register(new BattleScene());
   SceneManager.register(new TeamScene());
@@ -189,24 +241,31 @@ async function main(): Promise<void> {
   SceneManager.register(new ShopScene());
   SceneManager.register(new SecretRealmScene());
   SceneManager.register(new TowerScene());
+
+  bootStep('switch-title');
   SceneManager.switchTo('title');
+  bootStep('title-ok');
 
-  OverlayManager.container.addChild(new CheckinPanel());
-  OverlayManager.container.addChild(new DailyQuestPanel());
-  OverlayManager.container.addChild(new CurrencySourcePanel());
-  OverlayManager.container.addChild(new StaminaPanel());
-  OverlayManager.container.addChild(new SettingsPanel());
-
-  if (GMManager.isRuntimeAllowed) {
-    OverlayManager.container.addChild(new GMPanel());
-    OverlayManager.container.addChild(new GMEntryButton());
+  bootStep('overlays');
+  try {
+    OverlayManager.container.addChild(new CheckinPanel());
+    OverlayManager.container.addChild(new DailyQuestPanel());
+    OverlayManager.container.addChild(new CurrencySourcePanel());
+    OverlayManager.container.addChild(new StaminaPanel());
+    OverlayManager.container.addChild(new SettingsPanel());
+    if (GMManager.isRuntimeAllowed) {
+      OverlayManager.container.addChild(new GMPanel());
+      OverlayManager.container.addChild(new GMEntryButton());
+    }
+    if (Platform.isDouyin) {
+      OverlayManager.container.addChild(new DesktopShortcutPanel());
+      OverlayManager.container.addChild(new SidebarPanel());
+    }
+  } catch (e) {
+    bootStep('overlays.fail:' + describeError(e));
   }
 
-  if (Platform.isDouyin) {
-    OverlayManager.container.addChild(new DesktopShortcutPanel());
-    OverlayManager.container.addChild(new SidebarPanel());
-  }
-
+  bootStep('warm-present');
   await Game.warmScenePresent();
   loadingOverlay.setProgress(1);
 
@@ -214,21 +273,31 @@ async function main(): Promise<void> {
   Game.stage.removeChild(loadingOverlay);
   loadingOverlay.destroy({ children: true });
 
+  bootStep('audio');
+  try {
+    await ensureAudioSubpackage();
+    loadAudioSettings();
+    BgmManager.playMain();
+  } catch (e) {
+    bootStep('audio.fail:' + describeError(e));
+  }
+
   warmupCommonSubpackages();
   // CDN：不 await，manifest + 拥有灵宠/BGM 后台预热，不挡首屏与 BGM 起播
   warmupCdnAssets();
   void warmupDeferredImages();
 
-  await ensureAudioSubpackage();
-  // 先落用户音量偏好，再起播——否则会先以默认量轰一声再被调低
-  loadAudioSettings();
-  BgmManager.playMain();
-
-  analytics.trackSessionStart({
-    entry: 'main_boot',
-    with_user_id: !!resolvedUserId,
-    cloud_sync_status: startupSync.status,
-  });
+  try {
+    analytics.trackSessionStart({
+      entry: 'main_boot',
+      with_user_id: !!resolvedUserId,
+      cloud_sync_status: startupSync.status,
+    });
+  } catch (e) {
+    bootStep('analytics.fail:' + describeError(e));
+  }
+  try { GameGlobal.__bootOk = true; } catch { /* */ }
+  bootStep('boot-ok');
 
   let lastHideAt = 0;
   Platform.onHide(() => {
@@ -249,8 +318,9 @@ async function main(): Promise<void> {
 }
 
 main().catch((e) => {
-  console.error('[main] 启动失败:', e);
-  bootStep('main.catch:' + e);
+  const desc = describeError(e);
+  console.error('[main] 启动失败:', desc, e);
+  bootStep('main.catch:' + desc);
   try { GameGlobal.__showBootDiag?.(); } catch { /* */ }
   analytics.trackAppError(e, { source: 'main.catch' });
 });

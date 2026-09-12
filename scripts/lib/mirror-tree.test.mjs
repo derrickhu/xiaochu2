@@ -88,6 +88,18 @@ describe('mirrorDir', () => {
     expect(fs.readFileSync(path.join(dest, 'project.private.config.json'), 'utf8')).toContain('keep');
   });
 
+  it('留下华为助手的 settings 和 rpk，避免组装时被 prune', () => {
+    const root = tmpDir();
+    const src = path.join(root, 'src');
+    const dest = path.join(root, 'dest');
+    writeFile(path.join(src, 'a.png'), 'a');
+    writeFile(path.join(dest, 'settings', 'project.json'), '{"keep":true}');
+    writeFile(path.join(dest, 'com.luckygua.xiaochu2.rpk'), 'rpk');
+    mirrorDir(src, dest);
+    expect(fs.readFileSync(path.join(dest, 'settings', 'project.json'), 'utf8')).toContain('keep');
+    expect(fs.existsSync(path.join(dest, 'com.luckygua.xiaochu2.rpk'))).toBe(true);
+  });
+
   it('留下 dest 里的上传 zip，避免组装时被 prune', () => {
     const root = tmpDir();
     const src = path.join(root, 'src');

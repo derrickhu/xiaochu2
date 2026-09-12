@@ -22,19 +22,20 @@ npm install
 npm run build          # 组装 build/wechat/ 与 build/douyin/
 npm run build:douyin   # 只出抖音
 npm run build:taptap   # Tap 扫码包
+npm run build:huawei   # 华为快游戏，打开 build/huawei/
 npm test
 npm run dev
 npm run typecheck
 ```
 
-构建后用开发者工具打开 **`build/douyin/`**（抖音）或 **`build/wechat/`**（微信），不要打开 `minigame/`。
+构建后用开发者工具打开 **`build/douyin/`**（抖音）、**`build/wechat/`**（微信）或 **`build/huawei/`**（华为快游戏助手），不要打开 `minigame/`。
 
 ## 目录结构
 
 ```
 ├── docs/
 ├── minigame/              # 共享内容树（资源唯一真源）
-├── platform/              # 各端 game.json / project.config.json
+├── platform/              # 各端 game.json / project.config.json / 华为 manifest.json
 ├── build/                 # 工具打开目录（不入库）
 ├── src/
 │   ├── main.ts            # 入口：patch → Game.init → 预加载 → TitleScene

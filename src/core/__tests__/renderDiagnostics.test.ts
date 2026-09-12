@@ -110,4 +110,9 @@ describe('describeError', () => {
     expect(() => describeError(null)).not.toThrow();
     expect(() => describeError('炸了')).not.toThrow();
   });
+
+  it('华为 API 抛的普通对象能读出 errMsg', () => {
+    expect(describeError({ errMsg: 'qg.fail: no fs', errCode: 200 })).toContain('qg.fail');
+    expect(describeError({ errMsg: 'qg.fail: no fs', errCode: 200 })).toContain('200');
+  });
 });

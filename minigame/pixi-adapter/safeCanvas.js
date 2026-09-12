@@ -1,5 +1,5 @@
 /**
- * Tap：document.createElement('canvas') / Pixi 量字不能再走 tap.createCanvas。
+ * Tap / 华为快游戏：document.createElement('canvas') / Pixi 量字不能再走宿主 createCanvas。
  * 宿主 createCanvas 往往会回到 document.createElement，一包就栈溢出。
  */
 function fake2d() {

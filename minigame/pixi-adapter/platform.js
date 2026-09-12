@@ -3,14 +3,20 @@
  * 宿主识别与 src/core/PlatformService 一致：检测到哪个平台就用哪个原生 API
  */
 
-const { detectMinigamePlatform, getNativePlatformApi } = require('../runtime.js');
+const {
+  detectMinigamePlatform,
+  getNativePlatformApi,
+  createHuaweiCanvas,
+  createHuaweiImage,
+} = require('../runtime.js');
 const _platformName = detectMinigamePlatform();
 const _api = getNativePlatformApi(_platformName);
+const _dummyCanvas = { width: 0, height: 0, getContext: function() { return null; } };
 const _isDouyin = _platformName === 'douyin';
 const _isWechat = _platformName === 'wechat';
 
 if (!_api) {
-  console.error('[platform] 未检测到小游戏运行环境（wx/tt/tap）');
+  console.error('[platform] 未检测到小游戏运行环境（wx/tt/tap/qg/qa）');
 }
 
 // 安全调用包装：防止鸿蒙等环境中 API 缺失导致崩溃
@@ -20,6 +26,64 @@ function _safeCall(fn, fallback) {
   } catch (e) {
     console.warn('[platform] API 调用失败:', e);
     return fallback;
+  }
+}
+
+function _hostLocalStorage() {
+  try {
+    if (typeof GameGlobal !== 'undefined' && GameGlobal.__hostLocalStorage) {
+      return GameGlobal.__hostLocalStorage;
+    }
+  } catch (_) { /* */ }
+  return null;
+}
+
+function _unwrapStorage(raw) {
+  if (raw == null || raw === '') return '';
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object') return raw.data || raw.value || '';
+  return String(raw);
+}
+
+function _readStorage(key) {
+  if (_api && typeof _api.getStorageSync === 'function') {
+    const wxStyle = _safeCall(() => _unwrapStorage(_api.getStorageSync(key)), '');
+    if (wxStyle) return wxStyle;
+    const qgStyle = _safeCall(() => _unwrapStorage(_api.getStorageSync({ key: key })), '');
+    if (qgStyle) return qgStyle;
+  }
+  const ls = _hostLocalStorage();
+  if (ls && typeof ls.getItem === 'function') {
+    return _safeCall(() => ls.getItem(key) || '', '');
+  }
+  return '';
+}
+
+function _writeStorage(key, data) {
+  if (_api && typeof _api.setStorageSync === 'function') {
+    try {
+      _api.setStorageSync(key, data);
+    } catch (_) {
+      _safeCall(() => _api.setStorageSync({ key: key, value: data }));
+    }
+  }
+  const ls = _hostLocalStorage();
+  if (ls && typeof ls.setItem === 'function') {
+    _safeCall(() => { ls.setItem(key, data); });
+  }
+}
+
+function _removeStorage(key) {
+  if (_api && typeof _api.removeStorageSync === 'function') {
+    _safeCall(() => _api.removeStorageSync(key));
+    _safeCall(() => _api.removeStorageSync({ key: key }));
+  }
+  if (_api && typeof _api.deleteStorageSync === 'function') {
+    _safeCall(() => _api.deleteStorageSync({ key: key }));
+  }
+  const ls = _hostLocalStorage();
+  if (ls && typeof ls.removeItem === 'function') {
+    _safeCall(() => { ls.removeItem(key); });
   }
 }
 
@@ -53,15 +117,43 @@ function _sanitizeRequestOptions(opts) {
   return out;
 }
 
+function _createCanvas() {
+  if (_platformName === 'huawei' && typeof createHuaweiCanvas === 'function') {
+    const hw = createHuaweiCanvas();
+    if (hw) return hw;
+  }
+  if (_api && typeof _api.createCanvas === 'function') {
+    try {
+      const c = _api.createCanvas();
+      if (c && typeof c.getContext === 'function') return c;
+    } catch (e) {
+      console.warn('[platform] createCanvas 失败:', e);
+    }
+  }
+  return _dummyCanvas;
+}
+
+function _createImage() {
+  if (_platformName === 'huawei' && typeof createHuaweiImage === 'function') {
+    return createHuaweiImage();
+  }
+  if (_api && typeof _api.createImage === 'function') {
+    try { return _api.createImage(); } catch (e) {
+      console.warn('[platform] createImage 失败:', e);
+    }
+  }
+  return { src: '', onload: null, onerror: null };
+}
+
 const platform = {
-  createCanvas: () => _api ? _api.createCanvas() : { width: 0, height: 0, getContext: function() { return null; } },
-  createImage: () => _api ? _api.createImage() : { src: '', onload: null, onerror: null },
+  createCanvas: _createCanvas,
+  createImage: _createImage,
 
   getSystemInfoSync: () => _api ? _safeCall(() => _api.getSystemInfoSync(), { platform: 'unknown', screenWidth: 375, screenHeight: 667 }) : { platform: 'unknown', screenWidth: 375, screenHeight: 667 },
 
-  getStorageSync: (key) => _api ? _safeCall(() => _api.getStorageSync(key), '') : '',
-  setStorageSync: (key, data) => _api ? _safeCall(() => _api.setStorageSync(key, data)) : undefined,
-  removeStorageSync: (key) => _api ? _safeCall(() => _api.removeStorageSync(key)) : undefined,
+  getStorageSync: (key) => _readStorage(key),
+  setStorageSync: (key, data) => _writeStorage(key, data),
+  removeStorageSync: (key) => _removeStorage(key),
 
   request: (opts) => {
     if (!_api) return null;
@@ -99,6 +191,8 @@ const platform = {
 
   name: _platformName,
   api: _api,
+  /** 微信/抖音有 onTouchStart；华为原生 qg 常常没有 */
+  hasTouchApi: !!( _api && typeof _api.onTouchStart === 'function'),
 };
 
 module.exports = platform;

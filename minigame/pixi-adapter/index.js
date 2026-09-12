@@ -92,8 +92,10 @@ const isDevtools = sysInfo.platform === 'devtools';
 ;(function _patchTimers() {
   var pairs = {};
   var _tap = typeof tap !== 'undefined' ? tap : null;
+  var _qg = typeof qg !== 'undefined' ? qg : null;
+  var _qa = typeof qa !== 'undefined' ? qa : null;
   var _wx = typeof wx !== 'undefined' ? wx : null;
-  var _host = _tap || _wx || {};
+  var _host = _tap || _qg || _qa || _wx || {};
   if (typeof setTimeout !== 'undefined')              pairs.setTimeout = setTimeout;
   else if (_host.setTimeout)                          pairs.setTimeout = _host.setTimeout.bind(_host);
   if (typeof clearTimeout !== 'undefined')             pairs.clearTimeout = clearTimeout;
@@ -131,9 +133,9 @@ function _ctorFromGlobal(name) {
   return {};
 }
 
-const isTap = platform.name === 'taptap';
+const isGuardedHost = platform.name === 'taptap' || platform.name === 'huawei';
 let _WebGLRenderingContext = {};
-if (isTap) {
+if (isGuardedHost) {
   _WebGLRenderingContext = _ctorFromGlobal('WebGLRenderingContext');
 } else {
   try {
@@ -192,7 +194,7 @@ if (isTap) {
 }
 
 let _CanvasRenderingContext2D = {};
-if (isTap) {
+if (isGuardedHost) {
   _CanvasRenderingContext2D = _ctorFromGlobal('CanvasRenderingContext2D');
 } else {
   try {
@@ -422,13 +424,22 @@ if (isDevtools) {
 }
 
 // ======== 全局 canvas（对齐 game2D_huahua）========
+// 华为宿主可能已经注入了全局 canvas；禁止用 undefined/假画布把它盖掉。
+function _usableCanvas(c) {
+  return !!(c && typeof c.getContext === 'function');
+}
+if (!_usableCanvas(canvas)) {
+  canvas = (typeof GameGlobal !== 'undefined' && _usableCanvas(GameGlobal.__hostCanvas))
+    ? GameGlobal.__hostCanvas
+    : (_usableCanvas(_realGlobal.canvas) ? _realGlobal.canvas : canvas);
+}
 try {
-  GameGlobal.canvas = canvas;
+  if (_usableCanvas(canvas)) GameGlobal.canvas = canvas;
 } catch (e) {
   console.warn('[pixi-adapter] GameGlobal.canvas 设置失败:', e);
 }
 try {
-  _realGlobal.canvas = canvas;
+  if (_usableCanvas(canvas)) _realGlobal.canvas = canvas;
 } catch (e) { /* 只读属性忽略 */ }
 
 // ======== navigator.userAgent ========

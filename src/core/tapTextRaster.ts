@@ -193,5 +193,5 @@ export function installTapTextRaster(acquireHost: () => Host2d | null): (w?: num
 }
 
 export function shouldInstallTapTextRaster(): boolean {
-  return Platform.isTaptap;
+  return Platform.isCanvasHostGuarded;
 }

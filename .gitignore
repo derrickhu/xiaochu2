@@ -12,6 +12,7 @@ npm-debug.log*
 # 构建产物
 .bundle/
 .bundle-taptap/
+.bundle-huawei/
 build/
 minigame/game-bundle.js
 minigame/index.html
@@ -30,6 +31,7 @@ skills-lock.json
 .env.local
 scripts/.cdn_secret
 scripts/.cdn_manifest.json
+scripts/.cdn_asset_cache/
 scripts/_tmp_cdn_manifest.json
 # cdn:strip 留下的本地状态标记，因机器而异，不该入库
 minigame/.cdn_stripped
