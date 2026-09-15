@@ -2,6 +2,20 @@
 export const TEAM_STAGE_DRAG_SLOP = 14;
 /** 站台座距 130，半径取约 60% 以免同时咬住两座 */
 export const TEAM_STAGE_DROP_RADIUS = 78;
+/** ticker 超过该间隔没跑，视为被 touchmove 挤掉 */
+export const TEAM_STAGE_TICK_STARVE_MS = 32;
+/** 补帧最短间隔，避免 touchmove 里无节制整屏 render */
+export const TEAM_STAGE_PRESENT_MIN_MS = 16;
+
+/** 仅当 ticker 停滞且距上次补帧够久，才允许同步上屏 */
+export function teamStageDragNeedsPresent(
+  nowMs: number,
+  lastTickWallMs: number,
+  lastPresentMs: number,
+): boolean {
+  if (nowMs - lastTickWallMs < TEAM_STAGE_TICK_STARVE_MS) return false;
+  return nowMs - lastPresentMs >= TEAM_STAGE_PRESENT_MIN_MS;
+}
 
 export interface TeamStageDropHome {
   visual: number;

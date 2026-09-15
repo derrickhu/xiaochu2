@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { pickTeamStageDrop, TEAM_STAGE_DROP_RADIUS } from '../teamStageDrop';
+import {
+  pickTeamStageDrop,
+  TEAM_STAGE_DROP_RADIUS,
+  TEAM_STAGE_PRESENT_MIN_MS,
+  TEAM_STAGE_TICK_STARVE_MS,
+  teamStageDragNeedsPresent,
+} from '../teamStageDrop';
 
 const HOMES = [0, 1, 2, 3, 4].map((visual) => ({
   visual,
@@ -23,5 +29,24 @@ describe('pickTeamStageDrop', () => {
 
   it('不落到自己原来的座', () => {
     expect(pickTeamStageDrop(260, 0, 2, HOMES)).toBeNull();
+  });
+});
+
+describe('teamStageDragNeedsPresent', () => {
+  it('ticker 正常推进时不补帧', () => {
+    expect(teamStageDragNeedsPresent(100, 90, 0)).toBe(false);
+  });
+
+  it('ticker 停滞且距上次补帧够久才上屏', () => {
+    expect(teamStageDragNeedsPresent(
+      100,
+      100 - TEAM_STAGE_TICK_STARVE_MS,
+      100 - TEAM_STAGE_PRESENT_MIN_MS,
+    )).toBe(true);
+    expect(teamStageDragNeedsPresent(
+      100,
+      100 - TEAM_STAGE_TICK_STARVE_MS,
+      100 - TEAM_STAGE_PRESENT_MIN_MS + 1,
+    )).toBe(false);
   });
 });

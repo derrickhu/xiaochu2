@@ -3,9 +3,14 @@
  *
  * 落点反馈对齐编队页常见做法（阴阳师 / AFK / 原神编队）：
  * 不画圈不描边，目标位灵宠变淡并略抬起，表示「即将对调」。
- * 跟手交给 ticker，禁止在 touchmove 里整屏 render。
+ * 跟手交给 ticker；touchmove 只记账。ticker 被挤掉时才限频补一帧，
+ * 禁止每下 move 都整屏 render。
  */
 import * as PIXI from 'pixi.js';
+import { UPDATE_PRIORITY } from '@pixi/ticker';
+import { Game } from '@/core/Game';
+import { Platform } from '@/core/PlatformService';
+import { UI } from '@/balance/ui';
 import { bindCanvasPointerMove } from '@/minigame/canvasInteraction';
 import { clientEventToDesign } from '@/utils/clientEventToDesign';
 import { pickTopmostHit } from '@/utils/hitTestDesign';
@@ -13,6 +18,7 @@ import { deferAfterPointerEvent, deferNextFrame } from '@/utils/deferAfterPointe
 import {
   pickTeamStageDrop,
   TEAM_STAGE_DRAG_SLOP,
+  teamStageDragNeedsPresent,
   type TeamStageDropHome,
 } from './teamStageDrop';
 
@@ -65,6 +71,21 @@ export function bindTeamStageReorder(opts: {
   let bodyHomeX = 0;
   let bodyHomeY = 0;
   let bodyIndex = 1;
+  let lastTickWallMs = 0;
+  let lastPresentMs = 0;
+  let fpsBoosted = false;
+
+  const boostFps = (): void => {
+    if (fpsBoosted) return;
+    fpsBoosted = true;
+    Game.setMaxFPS(UI.fps.battle);
+  };
+
+  const restoreFps = (): void => {
+    if (!fpsBoosted) return;
+    fpsBoosted = false;
+    Game.setMaxFPS(UI.fps.idle);
+  };
 
   const clearMark = (): void => {
     const body = marked?.body;
@@ -87,6 +108,33 @@ export function bindTeamStageReorder(opts: {
     markedY = body.y;
     body.alpha = TARGET_GHOST_ALPHA;
     body.y = markedY + TARGET_LIFT_Y;
+  };
+
+  const applyHeld = (): void => {
+    if (!armed || !dragging) return;
+    const body = armed.slot.body;
+    if (!body || body.destroyed) return;
+    body.position.set(armed.liftX + armed.dx, armed.liftY + armed.dy);
+    const drop = pickTeamStageDrop(
+      armed.slot.homeX + armed.dx,
+      armed.slot.homeY + armed.dy,
+      armed.slot.visual,
+      homes,
+    );
+    markTarget(drop?.visual ?? -1);
+  };
+
+  const presentIfStarved = (): void => {
+    if (!Platform.isMinigame || Platform.isDevtools) return;
+    const now = Date.now();
+    if (!teamStageDragNeedsPresent(now, lastTickWallMs, lastPresentMs)) return;
+    lastPresentMs = now;
+    Game.syncFrameToScreen();
+  };
+
+  const followTick = (): void => {
+    lastTickWallMs = Date.now();
+    applyHeld();
   };
 
   const pickStart = (dx: number, dy: number): TeamStageDragSlot | null => {
@@ -112,6 +160,7 @@ export function bindTeamStageReorder(opts: {
     const held = armed;
     armed = null;
     dragging = false;
+    restoreFps();
     clearMark();
     if (held && !commit) parkBody(held.slot);
     deferAfterPointerEvent(() => {
@@ -119,6 +168,8 @@ export function bindTeamStageReorder(opts: {
       deferNextFrame(() => opts.setBusy(false));
     });
   };
+
+  Game.ticker.add(followTick, undefined, UPDATE_PRIORITY.HIGH);
 
   const handle = bindCanvasPointerMove({
     onDown: (e) => {
@@ -142,6 +193,7 @@ export function bindTeamStageReorder(opts: {
       if (!dragging) {
         if (dx * dx + dy * dy < TEAM_STAGE_DRAG_SLOP * TEAM_STAGE_DRAG_SLOP) return;
         dragging = true;
+        boostFps();
         opts.setBusy(true);
         bodyHomeX = body.x;
         bodyHomeY = body.y;
@@ -156,14 +208,8 @@ export function bindTeamStageReorder(opts: {
           armed.slot.chrome.visible = false;
         }
       }
-      body.position.set(armed.liftX + dx, armed.liftY + dy);
-      const drop = pickTeamStageDrop(
-        armed.slot.homeX + dx,
-        armed.slot.homeY + dy,
-        armed.slot.visual,
-        homes,
-      );
-      markTarget(drop?.visual ?? -1);
+      applyHeld();
+      presentIfStarved();
     },
     onUp: () => {
       if (!armed) return;
@@ -190,6 +236,8 @@ export function bindTeamStageReorder(opts: {
     if (armed?.slot) parkBody(armed.slot);
     armed = null;
     dragging = false;
+    restoreFps();
+    try { Game.ticker.remove(followTick); } catch { /* ticker 已拆 */ }
     if (!lift.destroyed) {
       for (const child of [...lift.children]) lift.removeChild(child);
       lift.destroy({ children: false });

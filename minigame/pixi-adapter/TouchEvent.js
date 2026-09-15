@@ -91,8 +91,9 @@ function _toTouchList(rawEvent) {
   if (typeof rawEvent.clientX === 'number' || typeof rawEvent.pageX === 'number') {
     return [{
       identifier: rawEvent.pointerId || rawEvent.identifier || 0,
-      clientX: rawEvent.clientX ?? rawEvent.pageX ?? 0,
-      clientY: rawEvent.clientY ?? rawEvent.pageY ?? 0,
+      // 抖音 TMA 上传走旧 Babylon，不认 ??；适配层其余坐标已用 ||
+      clientX: rawEvent.clientX || rawEvent.pageX || 0,
+      clientY: rawEvent.clientY || rawEvent.pageY || 0,
     }];
   }
   return [];

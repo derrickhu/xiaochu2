@@ -1,0 +1,30 @@
+ART STYLE (MANDATORY — xiaochu2 Spirit v2):
+Unified Q-version cute-chibi xianxia guofeng mobile game character.
+Soft cel-shaded / flat color, thin clean outlines, chubby rounded proportions, big glossy eyes.
+Same family as the other team-stage spirit pets: isolated standing mascot, NOT a card illustration.
+NO TEXT, no labels, no captions, no watermarks, no UI frames, no panel borders, no speech bubbles.
+
+LAYOUT:
+ONE image only. Single full-body character, centered.
+Plain solid soft cream / off-white background (easy cutout).
+Standing figure fills 85%–90% of image height. Clear empty margin above antler tips (8%) and below hooves (5%).
+Do NOT crop head, antlers, staff tip, or cape.
+
+SUBJECT — pet_004 灵鹿医者 awakened (Wood · Healer):
+Same cute anthropomorphic baby-deer healer as the reference: cream-tan fur, white spots, large emerald glossy eyes, small brown antlers, chubby chibi body, two-leg standing pose facing slightly 3/4.
+AWAKENED outfit (power-up by costume, NOT by a giant aura):
+- Ornate living-wood / jade-leaf healer robes, brighter emerald + gold filigree, cream tunic, small herb pouch
+- Leaf-and-flower crown on antlers, still compact (not a huge wreath that fills the frame)
+- Twisted wood staff with a bright green crystal orb, held in one paw
+- Tiny leaf cape that follows the body silhouette
+Face stays moe and gentle. Eyes may glow slightly.
+
+HARD FORBIDDEN (this is why the last 5-star art failed):
+- NO circular halo / rune ring / magic circle behind the body
+- NO leaf-particle storm, NO glowing disk, NO rectangular foliage backdrop
+- NO filled square or card-shaped color block in the upper half
+- NO photoreal, no dark fantasy, no 3D PBR
+The silhouette must be a clean character on empty cream, like the fox / rhino / archer pets on the team stage.
+
+Use the reference image for species, face, body proportions, and color only.
+Do not copy any background glow or card frame.

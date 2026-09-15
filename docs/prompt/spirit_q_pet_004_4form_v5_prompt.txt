@@ -1,0 +1,23 @@
+ART STYLE (MANDATORY — xiaochu2 Spirit v2):
+Unified Q-version cute-chibi xianxia guofeng. Soft cel-shaded, thin outlines, chubby, big glossy eyes.
+NO TEXT, no labels, no captions, no watermarks, no UI frames, no panel borders.
+
+LAYOUT:
+ONE image, 2×2 equal seamless panels. Plain solid cream background in every cell.
+
+CELL MAP (same character, EXPLOSIVE base vs awakened contrast):
+1) TOP-LEFT — Base bust. Simple olive-green hooded healer robe, cream tunic, small leaf wreath, plain wood staff with round green orb. Everyday cute.
+2) BOTTOM-LEFT — Awakened bust. MUST look like a different power tier at a glance: ornate jade-leaf plate armor, gold filigree, gem on chest, jeweled leaf crown, twisted gold-wood staff with diamond crystal. Glowing green eyes. SAME face, SAME bust framing.
+3) TOP-RIGHT — Base full body. Same simple hooded robe + herb pouch + wood staff. Isolated standing mascot.
+4) BOTTOM-RIGHT — Awakened full body. SAME ornate armor as bottom-left: gold-green plate, flowing emerald cape with gold trim, jeweled crown, evolved crystal staff. SAME height as top-right.
+
+SUBJECT: cute anthropomorphic baby deer, cream-tan fur, white spots, large emerald eyes, small brown antlers, chubby two-leg chibi.
+
+AWAKENED MUST CHANGE SILHOUETTE (costume): armor plates, gold edges, cape shape, fancier staff, brighter saturated emerald. NOT just a slightly greener robe.
+
+HARD FORBIDDEN:
+- NO large circular halo / rune ring / magic disk behind the body (those become a square blob after cutout)
+- NO leaf-storm filling the whole cell, NO rectangular foliage backdrop
+Tiny sparkles on gems/staff only, attached to the character, not a background circle.
+
+Use references: top row = simple robe identity; bottom row of the old sheet = ornate awakened costume. Do NOT copy the green rings.

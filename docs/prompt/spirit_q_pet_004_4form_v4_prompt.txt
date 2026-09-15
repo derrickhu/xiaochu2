@@ -1,0 +1,33 @@
+ART STYLE (MANDATORY — xiaochu2 Spirit v2):
+Unified Q-version cute-chibi xianxia guofeng mobile game character art.
+Soft cel-shaded / flat color blocks, thin clean outlines, chubby rounded proportions, big glossy eyes, moe spirit-pet look.
+Airy cute, NOT dark fantasy / NOT photoreal.
+FORBIDDEN: photorealistic, dark horror, heavy oil paint, cyberpunk neon, 3D PBR, tiny ant-sized characters, huge empty margins.
+NO TEXT, no labels, no captions, no watermarks, no UI frames, no speech bubbles, no panel borders.
+
+LAYOUT (MANDATORY):
+Exactly ONE image, 2 columns × 2 rows, four equal seamless panels (sprite sheet).
+Plain solid soft cream background in EVERY cell (easy cutout).
+Same character identity in all four cells. Base vs awakened differ by costume only.
+
+SIZE:
+- Left column (bust): chest-up, 70%–78% of cell height, centered, full antlers visible with 8% headroom.
+- Right column (full body): standing, 85%–90% of cell height, hooves 5% above bottom, 8% empty cream above antler tips.
+
+CELL MAP:
+1) TOP-LEFT — Base bust avatar. Simple green healer hood, cream tunic, small leaf crown, wooden staff with green orb peeking. Calm cute.
+2) BOTTOM-LEFT — Awakened bust. SAME face and framing. Ornate jade-leaf gold-trim robes, brighter emerald, slightly fancier leaf crown. Still a clean bust cutout.
+3) TOP-RIGHT — Base full body standing. Same simple green robe + herb pouch + wood staff. Isolated mascot.
+4) BOTTOM-RIGHT — Awakened full body. Ornate living-wood / jade-leaf robes, gold filigree, upgraded crystal staff, small leaf cape that follows the body. SAME height as top-right.
+
+SUBJECT — pet_004 灵鹿医者 (Wood · Healer · SR):
+Cute anthropomorphic baby deer: cream-tan fur, white spots, large emerald glossy eyes, small brown antlers, chubby chibi, two-leg stand, slight 3/4.
+
+HARD FORBIDDEN (previous 5-star failed because of this):
+- NO circular halo, rune ring, magic circle, glowing disk behind head or body
+- NO leaf-particle storm filling the cell
+- NO rectangular foliage backdrop, NO card-shaped color block
+- Awakened power is costume / gold trim / brighter green ONLY
+Silhouette in every cell = clean character on empty cream, like the fox and rhino on the team stage.
+
+Use references for 2x2 layout and the deer face/body only. Do NOT copy any green aura rings from older sheets.
