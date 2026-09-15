@@ -228,7 +228,7 @@ export class BattlePetBar {
     }
   }
 
-  /** 技能说明气泡置顶（须在英雄血条 / 宠物槽之后调用） */
+  /** 技能说明气泡置顶（须在关卡顶栏/怪名匾之后调用，否则名匾会盖住气泡） */
   raisePreviewLayer(parent: PIXI.Container): void {
     if (!this._previewLayer) return;
     parent.addChild(this._previewLayer);

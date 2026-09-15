@@ -346,8 +346,6 @@ export class BattleScene implements Scene {
     this._petBar.raiseSlotsLayer(this.container);
     // HP 数字再抬一层：箭头可以伸进血条带，但不能盖住可读数字
     this._hud.raiseHpReadouts(this.container);
-    // 技能说明气泡再置顶
-    this._petBar.raisePreviewLayer(this.container);
 
     // 特效层（粒子 / 飘字 / 闪光）—— 先加，珠盘后加以保证跟手珠不被挡住
     this._fx.build(this.container, w, h);
@@ -398,11 +396,13 @@ export class BattleScene implements Scene {
     // Combo 大字（棋盘中央，叠在珠盘与粒子之上）
     this._hud.buildCombo(this.container);
 
-    // 关卡号顶栏（最后绘制，保证不被敌人区背景遮挡）
+    // 关卡号顶栏（后画以免被敌人区背景挡住；名匾会叠在血条上方）
     this._hud.buildStageHeader(this.container);
     // 示意提到 HUD 之上，否则大气泡会被连击字 / 顶栏盖住
     this._dragHint?.raise(this.container);
     this._coachHint?.raise(this.container);
+    // 技能说明必须再压过怪名匾：点宠物时气泡正好落在名匾高度
+    this._petBar.raisePreviewLayer(this.container);
 
     // 怪物详情浮层（结算层之下；点怪打开）
     this._enemyDetailLayer = new PIXI.Container();
