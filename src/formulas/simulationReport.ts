@@ -21,15 +21,19 @@ export interface ComboModel {
 }
 
 /**
- * 玩家画像。
+ * 玩家画像的操作参数。语义与用途见 difficultyBudget.PlayerProfile。
  *
- * `mindless` 是 v0.7 新增的难度护栏基线：见珠就拖、从不放技能、完全不理会闸门提示。
- * 它不是用来验证「能不能过」，而是用来验证**过不了**——难度契约要求它从
- * difficultyBudget.MINDLESS_WALL_CHAPTER 起撞墙。旧体系缺的就是这一档，
- * 于是「太简单」永远测不出来。
+ * `newbie` 的 `combo: 1` 不是拍的：抖音首发日第一关的失败样本平均打了
+ * 11.5 回合、83.7 秒才阵亡，而 1C 模型在同一关的模拟结果是 13 回合阵亡——
+ * 两者对得上，说明这一档确实是从信息流进来的新号的真实水平。
+ *
+ * 这两档只放宽 `combo`，不放宽 `useSkills` / `gateCompliance`：
+ * 新手不会主动放技能、也读不懂闸门提示，这两项本来就该是 false / 0。
  */
 export const COMBO_MODELS: Readonly<Record<PlayerProfile, ComboModel>> = {
-  mindless: { name: '无脑基线', combo: 3, matchCount: 3, useSkills: false, gateCompliance: 0 },
+  newbie: { name: '真新手1C', combo: 1, matchCount: 3, useSkills: false, gateCompliance: 0 },
+  rookie: { name: '生手2C', combo: 2, matchCount: 3, useSkills: false, gateCompliance: 0 },
+  mindless: { name: '无脑基线3C', combo: 3, matchCount: 3, useSkills: false, gateCompliance: 0 },
   low: { name: '低手3C', combo: 3, matchCount: 3, useSkills: false, gateCompliance: 0.3 },
   mid: { name: '中手5C', combo: 5, matchCount: 3, useSkills: true, gateCompliance: 0.7 },
   high: { name: '高手7C', combo: 7, matchCount: 4, useSkills: true, gateCompliance: 0.95 },
@@ -52,6 +56,8 @@ export interface SimResult {
 
 export interface StageReportRow {
   stageId: string;
+  newbie: SimResult;
+  rookie: SimResult;
   mindless: SimResult;
   low: SimResult;
   mid: SimResult;
@@ -76,7 +82,7 @@ export function buildTeam(
     .map((def) => ({ def, level, star }));
 }
 
-/** 跑一支队伍在一组关卡上的三模型矩阵 */
+/** 跑一支队伍在一组关卡上的全画像矩阵 */
 export function simulateMatrixWith(
   simulateBattle: SimulateBattleFn,
   members: readonly TeamMember[],
@@ -84,6 +90,8 @@ export function simulateMatrixWith(
 ): StageReportRow[] {
   return stageIds.map((stageId) => ({
     stageId,
+    newbie: simulateBattle(members, stageId, COMBO_MODELS.newbie),
+    rookie: simulateBattle(members, stageId, COMBO_MODELS.rookie),
     mindless: simulateBattle(members, stageId, COMBO_MODELS.mindless),
     low: simulateBattle(members, stageId, COMBO_MODELS.low),
     mid: simulateBattle(members, stageId, COMBO_MODELS.mid),

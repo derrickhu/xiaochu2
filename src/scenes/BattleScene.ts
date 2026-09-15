@@ -473,10 +473,16 @@ export class BattleScene implements Scene {
     this._coachHint?.show(line);
   }
 
-  /** 手势示意只服务真新号的主线首关：副玩法与后续关卡都不该出现 */
+  /**
+   * 手势示意只服务真新号的主线新手保护关：副玩法与后续关卡都不该出现。
+   *
+   * 原本只挂首关（`STAGES[0]`），但 `BattleDragHint.needed` 的语义是「还没自己消掉过一次」——
+   * 一个在 1-1 就没学会的人，到 1-2 更需要看示范，而旧条件恰好在这时把它撤掉了。
+   * 范围跟着 NOVICE_MERCY 的名单走：还在保护期内就一直教到他真的消掉一次为止。
+   */
   private get _wantsDragHint(): boolean {
     return !this._context
-      && this._ctrl.stage.id === STAGES[0].id
+      && this._ctrl.noviceMercy
       && BattleDragHint.needed;
   }
 
@@ -501,6 +507,24 @@ export class BattleScene implements Scene {
       });
     }
     this._dragHint?.notifyMatched();
+  }
+
+  /**
+   * 新手保护关拖空了：告诉玩家这一拖不算，并立刻重新示范一遍。
+   *
+   * 光是「不惩罚」还不够——玩家看不到扣血也看不到伤害，会怀疑是不是没点动。
+   * 必须给一句明确的反馈说明发生了什么。
+   */
+  private _showFruitlessDragHint(): void {
+    if (this._dragHint) {
+      this._dragHint.notifyFruitless();
+    } else {
+      Platform.showToast('要让 3 颗同色珠连成一排哦，这次不算～');
+    }
+    analytics.track('novice_fruitless_drag', {
+      stage_id: this._ctrl.stage.id,
+      turns: this._ctrl.turnsUsed,
+    });
   }
 
   private _openEnemyDetail(): void {
@@ -676,6 +700,18 @@ export class BattleScene implements Scene {
       }
 
       if (allGroups.length === 0) {
+        /*
+         * 新手保护关：一颗都没消掉，就当这一拖没发生 —— 不计回合、敌人不出手。
+         * 新手拖不出消除是常态（找不到三连、手势没走通、12 秒到点），
+         * 而原本这一拖既扣一个回合又白送敌人一次攻击，越不会玩掉血越快。
+         * 会玩的人本来就消得掉，这条对他们没有任何影响。
+         */
+        if (this._ctrl.noviceMercy) {
+          this._ctrl.refundFruitlessTurn();
+          this._hud.refreshStageHeader();
+          this._showFruitlessDragHint();
+          return;
+        }
         await this._enemyPhase(isStale);
         return;
       }
@@ -1016,8 +1052,34 @@ export class BattleScene implements Scene {
     // 失败音改在结算板弹出时播（BattleResultOverlay），与「战斗失败」标题对齐
     await delay(UI.anim.defeatHitHold);
     if (this._resultOpen) return;
+    // 新手保护关：第一次血空由灵宠挡下，不弹失败板
+    if (this._tryGuardianSave()) return;
     this._showDefeatOverlay();
     await delay(0.3);
+  }
+
+  /**
+   * 灵宠护体：新手保护关的第一次死亡不判失败。见 powerBudget.NOVICE_MERCY。
+   *
+   * 所有致死路径都汇到 `_presentDefeatAfterHit`，所以只在这一处拦即可。
+   * 调用方在此之后一律 `return`（原本要交给失败板），因此这里要自己把状态推回玩家回合，
+   * 口径与 `_reviveFromAd` 一致。
+   */
+  private _tryGuardianSave(): boolean {
+    if (!this._ctrl.consumeGuardianSave()) return false;
+    if (this._ctrl.state !== 'playerTurn') this._ctrl.beginPlayerTurn();
+    this._hud.refreshStageHeader();
+    this._hud.snapHpBarsToModel();
+    this._refreshSkillUi();
+    this._boardView?.refreshOrbStates();
+    this._fx.flash(0xfff3c8, 0.22, 0.4);
+    Platform.vibrateShort('heavy');
+    Platform.showToast('灵宠替你挡下了这一击！', 'success');
+    analytics.track('novice_guardian_save', {
+      stage_id: this._ctrl.stage.id,
+      turns: this._ctrl.turnsUsed,
+    });
+    return true;
   }
 
   private _reviveFromAd(): void {

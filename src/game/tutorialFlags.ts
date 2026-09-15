@@ -9,6 +9,8 @@
  * 新增 flag 前先问：它教的东西是不是真的无法从盘面与反馈里自己看懂？
  */
 
+import { FEATURE_NOTICE_FLAGS } from '@/balance/featureGates';
+
 /** 引导 flag id（存档 key，改名等于丢进度，勿改） */
 export const TUTORIAL_FLAGS = {
   /**
@@ -30,20 +32,48 @@ export const TUTORIAL_FLAGS = {
   teamOrb: 'teamOrb',
 } as const;
 
-export type TutorialFlag = (typeof TUTORIAL_FLAGS)[keyof typeof TUTORIAL_FLAGS];
+export type TeachingFlag = (typeof TUTORIAL_FLAGS)[keyof typeof TUTORIAL_FLAGS];
 
-export const ALL_TUTORIAL_FLAGS: readonly TutorialFlag[] = Object.values(TUTORIAL_FLAGS);
+/**
+ * 教学 flag：教的是操作与规则，「老玩家早就会了」这个豁免对它们成立。
+ */
+export const ALL_TEACHING_FLAGS: readonly TeachingFlag[] = Object.values(TUTORIAL_FLAGS);
 
-const FLAG_SET = new Set<string>(ALL_TUTORIAL_FLAGS);
+/**
+ * 解锁通告 flag（秘境 / 通天塔），登记在此但**不吃老档豁免**。
+ *
+ * 它们放进 tutorial 存档是因为需求完全一样——一次性、布尔、跟着存档走。
+ * 也过了本文件开头那道自问：底栏凭空多出一格，玩家**无法**从盘面和反馈里看懂发生了什么，
+ * 他既不知道那是什么模式，也不知道自己是因为通了哪一关才拿到的。
+ * 而且各自单页、点一下就没、彼此无顺序依赖，不是本文件警告的那种跨页引导链。
+ *
+ * ⚠️ 但它们与教学 flag 有一处关键区别，踩过一次别再踩：
+ * 老档豁免的判据是「有任何通关记录」，对教学是对的（推到十几章的人当然会拖珠了），
+ * 对解锁通告是**错的** —— 通到 1-6 的玩家按这个判据算老玩家，可他根本还没有通天塔，
+ * 结果通告在他解锁之前就被标成看过，等他真通了第 1 章，底栏多一格而没有任何交代。
+ * 正确判据是「这个存档里该功能当时是否已经开着」，见 balance/featureGates.featureNoticeSeed。
+ */
+export const ALL_FEATURE_NOTICE_FLAGS: readonly string[] = FEATURE_NOTICE_FLAGS;
 
-export function isTutorialFlag(id: string): id is TutorialFlag {
+export type TutorialFlag = TeachingFlag | string;
+
+const TEACHING_SET = new Set<string>(ALL_TEACHING_FLAGS);
+const FLAG_SET = new Set<string>([...ALL_TEACHING_FLAGS, ...ALL_FEATURE_NOTICE_FLAGS]);
+
+/** 是否为已登记的 flag（未登记的 key 在清洗时丢弃） */
+export function isTutorialFlag(id: string): boolean {
   return FLAG_SET.has(id);
 }
 
-/** 全部已完成（老玩家豁免用） */
-export function allTutorialFlagsDone(): Record<string, boolean> {
+/** 是否为吃老档豁免的教学 flag */
+export function isTeachingFlag(id: string): id is TeachingFlag {
+  return TEACHING_SET.has(id);
+}
+
+/** 全部教学 flag 已完成（老玩家豁免用；刻意不含解锁通告） */
+export function allTeachingFlagsDone(): Record<string, boolean> {
   const out: Record<string, boolean> = {};
-  for (const id of ALL_TUTORIAL_FLAGS) out[id] = true;
+  for (const id of ALL_TEACHING_FLAGS) out[id] = true;
   return out;
 }
 
@@ -53,13 +83,25 @@ export function allTutorialFlagsDone(): Record<string, boolean> {
  * `veteran` = 老档已有通关记录。老档没有 tutorial 字段时**不能**等同于「新手」，
  * 否则已推到十几章的玩家回来会被弹 1-1 的拖珠示意。第一版就是靠云同步补写
  * introDone / tutorialDone 等 4 个 key 来救这个场，说明这坑踩过一次了。
+ *
+ * `featureNoticeSeen` 是解锁通告的独立种子（按功能是否已开放逐个判定），
+ * 不能让 veteran 一把盖掉——原因见 ALL_FEATURE_NOTICE_FLAGS 上的警告。
  */
-export function sanitizeTutorial(raw: unknown, veteran: boolean): Record<string, boolean> {
-  if (veteran) return allTutorialFlagsDone();
+export function sanitizeTutorial(
+  raw: unknown,
+  veteran: boolean,
+  featureNoticeSeen: Readonly<Record<string, boolean>> = {},
+): Record<string, boolean> {
   const out: Record<string, boolean> = {};
-  if (!raw || typeof raw !== 'object') return out;
-  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (v === true && isTutorialFlag(id)) out[id] = true;
+  // 已经存下来的一律保留：玩家真看过的通告不该因为迁移逻辑变动而重弹
+  if (raw && typeof raw === 'object') {
+    for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (v === true && isTutorialFlag(id)) out[id] = true;
+    }
+  }
+  if (veteran) for (const id of ALL_TEACHING_FLAGS) out[id] = true;
+  for (const [id, seen] of Object.entries(featureNoticeSeen)) {
+    if (seen && isTutorialFlag(id)) out[id] = true;
   }
   return out;
 }

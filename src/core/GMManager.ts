@@ -149,6 +149,21 @@ class GMManagerClass {
     return `可打 ${label}（新标 ${r.cleared} 关${petBit}）`;
   }
 
+  /**
+   * 清空全部引导进度（含秘境 / 通天塔的解锁通告），回首页重新走一遍。
+   *
+   * 引导天生只能看一次，改完却必须验：没有这个开关，唯一的验证办法是清档，
+   * 而清档会连带丢掉用来复现问题的那份进度，等于每次调引导都要从第 1 关重打。
+   */
+  resetTutorial(): string {
+    if (!this.isEnabled) return 'GM 未激活';
+    PlayerData.load();
+    PlayerData.gmResetTutorial();
+    EventBus.emit('home:refresh');
+    Platform.showToast('引导已重置，回首页重看', 'success');
+    return '已清空引导进度（含解锁通告）';
+  }
+
   /** 解锁路径后直接进编队开战 */
   enterStage(chapter: number, index: number): string {
     const ch = Math.max(1, Math.min(MAIN_CHAPTER_COUNT, Math.floor(chapter)));

@@ -1,7 +1,7 @@
 import type { ResolvedEncounter } from '@/balance/enemies';
 import type { StageDef } from '@/balance/stages';
 import { stageDrops, stageCoinReward } from '@/formulas/economyOutput';
-import { enemyStats } from '@/formulas/growth';
+import { enemyStatsForStage } from '@/formulas/growth';
 import { GROWTH } from '@/balance/growth';
 import { starsFromTurns } from '@/formulas/stars';
 import { skillForEnemy } from './SkillEngine';
@@ -42,7 +42,7 @@ export function spawnBattleEnemy(
   const wave = waves[waveIndex];
   if (!wave) throw new Error(`未知波次: ${stage.id} #${waveIndex}`);
   const def = wave.def;
-  const stats = enemyStats(def, stage.chapter, stage.difficulty);
+  const stats = enemyStatsForStage(def, stage);
   return {
     def,
     maxHp: stats.hp,

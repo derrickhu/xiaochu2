@@ -33,7 +33,7 @@ import {
 } from './playerSave';
 import { ensureDailyFresh, isConsecutiveDay } from './dailyReset';
 import { swapTeamEntries } from './teamSwap';
-import type { TutorialFlag } from './tutorialFlags';
+import { TUTORIAL_FLAGS, type TutorialFlag } from './tutorialFlags';
 import {
   msToFull, msToNextPoint, settleStamina, staminaCap,
 } from './staminaService';
@@ -626,6 +626,19 @@ class PlayerDataClass {
   markTutorialDone(flag: TutorialFlag): void {
     if (this._data.tutorial[flag] === true) return;
     this._data.tutorial[flag] = true;
+    this._save();
+  }
+
+  /**
+   * GM：清空引导进度（含解锁通告），用来反复验证只出现一次的引导。
+   *
+   * 有通关记录的档保留「首页指路」：那一下要的是新号第一次进来不知道点哪，
+   * 对一个已经推了几关的账号毫无意义，而它会抢在解锁通告之前占掉首页
+   * （两套小灵不能同时说话），把真正要验的东西挡在下一次进场之后。
+   */
+  gmResetTutorial(): void {
+    const veteran = Object.keys(this._data.stars).length > 0;
+    this._data.tutorial = veteran ? { [TUTORIAL_FLAGS.homeStart]: true } : {};
     this._save();
   }
 

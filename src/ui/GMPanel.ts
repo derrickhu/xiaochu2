@@ -340,10 +340,21 @@ export class GMPanel extends PIXI.Container {
     card.addChild(enterBtn);
     rowY += 52;
 
-    const hint = new PIXI.Text('解锁：目标关之前标 3★ 并发 Boss 掉落宠；开战：解锁后进编队', {
-      fontSize: 12, fill: C.muted, fontFamily: FONT_FAMILY,
-      wordWrap: true, wordWrapWidth: w - innerPad * 2, lineHeight: 16,
+    const resetBtn = this._makeChip('重置引导', actionW, 44, () => {
+      this._showResult(GMManager.resetTutorial());
     });
+    resetBtn.position.set(innerPad, rowY);
+    card.addChild(resetBtn);
+    rowY += 52;
+
+    const hint = new PIXI.Text(
+      '解锁：目标关之前标 3★ 并发 Boss 掉落宠；开战：解锁后进编队；'
+      + '重置引导：清掉拖珠示意与秘境/通天塔解锁通告，回首页重看',
+      {
+        fontSize: 12, fill: C.muted, fontFamily: FONT_FAMILY,
+        wordWrap: true, wordWrapWidth: w - innerPad * 2, lineHeight: 16,
+      },
+    );
     hint.position.set(innerPad, rowY);
     hint.eventMode = 'none';
     card.addChild(hint);

@@ -10,7 +10,14 @@
  * `STAGE_TTK.min` 字段甚至从定义之日起就没有被任何一条断言读过。
  *
  * 这个文件补上缺失的另一半：每一条断言都在问「是不是太简单了」。
- * 四条护栏的定义与阈值在 balance/difficultyBudget.ts，此处只负责把它们钉进 CI。
+ * 护栏的定义与阈值在 balance/difficultyBudget.ts，此处只负责把它们钉进 CI。
+ *
+ * ── v1.0 补的那条方向相反的护栏 ──
+ *
+ * 上面这段说的仍然对，但它自己也踩了同一个坑：所有断言都朝一个方向，
+ * 于是「太难」同样测不出来。抖音首发日 4476 个新号里 94.5% 一关没过，
+ * 而当天这份门禁是**全绿**的——因为没有任何一条断言在问「新玩家过得去吗」。
+ * ①c 早期下限（`earlyFloor`）就是那条反方向的护栏，它和其余几条一起把难度夹成一个区间。
  *
  * ── 失败了该怎么办 ──
  *
@@ -21,23 +28,49 @@
 import { describe, expect, it } from 'vitest';
 import { auditDifficulty, formatDifficultyReport } from '@/formulas/difficultyAudit';
 import {
+  EARLY_FLOOR,
   MECHANIC_DENSITY,
   MINDLESS_MAX_DEPTH,
   TEAM_SWAP_EDGE_FROM_CHAPTER,
   TEAM_SWAP_EDGE_MIN,
+  type PlayerProfile,
 } from '@/balance/difficultyBudget';
 
 const report = auditDifficulty();
 const summary = (): string => `\n${formatDifficultyReport(report)}\n`;
 
 describe('难度门禁', () => {
-  it('四条护栏全部满足', () => {
+  it('全部护栏满足', () => {
     expect(report.violations, summary()).toEqual([]);
   });
 
   it('① 中手达标队不会秒推，也不会被磨死', () => {
     const ttk = report.violations.filter((v) => v.rule === 'ttkFloor' || v.rule === 'ttkCeiling');
     expect(ttk, summary()).toEqual([]);
+  });
+
+  it('①c 开局关卡真新手过得去，且不是磨赢也不是惨胜', () => {
+    const early = report.violations.filter((v) => v.rule === 'earlyFloor');
+    expect(early, summary()).toEqual([]);
+  });
+
+  it('①c 逐关下限表与关卡表同步，画像逐段放宽而非收紧', () => {
+    const order: readonly PlayerProfile[] = ['newbie', 'rookie', 'mindless', 'low', 'mid', 'high'];
+    const byId = new Map(report.audits.map((a) => [a.stageId, a]));
+    let prev = -1;
+    for (const spec of EARLY_FLOOR) {
+      expect(byId.get(spec.stageId), `EARLY_FLOOR 里的 ${spec.stageId} 不在 STAGES 中`).toBeTruthy();
+      /*
+       * 要求的画像只能越来越宽松（newbie → rookie → mindless），不能回头。
+       * 若哪天有人把某关的要求从 mindless 改回 newbie，等于要求玩家在第 5 关
+       * 反而比第 1 关更菜也能过；那不是护栏，是把整章拍平。
+       */
+      const rank = order.indexOf(spec.profile);
+      expect(rank, `${spec.stageId} 用了未知画像 ${spec.profile}`).toBeGreaterThanOrEqual(0);
+      expect(rank, `${spec.stageId} 的下限画像比前一关更严，逐段放宽被打破`)
+        .toBeGreaterThanOrEqual(prev);
+      prev = rank;
+    }
   });
 
   it('② 无脑基线撞得到墙', () => {

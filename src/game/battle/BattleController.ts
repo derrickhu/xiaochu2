@@ -32,6 +32,7 @@ import {
 } from '@/formulas/team';
 import type { ResolvedLeaderSkill } from '@/balance/leaderSkill';
 import { applyDamageReduction } from '@/formulas/damage';
+import { NOVICE_MERCY, hasNoviceMercy } from '@/balance/powerBudget';
 import type { MatchGroup } from '@/game/board/BoardModel';
 import {
   emptyRunModifiers,
@@ -135,6 +136,11 @@ export class BattleController {
   /** 不灭刚刚挡下一次致死伤害（表现层播「不灭」横幅后由场景清零） */
   undyingTriggered = false;
 
+  /** 本关是否启用新手保护的行为层规则（灵宠护体 / 空拖不惩罚） */
+  readonly noviceMercy: boolean;
+  /** 本场剩余的「灵宠护体」次数（见 powerBudget.NOVICE_MERCY） */
+  guardianSavesLeft: number;
+
   /** 通天塔灵机聚合修正（主线/秘境为空修正） */
   readonly runMods: TowerRunModifiers;
   /** 复仇栈：每受一次敌人攻击 +1，玩家回合结算后清零 */
@@ -174,6 +180,8 @@ export class BattleController {
     this._waves = stage.encounters.map((ref) => resolveEncounter(ref));
     this._rng = rng;
     this.runMods = runMods;
+    this.noviceMercy = hasNoviceMercy(stage.id);
+    this.guardianSavesLeft = this.noviceMercy ? NOVICE_MERCY.guardianSavesPerBattle : 0;
 
     const ids = teamIds && teamIds.length > 0 ? teamIds : DEFAULT_TEAM;
     const members: TeamMember[] = ids
@@ -303,6 +311,31 @@ export class BattleController {
   /** 空拖（未发生交换）不计回合，直接回到玩家回合 */
   cancelResolve(): void {
     this.state = 'playerTurn';
+  }
+
+  /**
+   * 新手保护关：这一拖没消掉任何珠，退还刚记上的回合。
+   *
+   * 与 `cancelResolve` 的区别是它已经过了 `beginResolve()`（turnsUsed 已 ++），
+   * 所以要减回去；调用方还要负责跳过敌人回合，两件事一起才是「这一拖没发生过」。
+   */
+  refundFruitlessTurn(): void {
+    this.turnsUsed = Math.max(0, this.turnsUsed - 1);
+    this.state = 'playerTurn';
+  }
+
+  /**
+   * 灵宠护体：把一次死亡换成一次教学。返回是否真的挡下了。
+   *
+   * 顺手净化我方 debuff —— 只回血不解毒的话，玩家会在下一个回合结束时被同一份
+   * 持续伤害再打死一次，护体就变成了「多活两秒」的戏弄。
+   */
+  consumeGuardianSave(): boolean {
+    if (this.guardianSavesLeft <= 0) return false;
+    this.guardianSavesLeft--;
+    this._statuses.cleanseTeamDebuffs();
+    this.heroHp = Math.max(1, Math.floor(this.heroMaxHp * NOVICE_MERCY.guardianRestorePct));
+    return true;
   }
 
   /**

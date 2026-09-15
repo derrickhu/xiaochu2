@@ -101,6 +101,25 @@ export const MOBS: readonly MobDef[] = [
     baseHp: 1000, baseAtk: 155, baseDef: 12, attackInterval: 1,
     skillIds: [ENEMY_SKILL_IDS.poisonTeam],
   },
+  /*
+   * 教学关专用软泥（v1.0 新增，只用于 stage_1_1）。
+   *
+   * 与上面那只同名同图，唯一区别是**没有技能**。
+   *
+   * 抖音首发日第一关按尝试次数只有 12.8% 的通过率，而那一关的敌人带 poisonTeam：
+   * 一个还没学会拖珠的人，在被中毒持续掉血的同时要摸索手势，等于同时教两件事。
+   * 中毒这一手本身是对的（教续航语汇），但它的位置应该在玩家已经会拖珠之后——
+   * 现在从 1-2 开始教，1-1 只教「拖珠会打出伤害」。
+   *
+   * 不直接把 poisonTeam 从 enemy_slime_wood 上摘掉，是因为那只怪还出现在 1-2、1-4 等关，
+   * 动它会连带改掉整章的压力配方；也不复用 image 字段以外的任何差异，
+   * 玩家看到的仍然是同一只软泥，不会以为多了一种怪。
+   */
+  {
+    id: 'enemy_slime_wood_tutor', name: '木域软泥', element: 'wood', displayTier: 'mob',
+    baseHp: 1000, baseAtk: 155, baseDef: 12, attackInterval: 1,
+    image: enemyImageOf('enemy_slime_wood'),
+  },
   {
     id: 'enemy_bat_fire', name: '洞窟火蝠', element: 'fire', displayTier: 'mob',
     baseHp: 870, baseAtk: 195, baseDef: 8, attackInterval: 1,

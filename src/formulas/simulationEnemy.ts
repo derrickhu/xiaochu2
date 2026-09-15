@@ -5,7 +5,7 @@ import type { SkillVfxId } from '@/balance/skills';
 import type { StageDef } from '@/balance/stages';
 import { skillForEnemy } from '@/game/battle/SkillEngine';
 import { initialPhaseState } from '@/game/battle/bossPhase';
-import { enemyStats } from './growth';
+import { enemyStatsForStage } from './growth';
 import { GROWTH } from '@/balance/growth';
 
 export interface SimEnemy {
@@ -34,7 +34,7 @@ export function spawnSimEnemy(stage: StageDef, waveIndex: number): SimEnemy {
   const ref = stage.encounters[waveIndex];
   if (!ref) throw new Error(`未知波次: ${stage.id} #${waveIndex}`);
   const def = resolveEncounter(ref).def;
-  const stats = enemyStats(def, stage.chapter, stage.difficulty);
+  const stats = enemyStatsForStage(def, stage);
   return {
     def,
     maxHp: stats.hp,

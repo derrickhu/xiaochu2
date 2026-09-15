@@ -12,6 +12,7 @@ import { getStarProfile } from '@/balance/growth';
 import { ECONOMY } from '@/balance/economy';
 import { emptyStaminaState, type StaminaState } from './staminaService';
 import { sanitizeTutorial } from './tutorialFlags';
+import { featureNoticeSeed } from '@/balance/featureGates';
 
 import {
   DEV_LEGACY_SAVE_KEYS,
@@ -295,7 +296,16 @@ export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown
     checkin: sanitizeCheckin(migrated.checkin),
     tower: sanitizeTower(migrated.tower),
     stamina: sanitizeStamina(migrated.stamina),
-    tutorial: sanitizeTutorial(migrated.tutorial, veteran),
+    /*
+     * 解锁通告不跟 veteran 走：veteran 的判据是「有任何通关记录」，
+     * 而通到 1-6 的玩家按这个判据算老玩家却还没有通天塔，一刀切会把他的通告吞掉。
+     * 按功能逐个看「这个存档里该入口当时是否已经开着」，理由见 featureNoticeSeed。
+     */
+    tutorial: sanitizeTutorial(
+      migrated.tutorial,
+      veteran,
+      featureNoticeSeed((stageId) => (stars[stageId] ?? 0) > 0),
+    ),
     homeChapter: typeof migrated.homeChapter === 'number' && Number.isFinite(migrated.homeChapter)
       ? Math.max(0, Math.floor(migrated.homeChapter))
       : 0,

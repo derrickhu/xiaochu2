@@ -25,6 +25,9 @@ import { EventBus } from '@/core/EventBus';
 import type { TeamEnterData } from './TeamScene';
 import { showStageEntryDialog, type StageEntryDialogHandle } from './StageEntryDialog';
 import { HomeStartGuide } from './HomeStartGuide';
+import { FeatureUnlockGuide } from './FeatureUnlockGuide';
+import { pendingFeatureNotices } from '@/game/featureGate';
+import type { BottomNavLayout } from '@/ui/BottomNav';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { buildTitleScreenWorld } from './chapterMapView';
 import { attachChapterMapEditor } from './chapterMapEditor';
@@ -76,6 +79,7 @@ export class TitleScene implements Scene {
   private _dialogLayer: PIXI.Container | null = null;
   private _stageEntry: StageEntryDialogHandle | null = null;
   private _homeGuide: HomeStartGuide | null = null;
+  private _featureNotice: FeatureUnlockGuide | null = null;
   private _mapEditMode = false;
   private _editorTeardown: (() => void) | null = null;
   private _onMapEditToggle = (): void => {
@@ -132,6 +136,8 @@ export class TitleScene implements Scene {
     this._stageEntry = null;
     this._homeGuide?.destroy();
     this._homeGuide = null;
+    this._featureNotice?.destroy();
+    this._featureNotice = null;
     this._editorTeardown?.();
     this._editorTeardown = null;
     this._scroll.detach();
@@ -176,6 +182,8 @@ export class TitleScene implements Scene {
     this._stageEntry = null;
     this._homeGuide?.destroy();
     this._homeGuide = null;
+    this._featureNotice?.destroy();
+    this._featureNotice = null;
     this._editorTeardown?.();
     this._editorTeardown = null;
     this._mapEditMode = false;
@@ -229,7 +237,7 @@ export class TitleScene implements Scene {
     this._buildTopBar(w, Game.safeHeaderCenterY);
     this._buildChapterNav(w, TitleScene.chapterNavY());
     this._buildLeftRail(h);
-    this._buildBottomNav(w, h);
+    const navLayout = this._buildBottomNav(w, h);
 
     // 弹层置顶：盖住地图与导航
     this._dialogLayer = new PIXI.Container();
@@ -239,6 +247,38 @@ export class TitleScene implements Scene {
     if (!mapEditMode && HomeStartGuide.needed && mapWorld.activeScreenPos) {
       this._homeGuide = new HomeStartGuide({ target: mapWorld.activeScreenPos });
       this._homeGuide.build(this._dialogLayer);
+      return;
+    }
+
+    /*
+     * 刚解锁的模式在这里交代。
+     *
+     * 放在首页而不是战斗结算板上，是因为要圈的东西（底栏那一格）只在首页存在——
+     * 在结算板上说「底栏多了个秘境」，玩家当场看不到，回到首页时话又已经说完了。
+     *
+     * 与首页开场引导互斥：新号第一次进来该看的是「点这一关」，
+     * 不能两套小灵同时说话。解锁通告等下一次回首页再补，反正 flag 没消。
+     */
+    if (!mapEditMode) this._showNextFeatureNotice(navLayout);
+  }
+
+  /** 逐条弹出待通告的解锁；收起后接着弹下一条 */
+  private _showNextFeatureNotice(navLayout: BottomNavLayout): void {
+    if (!this._dialogLayer) return;
+    for (const gate of pendingFeatureNotices()) {
+      const target = navLayout[gate.id];
+      // 拿不到落点（理论上不会）就别弹：没有圈选的通告等于让玩家自己去找
+      if (!target) continue;
+      this._featureNotice = new FeatureUnlockGuide({
+        gate,
+        target,
+        onDismiss: () => {
+          this._featureNotice = null;
+          this._showNextFeatureNotice(navLayout);
+        },
+      });
+      this._featureNotice.build(this._dialogLayer);
+      return;
     }
   }
 
@@ -262,8 +302,8 @@ export class TitleScene implements Scene {
     });
   }
 
-  private _buildBottomNav(w: number, h: number): void {
-    buildBottomNav(this.container, w, h, 'home');
+  private _buildBottomNav(w: number, h: number): BottomNavLayout {
+    return buildBottomNav(this.container, w, h, 'home');
   }
 
   private _buildLeftRail(h: number): void {

@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import { STAGES } from '@/balance/stages';
 import { resolveEncounter } from '@/balance/enemies';
-import { enemyStats } from '@/formulas/growth';
+import { enemyStatsForStage } from '@/formulas/growth';
 import { GROWTH } from '@/balance/growth';
 import { skillForEnemy, type SkillRuntimeContext } from '../SkillEngine';
 import { initialPhaseState } from '../bossPhase';
@@ -30,7 +30,7 @@ function bossEnemies(): { stageId: string; enemy: () => EnemyUnit }[] {
     .map((s) => {
       const ref = s.encounters[s.encounters.length - 1];
       const def = resolveEncounter(ref).def;
-      const stats = enemyStats(def, s.chapter, s.difficulty);
+      const stats = enemyStatsForStage(def, s);
       return {
         stageId: s.id,
         enemy: (): EnemyUnit => ({
@@ -297,7 +297,7 @@ describe('条件技不进预告', () => {
     const def = resolveEncounter(ref).def;
     expect(def.skillIds).toContain(ENEMY_SKILL_IDS.enrage);
 
-    const stats = enemyStats(def, stage!.chapter, stage!.difficulty);
+    const stats = enemyStatsForStage(def, stage!);
     const spawn = (hpPct: number): EnemyUnit => ({
       def,
       maxHp: stats.hp,

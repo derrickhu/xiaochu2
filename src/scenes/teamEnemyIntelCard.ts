@@ -8,7 +8,7 @@ import { enemyImage } from '@/config/Assets';
 import { counterElementOf, resistedElementOf } from '@/balance/combat';
 import { resolveEncounter, type EnemyDef } from '@/balance/enemies';
 import { formatEnemyBattleName } from '@/balance/enemyDisplay';
-import { enemyStats } from '@/formulas/growth';
+import { enemyStatsForStage } from '@/formulas/growth';
 import type { PetDef } from '@/balance/pets';
 import type { StageDef } from '@/balance/stages';
 import {
@@ -130,7 +130,7 @@ export function buildTeamEnemyIntelCard(opts: {
 
   const paintInfo = (def: EnemyDef): void => {
     infoHost.removeChildren().forEach((c) => c.destroy({ children: true }));
-    const stats = enemyStats(def, stage.chapter, stage.difficulty);
+    const stats = enemyStatsForStage(def, stage);
     const pagerW = waveCount > 1 ? PAGER_W + 8 : 0;
     const identW = ELEM_ORB + ELEM_GAP + PORTRAIT;
     const infoW = width - INSET - identW - 12 - INSET - pagerW;

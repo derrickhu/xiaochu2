@@ -14,6 +14,10 @@ import { DEFAULT_TEAM, PET_MAP, TEAM_SIZE, type PetDef } from '@/balance/pets';
 import { CHAPTER_REWARD_PET, STAGES, stageWaveCount, type StageDef } from '@/balance/stages';
 import { getChapterPower, stageTtkFor } from '@/balance/powerBudget';
 import {
+  EARLY_FLOOR,
+  EARLY_FLOOR_FALLBACK,
+  PLAYER_PROFILE_NAME,
+  TTK_FLOOR_EXEMPT_THROUGH_CHAPTER,
   MECHANIC_DENSITY,
   MINDLESS_MAX_DEPTH,
   MINDLESS_WALL_CHAPTER,
@@ -353,12 +357,14 @@ export interface StageAudit {
   plain: boolean;
   /** 本关是否挂了硬闸门（闸门按设计要多花回合，TTK 上限据此放宽） */
   gated: boolean;
+  /** 是否带任何机制标签（挑战关；早期下限的兜底规则据此豁免） */
+  tagged: boolean;
   /** 波数（同样影响 TTK 上限） */
   waves: number;
   results: Readonly<Record<PlayerProfile, SimResult>>;
 }
 
-/** 对单关跑四画像（通用队口径） */
+/** 对单关跑全部画像（通用队口径） */
 export function auditStage(stage: StageDef): StageAudit {
   const team = genericTeam(stage.chapter);
   const run = (p: PlayerProfile): SimResult => simulateBattle(team, stage.id, COMBO_MODELS[p]);
@@ -368,8 +374,11 @@ export function auditStage(stage: StageDef): StageAudit {
     kind: ttkKindOf(stage),
     plain: isPlainStage(stage),
     gated: (stage.mechanics ?? []).some((m) => m.startsWith('gate_')),
+    tagged: (stage.mechanics ?? []).length > 0,
     waves: stageWaveCount(stage),
     results: {
+      newbie: run('newbie'),
+      rookie: run('rookie'),
       mindless: run('mindless'),
       low: run('low'),
       mid: run('mid'),
@@ -379,7 +388,7 @@ export function auditStage(stage: StageDef): StageAudit {
 }
 
 export interface Violation {
-  rule: 'ttkFloor' | 'ttkCeiling' | 'mindlessWall' | 'mindlessDepth' | 'teamSwapEdge'
+  rule: 'ttkFloor' | 'ttkCeiling' | 'earlyFloor' | 'mindlessWall' | 'mindlessDepth' | 'teamSwapEdge'
     | 'mechanicDensity' | 'plainStages';
   stageId?: string;
   chapter?: number;
@@ -415,6 +424,8 @@ function checkTtkFloor(audits: readonly StageAudit[]): Violation[] {
   const out: Violation[] = [];
   for (const a of audits) {
     if (TTK_FLOOR_EXEMPT.includes(a.stageId)) continue;
+    // 教学章整章豁免：与 ①c 早期下限数学互斥，见 TTK_FLOOR_EXEMPT_THROUGH_CHAPTER
+    if (a.chapter <= TTK_FLOOR_EXEMPT_THROUGH_CHAPTER) continue;
     const floor = TTK_FLOOR[a.kind];
     /*
      * 下限必须按**最快的那一档**判定。
@@ -480,6 +491,80 @@ function checkTtkCeiling(
       });
     }
   }
+  return out;
+}
+
+/**
+ * ①c 早期下限：开局那几关必须让最菜的档打得过去。
+ *
+ * 这条是抖音首发日的直接产物。当时全部护栏 0 违规，但线上 94.5% 的新号一关没过——
+ * 因为四条护栏全在防「太简单」，没有一条在防「劝退」。
+ * 契约细则见 difficultyBudget.EARLY_FLOOR。
+ */
+function checkEarlyFloor(audits: readonly StageAudit[]): Violation[] {
+  const out: Violation[] = [];
+  const byId = new Map(audits.map((a) => [a.stageId, a]));
+  const spelled = new Set(EARLY_FLOOR.map((s) => s.stageId));
+
+  for (const spec of EARLY_FLOOR) {
+    const a = byId.get(spec.stageId);
+    if (!a) {
+      out.push({
+        rule: 'earlyFloor',
+        stageId: spec.stageId,
+        detail: 'EARLY_FLOOR 名单里的关卡不存在，契约与 STAGES 已不同步',
+      });
+      continue;
+    }
+    const label = PLAYER_PROFILE_NAME[spec.profile];
+    const r = a.results[spec.profile];
+    if (!r.win) {
+      out.push({
+        rule: 'earlyFloor',
+        stageId: spec.stageId,
+        chapter: a.chapter,
+        detail: `${label} ${r.turnsUsed} 回合未通关，这一关必须过得去`,
+      });
+      continue;
+    }
+    if (r.turnsUsed > spec.maxTurns) {
+      out.push({
+        rule: 'earlyFloor',
+        stageId: spec.stageId,
+        chapter: a.chapter,
+        detail: `${label} 要打 ${r.turnsUsed} 回合，超出上限 ${spec.maxTurns}（磨赢也是劝退）`,
+      });
+    }
+    const hpPct = r.heroHpRemaining / Math.max(1, r.heroMaxHp);
+    if (hpPct < spec.minHpPct) {
+      out.push({
+        rule: 'earlyFloor',
+        stageId: spec.stageId,
+        chapter: a.chapter,
+        detail: `${label} 通关仅剩 ${(hpPct * 100).toFixed(0)}% 血，`
+          + `低于下限 ${(spec.minHpPct * 100).toFixed(0)}%（惨胜劝退）`,
+      });
+    }
+  }
+
+  // 兜底：早期章节的非 Boss 关不许成为第二道劝退墙
+  const fb = EARLY_FLOOR_FALLBACK;
+  for (const a of audits) {
+    if (a.chapter > fb.throughChapter) continue;
+    if (a.kind === 'boss' || spelled.has(a.stageId)) continue;
+    if (a.tagged) continue; // 挑战关豁免，理由见 EARLY_FLOOR_FALLBACK
+    const r = a.results[fb.profile];
+    if (!r.win) {
+      out.push({
+        rule: 'earlyFloor',
+        stageId: a.stageId,
+        chapter: a.chapter,
+        detail: `${PLAYER_PROFILE_NAME[fb.profile]} ${r.turnsUsed} 回合未通关；`
+          + `第 ${MINDLESS_WALL_CHAPTER} 章之前的铺垫关不许立墙`,
+      });
+    }
+  }
+
   return out;
 }
 
@@ -586,6 +671,7 @@ export function auditDifficulty(): DifficultyReport {
   const violations: Violation[] = [
     ...checkTtkFloor(audits),
     ...checkTtkCeiling(audits, swap.counterRuns),
+    ...checkEarlyFloor(audits),
     ...checkMindlessWall(audits),
     ...swap.violations,
     ...checkMechanicDensity(audits),

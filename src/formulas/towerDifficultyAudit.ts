@@ -8,7 +8,7 @@ import { DEFAULT_TEAM, PET_MAP } from '@/balance/pets';
 import { TOWER_WALL } from '@/balance/difficultyBudget';
 import { TOWER, buildTowerStage, isMilestoneFloor } from '@/balance/tower';
 import { resolveEncounter } from '@/balance/enemies';
-import { enemyStats } from '@/formulas/growth';
+import { enemyStatsForStage } from '@/formulas/growth';
 import { genericTeam } from '@/formulas/difficultyAudit';
 import { simulateBattle } from '@/formulas/simulation';
 import { COMBO_MODELS, type ComboModel } from '@/formulas/simulationReport';
@@ -47,7 +47,7 @@ function floorTotalHp(floor: number): number {
   let hp = 0;
   for (const ref of stage.encounters) {
     const def = resolveEncounter(ref).def;
-    hp += enemyStats(def, stage.chapter, stage.difficulty).hp;
+    hp += enemyStatsForStage(def, stage).hp;
   }
   return hp;
 }

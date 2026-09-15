@@ -129,6 +129,24 @@ export class BattleDragHint {
     this._idleMs = 0;
   }
 
+  /**
+   * 玩家拖了但一颗也没消掉：立刻重新示范，不等 REPEAT_DELAY_MS 的静止计时。
+   *
+   * 这是「手把手」在不违反本文件开头那几条底线的前提下唯一正确的做法。
+   * 原本的节奏是「玩家发呆够久才提示」，可是拖空的人不是在发呆，他刚刚试过一次并且失败了 ——
+   * 那一刻正是他最需要看第二遍的时候，再让他干等几秒只会让他以为游戏卡了。
+   *
+   * 仍然不锁起点、不锁路径：他下一次可以从任何一颗珠起手。
+   */
+  notifyFruitless(): void {
+    if (this._state === 'done') return;
+    this._root.visible = true;
+    this._state = 'waiting';
+    // 只差一点就到重播阈值：留一小段间隔让上一次拖动的手指先离开屏幕
+    this._idleMs = Math.max(0, REPEAT_DELAY_MS - 350);
+    if (this._round >= MAX_ROUNDS) this._round = MAX_ROUNDS - 1;
+  }
+
   /** 玩家自己消掉一次 = 真的学会了，永久收起 */
   notifyMatched(): void {
     if (this._state === 'done') return;

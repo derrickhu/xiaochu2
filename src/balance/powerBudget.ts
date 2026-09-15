@@ -259,6 +259,94 @@ export function getDailyTarget(chapter: number): DailyTargetAnchor {
 export const DAILY_TARGET_TOLERANCE = 0.15;
 
 /**
+ * ── 新手保护层（v1.0）──
+ *
+ * 为什么要单独开一层，而不是去调 stages 的 difficulty 或 enemies 的 baseHp：
+ *
+ * 抖音首发日 4476 个新号里 94.5% 一关没过，第一关按尝试次数只有 12.8% 通过率。
+ * 归因结果是 stage_1_1 对「每回合只消得出 1 组珠」的真新手数学上无解——
+ * 敌人 1580 血（1000 × hpScale 1.58），玩家队总血 1680、敌人每回合 155 攻，
+ * 也就是 10.8 回合必死，而 1 组珠的输出要 20 多回合才磨得完。
+ *
+ * 三条路里选了这一条：
+ * - 调 `difficulty`：它同时缩放 HP/ATK/DEF，比例锁死，没法「血砍狠一点、攻砍轻一点」，
+ *   而且它是关卡间坡度的语义字段，借它做新手保护会让后面的人读不懂坡度为什么是反的；
+ * - 调 `enemies.baseHp`：软泥/火蝠同时出现在 1-2、1-4 等关，动基值会连带改掉整章手感；
+ * - 单开一层（本表）：作用域精确到关卡 id，语义自解释，且能被难度审计单独断言。
+ *
+ * 覆盖整个第 1 章。原计划只保护前 3 关，是难度审计加上 EARLY_FLOOR 护栏后否掉的：
+ * 生手（2C）过不了 1-4 到 1-7，无脑档（3C）过不了章 Boss —— 劝退是整章的，不是头三关的。
+ * 第 2 章不需要这一层（无脑档本来就过得去），保护到第 1 章末为止自然退场。
+ *
+ * ⚠️ 这几个数看着不成曲线（0.18 → 0.20 → 0.50 …），别去「捋顺」它。
+ * 关与关的波数（1-2 是两波）、杂兵基础血量、difficulty 都不同，
+ * 平滑的乘数会得到不平滑的实际体验；这张表要平滑的是**玩家侧的回合数与留血**，
+ * 那一侧才是 EARLY_FLOOR 断言的东西。改动一律以护栏跑绿为准，不要凭手感。
+ *
+ * 每个数都比模拟器求出的临界值再松一档：模拟器每回合必定拿到设定的 combo，
+ * 真人会在 12 秒里整回合空手。这点余量买的就是那些回合。
+ *
+ * 数值口径：hp/atk 分别乘在 enemyStats 的结果上。1.0 = 无保护。
+ */
+export interface TutorialGrace {
+  /** 敌人 HP 乘数 */
+  hp: number;
+  /** 敌人 ATK 乘数 */
+  atk: number;
+}
+
+export const NO_TUTORIAL_GRACE: TutorialGrace = { hp: 1, atk: 1 };
+
+export const TUTORIAL_GRACE: Readonly<Record<string, TutorialGrace>> = {
+  /* 教学段（1C 必过）：唯一职能是「拖珠会打出伤害」，5 回合左右自己打赢、留七成血 */
+  stage_1_1: { hp: 0.18, atk: 0.85 },
+  stage_1_2: { hp: 0.13, atk: 0.62 },
+  /* 上手段（2C 必过）：会连 2 组就够，仍不要求放技能、不要求看闸门 */
+  stage_1_3: { hp: 0.50, atk: 0.78 },
+  stage_1_4: { hp: 0.32, atk: 0.90 },
+  /* 收尾段（3C 必过）：打过十几场后该有的水平，保护到章末退光 */
+  stage_1_5: { hp: 0.36, atk: 0.92 },
+  stage_1_6: { hp: 0.42, atk: 0.92 },
+  stage_1_7: { hp: 0.32, atk: 0.92 },
+  stage_1_8: { hp: 0.32, atk: 0.92 },
+};
+
+/** 取关卡的新手保护系数（不在表里 = 无保护） */
+export function tutorialGraceFor(stageId: string): TutorialGrace {
+  return TUTORIAL_GRACE[stageId] ?? NO_TUTORIAL_GRACE;
+}
+
+/**
+ * ── 新手保护的两条行为层规则（v1.0）──
+ *
+ * 上面的数值层解决「关卡是否可解」，这两条解决「玩家会不会在学会之前就被赶走」。
+ * 数值算得再准也拦不住这两种死法：
+ *
+ * ① 灵宠护体：新手第一次血空是必然事件——他还不知道要留血、不知道敌人蓄力要处理。
+ *   首发日的失败样本平均打了 11.5 回合、83.7 秒，也就是「玩了一分半，然后失败」。
+ *   这时弹失败结算，等于告诉他「你不适合这个游戏」。护体把第一次死亡变成一次教学：
+ *   血条见底 → 灵宠替你挡下 → 回半血继续打。每场只给一次，且只在这几关给。
+ *
+ * ② 空拖不惩罚：新手拖不出消除是常态（找不到三连、手势没走通、12 秒超时）。
+ *   现状是这一拖既记 1 回合、又白送敌人一次攻击 —— 越不会玩掉血越快，正是死亡螺旋。
+ *   在这几关里，没消掉任何珠就当这一拖没发生：不计回合，敌人不出手。
+ *   这不改变「会玩的人」的任何体验（他们本来就消得掉），只是把摸索成本降到零。
+ */
+export const NOVICE_MERCY = {
+  /** 生效关卡（与 TUTORIAL_GRACE 的教学段对齐：真正在学操作的那几关） */
+  stageIds: ['stage_1_1', 'stage_1_2', 'stage_1_3'] as readonly string[],
+  /** 灵宠护体每场触发次数 */
+  guardianSavesPerBattle: 1,
+  /** 护体后恢复到最大生命的这个比例 */
+  guardianRestorePct: 0.6,
+} as const;
+
+/** 本关是否启用新手保护的行为层规则 */
+export function hasNoviceMercy(stageId: string): boolean {
+  return NOVICE_MERCY.stageIds.includes(stageId);
+}
+
+/**
  * ── 关卡 TTK 目标（中手模型口径：COMBO_MODELS.mid，达标队伍）──
  *
  * 普通关快节奏刷图、精英关略有压力、Boss 关是章末大战但不是隔天的墙。

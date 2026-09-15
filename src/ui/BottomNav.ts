@@ -1,6 +1,7 @@
 /**
- * 底部五格导航：灵宠 | 召唤 | 主线 | 秘境 | 通天塔
+ * 底部导航：灵宠 | 召唤 | 主线 | (秘境) | (通天塔)
  *
+ * 后两格按 game/featureGate.ts 的解锁门显示——新号只有三格。
  * 「主线」= 首页 TitleScene（章节地图）；秘境/通天塔为日循环与长线一级入口。
  * 商店下沉到左栏；编队只保留战前流程，不再占底栏。
  * 对齐截图/home_hub_v4：生成云形奶油板贴图 + 大号图标 + 选中金环光晕 + 奶油标签胶囊。
@@ -11,6 +12,7 @@ import { SceneManager } from '@/core/SceneManager';
 import { Game } from '@/core/Game';
 import { ECONOMY } from '@/balance/economy';
 import { PlayerData } from '@/game/PlayerData';
+import { isFeatureUnlocked } from '@/game/featureGate';
 import { UI_IMAGES } from '@/config/Assets';
 import { COLORS, FONT_SIZE } from './theme';
 import { makeText } from './text';
@@ -92,12 +94,19 @@ function makeBottomNavTab(opts: {
   return root;
 }
 
+/** 每一格图标中心的屏幕坐标（未显示的格子不在表里） */
+export type BottomNavLayout = Partial<Record<BottomNavTab, { x: number; y: number }>>;
+
+/**
+ * 返回值是各格的落点，给「解锁通告」圈选新格子用（见 scenes/FeatureUnlockGuide.ts）。
+ * 位置由本函数按实际格数算出，外部不要再自己推一遍，否则解锁增减格子时两边必然错位。
+ */
 export function buildBottomNav(
   parent: PIXI.Container,
   w: number,
   h: number,
   active?: BottomNavTab,
-): void {
+): BottomNavLayout {
   const reserve = BOTTOM_NAV_RESERVE;
   const lift = Math.min(Game.safeBottom, 28);
   const navTop = h - reserve;
@@ -131,40 +140,53 @@ export function buildBottomNav(
   }
 
   const canGacha = PlayerData.lingyu >= ECONOMY.gacha.singleCost;
-  const xs = [0.1, 0.3, 0.5, 0.7, 0.9].map((r) => w * r);
   const slots: {
     tab: BottomNavTab;
     label: string;
     icon: string;
-    x: number;
     highlight?: boolean;
     onTap: () => void;
   }[] = [
     {
-      tab: 'codex', label: '灵宠', icon: UI_IMAGES.navPet, x: xs[0],
+      tab: 'codex', label: '灵宠', icon: UI_IMAGES.navPet,
       onTap: () => { if (active !== 'codex') SceneManager.switchTo('codex'); },
     },
     {
-      tab: 'gacha', label: '召唤', icon: UI_IMAGES.iconRecruit, x: xs[1],
+      tab: 'gacha', label: '召唤', icon: UI_IMAGES.iconRecruit,
       highlight: canGacha,
       onTap: () => { if (active !== 'gacha') SceneManager.switchTo('gacha'); },
     },
     {
-      tab: 'home', label: '主线', icon: UI_IMAGES.navHome, x: xs[2],
+      tab: 'home', label: '主线', icon: UI_IMAGES.navHome,
       onTap: () => { if (active !== 'home') SceneManager.switchTo('title', PlayerData.titleEnter()); },
-    },
-    {
-      tab: 'realm', label: '秘境', icon: UI_IMAGES.navRealm, x: xs[3],
-      highlight: PlayerData.realmRunsLeft > 0,
-      onTap: () => { if (active !== 'realm') SceneManager.switchTo('realm'); },
-    },
-    {
-      tab: 'tower', label: '通天塔', icon: UI_IMAGES.railTower, x: xs[4],
-      onTap: () => { if (active !== 'tower') SceneManager.switchTo('tower'); },
     },
   ];
 
-  for (const s of slots) {
+  /*
+   * 秘境与通天塔按解锁门增减格子，见 game/featureGate.ts。
+   * 新号只看到「灵宠 / 召唤 / 主线」三格，动线唯一；达标后自动长出来。
+   */
+  if (isFeatureUnlocked('realm')) {
+    slots.push({
+      tab: 'realm', label: '秘境', icon: UI_IMAGES.navRealm,
+      highlight: PlayerData.realmRunsLeft > 0,
+      onTap: () => { if (active !== 'realm') SceneManager.switchTo('realm'); },
+    });
+  }
+  if (isFeatureUnlocked('tower')) {
+    slots.push({
+      tab: 'tower', label: '通天塔', icon: UI_IMAGES.railTower,
+      onTap: () => { if (active !== 'tower') SceneManager.switchTo('tower'); },
+    });
+  }
+
+  /*
+   * 按实际格数均分，别写死 [0.1,0.3,0.5,0.7,0.9]：
+   * 格子会随解锁增减，写死比例在 3 格时会在右侧留两个空洞。
+   * n=5 时这个公式正好还是原来的那五个比例。
+   */
+  const layout: BottomNavLayout = {};
+  slots.forEach((s, i) => {
     const isActive = s.tab === active;
     const btn = makeBottomNavTab({
       iconPath: s.icon,
@@ -173,7 +195,10 @@ export function buildBottomNav(
       highlight: s.highlight,
       onTap: s.onTap,
     });
-    btn.position.set(s.x, btnY);
+    const x = w * ((i + 0.5) / slots.length);
+    btn.position.set(x, btnY);
     parent.addChild(btn);
-  }
+    layout[s.tab] = { x, y: btnY };
+  });
+  return layout;
 }

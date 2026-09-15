@@ -51,9 +51,11 @@ export function renderSimulationView(container: HTMLElement): void {
 
   function renderMatrix(rows: StageReportRow[]): void {
     const html = `<div class="table-wrap"><table class="data">
-      <thead><tr><th>关卡</th><th>低手</th><th>中手</th><th>高手</th></tr></thead>
+      <thead><tr><th>关卡</th><th>真新手1C</th><th>生手2C</th><th>低手</th><th>中手</th><th>高手</th></tr></thead>
       <tbody>${rows.map((r) => `<tr>
         <td class="mono">${r.stageId}</td>
+        <td>${formatResult(r.newbie)}</td>
+        <td>${formatResult(r.rookie)}</td>
         <td>${formatResult(r.low)}</td>
         <td>${formatResult(r.mid)}</td>
         <td>${formatResult(r.high)}</td>
@@ -91,7 +93,7 @@ export function renderSimulationView(container: HTMLElement): void {
   runOne.addEventListener('click', () => {
     const stageId = (container.querySelector('#sim-stage') as HTMLSelectElement).value;
     const team = getTeam();
-    const results = (['low', 'mid', 'high'] as const).map((k) => ({
+    const results = (['newbie', 'rookie', 'low', 'mid', 'high'] as const).map((k) => ({
       name: COMBO_MODELS[k].name,
       r: simulateBattle(team, stageId, COMBO_MODELS[k]),
     }));

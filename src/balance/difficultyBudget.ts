@@ -23,14 +23,25 @@ import type { TtkStageKind } from './powerBudget';
 /**
  * ── 玩家画像 ──
  *
- * 比旧版的低/中/高手多一档 `mindless`。这一档是整套护栏的核心：
- * 它代表「完全不动脑」的玩法——见珠就拖、不放技能、不理会闸门提示、全程一队到底。
+ * `mindless` 代表「完全不动脑」的玩法——见珠就拖、不放技能、不理会闸门提示、全程一队到底。
  * 「游戏太简单」的准确定义就是：这一档能推得太远。
+ *
+ * `newbie` / `rookie` 是 v1.0 补的**下限档**，来自抖音首发日的线上归因：
+ * 那天 4476 个新号里 94.5% 一关都没过，第一关按尝试次数口径只有 12.8% 的通过率。
+ * 复盘发现根因不在关卡也不在引导，而在这份画像表本身——
+ * 当时最菜的 `mindless` 参数是 `combo: 3`，即**假设玩家每回合都能稳定消掉 3 组珠**。
+ * 从信息流进来、第一次见转珠的人在 12 秒限时里通常只拖得出 1 组，甚至空手。
+ * 于是整套护栏虽然全绿，却没有任何一条在描述真实的新玩家。
+ *
+ * 这两档存在的意义与 `mindless` 恰好相反：`mindless` 用来验证**过不了**（防太简单），
+ * 它们用来验证**过得了**（防劝退）。两头都钉住，难度才有区间可言。
  */
-export type PlayerProfile = 'mindless' | 'low' | 'mid' | 'high';
+export type PlayerProfile = 'newbie' | 'rookie' | 'mindless' | 'low' | 'mid' | 'high';
 
 export const PLAYER_PROFILE_NAME: Readonly<Record<PlayerProfile, string>> = {
-  mindless: '无脑基线',
+  newbie: '真新手1C',
+  rookie: '生手2C',
+  mindless: '无脑基线3C',
   low: '低手3C',
   mid: '中手5C',
   high: '高手7C',
@@ -58,8 +69,97 @@ export const TTK_FLOOR: Readonly<Record<TtkStageKind, number>> = {
  * 只有全游戏第一场战斗在列：那一关的职能是「让玩家知道拖珠会打出伤害」，
  * 秒杀正是想要的反馈。把它也拉到 3 回合只会让开场变拖沓。
  * 这份名单要一直保持只有一两条——每多一条豁免，护栏就少管一块地方。
+ *
+ * 注：第 1 章已被下面的整章豁免覆盖，这条留着是为了给别的章节开一次性口子时有地方写。
  */
 export const TTK_FLOOR_EXEMPT: readonly string[] = ['stage_1_1'];
+
+/**
+ * TTK 下限整章豁免的章节（含）。
+ *
+ * v1.0 新增，用来解掉护栏内部的一处**数学矛盾**，不是为了放水：
+ *
+ * TTK 下限按高手（7C、4 连）判定「不许秒推」，而 ①c 早期下限按 1C~3C 判定「不许劝退」。
+ * 两档的输出差在 4.7 倍以上，于是同一关同时满足「高手 ≥ 3 回合」和「生手 ≤ 13 回合」
+ * 需要 HP 既大于 3×高手每回合输出、又小于 13×生手每回合输出 —— 这个区间是空的。
+ * 实测第 1 章有 4 关无论怎么配都落不进去。
+ *
+ * 教学章里这个矛盾只有一个合理解法：让防劝退优先。高手用 2 回合清掉第 1 章不是问题，
+ * 他们本来就不是这一章的受众；新玩家被第 1 关挡住才是问题。
+ * 第 2 章起两条护栏不再冲突（那时下限只要求 3C），秒推下限照常生效。
+ */
+export const TTK_FLOOR_EXEMPT_THROUGH_CHAPTER = 1;
+
+/**
+ * ── ①b 早期下限（v1.0 新增，与 TTK 下限成对）──
+ *
+ * 旧契约的四条护栏全部朝一个方向：防止游戏太简单。于是「第一关就把 87% 的新号劝退」
+ * 这种事一条都测不出来 —— 抖音首发日就是这么漏掉的，审计当时 0 违规。
+ *
+ * 这一条反过来钉住下限：**指定关卡必须能被指定的菜档打过去**。
+ * 三级台阶对应「教学 → 上手 → 正常」：
+ *
+ * - `newbieStages`：真新手（1C）必须能自己打赢，且留血不低于 `newbieMinHpPct`。
+ *   留血下限是必要的：勉强赢和轻松赢对新手是两种体验，剩 5% 血过关的人下一关照样走。
+ * - 第 1 章其余非 Boss 关：生手（2C）必须能过。玩家打到这里已经消了十几回合，
+ *   手上功夫理应从 1C 长到 2C，但还谈不上会看机制。
+ * - 第 1 章 Boss：无脑档（3C）必须能过。第一章的墙会直接砸在「还没建立循环」的人身上，
+ *   真正的墙从 MINDLESS_WALL_CHAPTER 起才立。
+ *
+ * 与 ② 无脑基线墙不冲突：那条管的是「第 4 章起 mindless 不许过」，
+ * 这条管的是「第 1 章 mindless 必须过」，两条一起把无脑档的推进深度夹在 1~3 章。
+ */
+export interface EarlyFloorSpec {
+  stageId: string;
+  /** 必须能通关这一关的最菜画像 */
+  profile: PlayerProfile;
+  /** 该画像通关时的回合上限（只要求「过得了」是不够的，磨 50 回合也是劝退） */
+  maxTurns: number;
+  /** 该画像通关后的剩余血量下限（惨胜和轻松赢对新手是两种体验） */
+  minHpPct: number;
+}
+
+/**
+ * 逐关下限。分三段，对应技巧的真实成长节奏 1C → 2C → 3C：
+ *
+ * - 1-1 / 1-2 教学段：`newbie`。此时玩家还在找「按住珠子拖一条路」的手感。
+ * - 1-3 / 1-4 上手段：`rookie`。已经能稳定连到 2 组，但不会放技能、不看闸门。
+ * - 1-5 起：`mindless`（3C）。打过十几场之后该有的水平，也正好接上 ② 无脑基线墙的口径
+ *   —— 那条要求 mindless 从第 4 章起过不去，这条要求它在第 1、2 章必须过得去，
+ *   两条一起把无脑档的推进深度夹在 1~3 章，而不是像首发版那样连第 1 关都过不去。
+ *
+ * 第 2 章只挂非 Boss 关：章 Boss 是允许卡人的地方，铺垫关不是。
+ */
+export const EARLY_FLOOR: readonly EarlyFloorSpec[] = [
+  { stageId: 'stage_1_1', profile: 'newbie', maxTurns: 7, minHpPct: 0.65 },
+  { stageId: 'stage_1_2', profile: 'newbie', maxTurns: 12, minHpPct: 0.50 },
+  { stageId: 'stage_1_3', profile: 'rookie', maxTurns: 13, minHpPct: 0.35 },
+  { stageId: 'stage_1_4', profile: 'rookie', maxTurns: 13, minHpPct: 0.30 },
+  { stageId: 'stage_1_5', profile: 'mindless', maxTurns: 12, minHpPct: 0.30 },
+  { stageId: 'stage_1_6', profile: 'mindless', maxTurns: 12, minHpPct: 0.25 },
+  { stageId: 'stage_1_7', profile: 'mindless', maxTurns: 13, minHpPct: 0.25 },
+  { stageId: 'stage_1_8', profile: 'mindless', maxTurns: 20, minHpPct: 0.10 },
+];
+
+/**
+ * 除逐关表之外的兜底：第 2 章的**非 Boss** 关必须能被这一档打过去。
+ * 第 2 章接手第 1 章毕业的玩家，铺垫关不该成为第二道劝退墙。
+ *
+ * 用 `low` 而不是 `mindless`：`mindless` 的闸门满足率按定义是 0，而第 2 章有 3 关带
+ * `gate_*`。要求一个「从不理会闸门」的画像通过闸门关，是拿护栏去否定关卡设计本身，
+ * 只会逼着把闸门拆掉。`low` 同样是 3C、同样不放技能，但会碰机制。
+ *
+ * 只管**无机制标签**的铺垫关。带 `orb_sealed` / `gate_*` 的挑战关正是设计上
+ * 「必须按机制打」的地方，而 `low` 的定义里 `useSkills: false` —— 用一个从不放技能的画像
+ * 去判定封珠关是否劝退，判出来的是画像的短板，不是关卡的问题。
+ *
+ * 因此这条规则对第 2 章的实际覆盖只有 4 关（2-1/2-2/2-4/2-6），teeth 有限，
+ * 主要作用是防回归：以后有人给这几关加数值时会被拦下。第 1 章的真实约束在上面那张逐关表。
+ */
+export const EARLY_FLOOR_FALLBACK = {
+  throughChapter: 2,
+  profile: 'low' as PlayerProfile,
+} as const;
 
 /**
  * ── ② 无脑基线墙 ──

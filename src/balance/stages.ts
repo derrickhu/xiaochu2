@@ -186,8 +186,9 @@ const CHAPTER_1: readonly StageDef[] = ([
   {
     id: 'stage_1_1', chapter: 1, index: 1, name: '青苔林边', element: 'wood',
     type: 'normal', dropTableId: 'dt_forest_metal',
-    encounters: [mob('enemy_slime_wood')], difficulty: 1.0,
-    hintTags: ['新手'], hintText: '熟悉转珠：木怪上场，带金宠更省力',
+    // 教学关：无技能软泥 + powerBudget.TUTORIAL_GRACE 的新手保护，只教「拖珠出伤害」
+    encounters: [mob('enemy_slime_wood_tutor')], difficulty: 1.0,
+    hintTags: ['新手'], hintText: '熟悉转珠：按住珠子拖一条路，木怪怕金',
   },
   {
     id: 'stage_1_2', chapter: 1, index: 2, name: '林间小径', element: 'wood',
