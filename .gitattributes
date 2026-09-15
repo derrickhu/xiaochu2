@@ -1,0 +1,8 @@
+# CDN 大资源底稿走 Git LFS。运行时仍优先拉 CDN；丢云端可用 git lfs checkout 还原。
+minigame/subpackages/pkg-pet/images/**/*.png filter=lfs diff=lfs merge=lfs -text
+minigame/subpackages/pkg-enemy/images/**/*.png filter=lfs diff=lfs merge=lfs -text
+minigame/subpackages/pkg-enemy-cr/images/**/*.png filter=lfs diff=lfs merge=lfs -text
+minigame/subpackages/pkg-scene/images/**/*.png filter=lfs diff=lfs merge=lfs -text
+minigame/subpackages/pkg-scene/images/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+minigame/subpackages/pkg-scene/images/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+minigame/subpackages/pkg-audio/bgm/**/*.mp3 filter=lfs diff=lfs merge=lfs -text
