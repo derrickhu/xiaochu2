@@ -53,6 +53,7 @@ import {
   addTeamStageEmpty, addTeamStagePet, stageSlotLayout,
   STAGE_PAINT_ORDER, STAGE_ORB_LOCAL_Y, STAGE_ORB_SIZE,
 } from './teamStage';
+import { bindTeamStageReorder, type TeamStageDragSlot } from './teamStageDrag';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { skillForPet } from '@/game/battle/SkillEngine';
@@ -106,6 +107,8 @@ export class TeamScene implements Scene {
   private _skillPreview: PetSkillPreviewHandle | null = null;
   private _filterElement: Element | 'all' = 'all';
   private _slotUnbinds: Array<() => void> = [];
+  /** 站台拖动中：挡住短按下阵，避免松手误卸宠 */
+  private _stageSlotDragging = false;
 
   onEnter(data?: unknown): void {
     Game.setMaxFPS(UI.fps.idle);
@@ -171,6 +174,7 @@ export class TeamScene implements Scene {
     this._summaryHost = null;
     this._listScroll.detach();
     this._listContent = null;
+    this._stageSlotDragging = false;
     this._slotUnbinds.forEach((u) => u());
     this._slotUnbinds = [];
     this.container.removeChildren().forEach((c) => {
@@ -439,13 +443,32 @@ export class TeamScene implements Scene {
   }
 
   /**
-   * 槽位点击 = 下阵。换队长点卡面右下角皇冠（业界编队页的标准控件，不占顶栏）。
+   * 槽位点击 = 下阵。拖到另一只宠上 = 换位（含队长座）。
+   * 皇冠芯片仍可点选队长，给没发现能拖的人留一条路。
    */
   private _onSlotTap(petId: string): void {
+    if (this._stageSlotDragging) return;
     this._togglePet(petId);
   }
 
+  private _onSwapSlots(fromIndex: number, toIndex: number): void {
+    const beforeLeader = PlayerData.leaderId;
+    if (!PlayerData.swapTeamSlots(fromIndex, toIndex)) return;
+    const afterLeader = PlayerData.leaderId;
+    Platform.vibrateShort('light');
+    if (afterLeader && afterLeader !== beforeLeader) {
+      const pet = PET_MAP.get(afterLeader);
+      if (pet) {
+        const skill = resolveLeaderSkill(pet);
+        Platform.showToast(`${pet.name} 已任队长 · ${skill.text}`, 'success');
+      }
+    }
+    this._refreshTeamUi();
+    if (Platform.isMinigame) Game.syncFrameToScreen();
+  }
+
   private _onSetLeader(petId: string): void {
+    if (this._stageSlotDragging) return;
     const pet = PET_MAP.get(petId);
     if (!pet) return;
     if (!PlayerData.setLeader(petId)) return;
@@ -540,6 +563,7 @@ export class TeamScene implements Scene {
     const layouts = stageSlotLayout(w / 2, baseY);
     // 珠 / 换队长钮统一置顶：相邻石座（尤其放大的队长座）会压住下沿控件
     const overlay = new PIXI.Container();
+    const dragSlots: TeamStageDragSlot[] = [];
     for (const visual of STAGE_PAINT_ORDER) {
       const layout = layouts[visual];
       const slot = new PIXI.Container();
@@ -558,9 +582,20 @@ export class TeamScene implements Scene {
       slot.hitArea = new PIXI.Rectangle(-hitW / 2, -hitH * 0.78, hitW, hitH);
       slot.interactiveChildren = false;
       slot.eventMode = 'static';
-      slot.cursor = 'pointer';
+      slot.cursor = pet ? 'grab' : 'pointer';
+      dragSlots.push({
+        visual,
+        teamIndex: layout.teamIndex,
+        petId: pet?.id,
+        slot,
+        body: size.body,
+        chrome: size.chrome,
+        homeX: layout.x,
+        homeY: layout.y,
+      });
       if (pet) {
         bindPointerTap(slot, () => this._onSlotTap(pet.id), {
+          blockTap: () => this._stageSlotDragging,
           onLongPress: () => this._showPetSkillPreview(pet.id, slot),
         });
         if (layout.isLeaderSlot && size.leaderPlaque && this._prevTeam[0] !== petId) {
@@ -583,10 +618,22 @@ export class TeamScene implements Scene {
         const chip = makeLeaderPickChip();
         chip.position.set(layout.x - 42, baseY + STAGE_ORB_LOCAL_Y + 2);
         overlay.addChild(chip);
-        bindPointerTap(chip, () => this._onSetLeader(pet.id));
+        bindPointerTap(chip, () => this._onSetLeader(pet.id), {
+          blockTap: () => this._stageSlotDragging,
+        });
       }
     }
     this._slotArea.addChild(overlay);
+    this._slotUnbinds.push(bindTeamStageReorder({
+      slotArea: this._slotArea,
+      slots: dragSlots,
+      isBusy: () => this._stageSlotDragging,
+      setBusy: (busy) => {
+        this._stageSlotDragging = busy;
+        if (busy) this._dismissSkillPreview();
+      },
+      onSwap: (from, to) => this._onSwapSlots(from, to),
+    }));
   }
 
   private _paintFreeSlot(

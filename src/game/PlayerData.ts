@@ -32,6 +32,7 @@ import {
   type TowerState,
 } from './playerSave';
 import { ensureDailyFresh, isConsecutiveDay } from './dailyReset';
+import { swapTeamEntries } from './teamSwap';
 import type { TutorialFlag } from './tutorialFlags';
 import {
   msToFull, msToNextPoint, settleStamina, staminaCap,
@@ -514,6 +515,18 @@ class PlayerDataClass {
     const prev = this._data.team[0];
     this._data.team[0] = petId;
     this._data.team[idx] = prev;
+    this._save();
+    return true;
+  }
+
+  /**
+   * 对调两个上阵槽（含队长位 team[0]）。
+   * 空槽 / 越界返回 false，不改阵容。
+   */
+  swapTeamSlots(a: number, b: number): boolean {
+    const next = swapTeamEntries(this._data.team, a, b);
+    if (!next) return false;
+    this._data.team = next;
     this._save();
     return true;
   }

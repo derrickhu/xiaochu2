@@ -48,6 +48,10 @@ export interface StageSlotSize {
   unbind: () => void;
   /** 队长技气泡，换队长时由场景 popIn */
   leaderPlaque?: PIXI.Container;
+  /** 只拖这张立绘，石座 / 飘带不动 */
+  body?: PIXI.Sprite;
+  /** 队长飘带 + 令牌，拖动时就地藏起 */
+  chrome?: PIXI.Container;
 }
 
 export function stageSlotLayout(centerX: number, baseY: number): StageSlotLayout[] {
@@ -142,6 +146,8 @@ export function addTeamStagePet(
     height: h,
     unbind: () => { for (const u of unbinds) u(); },
     leaderPlaque,
+    body: spr,
+    chrome: leader ? crownStack : undefined,
   };
 }
 
