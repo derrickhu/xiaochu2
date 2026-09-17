@@ -82,6 +82,19 @@ export function formatChapterGoalCard(chapter: number): string {
   return `${g.summary}\n被动：${g.passiveLine}`;
 }
 
+/** 本章已通关数 / 总关数（有星即算通） */
+export function chapterClearProgress(
+  stages: readonly { id: string }[],
+  starsOf: (id: string) => number,
+): { cleared: number; total: number } {
+  const total = stages.length;
+  let cleared = 0;
+  for (const s of stages) {
+    if (starsOf(s.id) > 0) cleared += 1;
+  }
+  return { cleared, total };
+}
+
 /** 校验收录宠稀有度是否符合章节递进表 */
 export function chapterBossDropRarityMatches(chapter: number): boolean {
   const petId = CHAPTER_REWARD_PET[chapter];

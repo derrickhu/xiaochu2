@@ -8,6 +8,7 @@ import { towerScaledFlatCoins } from '@/balance/tower';
 import { TOWER_REST_HEAL_PCT, type TowerEventDef } from '@/balance/towerPath';
 import { PlayerData } from './PlayerData';
 import { reportQuest } from './dailyQuestTracker';
+import { queueTowerRankSync } from './rankService';
 import { analytics } from '@/analytics';
 
 /**
@@ -20,6 +21,7 @@ function advanceAfterNonCombat(floor: number, hpPct: number): void {
   PlayerData.towerSettleCoins(floor);
   PlayerData.towerAdvance(floor, hpPct, PlayerData.tower.runCharges);
   reportQuest('towerFloor');
+  queueTowerRankSync();
 }
 
 export type TowerDeltaTone = 'loss' | 'gain' | 'neutral';

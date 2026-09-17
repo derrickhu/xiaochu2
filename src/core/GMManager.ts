@@ -9,6 +9,7 @@ import { Platform } from '@/core/PlatformService';
 import { SceneManager } from '@/core/SceneManager';
 import { ChapterMapLayoutStore } from '@/game/chapterMapLayoutStore';
 import { PlayerData } from '@/game/PlayerData';
+import { clearTowerRankSync } from '@/game/rankService';
 import { MAX_PET_STAR } from '@/balance/growth';
 import { PET_AWAKEN_STAR } from '@/config/Assets';
 import { PET_MAP } from '@/balance/pets';
@@ -178,6 +179,17 @@ class GMManagerClass {
   }
 
   private _registerCommands(): void {
+    this._commands.push({
+      id: 'open_tower_rank',
+      group: '通天塔',
+      name: '打开排行榜',
+      desc: '打开通天塔总榜弹窗（抖音走开放数据域，开发者工具写入 test 分区）',
+      execute: () => {
+        clearTowerRankSync();
+        EventBus.emit('rank:open');
+        return '已打开通天塔排行';
+      },
+    });
     this._commands.push({
       id: 'toggle_map_edit',
       group: '主界面',

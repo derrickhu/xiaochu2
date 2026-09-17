@@ -1,0 +1,14 @@
+3 columns x 1 row, 3 equal panels, even gutters, flat even lighting.
+
+Use the ranking UI mock ONLY for the three olympic podium BLOCKS (material, 3D bevel, rounded top, gold / silver / bronze).
+Do not copy pets, frames, names, numbers, or any writing.
+
+Each cell: one isolated olympic medal stand, front-facing, centered, soft clay Q-version mobile UI.
+- Cell 1 LEFT: medium-height SILVER podium. Cool gray metal #d8dbe0, lighter top face, soft side shade. Same width as the others, shorter than gold.
+- Cell 2 CENTER: TALLEST WARM GOLD podium. Saturated honey gold #e8b86a / #f2c685, not pale khaki. Rounded top, 3D bevel, richer than cream paper.
+- Cell 3 RIGHT: shortest COPPER BRONZE podium. Warm bronze #c9844a, not washed tan.
+
+Shape: chunky olympic stand (wider than a pole, much taller than a flat bar). Rounded top corners, flat front, soft contact shadow. Premium game UI piece.
+
+Isolated on a flat teal-gray background for cutout.
+NO TEXT, no labels, no captions, no numbers, no 1 2 3, no Chinese, no letters, no writing anywhere in the image.

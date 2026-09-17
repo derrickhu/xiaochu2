@@ -2,6 +2,7 @@ const { httpError } = require('./http');
 const { requireUser } = require('./auth');
 const { getCollection } = require('./db');
 const { getMaxBytes } = require('./config');
+const { upsertFromPayload } = require('./rank');
 
 function isCollectionNotExistError(error) {
   const msg = String((error && error.message) || error || '');
@@ -139,10 +140,12 @@ async function handlePush(req) {
 
   if (existing && existing._id) {
     await col.doc(existing._id).update(docData);
+    await upsertRankQuietly(userId, platform, payload, body.rankProfile);
     return { userId, updatedAt, savedAt: now, mode: 'update', sizeBytes: size };
   }
 
   const addRes = await col.add(docData);
+  await upsertRankQuietly(userId, platform, payload, body.rankProfile);
   return {
     userId,
     updatedAt,
@@ -151,6 +154,14 @@ async function handlePush(req) {
     sizeBytes: size,
     _id: addRes && (addRes.id || addRes._id),
   };
+}
+
+async function upsertRankQuietly(userId, platform, payload, profile) {
+  try {
+    await upsertFromPayload(userId, platform, payload, profile);
+  } catch (error) {
+    console.warn('[petTower-api] towerRank upsert skip', (error && error.message) || error);
+  }
 }
 
 module.exports = {

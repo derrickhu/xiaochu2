@@ -1,0 +1,54 @@
+Create ONE complete mobile game HOME SCREEN UI prototype, phone 9:16 portrait, fully finished top-to-bottom.
+
+Use the Tata/塔塔 reference ONLY for information architecture of the chapter-end reward billboard:
+a visible chapter-clear reward card on the home map, small reward icons plus one featured hero prize.
+Do NOT copy Tata's black-and-white flat material look, forest path, or zombie characters.
+Do NOT copy any existing text from the Tata screenshot.
+
+Use the xiaochu2 title-screen / mountain path / rail icons / currency icons / deer pet references for STYLE and scenery.
+
+ART STYLE: Q-version cute-chibi xianxia guofeng. Soft cel-shaded, thin clean outlines, chubby rounded UI.
+Palette: mint-teal mountains, cream parchment #fdf3df, soft gold trim #e8a33d, ink brown text #3a2e22.
+NOT photoreal, NOT Tata cartoon flat, NOT purple AI defaults.
+
+FULL SCREEN COMPOSITION (xiaochu2 home, keep existing chrome):
+
+1) TOP BAR
+Left: cute Q avatar in gold circle + nickname 游乐
+Right: cream pills for stamina 100, green jade ring 灵玉, gold star-coin 灵宠币
+
+2) CHAPTER HEADER
+Center cream-gold pointed plaque: 第一章 · 灵兽森林
+Soft gold left/right arrows beside it.
+
+3) NEW — CHAPTER CLEAR REWARD BILLBOARD (the hero of this mock)
+Directly UNDER the chapter plaque, floating over the upper map, not covering the left rail.
+Cream parchment rounded card with thin gold trim and soft shadow.
+Left block:
+  - Small gold caption: 章节通关奖励
+  - Tiny progress chip: 3/8
+  - One row of 3 cute reward slots on cream circles, each with a count under it:
+    green jade ring ×60, gold star-coin, green EXP token
+Right block (featured prize, like Tata's featured pack but our art):
+  - Taller cream-gold pet card
+  - The white deer spirit 星辉灵鹿 from the reference, bust portrait
+  - Small SR badge, caption 星辉灵鹿
+  - Tiny line: 通关第8关直得
+The card must read as a DESTINATION GOAL, light and airy, not a heavy modal.
+
+4) MAP
+The existing winding cream mountain path with pink flowers, mint peaks, water, pavilion at the top.
+8 simple stone stage pads along the path. Leave left margin for the rail.
+Do NOT put a giant boss creature over the path; the reward card is the goal.
+
+5) LEFT RAIL (narrow cream circles + labels)
+排行 (gold trophy cup on a tiny podium)
+签到 (calendar check)
+日常 (scroll)
+商店 (tiny shop)
+设置 (gear)
+
+6) BOTTOM NAV on a cream cloud bar
+灵宠 | 召唤 | 主线(SELECTED, slightly larger, soft gold halo) | 商店 | 编队
+
+Readable Chinese exactly as listed. Soft, light, Q, airy. Finished production mockup, not a wireframe.

@@ -1,0 +1,43 @@
+ART STYLE (MANDATORY — xiaochu2 / 灵宠消消塔2):
+Unified Q-version cute-chibi xianxia guofeng mobile UI.
+Soft cel-shaded, thin clean outlines, chubby pets, airy cream parchment.
+Palette: cream #fdf3df + soft gold #e8a33d / #c9a063 + ink brown #3a2e22 + mint mist.
+Premium but LIGHT: thin gold lines, soft glow, generous space. Not heavy carved filigree, not 3D jewelry rings, not photoreal, not dark mode, not WeChat green.
+
+Use the filled ranking reference for pet cuteness, cream-gold chrome, and readable Chinese.
+Use the empty in-game shot ONLY as a warning: do NOT copy hollow rings, blank bars, or sparse programmer UI.
+
+This is a MODAL overlay (like 签到 / 日常), not a full-page scene.
+
+INDUSTRY RANKING LANGUAGE (honor-of-kings / onmyoji / xianxia gacha, localized to our game):
+- Ceremonial top-3 podium, #1 clearly king
+- Soft god-ray / gold halo only behind first place
+- Medal badges + ornate circular pet frames (filled portraits)
+- Compact card list under the podium
+- Self row warm-gold highlight
+- One gold CTA
+
+LAYOUT — 9:16 iPhone mock, black phone frame, no GM badge:
+
+1) Behind the modal: dimmed home garden (pagoda, mist) at 40% brightness. No bottom nav on top of the modal.
+
+2) Centered cream parchment panel, almost full width, rounded 28px, solid opaque cream, thin gold border, tiny cloud flourishes at the two top corners. No landscape leaking through the panel sides.
+
+3) Title: arched cream-gold cloud plaque「通天塔排行」. Close X top-right. Subtitle「历史最高层」small muted ink.
+
+4) PODIUM (hero, must be filled):
+   - Order left-to-right: 2 / 1 / 3. Center #1 larger and higher.
+   - #1: chubby white-deer Q pet in a thick gold circular frame, tiny gold crown, soft gold halo, name「小灵」and「62层」under the frame, tall gold jade pedestal marked 1.
+   - #2: green qilin pet, silver frame + silver crown,「阿白」「48层」, shorter silver pedestal 2.
+   - #3: fire cub pet, bronze frame + bronze crown,「阿青」「41层」, shortest bronze pedestal 3.
+   - No empty rings. No wedding-ring jewelry.
+
+5) LIST — four cream rounded row cards:
+   4  avatar  玩家一   35层
+   5  avatar  玩家二   34层
+   6  avatar  玩家三   30层
+   7  fire-cub avatar  我   36层   ← warm gold wash + thin gold edge (self)
+
+6) Bottom of panel: wide warm-gold apricot plaque button「炫耀一下」, dark-brown calligraphy.
+
+Polished production mock. Readable Chinese. High clarity. No watermark. No English except layer numbers. No extra captions outside the phone.

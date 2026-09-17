@@ -1,0 +1,15 @@
+3 columns x 4 rows, 12 equal panels, even gutters, flat even lighting.
+
+Use the reference only for cream-gold xianxia UI material (warm parchment, soft metal). Do not copy layout, pets, names, or any writing.
+
+Row 1: empty circular avatar frames, thin metal rings, hollow centers, no pets.
+  1) large gold ring  2) silver ring  3) bronze ring
+Row 2: solid rounded podium blocks, 3D soft clay, no numbers.
+  4) tall gold block  5) short silver block  6) short bronze block
+Row 3: list chrome.
+  7) wide cream rounded row bar  8) wide warm-gold tinted row bar  9) small cream-gold ring
+Row 4: tiny metal crowns, no gems text.
+  10) gold crown  11) silver crown  12) bronze crown
+
+Q-version mobile game UI pieces, clean edges, centered in each cell, isolated on a flat teal-gray background for cutout.
+NO TEXT, no labels, no captions, no numbers, no Chinese, no letters, no writing anywhere in the image.

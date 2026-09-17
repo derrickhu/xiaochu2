@@ -1,0 +1,8 @@
+Single mobile game UI asset, landscape 16:9.
+Empty hanging parchment SCROLL PLATE for a Q-version xianxia game.
+Cream rice-paper texture #fdf3df, thin gold-brown trim, wooden rollers on LEFT and RIGHT ends (vertical cream-gold rods with rounded caps).
+Soft cel-shaded, chubby rounded, same family as the pointed gold-cream banner reference.
+The paper area must be EMPTY: no icons, no coins, no pets, no badges, no decorations in the center.
+Centered on flat solid dark teal-gray #1e2a32 only.
+NO TEXT, no labels, no captions, no numbers, no Chinese, no Latin letters.
+Not a white iOS card, not photoreal, not neon.

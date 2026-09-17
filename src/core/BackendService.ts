@@ -4,6 +4,8 @@ import {
   BACKEND_LOGIN_PATH,
   BACKEND_PULL_PATH,
   BACKEND_PUSH_PATH,
+  BACKEND_RANK_TOWER_PATH,
+  BACKEND_RANK_TOWER_REPORT_PATH,
   BACKEND_REQUEST_TIMEOUT_MS,
   BACKEND_TOKEN_KEY,
 } from '@/config/CloudConfig';
@@ -35,6 +37,14 @@ export interface BackendPushResult {
   savedAt: number;
   mode: 'insert' | 'update';
   sizeBytes: number;
+}
+
+export interface BackendTowerRankRow {
+  rank: number;
+  name: string;
+  floor: number;
+  avatarUrl?: string;
+  isSelf: boolean;
 }
 
 interface StoredToken {
@@ -108,6 +118,17 @@ class BackendServiceClass {
 
   pushSave(snapshot: BackendPushPayload): Promise<BackendPushResult> {
     return this.callWithAuth<BackendPushResult>(BACKEND_PUSH_PATH, snapshot);
+  }
+
+  listTowerRank(limit = 10): Promise<{
+    items: BackendTowerRankRow[];
+    self?: BackendTowerRankRow | null;
+  }> {
+    return this.callWithAuth(BACKEND_RANK_TOWER_PATH, { limit });
+  }
+
+  reportTowerRank(body: { floor: number; name?: string; avatarUrl?: string }): Promise<{ ok?: boolean; floor?: number }> {
+    return this.callWithAuth(BACKEND_RANK_TOWER_REPORT_PATH, body);
   }
 
   clearToken(): void {

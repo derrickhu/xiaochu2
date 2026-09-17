@@ -1,0 +1,14 @@
+Single mobile game UI icon, square 1:1, cute Q-version xianxia sticker style.
+Match the reference rail icons: soft cel-shaded clay/plastic, chubby rounded shapes,
+thin dark brown outline, cream + warm gold + sage-green palette, gentle top-left highlight.
+
+Subject: a leaderboard trophy, NOT a coin, NOT a star medal.
+A chubby gold champion cup with two small curved handles, a short stem, sitting on a
+tiny three-step winners podium (center step tallest in warm gold, left silver-cream,
+right bronze-amber). Soft rounded blocks, no sharp edges.
+Optional tiny sage-green jade gem on the cup belly. Soft drop shadow under the podium.
+
+Centered, large in frame, readable at 56px.
+Solid flat background only: dark teal-gray #1e2a32.
+NO TEXT, no labels, no captions, no numbers, no Chinese characters, no Latin letters.
+Not photoreal, not neon, not 3D PBR, not a gold coin, not a star badge.

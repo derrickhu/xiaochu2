@@ -19,8 +19,13 @@ function getCollection(platform) {
   return getDb().collection(getCollectionName('playerData', platform));
 }
 
+function getRankCollection(platform) {
+  return getDb().collection(getCollectionName('towerRank', platform));
+}
+
 module.exports = {
   getApp,
   getDb,
   getCollection,
+  getRankCollection,
 };

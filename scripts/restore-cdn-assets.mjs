@@ -46,6 +46,9 @@ const MAIN_OVERFLOW_SOURCES = [
   'minigame/images/ui/plaque/scene_title.png',
   'minigame/images/bg/scene_realm.jpg',
   'minigame/images/bg/scene_tower.jpg',
+  'minigame/images/bg/scene_rank.jpg',
+  'minigame/images/ui/chapter',
+  'minigame/images/ui/rank',
 ];
 
 console.log('=== 恢复 CDN 本地资源 ===');

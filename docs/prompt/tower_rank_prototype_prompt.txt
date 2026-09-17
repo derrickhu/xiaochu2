@@ -1,0 +1,30 @@
+Mobile game UI prototype, 9:16 iPhone mockup, 灵宠消消塔2 / xiaochu2.
+
+Use the reference screenshot ONLY for art direction: warm cream-gold UI, ink-wash Chinese fantasy landscape, misty mountains, lotus water, pale sky, rounded cream bottom nav, calligraphy-like but readable Chinese UI, soft gold plaques, dark-ink text on light paper.
+
+This is a RANKING BOARD screen over the same world, not a copy of the map.
+
+Layout:
+- Same black iPhone frame and status bar as a premium mobile mock.
+- Soft scenic background still visible around the panel (pagoda silhouette, distant mountains).
+- Center: a large cream parchment ranking panel with gold-brown rounded border and subtle cloud ornaments.
+- Title plaque at top center of the panel:「通天塔排行」in dark brown calligraphy.
+- Two pill tabs under the title: selected「好友榜」gold filled, unselected「总榜」cream outline.
+- Subtitle small ink text:「历史最高层」.
+
+Podium row (top 3) under tabs:
+- 2nd left, 1st center slightly higher, 3rd right.
+- Cute chibi pet avatars in circular gold frames (small qilin/dragon, white deer, fire cub), no weapons.
+- Names and floors under each: 阿白 48层 / 小灵 62层 / 阿青 41层.
+- Tiny gold/silver/bronze crowns.
+
+Then a vertical list of 4-5 rows:
+Each row: rank number, circular avatar, player name, right-aligned「N层」.
+Row 4, 5, 6 normal cream.
+One row is ME: rank 7, name「我」, 36层, highlighted with a warm gold wash and a thin gold ring.
+
+Bottom of panel: a wide warm-gold capsule button「炫耀一下」with a small flag icon.
+
+Bottom nav still visible: 灵宠 / 召唤 / 主线 / 秘境 / 通天塔, 通天塔 selected.
+
+Style: polished production UI mock, high clarity, readable Chinese, not photoreal, not dark mode, not cyberpunk, not WeChat green, not generic Discord leaderboard. No English except maybe layer numbers. No watermark, no extra captions outside the phone.

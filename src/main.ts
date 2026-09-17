@@ -34,6 +34,8 @@ import { GachaScene } from '@/scenes/GachaScene';
 import { ShopScene } from '@/scenes/ShopScene';
 import { SecretRealmScene } from '@/scenes/SecretRealmScene';
 import { TowerScene } from '@/scenes/TowerScene';
+import { RankPanel } from '@/ui/RankPanel';
+import { queueTowerRankSync, startCloudRankWatch } from '@/game/rankService';
 import { GMManager } from '@/core/GMManager';
 import { OverlayManager } from '@/core/OverlayManager';
 import { GMPanel } from '@/ui/GMPanel';
@@ -245,11 +247,14 @@ async function main(): Promise<void> {
   bootStep('switch-title');
   SceneManager.switchTo('title');
   bootStep('title-ok');
+  // 标题已经能玩，后面叠层 / 音频再慢也不算启动失败
+  try { GameGlobal.__bootOk = true; } catch { /* */ }
 
   bootStep('overlays');
   try {
     OverlayManager.container.addChild(new CheckinPanel());
     OverlayManager.container.addChild(new DailyQuestPanel());
+    OverlayManager.container.addChild(new RankPanel());
     OverlayManager.container.addChild(new CurrencySourcePanel());
     OverlayManager.container.addChild(new StaminaPanel());
     OverlayManager.container.addChild(new SettingsPanel());
@@ -264,6 +269,7 @@ async function main(): Promise<void> {
   } catch (e) {
     bootStep('overlays.fail:' + describeError(e));
   }
+  try { startCloudRankWatch(); } catch { /* 巡检失败不挡进家 */ }
 
   bootStep('warm-present');
   await Game.warmScenePresent();
@@ -308,6 +314,7 @@ async function main(): Promise<void> {
   });
   Platform.onShow(() => {
     BgmManager.resume();
+    queueTowerRankSync();
     if (lastHideAt > 0) {
       analytics.trackAppShow({
         from_background: true,

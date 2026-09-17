@@ -1,0 +1,20 @@
+Complete 9:16 mobile game HOME SCREEN, one painted illustration, Q-version cute xianxia.
+
+Use the mountain-path reference as the EXACT scenery: mint peaks, pink flowers, cream winding stone path, lotus water, pavilion, lanterns.
+Use the pointed gold-cream banner and gold cloud-scroll plaques as the ONLY UI chrome language.
+Use the white deer bust as the featured chapter pet.
+Use the cream jade cylinder pads as stage nodes.
+
+FORBIDDEN: flat white iOS cards, material design, Tata black-white UI, generic rounded white rectangles, thin gray lines, photoreal, purple gradients.
+
+UI chrome must look carved/painted in the same world:
+- Chapter title sits on a pointed cream parchment plaque with thin gold-brown filigree corners (same family as the banner reference).
+- Under it, a SMALL hanging reward scroll of the SAME parchment + gold cloud corners, not a second white card.
+- Three chubby Q reward tokens sit on tiny cream jade discs: green jade ring, gold star-coin, green EXP token.
+- Right side of the scroll: circular jade/wood frame with the white deer, small gold SR chip.
+- Left rail: cream rounded squares with Q icons (trophy, calendar, scroll, shop, gear), same sticker style as the checkin calendar.
+- Bottom: cream cloud bar with pet / egg / home girl / cave / pagoda.
+- Top: tiny avatar + cream currency pills.
+
+Readable Chinese: 第一章 · 灵兽森林 / 章节通关奖励 / 星辉灵鹿 / 排行 签到 日常 商店 设置 / 灵宠 召唤 主线 秘境 通天塔
+Soft cel-shaded, thin outlines, cream #fdf3df + gold #e8a33d + ink #3a2e22. Finished mockup, unified art, not a wireframe overlay.

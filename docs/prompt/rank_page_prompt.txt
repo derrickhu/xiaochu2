@@ -1,0 +1,3 @@
+通天塔排行页零件。从 docs/prompt/tower_rank_ui_v2.png 裁手机屏后拆图拼接，不涂抹整页。
+零件：title / subtitle / crown_1-3 / frame_1-3 / frame_list / podium_1-3 / row_4-7 / cta / sheet。
+头像框只留金属圆环（中空透明）；名单行用同行奶油克隆清掉头像和字，保留名次；台子整块裁。

@@ -1,0 +1,35 @@
+Mobile game UI prototype, 9:16 iPhone mockup, 灵宠消消塔2 / xiaochu2 production style.
+
+Use the first reference (filled ranking mock) for composition, pet cuteness, cream-gold density, and readable Chinese.
+Use the second reference ONLY as a warning: do NOT copy that empty unfinished page (hollow circles, blank rows, sparse programmer UI).
+
+Art direction:
+- Warm cream parchment (#fdf3df) + soft gold trim (#e8a33d / #c9a063) + dark-ink brown text (#3a2e22).
+- Q-version cute chibi xianxia pets, cel-shaded, chubby, no weapons.
+- Ink-wash garden atmosphere around the panel: mist, lotus water, distant pagoda, lanterns.
+- Same premium UI language as the game: cloud-ornament title plaque, rounded cream cards, warm-gold capsule CTA, cloud-shaped bottom nav.
+- Not photoreal, not dark mode, not cyberpunk, not WeChat green, not empty wireframe.
+
+Layout:
+- Black iPhone frame, status bar, no GM badge.
+- Top-left: jade tassel back pendant (same family as the game back button).
+- Top center: arched cream-gold cloud plaque titled「通天塔排行」in calligraphy brown-gold.
+- Two pills under the plaque:「好友榜」cream outline (inactive),「总榜」gold filled (selected).
+- Small ink subtitle「历史最高层」.
+
+Podium (must be filled, not empty rings):
+- 2nd left, 1st center higher, 3rd right.
+- Cute circular gold-framed pet avatars (green qilin, white deer, fire cub).
+- Tiny gold/silver/bronze crowns.
+- Names + floors: 阿白 48层 / 小灵 62层 / 阿青 41层.
+- Solid podium blocks: silver 2, gold 1, bronze 3.
+
+List of 4 cream rows:
+- Rank, circular avatar, name, right-aligned「N层」.
+- Rows 4-6 normal. Row「我」highlighted with warm gold wash (36层).
+
+Bottom of panel: wide warm-gold apricot gradient plaque button「炫耀一下」, dark-brown ink text.
+
+Bottom nav still visible, cloud cream plate: 灵宠 / 召唤 / 主线 / 秘境 / 通天塔. 「主线」selected (rank opens from home).
+
+Polished production mock, high clarity, readable Chinese, no English except layer numbers, no watermark, no extra captions outside the phone.

@@ -1,0 +1,6 @@
+Single mobile game UI icon, square, cute Q-version xianxia style.
+A small gold medal / champion badge: round gold coin with a simple five-point star,
+thin gold rim, tiny cream highlight, soft cel-shaded, chubby rounded shapes.
+Centered on flat solid dark teal-gray #1e2a32 only.
+NO TEXT, no labels, no Chinese characters, no numbers.
+Readable at 56px. Not photoreal, not neon, not 3D PBR.

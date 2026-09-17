@@ -71,6 +71,19 @@ export function resolveMinigameRuntime(): { name: PlatformName; api: any } {
   return { name, api: getNativePlatformApi(name) };
 }
 
+/** 抖音鸿蒙 / 华为鸿蒙：platform 常为 ohos */
+export function isHarmonyOsInfo(info: Record<string, unknown> | null | undefined): boolean {
+  if (!info) return false;
+  const blobs = [info.platform, info.system, info.osName, info.brand, info.host]
+    .map((value) => String(value ?? '').toLowerCase());
+  return blobs.some((text) => (
+    text === 'ohos'
+    || text === 'openharmony'
+    || text.includes('harmony')
+    || text.includes('hongmeng')
+  ));
+}
+
 export function toBackendPlatformCode(name: PlatformName): BackendPlatformCode {
   if (name === 'douyin') return 'dy';
   if (name === 'wechat') return 'wx';
@@ -158,6 +171,11 @@ class PlatformServiceClass {
     } catch {
       return false;
     }
+  }
+
+  /** 鸿蒙：抖音开放数据域 / getImRankData 不可用，排行只能走主域本地画 */
+  get isHarmony(): boolean {
+    return isHarmonyOsInfo(this.getSystemInfoSync());
   }
 
   /** 底层 API（慎用，优先使用封装方法） */
@@ -295,6 +313,149 @@ class PlatformServiceClass {
     }
 
     return Promise.reject(new Error('no http transport available'));
+  }
+
+  /**
+   * 抖音排行榜写成绩。非抖音或宿主无此 API 时返回 false，不抛。
+   * 文档：tt.setImRankData，基础库 2.70.0。
+   */
+  setImRankData(opts: {
+    dataType: number;
+    value: string;
+    priority?: number;
+    extra?: string;
+    zoneId?: string;
+  }): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.isDouyin || typeof this._api?.setImRankData !== 'function') {
+        resolve(false);
+        return;
+      }
+      try {
+        const timer = setTimeout(() => {
+          console.warn('[Rank] setImRankData timeout');
+          resolve(false);
+        }, 2000);
+        this._api.setImRankData({
+          dataType: opts.dataType,
+          value: opts.value,
+          priority: opts.priority ?? 0,
+          extra: opts.extra,
+          zoneId: opts.zoneId ?? 'default',
+          success: () => { clearTimeout(timer); resolve(true); },
+          fail: (err: unknown) => {
+            clearTimeout(timer);
+            console.warn('[Rank] setImRankData fail', err);
+            resolve(false);
+          },
+        });
+      } catch (e) {
+        console.warn('[Rank] setImRankData throw', e);
+        resolve(false);
+      }
+    });
+  }
+
+  /**
+   * 拉起抖音官方原生排行榜。非抖音或宿主无此 API 时返回 false。
+   * 拉榜前调用方必须先 ensureLogin，否则可能弹不出或闪退。
+   */
+  getImRankList(opts: {
+    relationType: 'default' | 'friend' | 'all';
+    dataType: number;
+    rankType: 'day' | 'week' | 'month' | 'all';
+    pageNum?: number;
+    pageSize?: number;
+    suffix?: string;
+    rankTitle?: string;
+    zoneId?: string;
+  }): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.isDouyin || typeof this._api?.getImRankList !== 'function') {
+        resolve(false);
+        return;
+      }
+      try {
+        this._api.getImRankList({
+          relationType: opts.relationType,
+          dataType: opts.dataType,
+          rankType: opts.rankType,
+          pageNum: opts.pageNum ?? 1,
+          pageSize: opts.pageSize ?? 20,
+          suffix: opts.suffix ?? '',
+          rankTitle: opts.rankTitle ?? '',
+          zoneId: opts.zoneId ?? 'default',
+          success: () => resolve(true),
+          fail: (err: unknown) => {
+            console.warn('[Rank] getImRankList fail', err);
+            resolve(false);
+          },
+        });
+      } catch (e) {
+        console.warn('[Rank] getImRankList throw', e);
+        resolve(false);
+      }
+    });
+  }
+
+  private _loginReady: Promise<boolean> | null = null;
+
+  /**
+   * 抖音登录（排行榜写入/拉起前必做）。成功过就复用，避免每次爬塔都弹。
+   * 非抖音直接 false。失败不抛。
+   */
+  ensureLogin(): Promise<boolean> {
+    if (!this.isDouyin) return Promise.resolve(false);
+    if (!this._loginReady) {
+      this._loginReady = this.loginCode().then((code) => {
+        const ok = code.length > 0;
+        if (!ok) this._loginReady = null;
+        return ok;
+      });
+    }
+    return this._loginReady;
+  }
+
+  /**
+   * 当前登录用户的抖音头像 / 昵称。第一次可能弹授权。
+   * 非抖音或失败返回 null，不抛。
+   */
+  getUserProfile(): Promise<{ nickName: string; avatarUrl: string } | null> {
+    return new Promise((resolve) => {
+      if (!this.isDouyin || typeof this._api?.getUserInfo !== 'function') {
+        resolve(null);
+        return;
+      }
+      try {
+        const timer = setTimeout(() => {
+          console.warn('[Platform] getUserInfo timeout');
+          resolve(null);
+        }, 2000);
+        this._api.getUserInfo({
+          success: (res: {
+            userInfo?: { nickName?: string; nick_name?: string; avatarUrl?: string; user_img?: string };
+          }) => {
+            clearTimeout(timer);
+            const info = res?.userInfo ?? {};
+            const nickName = String(info.nickName ?? info.nick_name ?? '').trim();
+            const avatarUrl = String(info.avatarUrl ?? info.user_img ?? '').trim();
+            if (!nickName && !avatarUrl) {
+              resolve(null);
+              return;
+            }
+            resolve({ nickName, avatarUrl });
+          },
+          fail: (err: unknown) => {
+            clearTimeout(timer);
+            console.warn('[Platform] getUserInfo fail', err);
+            resolve(null);
+          },
+        });
+      } catch (e) {
+        console.warn('[Platform] getUserInfo throw', e);
+        resolve(null);
+      }
+    });
   }
 
   /** 平台登录 code（wx.login / tt.login / tap.login） */

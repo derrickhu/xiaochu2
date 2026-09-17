@@ -2,7 +2,7 @@
  * CDN 后台预热：不阻塞首屏 / 进战斗主流程
  */
 import { AUDIO } from '@/config/Audio';
-import { petAvatarLoadPaths } from '@/config/Assets';
+import { CHAPTER_REWARD_IMAGES, petAvatarLoadPaths } from '@/config/Assets';
 import { SHOP_SHELL_IMAGES } from '@/config/assetPreload';
 import { CdnAssetService } from '@/core/CdnAssetService';
 import { Platform } from '@/core/PlatformService';
@@ -34,9 +34,14 @@ export function warmupCdnAssets(): void {
       return [...petAvatarLoadPaths(id, star)];
     });
 
-    // 商店壳优先：进页才下会空壳半晌。短音效已留包内，只有 BGM 需要从 CDN 拉
+    // 章节卷轴在首页，先于商店壳；短音效已留包内，只有 BGM 需要从 CDN 拉
     const bgmPaths = [AUDIO.mainBgm, AUDIO.battleBgm, AUDIO.bossBgm];
-    void CdnAssetService.preloadPaths([...SHOP_SHELL_IMAGES, ...petPaths, ...bgmPaths])
+    void CdnAssetService.preloadPaths([
+      ...CHAPTER_REWARD_IMAGES,
+      ...SHOP_SHELL_IMAGES,
+      ...petPaths,
+      ...bgmPaths,
+    ])
       .catch((e) => {
         console.warn('[CDN] 资源预热失败', e);
       });

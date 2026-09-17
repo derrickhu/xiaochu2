@@ -97,6 +97,14 @@ export const COLORS = {
   panelBorder: 0xc9a063,
   /** 面板浅描边 */
   panelBorderSoft: 0xddbf8e,
+  /** 通天塔榜弹窗底（比通用宣纸更暖，对齐榜原型） */
+  rankPanelBg: 0xf6e4c4,
+  /** 通天塔榜弹窗金边 */
+  rankPanelBorder: 0xc4963c,
+  /** 通天塔榜名单行 */
+  rankRowBg: 0xfff6e6,
+  /** 通天塔榜自己这一行 */
+  rankRowSelfBg: 0xf0d070,
   /** 卡面名字（深墨棕，写在浅色卡底上） */
   cardNameText: 0x3b2414,
   /** 朱砂题字（米色飘带 / 匾额上的红字，取自 v3b 原型） */

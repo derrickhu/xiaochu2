@@ -19,6 +19,8 @@ export const BACKEND_PATH_PREFIX = `/${BASE_GAME_KEY}-api`;
 export const BACKEND_LOGIN_PATH = `${BACKEND_PATH_PREFIX}/login`;
 export const BACKEND_PULL_PATH = `${BACKEND_PATH_PREFIX}/save/pull`;
 export const BACKEND_PUSH_PATH = `${BACKEND_PATH_PREFIX}/save/push`;
+export const BACKEND_RANK_TOWER_PATH = `${BACKEND_PATH_PREFIX}/rank/tower`;
+export const BACKEND_RANK_TOWER_REPORT_PATH = `${BACKEND_PATH_PREFIX}/rank/tower/report`;
 export const BACKEND_HEALTH_PATH = `${BACKEND_PATH_PREFIX}/health`;
 
 /** 经分批量上报（多游戏共用云函数，按 game_key 区分） */

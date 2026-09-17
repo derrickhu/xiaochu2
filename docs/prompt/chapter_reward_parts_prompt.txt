@@ -1,0 +1,10 @@
+Square 2x2 grid, 4 equal panels, same Q-version xianxia sticker style as the cream jade pad and gold-cream banner references.
+Each cell: one object centered on flat solid dark teal-gray #1e2a32.
+NO TEXT, no labels, no numbers, no letters anywhere.
+
+Top-left: small cream jade pedestal disc, like a tiny map node cylinder, gold rim, for sitting a reward icon on.
+Top-right: circular cream-gold avatar frame / ring, empty center (transparent-looking cream hole or open ring), thin gold rim, soft shadow. For a pet bust.
+Bottom-left: tiny cream ticket / progress chip plate, empty, rounded, gold edge. For overlaying a fraction later.
+Bottom-right: small horizontal cream pill plate, empty, gold edge. For overlaying a rarity code later.
+
+Soft cel-shaded, chubby, not photoreal, not iOS flat white.

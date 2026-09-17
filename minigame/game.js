@@ -91,9 +91,23 @@ function _diag(msg) {
   } catch (_) {}
 }
 
-function _showDiag() {
+/** 标题已经出来 / 渲染器活着：诊断只落日志，别挡玩家 */
+function _bootLooksAlive() {
+  try {
+    if (typeof GameGlobal === 'undefined') return false;
+    if (GameGlobal.__bootOk) return true;
+    var step = String(GameGlobal.__bootStep || '');
+    if (!step) return false;
+    return /title-ok|splash-|preload-done|overlays|boot-ok|cloud-sync /.test(step);
+  } catch (_) {
+    return false;
+  }
+}
+
+function _showDiag(force) {
   var dump = _diagMsgs.join('\n');
   try { console.error('[boot-diag]\n' + dump); } catch (_) {}
+  if (!force && _bootLooksAlive()) return;
   try {
     var api = _hostApi();
     if (!api) return;
@@ -120,11 +134,11 @@ try {
     GameGlobal.__showBootDiag = _showDiag;
     GameGlobal.onError = function (msg) {
       _diag('onError:' + msg);
-      _showDiag();
+      _showDiag(false);
     };
     GameGlobal.onUnhandledRejection = function (ev) {
       _diag('unhandledRej:' + (ev && ev.reason || ev));
-      _showDiag();
+      _showDiag(false);
     };
   }
 } catch (_) {}
@@ -133,7 +147,7 @@ try {
   if (_errApi && typeof _errApi.onError === 'function') {
     _errApi.onError(function (err) {
       _diag('host.onError:' + (err && (err.message || err.errMsg) || err));
-      _showDiag();
+      _showDiag(false);
     });
   }
 } catch (_) {}
@@ -247,8 +261,10 @@ try {
 
 setTimeout(function () {
   if (typeof GameGlobal !== 'undefined' && !GameGlobal.__bootOk) {
-    _diag('6秒未进主场景 step=' + (GameGlobal.__bootStep || '?')
+    _diag('12秒未标成功 step=' + (GameGlobal.__bootStep || '?')
       + ' rendered=' + GameGlobal.__gameRendered);
-    _showDiag();
+    // 鸿蒙抖音首包慢，标题已经出来就别再弹诊断
+    if (_bootLooksAlive()) return;
+    _showDiag(true);
   }
-}, 6000);
+}, 12000);

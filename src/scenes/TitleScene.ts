@@ -10,6 +10,7 @@ import { SceneManager, type Scene } from '@/core/SceneManager';
 import { UI } from '@/balance/ui';
 import { CHAPTERS, CHAPTER_NAME, STAGE_MAP, stagesOfChapter } from '@/balance/stages';
 import { resolveHomeDisplay } from '@/balance/chapterMap';
+import { getChapterGoal, chapterClearProgress } from '@/balance/chapterGoal';
 import { PlayerData } from '@/game/PlayerData';
 import { reportQuest } from '@/game/dailyQuestTracker';
 import {
@@ -24,6 +25,8 @@ import { GMManager } from '@/core/GMManager';
 import { EventBus } from '@/core/EventBus';
 import type { TeamEnterData } from './TeamScene';
 import { showStageEntryDialog, type StageEntryDialogHandle } from './StageEntryDialog';
+import { buildChapterRewardScroll } from './chapterRewardScroll';
+import type { PetDetailEnterData } from './PetDetailScene';
 import { HomeStartGuide } from './HomeStartGuide';
 import { FeatureUnlockGuide } from './FeatureUnlockGuide';
 import { pendingFeatureNotices } from '@/game/featureGate';
@@ -36,11 +39,10 @@ import { UI_IMAGES } from '@/config/Assets';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
 import { describeError } from '@/core/renderDiagnostics';
+import { ensureHostProfile, resolveHomeIdentity } from '@/game/rankHostProfile';
+import { queueTowerRankSync } from '@/game/rankService';
 
 declare const GameGlobal: any;
-
-/** 首页展示昵称（暂无账号系统） */
-const HOME_DISPLAY_NAME = '仙灵小萌新';
 
 export interface TitleEnterData {
   /** 进入时选中的章节（切章 / 返回时带回刚才那一章；缺省用存档落点章） */
@@ -65,7 +67,7 @@ export class TitleScene implements Scene {
     return Game.safeTop + 16;
   }
 
-  /** 章匾下沿 + 呼吸，地图 Boss 立绘不得越过此线 */
+  /** 章匾下沿 + 呼吸；地图节点仍按加卷轴之前的位置，卷轴只做叠层 */
   private static chapterChromeBottom(): number {
     return TitleScene.chapterNavY() + 36 + 10;
   }
@@ -129,6 +131,17 @@ export class TitleScene implements Scene {
     reportQuest('login');
     void ensurePetAvatars(titleHomePetAvatarEntries(this._chapter));
     void Game.warmScenePresent();
+    void this._hydrateHostProfile();
+  }
+
+  private async _hydrateHostProfile(): Promise<void> {
+    const before = resolveHomeIdentity();
+    await ensureHostProfile();
+    if (SceneManager.current?.name !== 'title') return;
+    const after = resolveHomeIdentity();
+    queueTowerRankSync();
+    if (before.name === after.name && before.avatarUrl === after.avatarUrl) return;
+    this._rebuild();
   }
 
   private _rebuild(): void {
@@ -236,6 +249,7 @@ export class TitleScene implements Scene {
 
     this._buildTopBar(w, Game.safeHeaderCenterY);
     this._buildChapterNav(w, TitleScene.chapterNavY());
+    this._buildChapterReward(w, TitleScene.chapterNavY());
     this._buildLeftRail(h);
     const navLayout = this._buildBottomNav(w, h);
 
@@ -321,14 +335,14 @@ export class TitleScene implements Scene {
     });
   }
 
-  /** 顶栏：默认玩家头像+昵称；货币紧随昵称右侧排布，躲开右上角胶囊/收起 */
+  /** 顶栏：抖音头像+昵称（没有资料时占位萌新）；货币紧随昵称右侧，躲开胶囊 */
   private _buildTopBar(w: number, centerY: number): void {
+    const identity = resolveHomeIdentity();
     const padX = 28;
     const profile = new PIXI.Container();
     profile.position.set(padX, centerY);
 
     const avSize = 56;
-    // 外环金边 + 内圈奶油底，突出「仙灵小萌新」默认头像
     const ring = new PIXI.Graphics();
     ring.beginFill(COLORS.accent, 1);
     ring.drawCircle(0, 0, avSize / 2 + 3);
@@ -355,17 +369,27 @@ export class TitleScene implements Scene {
       sp.mask = mask;
       avatarSlot.addChild(sp, mask);
     };
-    const cached = TextureCache.get(UI_IMAGES.playerAvatarDefault);
+    const avatarPath = identity.avatarUrl || UI_IMAGES.playerAvatarDefault;
+    const cached = TextureCache.get(avatarPath);
     if (cached) {
       mountAvatar(cached);
     } else {
-      void TextureCache.load(UI_IMAGES.playerAvatarDefault).then((tex) => {
+      if (identity.avatarUrl) {
+        const fallback = TextureCache.get(UI_IMAGES.playerAvatarDefault);
+        if (fallback) mountAvatar(fallback);
+      }
+      void TextureCache.load(avatarPath).then((tex) => {
         if (!avatarSlot.destroyed) mountAvatar(tex);
-      }).catch(() => null);
+      }).catch(() => {
+        if (avatarSlot.destroyed) return;
+        void TextureCache.load(UI_IMAGES.playerAvatarDefault).then((tex) => {
+          if (!avatarSlot.destroyed) mountAvatar(tex);
+        }).catch(() => null);
+      });
     }
 
     const nameLeft = avSize / 2 + 12;
-    const name = makeText(HOME_DISPLAY_NAME, {
+    const name = makeText(identity.name, {
       size: FONT_SIZE.sm, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
     });
     try { name.updateText(true); } catch { /* noop */ }
@@ -405,7 +429,7 @@ export class TitleScene implements Scene {
       rightLimit - padX - nameLeft - nameGap - measureRow(gap),
     );
     if (name.width > nameMaxW) {
-      let t = HOME_DISPLAY_NAME;
+      let t = identity.name;
       while (t.length > 1) {
         t = t.slice(0, -1);
         name.text = `${t}…`;
@@ -468,5 +492,28 @@ export class TitleScene implements Scene {
     };
     mkArrow('left', leftX, idx > 0 ? CHAPTERS[idx - 1] : null);
     mkArrow('right', rightX, idx < CHAPTERS.length - 1 ? CHAPTERS[idx + 1] : null);
+  }
+
+  private _buildChapterReward(w: number, plaqueY: number): void {
+    const goal = getChapterGoal(this._chapter);
+    if (!goal) return;
+    const stages = stagesOfChapter(this._chapter);
+    const progress = chapterClearProgress(stages, (id) => PlayerData.starsOf(id));
+    const scroll = buildChapterRewardScroll({
+      goal,
+      screenW: w,
+      plaqueCenterY: plaqueY,
+      cleared: progress.cleared,
+      total: progress.total,
+      onTap: () => {
+        SceneManager.switchTo('petDetail', {
+          petId: goal.petId,
+          preview: true,
+          backScene: 'title',
+          backData: titleBackData(),
+        } satisfies PetDetailEnterData);
+      },
+    });
+    this.container.addChild(scroll);
   }
 }

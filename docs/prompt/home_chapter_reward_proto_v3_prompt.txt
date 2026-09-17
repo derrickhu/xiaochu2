@@ -1,0 +1,12 @@
+Use the full-screen home reference for STYLE, scenery, left rail, bottom nav, chapter plaque, and hanging-scroll chrome. Keep the same painted Q-version xianxia look.
+
+ONE change only: merge the chapter pet INTO the reward scroll. Do NOT put a separate deer portrait at the top-right corner. The featured prize must sit on the same scroll as the other rewards.
+
+Reward scroll layout (one horizontal parchment roll under the chapter plaque):
+- Small gold caption 章节通关奖励 and 3/8 on the top of the scroll
+- Left-to-right on the scroll: green jade ring, gold star-coin, EXP token, then a LARGER circular gold frame with the white deer bust (SR 星辉灵鹿). The deer is the hero of the scroll, same object, not a distant floating avatar.
+- Scroll stays compact under the title plaque, does not cover the path.
+
+Keep: pointed cream-gold chapter plaque 第一章 · 灵兽森林, left rail, cream path pads, bottom cloud nav.
+FORBIDDEN: isolated pet at the screen corner, flat white iOS cards, Tata material UI, photoreal.
+Readable Chinese as listed. Same cream #fdf3df + gold #e8a33d + ink brown.

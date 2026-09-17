@@ -41,6 +41,7 @@ import {
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import type { TeamEnterData } from './TeamScene';
 import { analytics } from '@/analytics';
+import { queueTowerRankSync } from '@/game/rankService';
 
 const MILESTONE_PREVIEW = 4;
 /** 状态条 / 里程碑左右边距一致，横向占满内容区 */
@@ -80,6 +81,7 @@ export class TowerScene implements Scene {
     PlayerData.load();
     EventBus.on('safearea:updated', this._onSafeArea);
     this._build();
+    queueTowerRankSync();
     void TextureCache.preload([
       BACKGROUND_IMAGES.tower,
       UI_IMAGES.towerPagoda,
@@ -344,7 +346,11 @@ export class TowerScene implements Scene {
 
     const checkpoint = PlayerData.towerCheckpointFloor();
     const parts: Array<{ text: string; fill: number; tap?: () => void }> = [
-      { text: `最高 ${tower.bestFloor}`, fill: 0x5c4033 },
+      {
+        text: `最高 ${tower.bestFloor} ›`,
+        fill: 0x7a5520,
+        tap: () => { EventBus.emit('rank:open'); },
+      },
       { text: `战败回到\n第${checkpoint}层`, fill: 0x5c4033 },
       {
         text: blessLabel,
@@ -840,6 +846,7 @@ export class TowerScene implements Scene {
     if (seq !== this._buildSeq) return;
     const landed = PlayerData.towerSkipToEntryFloor();
     if (landed == null) return;
+    queueTowerRankSync();
     analytics.track('tower_skip', { from, to: landed });
     Platform.showToast(`已直登第 ${landed} 层`, 'success');
     this._build();

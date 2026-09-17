@@ -138,6 +138,8 @@ export const BACKGROUND_IMAGES = {
   realm: `${PKG.scene}/images/bg/scene_realm.jpg`,
   /** 通天塔专用背景（9:16 云海浮岛，pkg-scene / CDN） */
   tower: `${PKG.scene}/images/bg/scene_tower.jpg`,
+  /** 通天塔榜宣纸底板（pkg-scene / CDN） */
+  rank: `${PKG.scene}/images/bg/scene_rank.jpg`,
 } as const;
 
 /**
@@ -252,6 +254,27 @@ export const UI_IMAGES = {
   towerLegacyRegen: `${PKG.scene}/images/ui/tower/tower_legacy_regen.png`,
   towerLegacyCoin: `${PKG.scene}/images/ui/tower/tower_legacy_coin.png`,
   railDaily: `${IMG}/ui/icon/rail_daily.png`,
+  /** 首页左栏：通天塔总榜 */
+  railRank: `${IMG}/ui/icon/rail_rank.png`,
+  /** 首页章节通关奖励卷轴（pkg-scene / CDN，禁手绘） */
+  chapterRewardScroll: `${PKG.scene}/images/ui/chapter/chapter_reward_scroll.png`,
+  chapterRewardPedestal: `${PKG.scene}/images/ui/chapter/chapter_reward_pedestal.png`,
+  chapterRewardPetRing: `${PKG.scene}/images/ui/chapter/chapter_reward_pet_ring.png`,
+  chapterRewardProgress: `${PKG.scene}/images/ui/chapter/chapter_reward_progress.png`,
+  chapterRewardPill: `${PKG.scene}/images/ui/chapter/chapter_reward_pill.png`,
+  /** 通天塔榜零件（pkg-scene / CDN） */
+  rankFrameGold: `${PKG.scene}/images/ui/rank/frame_gold.png`,
+  rankFrameSilver: `${PKG.scene}/images/ui/rank/frame_silver.png`,
+  rankFrameBronze: `${PKG.scene}/images/ui/rank/frame_bronze.png`,
+  rankFrameList: `${PKG.scene}/images/ui/rank/frame_list.png`,
+  rankPodiumGold: `${PKG.scene}/images/ui/rank/podium_gold.png`,
+  rankPodiumSilver: `${PKG.scene}/images/ui/rank/podium_silver.png`,
+  rankPodiumBronze: `${PKG.scene}/images/ui/rank/podium_bronze.png`,
+  rankRowCream: `${PKG.scene}/images/ui/rank/row_cream.png`,
+  rankRowGold: `${PKG.scene}/images/ui/rank/row_gold.png`,
+  rankCrownGold: `${PKG.scene}/images/ui/rank/crown_gold.png`,
+  rankCrownSilver: `${PKG.scene}/images/ui/rank/crown_silver.png`,
+  rankCrownBronze: `${PKG.scene}/images/ui/rank/crown_bronze.png`,
   /** 日常任务全清宝箱（pkg-scene / CDN） */
   questChest: `${PKG.scene}/images/ui/icon/quest_chest.png`,
   railEvent: `${IMG}/ui/icon/rail_event.png`,
@@ -317,6 +340,15 @@ export const UI_IMAGES = {
   /** 碎片转化：专属圆形头像框 */
   gachaShardAvatarFrame: `${PKG.scene}/images/ui/frame/gacha_shard_avatar_frame.png`,
 } as const;
+
+/** 首页章节通关奖励：pkg-scene / CDN，不进 MAIN_PRELOAD，避免冷启动拖整包 */
+export const CHAPTER_REWARD_IMAGES: readonly string[] = [
+  UI_IMAGES.chapterRewardScroll,
+  UI_IMAGES.chapterRewardPedestal,
+  UI_IMAGES.chapterRewardPetRing,
+  UI_IMAGES.chapterRewardProgress,
+  UI_IMAGES.chapterRewardPill,
+];
 
 /**
  * 机缘圆形水墨图标（id 与 balance/towerBless 一一对应）。

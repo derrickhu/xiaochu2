@@ -1,7 +1,7 @@
 /**
  * 首页左侧栏（对齐 home_layout_demo_b）
  *
- * 上组 = 轻量入口（签到 / 日常 / 商店）；秘境与通天塔已抬到底栏
+ * 上组 = 排行 / 签到 / 日常 / 商店 / 设置；秘境与通天塔已抬到底栏
  * 分隔线
  * 下组 = 平台福利（侧边栏 / 桌面，抖音必接）
  */
@@ -14,6 +14,7 @@ import { SidebarService } from '@/core/SidebarService';
 import { DesktopShortcutService } from '@/core/DesktopShortcutService';
 import { PlayerData } from '@/game/PlayerData';
 import { hasClaimableQuest } from '@/game/dailyQuestTracker';
+import { hasSeenRankEntry } from '@/game/rankService';
 import { UI_IMAGES } from '@/config/Assets';
 import { COLORS, FONT_SIZE } from './theme';
 import { makePanel } from './Panel';
@@ -21,7 +22,7 @@ import { makeText } from './text';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { pressFeedback } from './motion';
 
-export type HomeRailId = 'checkin' | 'daily' | 'shop' | 'settings' | 'sidebar' | 'desktop';
+export type HomeRailId = 'rank' | 'checkin' | 'daily' | 'shop' | 'settings' | 'sidebar' | 'desktop';
 
 export interface HomeRailItem {
   id: HomeRailId;
@@ -39,6 +40,7 @@ export interface HomeRailItem {
 
 /** 左栏轻量入口；秘境/通天塔在底栏 */
 export const DEFAULT_HOME_RAIL: readonly HomeRailItem[] = [
+  { id: 'rank', label: '排行', glyph: '榜', iconPath: UI_IMAGES.railRank },
   { id: 'checkin', label: '签到', glyph: '签', iconPath: UI_IMAGES.railCheckin },
   { id: 'daily', label: '日常', glyph: '常', iconPath: UI_IMAGES.railDaily },
   { id: 'shop', label: '商店', glyph: '店', iconPath: UI_IMAGES.navShop },
@@ -52,6 +54,12 @@ export const DEFAULT_HOME_RAIL: readonly HomeRailItem[] = [
 export function buildHomePlayRailItems(): HomeRailItem[] {
   return DEFAULT_HOME_RAIL.map((item) => {
     switch (item.id) {
+      case 'rank':
+        return {
+          ...item,
+          badge: !hasSeenRankEntry(),
+          onTap: () => EventBus.emit('rank:open'),
+        };
       case 'checkin':
         return {
           ...item,

@@ -12,6 +12,7 @@ import type { BattleContext } from '@/game/battleContext';
 import { PlayerData } from '@/game/PlayerData';
 import { grantReward } from '@/game/rewardGrant';
 import { reportQuest } from '@/game/dailyQuestTracker';
+import { queueTowerRankSync } from '@/game/rankService';
 import { analytics } from '@/analytics';
 
 /** 副玩法战斗掉落的折算乘区（1 = 原样发放） */
@@ -100,6 +101,7 @@ function settleTowerVictory(
   if (PlayerData.towerAdvance(floor, carry, skillCharges)) {
     lines.push(`历史最高层刷新 · 第 ${floor} 层`);
   }
+  queueTowerRankSync();
 
   if (isMilestoneFloor(floor) && PlayerData.claimTowerMilestone(floor)) {
     const milestone = towerMilestoneReward(floor);
