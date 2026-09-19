@@ -64,7 +64,7 @@ export function collectExpectedCdnPaths(cfg) {
   const inCdnDir = (p) => cdnDirs.some((d) => p === d || p.startsWith(`${d}/`));
 
   // 灵宠头像 / 秀场立绘
-  for (let n = 1; n <= 40; n++) {
+  for (let n = 1; n <= 100; n++) {
     const id = `pet_${String(n).padStart(3, '0')}`;
     set.add(`subpackages/pkg-pet/images/pet/${id}.png`);
     set.add(`subpackages/pkg-pet/images/pet/${id}_s3.png`);

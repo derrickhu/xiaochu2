@@ -13,13 +13,6 @@ export type HostLocalStorage = {
 declare const GameGlobal: { __hostLocalStorage?: HostLocalStorage } | undefined;
 
 const memory = new Map<string, string>();
-let loggedVia = '';
-
-function logVia(via: string): void {
-  if (loggedVia === via) return;
-  loggedVia = via;
-  console.log(`[Platform] storage via=${via}`);
-}
 
 export function resolveHostLocalStorage(): HostLocalStorage | null {
   try {
@@ -57,14 +50,12 @@ export function readHostStorage(
     try {
       const wxStyle = unwrapValue(api.getStorageSync(key));
       if (wxStyle != null) {
-        logVia('native-sync');
         return wxStyle;
       }
     } catch { /* */ }
     try {
       const qgStyle = unwrapValue(api.getStorageSync({ key }));
       if (qgStyle != null) {
-        logVia('qg-sync');
         return qgStyle;
       }
     } catch { /* */ }
@@ -73,14 +64,12 @@ export function readHostStorage(
     try {
       const cached = hostLs.getItem(key);
       if (cached) {
-        logVia('localStorage');
         return cached;
       }
     } catch { /* */ }
   }
   const mem = memory.get(key);
   if (mem != null) {
-    logVia('memory');
     return mem;
   }
   return null;
@@ -93,34 +82,24 @@ export function writeHostStorage(
   hostLs: HostLocalStorage | null = resolveHostLocalStorage(),
 ): void {
   memory.set(key, value);
-  let nativeOk = false;
   if (typeof api?.setStorageSync === 'function') {
     try {
       api.setStorageSync(key, value);
-      nativeOk = true;
     } catch {
       try {
         api.setStorageSync({ key, value });
-        nativeOk = true;
       } catch {
         try {
           api.setStorageSync({ key, data: value });
-          nativeOk = true;
         } catch { /* */ }
       }
     }
   }
-  let lsOk = false;
   if (hostLs) {
     try {
       hostLs.setItem(key, value);
-      lsOk = true;
     } catch { /* */ }
   }
-  if (nativeOk && lsOk) logVia('native+localStorage');
-  else if (nativeOk) logVia('native-sync');
-  else if (lsOk) logVia('localStorage');
-  else logVia('memory');
 }
 
 export function removeHostStorage(
