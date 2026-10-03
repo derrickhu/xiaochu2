@@ -1,11 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { applyHostProfile, HOME_GUEST_NAME, parseHostProfile, resolveHomeIdentity } from '@/game/rankHostProfile';
+import {
+  acceptHostProfile,
+  applyHostProfile,
+  HOME_GUEST_NAME,
+  parseHostProfile,
+  resolveHomeIdentity,
+} from '@/game/rankHostProfile';
 import { localSelfEntry, rankAvatarPath } from '@/game/rankBoard';
 
 describe('排行榜平台身份', () => {
   it('空串不当成资料', () => {
     expect(parseHostProfile({ name: '', avatarUrl: '' })).toBeNull();
     expect(parseHostProfile(null)).toBeNull();
+  });
+
+  it('微信占位昵称不当成已授权', () => {
+    expect(acceptHostProfile('微信用户', 'https://thirdwx.qlogo.cn/a')).toBeNull();
+    expect(acceptHostProfile('阿白', 'https://thirdwx.qlogo.cn/a')).toEqual({
+      name: '阿白',
+      avatarUrl: 'https://thirdwx.qlogo.cn/a',
+    });
+    expect(acceptHostProfile('', 'https://img/only-face')).toEqual({
+      name: '',
+      avatarUrl: 'https://img/only-face',
+    });
   });
 
   it('自己这条用抖音昵称和头像，不再用灵宠名', () => {

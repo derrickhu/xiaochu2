@@ -417,21 +417,117 @@ class PlatformServiceClass {
   }
 
   /**
-   * 当前登录用户的抖音头像 / 昵称。第一次可能弹授权。
-   * 非抖音或失败返回 null，不抛。
+   * 当前登录用户的头像 / 昵称。
+   * 抖音：getUserInfo，第一次可能弹授权。
+   * 微信：只在已经点过授权按钮（scope.userInfo）时静默读取，不会自己弹窗。
+   * 微信首次授权必须走 createUserInfoButton。失败返回 null，不抛。
    */
   getUserProfile(): Promise<{ nickName: string; avatarUrl: string } | null> {
+    if (this.isWechat) return this._wechatGrantedUserProfile();
+    if (!this.isDouyin || typeof this._api?.getUserInfo !== 'function') {
+      return Promise.resolve(null);
+    }
+    return this._readUserInfo(this._api.getUserInfo.bind(this._api));
+  }
+
+  /**
+   * 微信头像昵称授权按钮。必须盖在玩家会点的区域上，点下去才会出系统授权框。
+   * 返回的按钮要在页面关掉时 destroy。
+   */
+  createUserInfoButton(style: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  }): { onTap: (cb: (res: unknown) => void) => void; show?: () => void; hide?: () => void; destroy?: () => void; style?: Record<string, number> } | null {
+    if (!this.isWechat || typeof this._api?.createUserInfoButton !== 'function') return null;
+    try {
+      const btn = this._api.createUserInfoButton({
+        type: 'text',
+        text: ' ',
+        lang: 'zh_CN',
+        withCredentials: false,
+        style: {
+          left: style.left,
+          top: style.top,
+          width: style.width,
+          height: style.height,
+          backgroundColor: 'rgba(0,0,0,0)',
+          borderColor: 'rgba(0,0,0,0)',
+          borderWidth: 0,
+          borderRadius: Math.round(style.height / 2),
+          color: 'rgba(0,0,0,0)',
+          fontSize: 12,
+          textAlign: 'center',
+          lineHeight: style.height,
+        },
+      });
+      btn?.show?.();
+      return btn ?? null;
+    } catch (e) {
+      console.warn('[Platform] createUserInfoButton', e);
+      return null;
+    }
+  }
+
+  /** 微信：已授权才 getUserInfo。没授权返回 null，留给按钮去弹窗。 */
+  private _wechatGrantedUserProfile(): Promise<{ nickName: string; avatarUrl: string } | null> {
+    const api = this._api;
+    if (typeof api?.getSetting !== 'function' || typeof api?.getUserInfo !== 'function') {
+      return Promise.resolve(null);
+    }
     return new Promise((resolve) => {
-      if (!this.isDouyin || typeof this._api?.getUserInfo !== 'function') {
-        resolve(null);
-        return;
-      }
+      let done = false;
+      const finish = (value: { nickName: string; avatarUrl: string } | null) => {
+        if (done) return;
+        done = true;
+        resolve(value);
+      };
+      const timer = setTimeout(() => finish(null), 3000);
       try {
-        const timer = setTimeout(() => {
-          console.warn('[Platform] getUserInfo timeout');
-          resolve(null);
-        }, 2000);
-        this._api.getUserInfo({
+        api.getSetting({
+          success: (res: { authSetting?: Record<string, boolean> }) => {
+            if (res?.authSetting?.['scope.userInfo'] !== true) {
+              clearTimeout(timer);
+              finish(null);
+              return;
+            }
+            this._readUserInfo(api.getUserInfo.bind(api)).then((profile) => {
+              clearTimeout(timer);
+              finish(profile);
+            });
+          },
+          fail: () => {
+            clearTimeout(timer);
+            finish(null);
+          },
+        });
+      } catch (e) {
+        clearTimeout(timer);
+        console.warn('[Platform] getSetting throw', e);
+        finish(null);
+      }
+    });
+  }
+
+  private _readUserInfo(
+    getUserInfo: (opts: Record<string, unknown>) => void,
+  ): Promise<{ nickName: string; avatarUrl: string } | null> {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (value: { nickName: string; avatarUrl: string } | null) => {
+        if (done) return;
+        done = true;
+        resolve(value);
+      };
+      const timer = setTimeout(() => {
+        console.warn('[Platform] getUserInfo timeout');
+        finish(null);
+      }, 3000);
+      try {
+        getUserInfo({
+          lang: 'zh_CN',
+          withCredentials: false,
           success: (res: {
             userInfo?: { nickName?: string; nick_name?: string; avatarUrl?: string; user_img?: string };
           }) => {
@@ -440,20 +536,21 @@ class PlatformServiceClass {
             const nickName = String(info.nickName ?? info.nick_name ?? '').trim();
             const avatarUrl = String(info.avatarUrl ?? info.user_img ?? '').trim();
             if (!nickName && !avatarUrl) {
-              resolve(null);
+              finish(null);
               return;
             }
-            resolve({ nickName, avatarUrl });
+            finish({ nickName, avatarUrl });
           },
           fail: (err: unknown) => {
             clearTimeout(timer);
             console.warn('[Platform] getUserInfo fail', err);
-            resolve(null);
+            finish(null);
           },
         });
       } catch (e) {
+        clearTimeout(timer);
         console.warn('[Platform] getUserInfo throw', e);
-        resolve(null);
+        finish(null);
       }
     });
   }
@@ -787,6 +884,17 @@ class PlatformServiceClass {
         return;
       }
 
+      // 开发者工具里也能 new 出广告实例，但 show() 经常既不展示也不回调。
+      // 签到会一直占着「领取中」，关闭钮也被挡死。工具里走桩，真机才拉激励视频。
+      if (this.isDevtools) {
+        this.showToast('广告播放中…');
+        setTimeout(() => {
+          this.hideToast();
+          resolve(true);
+        }, 700);
+        return;
+      }
+
       let ad: any = null;
       try {
         ad = this._rewardedAd(adUnitId);
@@ -808,18 +916,33 @@ class PlatformServiceClass {
       }
 
       this._adResolve = resolve;
+      let displayed = false;
+      // show() 既不 resolve 也不 onError 时，签到会永远关不掉
+      const hang = setTimeout(() => {
+        if (!displayed && this._adResolve === resolve) this._settleAd(false);
+      }, 8000);
+      const markShown = (): void => {
+        displayed = true;
+        clearTimeout(hang);
+      };
+      const fail = (): void => {
+        clearTimeout(hang);
+        this._settleAd(false);
+      };
       try {
         const p = ad.show();
         // 拉取失败先 load 再播一次：小游戏侧常见于弱网首次拉取超时
-        if (p?.catch) {
-          p.catch(() => {
+        if (p?.then) {
+          p.then(markShown).catch(() => {
             const l = ad.load?.();
-            if (l?.then) l.then(() => ad.show()).catch(() => this._settleAd(false));
-            else this._settleAd(false);
+            if (l?.then) l.then(() => ad.show()).then(markShown).catch(fail);
+            else fail();
           });
+        } else {
+          markShown();
         }
       } catch (_) {
-        this._settleAd(false);
+        fail();
       }
     });
   }
@@ -831,10 +954,21 @@ class PlatformServiceClass {
     if (typeof create !== 'function') return null;
     const ad = create.call(this._api, { adUnitId });
     if (!ad?.onClose || !ad?.show) return null;
-    ad.onClose((res: { isEnded?: boolean }) => this._settleAd(!!res?.isEnded));
+    ad.onClose((res: { isEnded?: boolean } | null | undefined) => {
+      this._settleAd(this._rewardedEnded(res));
+    });
     ad.onError?.(() => this._settleAd(false));
     this._adCache.set(adUnitId, ad);
     return ad;
+  }
+
+  /**
+   * 微信基础库 2.1.0 以前，看完激励视频关闭时不传 res，中途关闭才带 isEnded:false。
+   * 抖音始终带 isEnded，空回调不当作看完。
+   */
+  private _rewardedEnded(res: { isEnded?: boolean } | null | undefined): boolean {
+    if (this.isWechat && res == null) return true;
+    return !!res?.isEnded;
   }
 
   private _settleAd(ok: boolean): void {

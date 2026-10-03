@@ -216,6 +216,50 @@ export function paintRankPageOverlays(
   };
 }
 
+/** 还没成绩时的身份条：头像 + 昵称，或「点击授权」。不占名次。 */
+export function paintUnrankedIdentity(
+  parent: PIXI.Container,
+  y: number,
+  width: number,
+  opts: { name: string; avatarUrl?: string },
+): { hit: PIXI.Container; unbind: () => void } {
+  const hit = new PIXI.Container();
+  hit.position.set(0, y);
+  hit.eventMode = 'static';
+  const bgW = Math.min(Math.max(280, width - 48), 560);
+  const bgH = 64;
+  const bg = makePanel({
+    width: bgW,
+    height: bgH,
+    radius: bgH / 2,
+    bg: COLORS.rankRowBg,
+    border: COLORS.rankPanelBorder,
+    borderWidth: 2,
+    centered: true,
+  });
+  hit.addChild(bg);
+  const { root, unbind } = makeAvatar({
+    rank: 0,
+    name: opts.name,
+    floor: 0,
+    isSelf: true,
+    avatarUrl: opts.avatarUrl,
+  }, 48);
+  root.position.set(-bgW / 2 + 40, 0);
+  hit.addChild(root);
+  const name = makeText(opts.name, {
+    size: FONT_SIZE.sm,
+    fill: COLORS.textMain,
+    bold: true,
+    anchor: [0, 0.5],
+    role: 'body',
+  });
+  name.position.set(-bgW / 2 + 76, 0);
+  hit.addChild(name);
+  parent.addChild(hit);
+  return { hit, unbind };
+}
+
 function makeAvatar(
   entry: RankEntry,
   size: number,

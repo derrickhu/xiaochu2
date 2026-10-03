@@ -3,7 +3,7 @@
  * 大卡 + 暖米底 + 亮描金框 + 名匾 + NEW；容器 pivot=中心。
  */
 import * as PIXI from 'pixi.js';
-import { TextureCache } from '@/core/TextureCache';
+import { showWhenTexture } from '@/ui/bindLazySprite';
 import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import { UI_IMAGES } from '@/config/Assets';
 import { PET_MAP } from '@/balance/pets';
@@ -68,20 +68,23 @@ export function multiResultCardSize(): GachaResultCardSize {
 
 function makeNewBadge(width: number): PIXI.Container {
   const root = new PIXI.Container();
-  const tex = TextureCache.get(UI_IMAGES.gachaResultNewBadge);
   const h = Math.max(32, Math.round(width * 0.36));
-  if (tex?.valid) {
-    const sp = new PIXI.Sprite(tex);
-    sp.anchor.set(0.5);
-    sp.width = width;
-    sp.height = h;
-    root.addChild(sp);
-  } else {
-    root.addChild(makePanel({
+  showWhenTexture(
+    root,
+    UI_IMAGES.gachaResultNewBadge,
+    (tex) => {
+      const sp = new PIXI.Sprite(tex);
+      sp.anchor.set(0.5);
+      sp.width = width;
+      sp.height = h;
+      return sp;
+    },
+    makePanel({
       width, height: h, radius: h / 2, centered: true,
-      bg: 0x5cbf4a, border: COLORS.accent, borderWidth: 3,
-    }));
-  }
+      bg: 0x5cbf4a,       border: COLORS.accent, borderWidth: 3,
+    }),
+    0,
+  );
   const label = makeText('NEW', {
     size: Math.max(16, Math.round(h * 0.52)),
     fill: 0xffffff, bold: true, anchor: 0.5,
@@ -195,18 +198,22 @@ export function buildGachaResultCard(
   card.addChild(face);
 
   // 亮描金框压在裁切面之上，描金边盖住米底边缘
-  const frameTex = TextureCache.get(UI_IMAGES.gachaResultCard);
-  if (frameTex?.valid) {
-    const frame = new PIXI.Sprite(frameTex);
-    frame.width = cardW;
-    frame.height = cardH;
-    card.addChild(frame);
-  } else {
-    card.addChild(makePanel({
+  const frameSlot = card.children.length;
+  showWhenTexture(
+    card,
+    UI_IMAGES.gachaResultCard,
+    (tex) => {
+      const frame = new PIXI.Sprite(tex);
+      frame.width = cardW;
+      frame.height = cardH;
+      return frame;
+    },
+    makePanel({
       width: cardW, height: cardH, radius: RADIUS.small, centered: false,
       bg: 0x000000, bgAlpha: 0, border: COLORS.accent, borderWidth: 5,
-    }));
-  }
+    }),
+    frameSlot,
+  );
 
   attachRarityBadge(card, o.rarity, portPadX, portTop, avatarSize, {
     variant: hero ? 'codex' : 'list',
@@ -218,18 +225,18 @@ export function buildGachaResultCard(
 
   // V2 金名匾
   const name = pet?.name ?? o.petId;
-  const bandTex = TextureCache.get(UI_IMAGES.gachaResultNameBand);
   const bandW = cardW * 0.78;
   const bandH = Math.max(34, nameH * 0.85);
   const bandY = (nameTop + nameBot) / 2;
-  if (bandTex?.valid) {
-    const band = new PIXI.Sprite(bandTex);
+  const bandSlot = card.children.length;
+  showWhenTexture(card, UI_IMAGES.gachaResultNameBand, (tex) => {
+    const band = new PIXI.Sprite(tex);
     band.anchor.set(0.5);
     band.width = bandW;
     band.height = bandH;
     band.position.set(cardW / 2, bandY);
-    card.addChild(band);
-  }
+    return band;
+  }, undefined, bandSlot);
   const nameText = makeText(name.length > 6 ? `${name.slice(0, 6)}…` : name, {
     size: hero ? FONT_SIZE.md : FONT_SIZE.xxs,
     fill: COLORS.cardNameText,

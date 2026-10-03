@@ -2,7 +2,7 @@
  * 标题场景：主线章节地图首页 + 左侧分组栏 + 五格底栏
  *
  * IA：底栏「主线」= 本页；
- * 左栏上组 = 副玩法；分隔线下 = 侧边栏/桌面（抖音必接，对齐 home_layout_demo_b）。
+ * 左栏上组 = 副玩法；分隔线下 = 侧边栏/桌面（仅抖音，微信不展示）。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -39,8 +39,9 @@ import { UI_IMAGES } from '@/config/Assets';
 import { TextureCache } from '@/core/TextureCache';
 import { Platform } from '@/core/PlatformService';
 import { describeError } from '@/core/renderDiagnostics';
-import { ensureHostProfile, resolveHomeIdentity } from '@/game/rankHostProfile';
+import { ensureHostProfile, readCachedHostProfile, resolveHomeIdentity } from '@/game/rankHostProfile';
 import { queueTowerRankSync } from '@/game/rankService';
+import { bindWeChatUserInfoButton } from '@/game/wechatUserInfoButton';
 
 declare const GameGlobal: any;
 
@@ -94,6 +95,32 @@ export class TitleScene implements Scene {
     if (SceneManager.current?.name !== 'title') return;
     this._rebuild();
   };
+  /** 排行弹层开着时，首页头像上的原生授权按钮会浮在弹层上面，先拆掉 */
+  private _rankOpen = false;
+  private _profileDirty = false;
+  private _profileHit: PIXI.Container | null = null;
+  private _dropAuthButton: (() => void) | null = null;
+  private _onRankOpen = (): void => {
+    this._rankOpen = true;
+    this._clearAuthButton();
+  };
+  private _onRankClose = (): void => {
+    this._rankOpen = false;
+    if (SceneManager.current?.name !== 'title') return;
+    if (this._profileDirty) {
+      this._profileDirty = false;
+      this._rebuild();
+      return;
+    }
+    this._syncWeChatAuthButton();
+  };
+  private _onHostProfile = (): void => {
+    if (this._rankOpen) {
+      this._profileDirty = true;
+      return;
+    }
+    if (SceneManager.current?.name === 'title') this._rebuild();
+  };
   /** GM 跳关后切到目标章并重建地图 */
   private _onFocusChapter = (chapter: unknown): void => {
     if (typeof chapter !== 'number' || !Number.isFinite(chapter)) return;
@@ -110,6 +137,9 @@ export class TitleScene implements Scene {
     EventBus.on('gm:focusChapter', this._onFocusChapter);
     EventBus.on('home:refresh', this._onHomeRefresh);
     EventBus.on('safearea:updated', this._onHomeRefresh);
+    EventBus.on('rank:open', this._onRankOpen);
+    EventBus.on('rank:close', this._onRankClose);
+    EventBus.on('host-profile:updated', this._onHostProfile);
     const enter = data as TitleEnterData | undefined;
     this._minimalStrip = enter?.minimalStrip;
     if (this._minimalStrip !== 'l7like') {
@@ -144,7 +174,27 @@ export class TitleScene implements Scene {
     this._rebuild();
   }
 
+  private _clearAuthButton(): void {
+    this._dropAuthButton?.();
+    this._dropAuthButton = null;
+  }
+
+  /** 微信还没授权时，把头像昵称区域盖上原生按钮。抖音由 getUserInfo 自己弹。 */
+  private _syncWeChatAuthButton(): void {
+    this._clearAuthButton();
+    if (this._rankOpen || !Platform.isWechat || readCachedHostProfile()) return;
+    const hit = this._profileHit;
+    if (!hit || hit.destroyed) return;
+    this._dropAuthButton = bindWeChatUserInfoButton(hit, () => {
+      this._clearAuthButton();
+      queueTowerRankSync();
+      if (SceneManager.current?.name === 'title') this._rebuild();
+    });
+  }
+
   private _rebuild(): void {
+    this._clearAuthButton();
+    this._profileHit = null;
     this._stageEntry?.dismiss();
     this._stageEntry = null;
     this._homeGuide?.destroy();
@@ -158,6 +208,7 @@ export class TitleScene implements Scene {
     this._dialogLayer = null;
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
     this._build();
+    this._syncWeChatAuthButton();
     void ensurePetAvatars(titleHomePetAvatarEntries(this._chapter));
   }
 
@@ -191,6 +242,11 @@ export class TitleScene implements Scene {
     EventBus.off('gm:focusChapter', this._onFocusChapter);
     EventBus.off('home:refresh', this._onHomeRefresh);
     EventBus.off('safearea:updated', this._onHomeRefresh);
+    EventBus.off('rank:open', this._onRankOpen);
+    EventBus.off('rank:close', this._onRankClose);
+    EventBus.off('host-profile:updated', this._onHostProfile);
+    this._rankOpen = false;
+    this._clearAuthButton();
     this._stageEntry?.dismiss();
     this._stageEntry = null;
     this._homeGuide?.destroy();
@@ -321,7 +377,7 @@ export class TitleScene implements Scene {
   }
 
   private _buildLeftRail(h: number): void {
-    const showWelfare = Platform.isDouyin || Platform.isDevtools;
+    const showWelfare = Platform.isDouyin;
     const top = TitleScene.chapterNavY() + 64;
     const bottomLimit = h - TitleScene.BOTTOM_RESERVE - 24;
     const railH = homeLeftRailHeight(
@@ -335,7 +391,7 @@ export class TitleScene implements Scene {
     });
   }
 
-  /** 顶栏：抖音头像+昵称（没有资料时占位萌新）；货币紧随昵称右侧，躲开胶囊 */
+  /** 顶栏：平台头像+昵称（没有资料时占位萌新）；货币紧随昵称右侧，躲开胶囊 */
   private _buildTopBar(w: number, centerY: number): void {
     const identity = resolveHomeIdentity();
     const padX = 28;
@@ -395,6 +451,7 @@ export class TitleScene implements Scene {
     try { name.updateText(true); } catch { /* noop */ }
     name.position.set(nameLeft, 0);
     profile.addChild(name);
+    this._profileHit = profile;
     this.container.addChild(profile);
 
     const stamina = makeCurrencySourceChip({

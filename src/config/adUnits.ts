@@ -44,7 +44,9 @@ export const AD_UNITS: Readonly<Record<'wechat' | 'douyin' | 'taptap', PlatformA
     interstitial: '1efbornvxlm12dj416',
   },
   wechat: {
-    rewarded: '',       // ← 微信激励视频 adUnitId，上微信时再填
+    // 与旧版灵宠消消塔同一小游戏（wx53b03390106eff65）里已开通的激励视频。
+    // 新版只挂一个物理位，逻辑位仍走 monetization.ts。不读旧版存档。
+    rewarded: 'adunit-6e618cadef132ef4',
     banner: '',
     interstitial: '',
   },

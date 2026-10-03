@@ -30,7 +30,6 @@ import {
 } from '@/game/dailyQuestTracker';
 import { analytics } from '@/analytics';
 import { UI_IMAGES } from '@/config/Assets';
-import { ensureAssets } from '@/config/Subpackages';
 import {
   COLORS, FONT_SIZE,
   makeActionButton, makeCloseButton, makePanel, makeText, makeModalTitlePlaque, pulse,
@@ -107,23 +106,6 @@ export class DailyQuestPanel extends PIXI.Container {
     this._refresh();
     this.alpha = 0;
     TweenManager.to({ target: this, props: { alpha: 1 }, duration: 0.2, ease: Ease.easeOutQuad });
-    void this._hydrateAssets();
-  }
-
-  private async _hydrateAssets(): Promise<void> {
-    const paths = [
-      UI_IMAGES.iconLingyu, UI_IMAGES.iconCoin, UI_IMAGES.iconExp,
-      UI_IMAGES.iconShard, UI_IMAGES.iconTicket, UI_IMAGES.iconStamina,
-      UI_IMAGES.btnPlateSuccess, UI_IMAGES.btnPlateCream, UI_IMAGES.modalTitlePlaque,
-      UI_IMAGES.navHome, UI_IMAGES.navRealm, UI_IMAGES.navPet, UI_IMAGES.navShop,
-      UI_IMAGES.iconRecruit, UI_IMAGES.railTower, UI_IMAGES.iconStatAtk,
-      UI_IMAGES.railDaily, UI_IMAGES.questChest,
-    ];
-    await ensureAssets(paths).catch((e) => {
-      console.warn('[DailyQuest] 资源预热失败', e);
-    });
-    if (!this._isOpen) return;
-    this._refresh();
   }
 
   close(): void {

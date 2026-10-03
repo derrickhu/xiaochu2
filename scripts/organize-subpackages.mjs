@@ -150,7 +150,7 @@ function migrateOverflowFromMain() {
     [path.join(ROOT, 'images/ui/tower'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/tower')],
     [path.join(ROOT, 'images/ui/codex'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/codex')],
     [path.join(ROOT, 'images/ui/team'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/team')],
-    // 章节通关奖励卷轴 / 通天塔榜零件 → pkg-scene（抖音 pack ignore 整目录，走 CDN）
+    // 章节通关奖励卷轴 / 通天塔榜零件 → pkg-scene（pack ignore 整目录 images，走 CDN）
     [path.join(ROOT, 'images/ui/chapter'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/chapter')],
     [path.join(ROOT, 'images/ui/rank'), path.join(ROOT, 'subpackages/pkg-scene/images/ui/rank')],
     // 自定义字体随包（非 CDN）：勿进主包，否则主包易超 4MB

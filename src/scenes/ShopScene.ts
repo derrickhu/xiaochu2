@@ -11,7 +11,7 @@ import { Platform } from '@/core/PlatformService';
 import { SfxManager } from '@/core/SfxManager';
 import { TextureCache } from '@/core/TextureCache';
 import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
-import { shopPreloadImages, shopPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
+import { shopPreloadImages } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI } from '@/balance/ui';
 import { PETS, type PetDef } from '@/balance/pets';
@@ -34,7 +34,6 @@ import {
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { pressFeedback } from '@/ui/motion';
 import { ScrollListController } from '@/ui/ScrollList';
-import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { ShopInfoPopup } from '@/scenes/shop/ShopInfoPopup';
 import { sortPetsByGrowthOrder } from './codexSort';
 
@@ -128,7 +127,29 @@ function shopCoinSlice(): { left: number; top: number; right: number; bottom: nu
   return { left: cap, top: 0, right: cap, bottom: 0 };
 }
 
-/** 九宫格贴图底板；贴图未就绪时不手绘面板，只留空容器 */
+/** 贴图到位再挂上。分包图 get() 不会自己开拉，这里补一次 load。 */
+function whenShopTex(
+  parent: PIXI.Container,
+  path: string,
+  apply: (tex: PIXI.Texture) => void,
+): void {
+  const ready = shopTexture(path);
+  if (ready) {
+    apply(ready);
+    return;
+  }
+  const unsub = TextureCache.onTextureLoaded((loaded) => {
+    if (loaded !== path) return;
+    unsub();
+    if (parent.destroyed) return;
+    const tex = shopTexture(path);
+    if (tex) apply(tex);
+  });
+  parent.once('destroyed', unsub);
+  void TextureCache.load(path).catch(() => null);
+}
+
+/** 九宫格贴图底板；未就绪时先空着，到图后垫到最底层 */
 function addNineSliceBg(
   parent: PIXI.Container,
   texPath: string,
@@ -136,13 +157,13 @@ function addNineSliceBg(
   h: number,
   slice: { left: number; top: number; right: number; bottom: number },
 ): boolean {
-  const tex = shopTexture(texPath);
-  if (!tex) return false;
-  const plane = new PIXI.NineSlicePlane(tex, slice.left, slice.top, slice.right, slice.bottom);
-  plane.width = w;
-  plane.height = h;
-  plane.position.set(-w / 2, -h / 2);
-  parent.addChild(plane);
+  whenShopTex(parent, texPath, (tex) => {
+    const plane = new PIXI.NineSlicePlane(tex, slice.left, slice.top, slice.right, slice.bottom);
+    plane.width = w;
+    plane.height = h;
+    plane.position.set(-w / 2, -h / 2);
+    parent.addChildAt(plane, 0);
+  });
   return true;
 }
 
@@ -153,14 +174,32 @@ function addScaledSprite(
   w: number,
   h: number,
 ): boolean {
-  const tex = shopTexture(texPath);
-  if (!tex) return false;
-  const sp = new PIXI.Sprite(tex);
-  sp.anchor.set(0.5);
-  sp.width = w;
-  sp.height = h;
-  parent.addChild(sp);
+  whenShopTex(parent, texPath, (tex) => {
+    const sp = new PIXI.Sprite(tex);
+    sp.anchor.set(0.5);
+    sp.width = w;
+    sp.height = h;
+    parent.addChildAt(sp, 0);
+  });
   return true;
+}
+
+function addShopIcon(
+  parent: PIXI.Container,
+  path: string,
+  size: number,
+  x: number,
+  y: number,
+): void {
+  const icon = new PIXI.Sprite(PIXI.Texture.EMPTY);
+  icon.anchor.set(0.5);
+  icon.position.set(x, y);
+  parent.addChild(icon);
+  whenShopTex(parent, path, (tex) => {
+    if (icon.destroyed || !tex.width) return;
+    icon.texture = tex;
+    icon.scale.set(size / Math.max(tex.width, tex.height));
+  });
 }
 
 function centerPivot(cont: PIXI.Container): { w: number; h: number } {
@@ -249,7 +288,6 @@ export class ShopScene implements Scene {
   private _cards = new Map<string, ShopCardRef>();
   private _tabId: ShopTabId = 'shard';
   private _from: string | null = null;
-  private readonly _enterSeq = new SceneEnterSeq();
   private _infoPopup: ShopInfoPopup | null = null;
 
   onEnter(data?: unknown): void {
@@ -259,31 +297,16 @@ export class ShopScene implements Scene {
     this._from = typeof enter?.from === 'string' ? enter.from : null;
     if (enter?.tab === 'honor' || enter?.tab === 'shard') this._tabId = enter.tab;
     else this._tabId = 'shard';
-    const token = this._enterSeq.next();
     this._fx = new SceneFx();
     this._build({ animate: true });
     void Game.warmScenePresent();
-    void this._hydrateShell(token);
-  }
-
-  private async _hydrateShell(token: number): Promise<void> {
-    await ensureAssets(shopPreloadImages()).catch((e) => {
+    // 壳图后台解码后由 whenShopTex 补上，不要等全部已拥有头像再整页重建。
+    void ensureAssets(shopPreloadImages()).catch((e) => {
       console.warn('[Shop] 壳层资源加载失败', e);
     });
-    // 头像先预热再重建，减少真机 CDN 空窗；bindPetAvatarSprite 仍会监听补刷
-    await ensurePetAvatars(shopPetAvatarEntries()).catch((e) => {
-      console.warn('[Shop] 头像预热失败', e);
-    });
-    if (!this._enterSeq.stillValid(token)) return;
-    if (SceneManager.current?.name !== 'shop') return;
-
-    this._fx?.destroy();
-    this._fx = new SceneFx();
-    this._build({ animate: false });
   }
 
   onExit(): void {
-    this._enterSeq.cancel();
     this._scroll.detach();
     this._content = null;
     this._listMask = null;
@@ -472,16 +495,7 @@ export class ShopScene implements Scene {
       th,
     );
 
-    const iconTex = shopTexture(tab.iconPath);
-    if (iconTex) {
-      const icon = new PIXI.Sprite(iconTex);
-      icon.anchor.set(0.5);
-      const s = SHOP_UI.tabIcon / Math.max(iconTex.width, iconTex.height);
-      icon.scale.set(s);
-      // 单层底板：图标居中偏上，文案贴底，不再给「底栏」留空
-      icon.position.set(0, -12);
-      node.addChild(icon);
-    }
+    addShopIcon(node, tab.iconPath, SHOP_UI.tabIcon, 0, -12);
 
     const label = makeText(tab.label, {
       size: FONT_SIZE.xs,
@@ -643,14 +657,7 @@ export class ShopScene implements Scene {
 
     // 与宠卡立绘一致：锚点居中；勿用 makeIconLabel（空文本会把视觉中心偏右）
     const iconSize = SHOP_UI.portraitSize * 0.85;
-    const iconTex = shopTexture(UI_IMAGES.iconShard);
-    if (iconTex) {
-      const icon = new PIXI.Sprite(iconTex);
-      icon.anchor.set(0.5);
-      icon.scale.set(iconSize / Math.max(iconTex.width, iconTex.height));
-      icon.position.set(0, portraitY);
-      card.addChild(icon);
-    }
+    addShopIcon(card, UI_IMAGES.iconShard, iconSize, 0, portraitY);
 
     const name = makeText('通用碎片', {
       size: SHOP_UI.nameSize, fill: COLORS.textMain, bold: true, anchor: 0.5,

@@ -31,6 +31,50 @@ export interface IconLabelHandle extends PIXI.Container {
   setText(text: string): void;
 }
 
+function armIcon(sprite: PIXI.Sprite, path: string, size: number): void {
+  const apply = (tex: PIXI.Texture): void => {
+    if (sprite.destroyed || !tex.width) return;
+    sprite.texture = tex;
+    sprite.scale.set(size / Math.max(tex.width, tex.height));
+  };
+  const cached = TextureCache.get(path);
+  if (cached?.width) {
+    apply(cached);
+    return;
+  }
+  const unsub = TextureCache.onTextureLoaded((loaded) => {
+    if (loaded !== path) return;
+    unsub();
+    const tex = TextureCache.get(path);
+    if (tex) apply(tex);
+  });
+  sprite.once('destroyed', unsub);
+  void TextureCache.load(path).catch(() => null);
+}
+
+/** 先占住图标宽，图到了再填，避免文字先顶到左边、到图后再整行重排。 */
+function addIconSlot(
+  cont: PIXI.Container,
+  path: string,
+  size: number,
+  anchorX: number,
+  x: number,
+  y: number,
+): void {
+  const slot = new PIXI.Container();
+  slot.position.set(x, y);
+  const spacer = new PIXI.Graphics();
+  spacer.beginFill(0xffffff, 0.001);
+  spacer.drawRect(anchorX === 0 ? 0 : -size / 2, -size / 2, size, size);
+  spacer.endFill();
+  slot.addChild(spacer);
+  const icon = new PIXI.Sprite(PIXI.Texture.EMPTY);
+  icon.anchor.set(anchorX, 0.5);
+  slot.addChild(icon);
+  cont.addChild(slot);
+  armIcon(icon, path, size);
+}
+
 export function makeIconLabel(opts: IconLabelOpts): IconLabelHandle {
   const iconSize = opts.iconSize ?? 32;
   const gap = opts.gap ?? 8;
@@ -42,7 +86,6 @@ export function makeIconLabel(opts: IconLabelOpts): IconLabelHandle {
   const capSize = opts.captionSize ?? FONT_SIZE.xs;
 
   const cont = new PIXI.Container() as IconLabelHandle;
-  const tex = opts.iconPath ? TextureCache.get(opts.iconPath) : null;
 
   const label = makeText(opts.text, {
     size: valSize,
@@ -65,12 +108,8 @@ export function makeIconLabel(opts: IconLabelOpts): IconLabelHandle {
     const leftH = iconSize + (cap ? stackGap + capLineH : 0);
     const topY = -leftH / 2;
 
-    if (tex) {
-      const icon = new PIXI.Sprite(tex);
-      icon.anchor.set(0.5);
-      icon.scale.set(iconSize / Math.max(tex.width, tex.height));
-      icon.position.set(leftW / 2, topY + iconSize / 2);
-      cont.addChild(icon);
+    if (opts.iconPath) {
+      addIconSlot(cont, opts.iconPath, iconSize, 0.5, leftW / 2, topY + iconSize / 2);
     }
 
     if (cap) {
@@ -84,12 +123,8 @@ export function makeIconLabel(opts: IconLabelOpts): IconLabelHandle {
   } else {
     let x = 0;
 
-    if (tex) {
-      const icon = new PIXI.Sprite(tex);
-      icon.anchor.set(0, 0.5);
-      icon.scale.set(iconSize / Math.max(tex.width, tex.height));
-      icon.position.set(0, 0);
-      cont.addChild(icon);
+    if (opts.iconPath) {
+      addIconSlot(cont, opts.iconPath, iconSize, 0, 0, 0);
       x = iconSize + gap;
     }
 

@@ -10,7 +10,6 @@ import { SceneManager, type Scene } from '@/core/SceneManager';
 import { Platform } from '@/core/PlatformService';
 import { SfxManager } from '@/core/SfxManager';
 import { TextureCache } from '@/core/TextureCache';
-import { gachaPreloadImages, gachaPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI, ELEMENT_NAME } from '@/balance/ui';
 import { PETS, PET_MAP } from '@/balance/pets';
@@ -43,7 +42,7 @@ import {
   buildGachaShardChip, buildGachaShardResult,
   multiShardChipSize, singleShardResultSize,
 } from './gacha/gachaShardResult';
-import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
+import { gachaPreloadImages } from '@/config/assetPreload';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 
 export class GachaScene implements Scene {
@@ -65,29 +64,17 @@ export class GachaScene implements Scene {
   private _tenPullBtn: ActionButtonHandle | null = null;
   private _freePullBtn: ActionButtonHandle | null = null;
   private _freePulling = false;
-  private readonly _enterSeq = new SceneEnterSeq();
 
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
     PlayerData.load();
-    const token = this._enterSeq.next();
     this._ensurePage();
     this._build();
     void Game.warmScenePresent();
-    void this._hydrateShell(token);
-  }
-
-  private async _hydrateShell(token: number): Promise<void> {
-    await ensureAssets(gachaPreloadImages()).catch((e) => {
+    // 壳图后台解码。结果卡和特效靠 texture:loaded 补上，不要等全图鉴头像再整页重建。
+    void ensureAssets(gachaPreloadImages()).catch((e) => {
       console.warn('[Gacha] 壳层资源加载失败', e);
     });
-    await ensurePetAvatars(gachaPetAvatarEntries()).catch((e) => {
-      console.warn('[Gacha] 头像预热失败', e);
-    });
-    if (!this._enterSeq.stillValid(token)) return;
-    if (SceneManager.current?.name !== 'gacha') return;
-    this._ensurePage();
-    this._build();
   }
 
   /** 保证 _page 挂载到 container 且未销毁 */
@@ -99,7 +86,6 @@ export class GachaScene implements Scene {
   }
 
   onExit(): void {
-    this._enterSeq.cancel();
     this._teardownResults();
     this.container.removeChildren().forEach((c) => c.destroy({ children: true }));
     this._page = new PIXI.Container();

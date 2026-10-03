@@ -247,9 +247,46 @@ function _windowDispatchEvent(type, event) {
 GameGlobal.__windowDispatchEvent = _windowDispatchEvent;
 
 // ======== 事件构造函数 ========
-function _PointerEvent(type, opts) { this.type = type; Object.assign(this, opts || {}); }
-function _TouchEventCtor(type, opts) { this.type = type; Object.assign(this, opts || {}); }
-function _MouseEvent(type, opts) { this.type = type; Object.assign(this, opts || {}); }
+// Pixi FederatedEvent.preventDefault 会执行 `nativeEvent instanceof Event`。
+// 微信小游戏没有 DOM Event，自由变量直接 ReferenceError，棋盘 pointerdown 被吃掉。
+function _Event(type, opts) {
+  this.type = type || '';
+  this.bubbles = !!(opts && opts.bubbles);
+  this.cancelable = !!(opts && opts.cancelable);
+  this.defaultPrevented = false;
+  this.timeStamp = Date.now();
+}
+_Event.prototype.preventDefault = function () {
+  if (this.cancelable) this.defaultPrevented = true;
+};
+_Event.prototype.stopPropagation = function () {};
+_Event.prototype.stopImmediatePropagation = function () {};
+
+function _MouseEvent(type, opts) {
+  _Event.call(this, type, opts);
+  if (opts) Object.assign(this, opts);
+}
+_MouseEvent.prototype = Object.create(_Event.prototype);
+_MouseEvent.prototype.constructor = _MouseEvent;
+
+function _PointerEvent(type, opts) {
+  _MouseEvent.call(this, type, opts);
+}
+_PointerEvent.prototype = Object.create(_MouseEvent.prototype);
+_PointerEvent.prototype.constructor = _PointerEvent;
+
+function _TouchEventCtor(type, opts) {
+  _Event.call(this, type, opts);
+  if (opts) Object.assign(this, opts);
+}
+_TouchEventCtor.prototype = Object.create(_Event.prototype);
+_TouchEventCtor.prototype.constructor = _TouchEventCtor;
+
+try {
+  if (AdapterTouchEvent && AdapterTouchEvent.prototype) {
+    Object.setPrototypeOf(AdapterTouchEvent.prototype, _Event.prototype);
+  }
+} catch (e) { /* 继承失败时 TouchEvent 仍可用，只是不是 Event */ }
 
 // ======== URL / Blob ========
 const _URL = {
@@ -281,38 +318,56 @@ const _allGlobals = {
   removeEventListener: _windowRemoveEventListener,
   self: null,            // 下面特殊处理
   // 对齐 game2D_huahua：真机也 stub PointerEvent，让 Pixi 走 pointerdown(canvas)+pointerup(window)
+  Event: _Event,
   PointerEvent: _PointerEvent,
-  TouchEvent: AdapterTouchEvent,
+  TouchEvent: AdapterTouchEvent || _TouchEventCtor,
   MouseEvent: _MouseEvent,
   URL: _URL,
   Blob: _Blob,
 };
 
+function _installDomEvents(targets) {
+  var map = {
+    Event: _Event,
+    MouseEvent: _MouseEvent,
+    PointerEvent: _PointerEvent,
+    TouchEvent: AdapterTouchEvent || _TouchEventCtor,
+  };
+  for (var i = 0; i < targets.length; i++) {
+    var target = targets[i];
+    if (!target) continue;
+    for (var name in map) {
+      if (typeof target[name] === 'function') continue;
+      _forceInstallGlobal(name, map[name], [target]);
+    }
+  }
+}
+
 if (isDevtools) {
   // ======== 模拟器环境 ========
   // window 已存在（浏览器环境），用 defineProperty 补充/覆盖
   const _win = typeof window !== 'undefined' ? window : GameGlobal;
-  const _forceDevtoolsOverwrite = ['XMLHttpRequest'];
-  _forceInstallGlobal('XMLHttpRequest', XMLHttpRequest, [_win, _realGlobal, typeof GameGlobal !== 'undefined' ? GameGlobal : null]);
+  // 开发者工具自带浏览器 XHR。盖掉之后 downloadFile / createImage(https)
+  // 的回包会被网络面板 structured clone，抛 An object could not be cloned。
+  // 工具里留给宿主 XHR。真机仍用适配器。
+  const _skipDevtoolsOverwrite = { XMLHttpRequest: true };
 
   for (const key in _allGlobals) {
     if (key === 'window' || key === 'self') continue;
+    if (_skipDevtoolsOverwrite[key]) continue;
     try {
       const desc = Object.getOwnPropertyDescriptor(_win, key);
-      const force = _forceDevtoolsOverwrite.indexOf(key) !== -1;
-      if (force || !desc || desc.configurable) {
+      if (!desc || desc.configurable) {
         _origDefineProperty.call(Object, _win, key, { value: _allGlobals[key], configurable: true, writable: true });
       }
-    } catch (e) {
-      try {
-        if (_forceDevtoolsOverwrite.indexOf(key) !== -1) _win[key] = _allGlobals[key];
-      } catch (_) { /* 只读属性忽略 */ }
-    }
-    try {
-      if (_forceDevtoolsOverwrite.indexOf(key) !== -1) GameGlobal[key] = _allGlobals[key];
-    } catch (_) {}
+    } catch (e) { /* 只读属性忽略 */ }
   }
-  _forceInstallGlobal('XMLHttpRequest', XMLHttpRequest, [_win, _realGlobal, typeof GameGlobal !== 'undefined' ? GameGlobal : null]);
+  _installDomEvents([
+    _win,
+    _realGlobal,
+    typeof GameGlobal !== 'undefined' ? GameGlobal : null,
+    typeof globalThis !== 'undefined' ? globalThis : null,
+  ]);
 
   // 关键修复：包装 window.addEventListener / removeEventListener
   // PixiJS EventSystem 在 globalThis(window) 上注册 pointermove / pointerup，
@@ -411,6 +466,11 @@ if (isDevtools) {
   }
   _forceInstallGlobal('XMLHttpRequest', XMLHttpRequest, [_realGlobal, typeof GameGlobal !== 'undefined' ? GameGlobal : null]);
   _forceInstallGlobal('document', document, [_realGlobal, typeof GameGlobal !== 'undefined' ? GameGlobal : null]);
+  _installDomEvents([
+    _realGlobal,
+    typeof GameGlobal !== 'undefined' ? GameGlobal : null,
+    typeof globalThis !== 'undefined' ? globalThis : null,
+  ]);
   ;(function _patchHostDocument() {
     var targets = [_realGlobal, typeof GameGlobal !== 'undefined' ? GameGlobal : null];
     if (typeof globalThis !== 'undefined') targets.push(globalThis);

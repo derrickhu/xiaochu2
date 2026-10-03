@@ -90,11 +90,16 @@ export function buildRankPresentation(opts: {
 }): { podium: [RankEntry | null, RankEntry | null, RankEntry | null]; list: Array<RankEntry | null> } {
   const slots = opts.listSlots ?? RANK_BOARD.listSlots;
   const items = densifyRankEntries(dedupeRankEntries(opts.items, opts.self));
-  if (items.length === 0 && opts.self) {
-    return {
-      podium: [null, { ...opts.self, rank: 1 }, null],
-      list: Array.from({ length: slots }, () => null),
-    };
+  const emptyList = Array.from({ length: slots }, () => null);
+  // 0 层不是成绩。空榜时不要把「我」摆上金牌，看起来像没打就拿了第一。
+  if (items.length === 0) {
+    if (opts.self && opts.self.floor > 0) {
+      return {
+        podium: [null, { ...opts.self, rank: 1 }, null],
+        list: emptyList,
+      };
+    }
+    return { podium: [null, null, null], list: emptyList };
   }
   const byRank = new Map<number, RankEntry>();
   for (const item of items) {
@@ -123,7 +128,7 @@ export function buildRankPresentation(opts: {
     ? visible.some((item) => item && (item.isSelf || sameRankPerson(item, self)
       || (self.rank > 0 && item.rank === self.rank)))
     : false;
-  if (self && !selfShown && (self.rank > 3 || self.rank === 0)) {
+  if (self && self.floor > 0 && !selfShown && (self.rank > 3 || self.rank === 0)) {
     list = [...list.filter((item) => item.rank !== self.rank), self]
       .sort((a, b) => {
         if (a.rank === 0) return 1;

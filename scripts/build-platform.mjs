@@ -50,6 +50,86 @@ function fail(msg) {
   throw new Error(`[build-platform] ${msg}`);
 }
 
+const PACK_TOTAL_LIMIT = 30 * 1024 * 1024;
+const PACK_MAIN_LIMIT = 4 * 1024 * 1024;
+
+function loadCdnDirs() {
+  const file = path.join(rootDir, 'src/config/CdnConfig.ts');
+  const text = fs.readFileSync(file, 'utf8');
+  const m = text.match(/cdnDirs:\s*\[([\s\S]*?)\]/);
+  if (!m) fail('无法解析 CdnConfig.cdnDirs');
+  return [...m[1].matchAll(/'([^']+)'/g)].map((hit) => hit[1]);
+}
+
+/** folder / prefix / glob 是否盖住整个 CDN 目录（只忽略子目录不算） */
+function ignoreCoversDir(ignore, dir) {
+  const norm = dir.replace(/\\/g, '/').replace(/\/$/, '');
+  return (ignore || []).some((rule) => {
+    if (rule.type !== 'folder' && rule.type !== 'glob' && rule.type !== 'prefix') return false;
+    let value = String(rule.value || '').replace(/\\/g, '/').replace(/^\//, '');
+    value = value.replace(/\/\*\*\/\*$/, '').replace(/\/\*$/, '').replace(/\/$/, '');
+    if (!value) return false;
+    return norm === value || norm.startsWith(`${value}/`);
+  });
+}
+
+function pathIgnored(rel, ignore) {
+  const norm = rel.replace(/\\/g, '/');
+  return (ignore || []).some((rule) => {
+    const value = String(rule.value || '').replace(/\\/g, '/').replace(/^\//, '');
+    if (!value) return false;
+    if (rule.type === 'file') return norm === value;
+    if (rule.type === 'folder') return norm === value || norm.startsWith(`${value}/`);
+    if (rule.type === 'prefix') return norm.startsWith(value);
+    if (rule.type === 'suffix') return norm.endsWith(value);
+    if (rule.type === 'glob') {
+      const body = value
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*\*/g, '::GLOBSTAR::')
+        .replace(/\*/g, '[^/]*')
+        .replace(/::GLOBSTAR::/g, '.*');
+      return new RegExp(`^${body}$`).test(norm);
+    }
+    return false;
+  });
+}
+
+/**
+ * 微信总包 30MB、主包 4MB。CDN 目录必须被 packOptions.ignore 整段排除，
+ * 否则开发者工具按磁盘全量计体积（80051）。
+ */
+function assertCdnNotPacked(platform, config, out) {
+  if (platform !== 'wechat' && platform !== 'douyin') return;
+  const ignore = config?.packOptions?.ignore || [];
+  const missed = loadCdnDirs().filter((dir) => !ignoreCoversDir(ignore, dir));
+  if (missed.length) {
+    fail(`${platform} packOptions.ignore 未覆盖 CDN 目录: ${missed.join(', ')}`);
+  }
+  if (!fs.existsSync(out)) return;
+  let total = 0;
+  let main = 0;
+  const walk = (dir) => {
+    for (const name of fs.readdirSync(dir)) {
+      if (name === '.DS_Store' || name === 'Thumbs.db') continue;
+      const full = path.join(dir, name);
+      const rel = path.relative(out, full).replace(/\\/g, '/');
+      if (pathIgnored(rel, ignore)) continue;
+      const st = fs.statSync(full);
+      if (st.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      total += st.size;
+      if (!rel.startsWith('subpackages/')) main += st.size;
+    }
+  };
+  walk(out);
+  const mb = (n) => (n / 1024 / 1024).toFixed(2);
+  console.log(`[build-platform] ${platform} 上传体积约 ${mb(total)}MB（主包 ${mb(main)}MB，上限 30MB / 主包 4MB）`);
+  if (total >= PACK_TOTAL_LIMIT) fail(`${platform} 代码包 ${mb(total)}MB 超过 30MB`);
+  if (main >= PACK_MAIN_LIMIT) fail(`${platform} 主包 ${mb(main)}MB 超过 4MB`);
+}
+
 function bundleDirOf(platform) {
   if (platform === 'taptap') return BUNDLE_TAPTAP_DIR;
   if (platform === 'huawei') return BUNDLE_HUAWEI_DIR;
@@ -65,16 +145,26 @@ function cleanStale(dir) {
   }
 }
 
+/** 开发者工具会把这些字段写回 project.config.json。重打时若模板没写，不能冲掉，否则模拟器 getGameEntrance 会 500。 */
+const IDE_PRESERVE_KEYS = ['simulatorType', 'simulatorPluginLibVersion'];
+
 function inheritAppid(outConfigPath, freshConfig) {
-  if (freshConfig.appid) return { config: freshConfig, inherited: null };
-  if (!fs.existsSync(outConfigPath)) return { config: freshConfig, inherited: null };
-  try {
-    const prev = JSON.parse(fs.readFileSync(outConfigPath, 'utf8'));
-    if (!prev.appid) return { config: freshConfig, inherited: null };
-    return { config: { ...freshConfig, appid: prev.appid }, inherited: prev.appid };
-  } catch {
-    return { config: freshConfig, inherited: null };
+  let prev = null;
+  if (fs.existsSync(outConfigPath)) {
+    try { prev = JSON.parse(fs.readFileSync(outConfigPath, 'utf8')); } catch { prev = null; }
   }
+  const config = { ...freshConfig };
+  let inherited = null;
+  if (!config.appid && prev?.appid) {
+    config.appid = prev.appid;
+    inherited = prev.appid;
+  }
+  if (prev) {
+    for (const key of IDE_PRESERVE_KEYS) {
+      if (config[key] == null && prev[key] != null) config[key] = prev[key];
+    }
+  }
+  return { config, inherited };
 }
 
 function contentLooksCopied(out) {
@@ -207,6 +297,7 @@ export function assemble(platform, { quiet = false, bundleDir, full = false } = 
     if (prev !== rendered) fs.writeFileSync(outConfig, rendered, 'utf8');
   }
   pokeSimulator(out, stats);
+  assertCdnNotPacked(platform, config, out);
 
   if (!quiet) {
     const size = (fs.statSync(bundle).size / 1024).toFixed(0);

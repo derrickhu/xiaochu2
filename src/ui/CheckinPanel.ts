@@ -20,7 +20,6 @@ import { tryRequestSubscribe } from '@/game/subscribeGate';
 import { AD_REWARD_MULT } from '@/balance/monetization';
 import { analytics } from '@/analytics';
 import { UI_IMAGES } from '@/config/Assets';
-import { ensureAssets } from '@/config/Subpackages';
 import {
   COLORS, FONT_SIZE,
   makeActionButton, makeCloseButton, makePanel, makeText, makeModalTitlePlaque, pulse,
@@ -65,27 +64,11 @@ export class CheckinPanel extends PIXI.Container {
     this._refresh();
     this.alpha = 0;
     TweenManager.to({ target: this, props: { alpha: 1 }, duration: 0.2, ease: Ease.easeOutQuad });
-    // 卡面/匾走 CDN：先 ensureAssets（含下载）再刷一次，避免真机首开空图
-    void this._hydrateAssets();
-  }
-
-  private async _hydrateAssets(): Promise<void> {
-    const paths = [
-      UI_IMAGES.iconLingyu, UI_IMAGES.iconCoin, UI_IMAGES.iconTicket, UI_IMAGES.iconShard,
-      UI_IMAGES.iconStamina,
-      UI_IMAGES.railCheckin, UI_IMAGES.modalTitlePlaque,
-      UI_IMAGES.checkinCardNormal, UI_IMAGES.checkinCardToday, UI_IMAGES.checkinBannerDay7,
-      UI_IMAGES.btnPlateSuccess, UI_IMAGES.btnPlateCream,
-    ];
-    await ensureAssets(paths).catch((e) => {
-      console.warn('[Checkin] 资源预热失败', e);
-    });
-    if (!this._isOpen) return;
-    this._refresh();
   }
 
   close(): void {
-    if (!this._isOpen || this._signing) return;
+    // 广告 Promise 没回来时也要能关。领奖在后台做完，不靠这个面板还活着。
+    if (!this._isOpen) return;
     this._isOpen = false;
     TweenManager.cancelTarget(this);
     TweenManager.to({
@@ -163,14 +146,29 @@ export class CheckinPanel extends PIXI.Container {
     bar.position.set(0, y);
     this._body.addChild(bar);
 
-    const iconTex = TextureCache.get(UI_IMAGES.railCheckin);
-    if (iconTex) {
-      const icon = new PIXI.Sprite(iconTex);
-      icon.anchor.set(0.5);
+    const icon = new PIXI.Sprite(PIXI.Texture.EMPTY);
+    icon.anchor.set(0.5);
+    icon.position.set(-barW / 2 + 28, y);
+    this._body.addChild(icon);
+    const railPath = UI_IMAGES.railCheckin;
+    const applyRail = (tex: PIXI.Texture): void => {
+      if (icon.destroyed || !tex.width) return;
+      icon.texture = tex;
       icon.width = 30;
       icon.height = 30;
-      icon.position.set(-barW / 2 + 28, y);
-      this._body.addChild(icon);
+    };
+    const railTex = TextureCache.get(railPath);
+    if (railTex?.width) {
+      applyRail(railTex);
+    } else {
+      const unsub = TextureCache.onTextureLoaded((loaded) => {
+        if (loaded !== railPath) return;
+        unsub();
+        const tex = TextureCache.get(railPath);
+        if (tex) applyRail(tex);
+      });
+      icon.once('destroyed', unsub);
+      void TextureCache.load(railPath).catch(() => null);
     }
 
     const streakText = makeText(`连续签到 ${streak} 天`, {

@@ -6,14 +6,10 @@
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
+import { TweenManager } from '@/core/TweenManager';
 import { SceneManager, type Scene } from '@/core/SceneManager';
 import { TextureCache } from '@/core/TextureCache';
-import {
-  CODEX_SHELL_IMAGES,
-  codexPetAvatarEntries,
-  ensurePetAvatars,
-  petDetailPreloadImages,
-} from '@/config/assetPreload';
+import { petDetailPreloadImages } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import type { ScrollListConfig } from '@/ui/ScrollList';
 import { UI } from '@/balance/ui';
@@ -27,7 +23,7 @@ import { PlayerData } from '@/game/PlayerData';
 import {
   COLORS, FONT_SIZE,
   makeBackButton, makeButton, makeCoverBackground, makeIconLabel, makePanel, makeText,
-  makeCloseButton, staggerIn,
+  makeCloseButton,
 } from '@/ui';
 import { ScrollListController } from '@/ui/ScrollList';
 import { bindPointerTap } from '@/utils/bindPointerTap';
@@ -36,7 +32,8 @@ import { Platform } from '@/core/PlatformService';
 import { SfxManager } from '@/core/SfxManager';
 import { RADIUS } from '@/ui/theme';
 import type { PetDetailEnterData } from './PetDetailScene';
-import { buildLockedCodexCard, buildOwnedCodexCard } from './codexCards';
+import { buildCodexCardBack, buildLockedCodexCard, buildOwnedCodexCard } from './codexCards';
+import { visibleRowRange } from '@/ui/scrollMotion';
 import { sortPetsByGrowthOrder } from './codexSort';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 
@@ -46,6 +43,24 @@ function designScale(w: number): number {
 
 type CodexState = 'owned' | 'locked';
 type CodexFilter = 'all' | 'owned' | 'locked';
+
+interface CodexSlot {
+  item: PIXI.Container;
+  pet: PetDef;
+  row: number;
+  filled: boolean;
+}
+
+interface CodexWindow {
+  viewportTop: number;
+  viewportH: number;
+  cardGap: number;
+  rowH: number;
+  cardW: number;
+  cardH: number;
+  S: number;
+  rowCount: number;
+}
 
 const FILTER_TABS: readonly { id: CodexFilter; label: string }[] = [
   { id: 'all', label: '全部' },
@@ -77,7 +92,19 @@ function petPoolGrid(w: number) {
 
 function codexTex(path: string): PIXI.Texture | null {
   const t = TextureCache.get(path);
-  return t?.valid ? t : null;
+  return t?.width ? t : null;
+}
+
+/** 有缓存立刻用；没有就后台拉，到了再画。不阻塞进页。 */
+function whenCodexTex(path: string, apply: (tex: PIXI.Texture) => void): void {
+  const ready = codexTex(path);
+  if (ready) {
+    apply(ready);
+    return;
+  }
+  void TextureCache.load(path).then((tex) => {
+    if (tex?.width) apply(tex);
+  }).catch(() => {});
 }
 
 export class CodexScene implements Scene {
@@ -88,6 +115,7 @@ export class CodexScene implements Scene {
   private _listMask: PIXI.Graphics | null = null;
   private _scroll = new ScrollListController();
   private readonly _enterSeq = new SceneEnterSeq();
+  private _detailWarmTimer: ReturnType<typeof setTimeout> | null = null;
   private _filter: CodexFilter = 'all';
   private _listTop = 280;
   private _rewardOverlay: PIXI.Container | null = null;
@@ -100,6 +128,16 @@ export class CodexScene implements Scene {
   private _parkFingerprint = '';
   private _parkContentY = 0;
   private _scrollCfg: ScrollListConfig | null = null;
+  private _slots: CodexSlot[] = [];
+  private _window: CodexWindow | null = null;
+  private _pumping = false;
+  private readonly _pumpTick = (): void => {
+    if (!this._content || this._content.destroyed || !this._window) {
+      this._stopPump();
+      return;
+    }
+    if (!this._syncWindow(this._content.y, 2)) this._stopPump();
+  };
 
   onEnter(): void {
     Game.setMaxFPS(UI.fps.idle);
@@ -114,31 +152,38 @@ export class CodexScene implements Scene {
     this._filter = 'all';
     const token = this._enterSeq.next();
     this._buildShell();
-    this._buildPetList({ animate: true });
+    this._buildPetList({ animate: false });
     void Game.warmScenePresent();
-    void this._hydrateShell(token);
+    this._warmFirstDetail(token);
   }
 
-  private async _hydrateShell(token: number): Promise<void> {
-    await ensureAssets(CODEX_SHELL_IMAGES).catch((e) => {
-      console.warn('[Codex] 壳层资源加载失败', e);
-    });
-    await ensurePetAvatars(codexPetAvatarEntries()).catch((e) => {
-      console.warn('[Codex] 头像预热失败', e);
-    });
-    if (!this._enterSeq.stillValid(token)) return;
-    if (SceneManager.current?.name !== 'codex') return;
-    this._buildShell();
-    this._buildPetList({ animate: false });
-    // 后台预热第一只已拥有宠的详情壳/秀场，减轻「点第一个就卡」
-    const firstOwned = PlayerData.ownedPets[0];
-    if (firstOwned) {
-      void ensureAssets(petDetailPreloadImages(firstOwned)).catch(() => {});
+  /**
+   * 壳图、卡面、头像都是缺了再后台拉，到货自己换上。
+   * 以前等整包下完再拆掉列表重建，首次点进来会卡在这一下。
+   * 详情图等列表先出来再预热，避免和首屏抢解码。
+   */
+  private _warmFirstDetail(token: number): void {
+    if (this._detailWarmTimer != null) {
+      clearTimeout(this._detailWarmTimer);
+      this._detailWarmTimer = null;
     }
+    const firstOwned = PlayerData.ownedPets[0];
+    if (!firstOwned) return;
+    const timer = setTimeout(() => {
+      if (!this._enterSeq.stillValid(token)) return;
+      if (SceneManager.current?.name !== 'codex') return;
+      void ensureAssets(petDetailPreloadImages(firstOwned)).catch(() => {});
+    }, 600);
+    this._detailWarmTimer = timer;
   }
 
   onExit(): void {
     this._enterSeq.cancel();
+    if (this._detailWarmTimer != null) {
+      clearTimeout(this._detailWarmTimer);
+      this._detailWarmTimer = null;
+    }
+    this._stopPump();
     if (this._parkForDetail) {
       this._parkForDetail = false;
       this._parked = true;
@@ -162,6 +207,9 @@ export class CodexScene implements Scene {
   }
 
   private _disposeTree(): void {
+    this._stopPump();
+    this._slots = [];
+    this._window = null;
     this._scroll.detach();
     this._scrollCfg = null;
     this._content = null;
@@ -186,6 +234,7 @@ export class CodexScene implements Scene {
       if (this._scrollCfg) {
         this._scroll.attach(this._scrollCfg);
         this._content.y = this._parkContentY;
+        this._syncWindow(this._content.y, 6);
       }
       return;
     }
@@ -213,6 +262,7 @@ export class CodexScene implements Scene {
   }
 
   private _buildShell(): void {
+    this._stopPump();
     const w = Game.logicWidth;
     const h = Game.logicHeight;
     this._scroll.detach();
@@ -225,19 +275,18 @@ export class CodexScene implements Scene {
 
     this.container.addChild(makeCoverBackground(BACKGROUND_IMAGES.codex, w, h));
 
-    // 祥云从屏顶 y=0 满铺向上区域（对齐原型顶栏云雾，勿从 safeTop 起留缝）
-    const canopyTex = codexTex(UI_CODEX_IMAGES.headerCanopy);
-    const canopyTop = 0;
-    const canopyH = canopyTex
-      ? Math.max(240, Math.min(320, w * (canopyTex.height / canopyTex.width) * 1.05))
-      : 260;
-    if (canopyTex) {
-      const canopy = new PIXI.Sprite(canopyTex);
+    // 祥云从屏顶 y=0 满铺。高度先按占位算，图到了再贴，避免等下载才排版
+    const canopyH = 260;
+    const canopyHost = new PIXI.Container();
+    this.container.addChild(canopyHost);
+    whenCodexTex(UI_CODEX_IMAGES.headerCanopy, (tex) => {
+      if (canopyHost.destroyed) return;
+      const canopy = new PIXI.Sprite(tex);
       canopy.width = w + 40;
       canopy.height = canopyH;
-      canopy.position.set(-20, canopyTop);
-      this.container.addChild(canopy);
-    }
+      canopy.position.set(-20, 0);
+      canopyHost.addChild(canopy);
+    });
 
     // 顶栏同一水平中线：返回 → 灵宠标题贴图 → 币/灵玉（避抖音胶囊）
     const headerY = Game.safeHeaderCenterY;
@@ -248,29 +297,28 @@ export class CodexScene implements Scene {
     this.container.addChild(back);
 
     const titleX = 64 + 48;
-    const titleTex = codexTex(UI_CODEX_IMAGES.titleLingchong);
-    let titleRight = titleX + 96;
-    if (titleTex) {
-      const title = new PIXI.Sprite(titleTex);
-      title.anchor.set(0, 0.5);
+    const title = makeText('灵宠', {
+      size: 48,
+      fill: 0x2b2118,
+      bold: true,
+      anchor: [0, 0.5],
+      role: 'title',
+    });
+    title.position.set(titleX, headerY);
+    this.container.addChild(title);
+    const titleRight = titleX + Math.max(96, title.width) + 14;
+    whenCodexTex(UI_CODEX_IMAGES.titleLingchong, (tex) => {
+      if (title.destroyed || !title.parent) return;
+      title.visible = false;
+      const spr = new PIXI.Sprite(tex);
+      spr.anchor.set(0, 0.5);
       const titleH = 48;
-      title.height = titleH;
-      title.width = titleTex.width * (titleH / titleTex.height);
-      title.position.set(titleX, headerY);
-      this.container.addChild(title);
-      titleRight = titleX + title.width + 14;
-    } else {
-      const title = makeText('灵宠', {
-        size: 48,
-        fill: 0x2b2118,
-        bold: true,
-        anchor: [0, 0.5],
-        role: 'title',
-      });
-      title.position.set(titleX, headerY);
-      this.container.addChild(title);
-      titleRight = titleX + title.width + 14;
-    }
+      spr.height = titleH;
+      spr.width = tex.width * (titleH / tex.height);
+      spr.position.set(titleX, headerY);
+      const parent = title.parent;
+      parent.addChildAt(spr, parent.getChildIndex(title) + 1);
+    });
 
     this._buildResourcePills(titleRight, headerY);
 
@@ -318,18 +366,17 @@ export class CodexScene implements Scene {
     const total = PETS.length;
     const pending = progress.pendingLingyu > 0;
 
-    const ringTex = codexTex(UI_CODEX_IMAGES.rewardRing);
     const ringRoot = new PIXI.Container();
     ringRoot.position.set(cx, cy);
     this.container.addChild(ringRoot);
-
-    if (ringTex) {
-      const ring = new PIXI.Sprite(ringTex);
+    whenCodexTex(UI_CODEX_IMAGES.rewardRing, (tex) => {
+      if (ringRoot.destroyed) return;
+      const ring = new PIXI.Sprite(tex);
       ring.anchor.set(0.5);
       ring.width = ringSize;
-      ring.height = ringSize * (ringTex.height / ringTex.width);
-      ringRoot.addChild(ring);
-    }
+      ring.height = ringSize * (tex.height / tex.width);
+      ringRoot.addChildAt(ring, 0);
+    });
 
     const count = makeText(`${owned}/${total}`, {
       size: 24, fill: COLORS.textMain, bold: true, anchor: 0.5,
@@ -353,20 +400,20 @@ export class CodexScene implements Scene {
     bindPointerTap(ringRoot, () => this._openRewardPanel());
 
     if (pending) {
-      const claimTex = codexTex(UI_CODEX_IMAGES.claimBtn);
       const claim = new PIXI.Container();
-      if (claimTex) {
-        const spr = new PIXI.Sprite(claimTex);
+      const fallback = makeText('领', {
+        size: 18, fill: COLORS.textMain, bold: true, anchor: 0.5,
+      });
+      claim.addChild(fallback);
+      whenCodexTex(UI_CODEX_IMAGES.claimBtn, (tex) => {
+        if (claim.destroyed) return;
+        fallback.visible = false;
+        const spr = new PIXI.Sprite(tex);
         spr.anchor.set(0.5);
         spr.width = 44;
         spr.height = 44;
         claim.addChild(spr);
-      } else {
-        const fallback = makeText('领', {
-          size: 18, fill: COLORS.textMain, bold: true, anchor: 0.5,
-        });
-        claim.addChild(fallback);
-      }
+      });
       claim.position.set(ringSize * 0.42, -ringSize * 0.38);
       claim.eventMode = 'static';
       claim.cursor = 'pointer';
@@ -388,18 +435,19 @@ export class CodexScene implements Scene {
     const rail = new PIXI.Container();
     rail.position.set(railX, y - railH / 2);
 
-    const railTex = codexTex(UI_CODEX_IMAGES.filterRail);
-    if (railTex) {
-      const spr = new PIXI.Sprite(railTex);
+    const railPlate = makePanel({
+      width: railW, height: railH, radius: railH / 2, centered: false,
+      bg: 0xeef4f0, border: 0xc4b49a, borderWidth: 2,
+    });
+    rail.addChild(railPlate);
+    whenCodexTex(UI_CODEX_IMAGES.filterRail, (tex) => {
+      if (rail.destroyed) return;
+      railPlate.visible = false;
+      const spr = new PIXI.Sprite(tex);
       spr.width = railW;
       spr.height = railH;
-      rail.addChild(spr);
-    } else {
-      rail.addChild(makePanel({
-        width: railW, height: railH, radius: railH / 2, centered: false,
-        bg: 0xeef4f0, border: 0xc4b49a, borderWidth: 2,
-      }));
-    }
+      rail.addChildAt(spr, 0);
+    });
 
     const segW = railW / FILTER_TABS.length;
     const selTex = codexTex(UI_CODEX_IMAGES.filterSelected);
@@ -413,18 +461,28 @@ export class CodexScene implements Scene {
       const cx = segW * i + segW / 2;
 
       if (selected) {
+        const g = new PIXI.Graphics();
+        g.beginFill(0x2a9b8f, 1);
+        g.drawRoundedRect(segW * i + selPadX, selPadY, selW, selH, selH / 2);
+        g.endFill();
+        rail.addChild(g);
         if (selTex) {
+          g.visible = false;
           const sel = new PIXI.Sprite(selTex);
           sel.width = selW;
           sel.height = selH;
           sel.position.set(segW * i + selPadX, selPadY);
           rail.addChild(sel);
         } else {
-          const g = new PIXI.Graphics();
-          g.beginFill(0x2a9b8f, 1);
-          g.drawRoundedRect(segW * i + selPadX, selPadY, selW, selH, selH / 2);
-          g.endFill();
-          rail.addChild(g);
+          whenCodexTex(UI_CODEX_IMAGES.filterSelected, (tex) => {
+            if (g.destroyed) return;
+            g.visible = false;
+            const sel = new PIXI.Sprite(tex);
+            sel.width = selW;
+            sel.height = selH;
+            sel.position.set(segW * i + selPadX, selPadY);
+            rail.addChild(sel);
+          });
         }
       }
 
@@ -452,8 +510,9 @@ export class CodexScene implements Scene {
     this.container.addChild(rail);
   }
 
-  private _buildPetList(opts?: { animate?: boolean }): void {
-    const animate = opts?.animate !== false;
+  private _buildPetList(opts?: { animate?: boolean; restoreY?: number }): void {
+    this._stopPump();
+    this._slots = [];
     this._scroll.detach();
     if (this._listMask && !this._listMask.destroyed) this._listMask.destroy();
     this._listMask = null;
@@ -478,13 +537,10 @@ export class CodexScene implements Scene {
     this._content = content;
     this.container.addChild(content);
 
-    const recruitId = PlayerData.nextRecruit();
-    const recruitCost = PlayerData.nextRecruitPrice();
-    const items: PIXI.Container[] = [];
+    const slots: CodexSlot[] = [];
     let maxBottom = 0;
 
     pool.forEach((pet, i) => {
-      const state = stateOf(pet);
       const col = i % cols;
       const row = Math.floor(i / cols);
       const x = marginX + col * (cardW + cardGap);
@@ -493,28 +549,18 @@ export class CodexScene implements Scene {
 
       const item = new PIXI.Container();
       item.position.set(x, y);
-      const cardBgTex = TextureCache.get(petCardPortraitImage(pet.rarity));
-      if (state === 'owned') {
-        buildOwnedCodexCard(item, pet, cardW, cardH, S, cardBgTex);
-      } else {
-        buildLockedCodexCard(
-          item, pet, cardW, cardH, S, cardBgTex,
-          pet.id === recruitId
-            ? { price: recruitCost, affordable: PlayerData.coins >= recruitCost }
-            : undefined,
-        );
-      }
-
       item.eventMode = 'static';
       item.interactiveChildren = false;
       item.cursor = 'pointer';
       item.hitArea = new PIXI.Rectangle(0, 0, cardW, cardH);
+      const state = stateOf(pet);
       bindPointerTap(item, () => this._onPetTap(pet, state), {
         blockTap: () => this._scroll.moved,
       });
       content.addChild(item);
-      items.push(item);
+      slots.push({ item, pet, row, filled: false });
     });
+    this._slots = slots;
 
     if (pool.length === 0) {
       const empty = makeText('暂无灵宠', {
@@ -525,15 +571,33 @@ export class CodexScene implements Scene {
       maxBottom = 120;
     }
 
-    if (animate) {
-      staggerIn(items, { stepDelay: 0.022, offsetY: 14, duration: 0.28 });
-    }
-
     const viewportH = h - startY - 16;
     const contentH = maxBottom + cardGap;
     const scrollMin = Math.min(startY, startY - Math.max(0, contentH - viewportH));
+    const rowH = cardH + cardGap;
+    this._window = {
+      viewportTop: startY,
+      viewportH,
+      cardGap,
+      rowH,
+      cardW,
+      cardH,
+      S,
+      rowCount: Math.ceil(pool.length / cols),
+    };
 
-    if (contentH > viewportH) {
+    let contentY = startY;
+    if (opts?.restoreY != null) {
+      contentY = Math.max(scrollMin, Math.min(startY, opts.restoreY));
+    }
+    content.y = contentY;
+
+    const overflow = contentH > viewportH;
+    // 这一帧只补最上面一行，剩下的分帧补，避免点进来把整表建完
+    const firstPaint = overflow ? Math.min(cols, slots.length) : slots.length;
+    if (this._syncWindow(contentY, firstPaint)) this._ensurePump();
+
+    if (overflow) {
       const mask = new PIXI.Graphics();
       mask.beginFill(0xffffff);
       mask.drawRect(0, startY, w, viewportH);
@@ -548,12 +612,113 @@ export class CodexScene implements Scene {
         scrollMin,
         listTop: startY,
         moveThreshold: 2,
+        onScroll: (y) => this._ensurePump(),
       };
       this._scrollCfg = cfg;
       this._scroll.attach(cfg);
     } else {
       this._scrollCfg = null;
     }
+  }
+
+  /** 只给视口附近的卡补立绘和文字。返回是否还有格子没处理完。 */
+  private _syncWindow(contentY: number, budget: number): boolean {
+    const win = this._window;
+    if (!win || budget <= 0) return false;
+    const { first, last } = visibleRowRange({
+      contentY,
+      viewportTop: win.viewportTop,
+      viewportH: win.viewportH,
+      cardGap: win.cardGap,
+      rowH: win.rowH,
+      rowCount: win.rowCount,
+      buffer: 1,
+    });
+    const mid = (first + last) / 2;
+    const fill: CodexSlot[] = [];
+    const drop: CodexSlot[] = [];
+    for (const slot of this._slots) {
+      if (slot.item.destroyed) continue;
+      if (slot.row >= first && slot.row <= last) {
+        if (!slot.filled) fill.push(slot);
+      } else if (slot.filled && (slot.row < first - 2 || slot.row > last + 2)) {
+        drop.push(slot);
+      }
+    }
+    fill.sort((a, b) => a.row - b.row);
+    drop.sort((a, b) => Math.abs(b.row - mid) - Math.abs(a.row - mid));
+    let n = 0;
+    for (const slot of fill) {
+      if (n >= budget) break;
+      this._fillSlot(slot);
+      n += 1;
+    }
+    let d = 0;
+    for (const slot of drop) {
+      if (d >= budget) break;
+      this._shellSlot(slot);
+      d += 1;
+    }
+    return n < fill.length || d < drop.length;
+  }
+
+  private _fillSlot(slot: CodexSlot): void {
+    const win = this._window;
+    if (!win || slot.item.destroyed) return;
+    this._clearSlotChildren(slot);
+    const tex = TextureCache.get(petCardPortraitImage(slot.pet.rarity));
+    const cardBg = tex?.valid ? tex : null;
+    const owned = PlayerData.isOwned(slot.pet.id);
+    if (owned) {
+      buildOwnedCodexCard(slot.item, slot.pet, win.cardW, win.cardH, win.S, cardBg);
+    } else {
+      const recruitId = PlayerData.nextRecruit();
+      const recruitCost = PlayerData.nextRecruitPrice();
+      buildLockedCodexCard(
+        slot.item, slot.pet, win.cardW, win.cardH, win.S, cardBg,
+        slot.pet.id === recruitId
+          ? { price: recruitCost, affordable: PlayerData.coins >= recruitCost }
+          : undefined,
+      );
+    }
+    slot.item.interactiveChildren = false;
+    slot.filled = true;
+  }
+
+  private _shellSlot(slot: CodexSlot): void {
+    const win = this._window;
+    if (!win || slot.item.destroyed) return;
+    TweenManager.cancelTarget(slot.item);
+    this._clearSlotChildren(slot);
+    const tex = TextureCache.get(petCardPortraitImage(slot.pet.rarity));
+    buildCodexCardBack(
+      slot.item, win.cardW, win.cardH, win.S,
+      tex?.width ? tex : null,
+      !PlayerData.isOwned(slot.pet.id),
+      petCardPortraitImage(slot.pet.rarity),
+    );
+    slot.item.alpha = 1;
+    slot.item.interactiveChildren = false;
+    slot.filled = false;
+  }
+
+  private _clearSlotChildren(slot: CodexSlot): void {
+    const kids = slot.item.removeChildren();
+    for (let i = 0; i < kids.length; i++) {
+      if (!kids[i].destroyed) kids[i].destroy({ children: true });
+    }
+  }
+
+  private _ensurePump(): void {
+    if (this._pumping) return;
+    this._pumping = true;
+    Game.ticker.add(this._pumpTick);
+  }
+
+  private _stopPump(): void {
+    if (!this._pumping) return;
+    this._pumping = false;
+    Game.ticker.remove(this._pumpTick);
   }
 
   private _claimRewards(): void {

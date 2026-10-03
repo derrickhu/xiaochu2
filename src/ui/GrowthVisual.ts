@@ -105,6 +105,29 @@ function makeSpriteStarRow(opts: StarRowOpts): PIXI.Container {
 
   const cont = new PIXI.Container();
   const startX = opts.anchor === 'center' ? -rowW / 2 : 0;
+  if (!tex?.width) {
+    const starPath = UI_BATTLE_IMAGES.petStar;
+    const unsub = TextureCache.onTextureLoaded((loaded) => {
+      if (loaded !== starPath) return;
+      unsub();
+      if (cont.destroyed) return;
+      const next = TextureCache.get(starPath);
+      if (!next?.width) return;
+      cont.removeChildren().forEach((c) => c.destroy());
+      for (let i = 0; i < maxStar; i++) {
+        const star = new PIXI.Sprite(next);
+        star.anchor.set(0.5);
+        star.width = starSize;
+        star.height = starSize;
+        if (i >= filled) {
+          star.tint = 0x9a8a70;
+          star.alpha = 0.35;
+        }
+        star.position.set(startX + starSize / 2 + i * (starSize + gap), 0);
+        cont.addChild(star);
+      }
+    });
+  }
   for (let i = 0; i < maxStar; i++) {
     const lit = i < filled;
     const x = startX + starSize / 2 + i * (starSize + gap);

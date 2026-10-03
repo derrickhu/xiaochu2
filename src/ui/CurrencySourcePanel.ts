@@ -12,7 +12,6 @@ import { EventBus } from '@/core/EventBus';
 import { TextureCache } from '@/core/TextureCache';
 import { UI_IMAGES } from '@/config/Assets';
 import { ECONOMY } from '@/balance/economy';
-import { ensureAssets } from '@/config/Subpackages';
 import { COLORS, FONT_SIZE } from './theme';
 import { makeText } from './text';
 import { makeActionButton } from './ActionButton';
@@ -181,7 +180,6 @@ export class CurrencySourcePanel extends PIXI.Container {
     this._refresh();
     this.alpha = 0;
     TweenManager.to({ target: this, props: { alpha: 1 }, duration: 0.2, ease: Ease.easeOutQuad });
-    void this._hydrateAssets();
   }
 
   close(): void {
@@ -195,17 +193,6 @@ export class CurrencySourcePanel extends PIXI.Container {
       ease: Ease.easeInQuad,
       onComplete: () => { if (!this._isOpen) this.visible = false; },
     });
-  }
-
-  private async _hydrateAssets(): Promise<void> {
-    const paths = [
-      UI_IMAGES.iconLingyu, UI_IMAGES.iconCoin, UI_IMAGES.iconStamina,
-      UI_IMAGES.modalTitlePlaque, UI_IMAGES.btnPlateCream, UI_IMAGES.btnPlateSuccess,
-      ...sourceList(this._kind).map((s) => s.icon),
-    ];
-    await ensureAssets(paths).catch((e) => console.warn('[CurrencySource] 资源预热失败', e));
-    if (!this._isOpen) return;
-    this._refresh();
   }
 
   private _buildShell(): void {
@@ -275,21 +262,34 @@ export class CurrencySourcePanel extends PIXI.Container {
 
     const iconSize = 48;
     const iconX = -INNER_W / 2 + 36;
-    const tex = TextureCache.get(src.icon);
-    if (tex) {
-      const sp = new PIXI.Sprite(tex);
-      sp.anchor.set(0.5);
-      const sc = iconSize / Math.max(tex.width, tex.height);
-      sp.scale.set(sc);
-      sp.position.set(iconX, 0);
-      row.addChild(sp);
+    const icon = new PIXI.Sprite(PIXI.Texture.EMPTY);
+    icon.anchor.set(0.5);
+    icon.position.set(iconX, 0);
+    row.addChild(icon);
+    const ph = new PIXI.Graphics();
+    ph.beginFill(0xc9a45a, 0.35);
+    ph.drawCircle(0, 0, iconSize / 2);
+    ph.endFill();
+    ph.position.set(iconX, 0);
+    row.addChild(ph);
+    const applyIcon = (tex: PIXI.Texture): void => {
+      if (icon.destroyed || !tex.width) return;
+      icon.texture = tex;
+      icon.scale.set(iconSize / Math.max(tex.width, tex.height));
+      ph.visible = false;
+    };
+    const cached = TextureCache.get(src.icon);
+    if (cached?.width) {
+      applyIcon(cached);
     } else {
-      const ph = new PIXI.Graphics();
-      ph.beginFill(0xc9a45a, 0.35);
-      ph.drawCircle(0, 0, iconSize / 2);
-      ph.endFill();
-      ph.position.set(iconX, 0);
-      row.addChild(ph);
+      const unsub = TextureCache.onTextureLoaded((loaded) => {
+        if (loaded !== src.icon) return;
+        unsub();
+        const tex = TextureCache.get(src.icon);
+        if (tex) applyIcon(tex);
+      });
+      icon.once('destroyed', unsub);
+      void TextureCache.load(src.icon).catch(() => null);
     }
 
     const title = makeText(src.title, {

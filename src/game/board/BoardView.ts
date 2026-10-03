@@ -18,6 +18,7 @@ import { UI } from '@/balance/ui';
 import { COMBAT, type OrbType } from '@/balance/combat';
 import { ORB_IMAGES } from '@/config/Assets';
 import { getTouchCanvas } from '@/utils/touchCanvas';
+import { preventHostDefault } from '@/utils/preventHostDefault';
 import { BoardModel, type MatchGroup, type FallMove, type Cell } from './BoardModel';
 import { playBoardClear, playBoardConvert, playBoardFall } from './boardAnimations';
 import { buildBoardBackground } from './boardBackground';
@@ -265,12 +266,12 @@ export class BoardView {
       if (this._dragging || !this._cb.canDrag()) return;
       const p = this._boardLocalFromClient(e);
       if (p.x < 0 || p.y < 0 || p.x > this.boardWidth || p.y > this.boardHeight) return;
-      (e as { preventDefault?: () => void }).preventDefault?.();
+      preventHostDefault(e);
       this._onDown(p.x, p.y);
     };
     const onMove = (e: Event): void => {
       if (!this._dragging) return;
-      (e as { preventDefault?: () => void }).preventDefault?.();
+      preventHostDefault(e);
       const p = this._boardLocalFromClient(e);
       this._onMove(p.x, p.y);
     };

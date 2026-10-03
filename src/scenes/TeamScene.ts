@@ -5,7 +5,6 @@
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
 import { SceneManager, type Scene } from '@/core/SceneManager';
-import { teamPreloadImages, teamPetAvatarEntries, ensurePetAvatars } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { Platform } from '@/core/PlatformService';
 import { UI } from '@/balance/ui';
@@ -54,7 +53,6 @@ import {
   STAGE_PAINT_ORDER, STAGE_ORB_LOCAL_Y, STAGE_ORB_SIZE,
 } from './teamStage';
 import { bindTeamStageReorder, type TeamStageDragSlot } from './teamStageDrag';
-import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
 import { bindPointerTap } from '@/utils/bindPointerTap';
 import { skillForPet } from '@/game/battle/SkillEngine';
 import {
@@ -97,7 +95,6 @@ export class TeamScene implements Scene {
   private _listContent: PIXI.Container | null = null;
   private _listItems = new Map<string, PIXI.Container>();
   private _listScroll = new ScrollListController();
-  private readonly _enterSeq = new SceneEnterSeq();
   private _summaryHost: PIXI.Container | null = null;
   private _summaryW = 0;
   /** 战前编队页的敌情卡；换宠后要重算「必带对策」勾选 */
@@ -131,23 +128,8 @@ export class TeamScene implements Scene {
       this._goBack();
       return;
     }
-    const token = this._enterSeq.next();
     this._build({ animate: true });
     void Game.warmScenePresent();
-    void this._hydrateShell(token);
-  }
-
-  /** 壳图/头像后台补齐后静默重建一次 */
-  private async _hydrateShell(token: number): Promise<void> {
-    await ensureAssets(teamPreloadImages(this._prepStage?.id)).catch((e) => {
-      console.warn('[Team] 壳层资源加载失败', e);
-    });
-    await ensurePetAvatars(teamPetAvatarEntries()).catch((e) => {
-      console.warn('[Team] 头像预热失败', e);
-    });
-    if (!this._enterSeq.stillValid(token)) return;
-    if (SceneManager.current?.name !== 'team') return;
-    this._build({ animate: false });
   }
 
   /** 回主页时带上刚才那一章，避免 TitleScene 落到进度章 */
@@ -160,7 +142,6 @@ export class TeamScene implements Scene {
   }
 
   onExit(): void {
-    this._enterSeq.cancel();
     this._dismissSkillPreview();
     this._listChecks.clear();
     this._listItems.clear();

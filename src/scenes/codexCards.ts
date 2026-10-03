@@ -11,6 +11,8 @@ import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
 import type { PetDef } from '@/balance/pets';
 import type { PetRole } from '@/balance/petRoles';
 import { PlayerData } from '@/game/PlayerData';
+import { petCardPortraitImage } from '@/config/Assets';
+import { bindLazySprite } from '@/ui/bindLazySprite';
 import {
   COLORS,
   makePanel,
@@ -101,6 +103,35 @@ function addCodexRoleBadge(
   item.addChild(badge);
 }
 
+/** 只要底板。列表先铺这一层，滑进视口再补立绘和文字。 */
+export function buildCodexCardBack(
+  item: PIXI.Container,
+  cardW: number,
+  cardH: number,
+  S: number,
+  cardBgTex: PIXI.Texture | null,
+  locked: boolean,
+  imagePath?: string | null,
+): void {
+  addCardShell(item, cardW, cardH, S, cardBgTex, locked, imagePath);
+}
+
+function placeCardFace(
+  bg: PIXI.Sprite,
+  tex: PIXI.Texture,
+  cardW: number,
+  cardH: number,
+  locked: boolean,
+): void {
+  bg.texture = tex;
+  bg.width = cardW;
+  bg.height = cardH;
+  if (locked) {
+    bg.tint = 0xb0b0b0;
+    bg.alpha = 0.92;
+  }
+}
+
 function addCardShell(
   item: PIXI.Container,
   cardW: number,
@@ -108,24 +139,34 @@ function addCardShell(
   S: number,
   cardBgTex: PIXI.Texture | null,
   locked: boolean,
+  imagePath?: string | null,
 ): void {
-  if (cardBgTex) {
-    const bg = new PIXI.Sprite(cardBgTex);
-    bg.width = cardW;
-    bg.height = cardH;
-    if (locked) {
-      bg.tint = 0xb0b0b0;
-      bg.alpha = 0.92;
-    }
+  const ready = cardBgTex?.width ? cardBgTex : null;
+  if (ready) {
+    const bg = new PIXI.Sprite(ready);
+    placeCardFace(bg, ready, cardW, cardH, locked);
     item.addChild(bg);
-  } else {
-    item.addChild(makePanel({
-      width: cardW, height: cardH, radius: 8 * S, centered: false,
-      bg: locked ? COLORS.panelBgAlt : COLORS.panelBg,
-      bgAlpha: locked ? 0.9 : 1,
-      border: COLORS.panelBorderSoft,
-    }));
+    return;
   }
+  const placeholder = makePanel({
+    width: cardW, height: cardH, radius: 8 * S, centered: false,
+    bg: locked ? COLORS.panelBgAlt : COLORS.panelBg,
+    bgAlpha: locked ? 0.9 : 1,
+    border: COLORS.panelBorderSoft,
+  });
+  item.addChild(placeholder);
+  if (!imagePath) return;
+  const bg = new PIXI.Sprite(PIXI.Texture.EMPTY);
+  bg.width = cardW;
+  bg.height = cardH;
+  item.addChild(bg);
+  bindLazySprite(bg, {
+    path: imagePath,
+    onApplied: (tex) => {
+      placeCardFace(bg, tex, cardW, cardH, locked);
+      placeholder.visible = false;
+    },
+  });
 }
 
 /** 未拥有卡 */
@@ -138,7 +179,7 @@ export function buildLockedCodexCard(
   cardBgTex: PIXI.Texture | null = null,
   recruit?: CodexRecruitInfo,
 ): void {
-  addCardShell(item, cardW, cardH, S, cardBgTex, true);
+  addCardShell(item, cardW, cardH, S, cardBgTex, true, petCardPortraitImage(pet.rarity));
 
   const orb = makeElementOrb(pet.element, 18 * S);
   orb.anchor.set(0);
@@ -207,7 +248,7 @@ export function buildOwnedCodexCard(
   cardBgTex: PIXI.Texture | null,
 ): void {
   const star = PlayerData.petStar(pet.id);
-  addCardShell(item, cardW, cardH, S, cardBgTex, false);
+  addCardShell(item, cardW, cardH, S, cardBgTex, false, petCardPortraitImage(pet.rarity));
 
   const orb = makeElementOrb(pet.element, 18 * S);
   orb.anchor.set(0);

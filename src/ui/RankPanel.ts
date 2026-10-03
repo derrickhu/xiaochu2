@@ -17,13 +17,14 @@ import {
   reportCloudTowerRankIfDirty,
   type CloudRankResult,
 } from '@/game/rankCloud';
-import { applyHostProfile, ensureHostProfile, HOME_GUEST_NAME, resolveHomeIdentity } from '@/game/rankHostProfile';
+import { applyHostProfile, ensureHostProfile, HOME_GUEST_NAME, readCachedHostProfile, resolveHomeIdentity } from '@/game/rankHostProfile';
+import { bindWeChatUserInfoButton } from '@/game/wechatUserInfoButton';
 import { rankPrimaryCta, rankSelfSubtitle } from '@/game/rankCopy';
 import { isFeatureUnlocked } from '@/game/featureGate';
 import { layoutRankBoard } from '@/game/rankPageLayout';
 import { markRankEntrySeen, towerRankFloor } from '@/game/rankService';
 import { SceneManager } from '@/core/SceneManager';
-import { mountRankPageChrome, paintRankPageOverlays } from '@/scenes/rank/rankPageView';
+import { mountRankPageChrome, paintRankPageOverlays, paintUnrankedIdentity } from '@/scenes/rank/rankPageView';
 import { COLORS, FONT_SIZE } from './theme';
 import { makeCloseButton } from './CloseButton';
 import { makeModalTitlePlaque } from './NamePlaque';
@@ -46,6 +47,8 @@ export class RankPanel extends PIXI.Container {
   private _busy = false;
   private _unbindChrome: (() => void) | null = null;
   private _unbindBoard: (() => void) | null = null;
+  private _unbindIdentity: (() => void) | null = null;
+  private _dropAuthButton: (() => void) | null = null;
   private _cloudItems: RankEntry[] = [];
   private _cloudSelf: RankEntry | null = null;
   private _cloudReady = false;
@@ -76,6 +79,7 @@ export class RankPanel extends PIXI.Container {
     this.visible = true;
     PlayerData.load();
     markRankEntrySeen();
+    EventBus.emit('rank:open');
     EventBus.emit('home:refresh');
     this._applyCache();
     this._layoutShell();
@@ -87,7 +91,10 @@ export class RankPanel extends PIXI.Container {
 
   close(): void {
     if (!this._openFlag) return;
+    this._dropAuthButton?.();
+    this._dropAuthButton = null;
     this._isOpen = false;
+    EventBus.emit('rank:close');
     TweenManager.cancelTarget(this);
     TweenManager.to({
       target: this,
@@ -160,10 +167,15 @@ export class RankPanel extends PIXI.Container {
     return 32;
   }
 
+  /** 还没爬塔时，标题下留一条「我」：头像昵称，不占金牌 */
+  private _identityRowH(): number {
+    return towerRankFloor() <= 0 ? 80 : 0;
+  }
+
   private _panelH(): number {
     const innerW = this._panelW() - 40;
     const layout = layoutRankBoard(innerW);
-    const topChrome = 128;
+    const topChrome = 128 + this._identityRowH();
     const ctaBlock = 16 + this._ctaH() + this._ctaBottomPad();
     const needed = topChrome + layout.contentH + ctaBlock;
     return Math.min(needed, Game.logicHeight - 40);
@@ -253,6 +265,8 @@ export class RankPanel extends PIXI.Container {
   }
 
   private _refresh(): void {
+    this._dropAuthButton?.();
+    this._dropAuthButton = null;
     this._teardown();
     this._body.removeChildren().forEach((c) => {
       if (!c.destroyed) c.destroy({ children: true });
@@ -261,7 +275,8 @@ export class RankPanel extends PIXI.Container {
     const panelH = this._panelH();
     const innerW = this._panelW() - 40;
     const layout = layoutRankBoard(innerW);
-    const boardTop = -panelH / 2 + 132;
+    const rowH = this._identityRowH();
+    const boardTop = -panelH / 2 + 132 + rowH;
     const board = new PIXI.Container();
     board.position.set(-innerW / 2, boardTop);
     this._body.addChild(board);
@@ -270,12 +285,14 @@ export class RankPanel extends PIXI.Container {
 
     const best = towerRankFloor();
     const identity = resolveHomeIdentity();
+    const cachedProfile = readCachedHostProfile();
     // 拿到平台资料才覆盖榜上的名字头像，否则会把云端记录抹成占位名
-    const profile = identity.name !== HOME_GUEST_NAME || identity.avatarUrl
-      ? { name: identity.name, avatarUrl: identity.avatarUrl || '' }
-      : null;
-    // 云榜还没回来 / 还没上榜时，先用本地层数占住自己那一格
-    const self = applyHostProfile(this._cloudSelf ?? localSelfEntry(best, true), profile);
+    const profile = cachedProfile
+      ?? (identity.name !== HOME_GUEST_NAME || identity.avatarUrl
+        ? { name: identity.name, avatarUrl: identity.avatarUrl || '' }
+        : null);
+    // 0 层不上榜。有成绩才用本地层数占自己那一格。
+    const self = applyHostProfile(this._cloudSelf ?? (best > 0 ? localSelfEntry(best) : null), profile);
     const items = this._cloudItems.length
       ? this._cloudItems
       : (this._cloudReady && self && self.floor > 0 ? [self] : []);
@@ -286,6 +303,29 @@ export class RankPanel extends PIXI.Container {
       list: view.list,
       towerOpen,
     });
+    if (best <= 0) {
+      const authorized = !!cachedProfile;
+      const label = authorized
+        ? (cachedProfile.name || identity.name)
+        : Platform.isWechat
+          ? '点击授权微信头像昵称'
+          : Platform.isDouyin
+            ? '点击授权头像昵称'
+            : identity.name;
+      const rowY = boardTop - rowH / 2;
+      const painted = paintUnrankedIdentity(this._body, rowY, innerW, {
+        name: label,
+        avatarUrl: cachedProfile?.avatarUrl || identity.avatarUrl || undefined,
+      });
+      this._unbindIdentity = painted.unbind;
+      if (!authorized && Platform.isWechat) {
+        this._dropAuthButton = bindWeChatUserInfoButton(painted.hit, () => this._onHostAuthorized());
+      } else if (!authorized && Platform.isDouyin) {
+        bindPointerTap(painted.hit, () => {
+          void ensureHostProfile().then(() => this._onHostAuthorized());
+        });
+      }
+    }
     const selfRank = view.podium.find((row) => row?.isSelf)?.rank
       || view.list.find((row) => row?.isSelf)?.rank
       || self?.rank
@@ -309,11 +349,21 @@ export class RankPanel extends PIXI.Container {
     this._body.addChild(cta);
   }
 
+  private _onHostAuthorized(): void {
+    if (!this._openFlag || !readCachedHostProfile()) return;
+    Platform.showToast('已更新头像昵称');
+    this._refresh();
+    EventBus.emit('host-profile:updated');
+    void reportCloudTowerRankIfDirty(towerRankFloor());
+  }
+
   private _teardown(): void {
     this._unbindChrome?.();
     this._unbindChrome = null;
     this._unbindBoard?.();
     this._unbindBoard = null;
+    this._unbindIdentity?.();
+    this._unbindIdentity = null;
   }
 
   private _setRefreshLabel(text: string): void {

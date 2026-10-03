@@ -105,9 +105,11 @@ function _bootLooksAlive() {
 }
 
 function _showDiag(force) {
+  // 游戏已经起来之后，wx.onError 仍会进这里。先打 console.error 会把整段启动日志
+  // 当成红错弹进调试器（开发者工具克隆失败就是这条）。活着就别再弹。
+  if (!force && _bootLooksAlive()) return;
   var dump = _diagMsgs.join('\n');
   try { console.error('[boot-diag]\n' + dump); } catch (_) {}
-  if (!force && _bootLooksAlive()) return;
   try {
     var api = _hostApi();
     if (!api) return;
@@ -133,11 +135,14 @@ try {
     GameGlobal.__bootDiag = _diag;
     GameGlobal.__showBootDiag = _showDiag;
     GameGlobal.onError = function (msg) {
+      if (_isDevtoolsCloneNoise(msg)) return;
       _diag('onError:' + msg);
       _showDiag(false);
     };
     GameGlobal.onUnhandledRejection = function (ev) {
-      _diag('unhandledRej:' + (ev && ev.reason || ev));
+      var reason = ev && ev.reason || ev;
+      if (_isDevtoolsCloneNoise(reason)) return;
+      _diag('unhandledRej:' + reason);
       _showDiag(false);
     };
   }
@@ -146,18 +151,280 @@ try {
   var _errApi = _hostApi();
   if (_errApi && typeof _errApi.onError === 'function') {
     _errApi.onError(function (err) {
+      if (_isDevtoolsCloneNoise(err)) return;
       _diag('host.onError:' + (err && (err.message || err.errMsg) || err));
       _showDiag(false);
     });
   }
 } catch (_) {}
 
+// 微信开发者工具把 XHR / WebSocket 日志经 contextBridge 送回网络面板。
+// 载荷里如果有宿主对象（响应体、Event、DOM），structured clone 会抛
+// "An object could not be cloned"，再被 wx.onError 记成 MiniProgramError。
+// 请求本身已经结束。这里只把开发者工具的日志收成可克隆数据。真机没有这条通道。
+// 必须在改 Array.push 之前加载。包装后的 push 里再 require，会和
+// WAGameSubContext 的模块加载对撞，启动即 Maximum call stack size exceeded。
+var _cloneSafe = require('./cloneSafe.js');
+var _guardCall = _cloneSafe.createReentryGuard();
+function _cs() {
+  return _cloneSafe;
+}
+function _isCloneErr(err) {
+  var msg = err && (err.message || err.errMsg) || '';
+  return (err && err.name === 'DataCloneError') || /could not be cloned/i.test(String(msg));
+}
+function _softenClone(data) {
+  return _cs().softenClone(data);
+}
+function _looksLikeNetLog(value, depth) {
+  if (value == null || depth > 6) return false;
+  if (typeof value === 'string') {
+    return value.indexOf('HTTP_REQUEST') >= 0
+      || value.indexOf('HTTP_RESPONSE') >= 0
+      || value.indexOf('WEBSOCKET_') >= 0;
+  }
+  if (typeof value !== 'object') return false;
+  var kind = value.type;
+  if (typeof kind === 'string' && (kind.indexOf('HTTP_') === 0 || kind.indexOf('WEBSOCKET_') === 0)) {
+    return true;
+  }
+  var list = Object.prototype.toString.call(value) === '[object Array]' ? value : null;
+  if (list) {
+    var n = Math.min(list.length, 8);
+    for (var i = 0; i < n; i++) {
+      if (_looksLikeNetLog(list[i], depth + 1)) return true;
+    }
+    return false;
+  }
+  var keys = ['data', 'detail', 'payload', 'message', 'args'];
+  for (var k = 0; k < keys.length; k++) {
+    try {
+      if (_looksLikeNetLog(value[keys[k]], depth + 1)) return true;
+    } catch (e2) {}
+  }
+  return false;
+}
+function _wrapNetPostMessage(proto) {
+  if (!proto || typeof proto.postMessage !== 'function' || proto.postMessage.__xiaochuCloneWrap) return false;
+  var orig = proto.postMessage;
+  var wrapped = function (message) {
+    try {
+      return orig.apply(this, arguments);
+    } catch (err) {
+      if (!_isCloneErr(err) || !_looksLikeNetLog(message, 0)) throw err;
+      try { return orig.call(this, _softenClone(message)); } catch (err2) {
+        if (!_isCloneErr(err2)) throw err2;
+      }
+    }
+  };
+  wrapped.__xiaochuCloneWrap = true;
+  try { proto.postMessage = wrapped; return true; } catch (e) { return false; }
+}
+function _inWechatDevtools() {
+  if (!_runtime || !_runtime.detectMinigamePlatform || _runtime.detectMinigamePlatform() !== 'wechat') return false;
+  function hasMessager(g) {
+    try {
+      return !!(g && ((g.__global__ && g.__global__.__messager__) || (g.__global && g.__global.__messager__)));
+    } catch (e) {
+      return false;
+    }
+  }
+  if (hasMessager(typeof window !== 'undefined' ? window : null)) return true;
+  if (hasMessager(typeof globalThis !== 'undefined' ? globalThis : null)) return true;
+  try { if (hasMessager(window.parent)) return true; } catch (e2) {}
+  try {
+    var api = _runtime.getNativePlatformApi && _runtime.getNativePlatformApi();
+    var info = api && api.getSystemInfoSync && api.getSystemInfoSync();
+    return !!(info && info.platform === 'devtools');
+  } catch (e3) {
+    return false;
+  }
+}
+function _forceArrayMethod(proto, name, wrapped) {
+  try {
+    Object.defineProperty(proto, name, { configurable: true, writable: true, value: wrapped });
+  } catch (e) {
+    try { proto[name] = wrapped; } catch (e2) {}
+  }
+  return proto[name] === wrapped;
+}
+function _realms() {
+  var list = [];
+  function add(w) {
+    if (!w) return;
+    for (var i = 0; i < list.length; i++) if (list[i] === w) return;
+    try {
+      if (!w.Array || !w.Array.prototype) return;
+      list.push(w);
+    } catch (e) {}
+  }
+  add(typeof window !== 'undefined' ? window : null);
+  add(typeof globalThis !== 'undefined' ? globalThis : null);
+  try { add(window.parent); } catch (e1) {}
+  try { add(window.top); } catch (e2) {}
+  try {
+    var frames = window.frames;
+    var n = frames ? frames.length : 0;
+    for (var i = 0; i < n; i++) {
+      try { add(frames[i]); } catch (e3) {}
+    }
+  } catch (e4) {}
+  return list;
+}
+function _wrapPushOn(proto) {
+  var orig = proto.push;
+  if (!orig) return false;
+  if (orig.__xiaochuCloneWrap) return true;
+  var wrapped = function (item) {
+    var self = this;
+    var args = arguments;
+    return _guardCall(orig, self, args, function () {
+      if (args.length === 1 && _cs().isNetLogItem(item)) {
+        return orig.call(self, _softenClone(item));
+      }
+      return orig.apply(self, args);
+    });
+  };
+  wrapped.__xiaochuCloneWrap = true;
+  return _forceArrayMethod(proto, 'push', wrapped);
+}
+function _wrapNetLogPush() {
+  var realms = _realms();
+  var ok = false;
+  for (var i = 0; i < realms.length; i++) {
+    if (_wrapPushOn(realms[i].Array.prototype)) ok = true;
+  }
+  return ok;
+}
+/**
+ * 工具每 2 秒 `s.splice(0, n)` 再 `messager.send`。
+ * send 过 contextBridge 时会克隆参数，直接改 send 会被桥接层忽略。
+ * 网络日志和游戏不在同一个 window 时，push 包装也碰不到那条队列，
+ * 所以每个能摸到的 window 都包一层 splice，取出时再收成纯数据。
+ */
+function _wrapSpliceOn(proto) {
+  var orig = proto.splice;
+  if (!orig) return false;
+  if (orig.__xiaochuCloneWrap) return true;
+  var wrapped = function () {
+    var self = this;
+    var args = arguments;
+    return _guardCall(orig, self, args, function () {
+      var removed = orig.apply(self, args);
+      try { _cs().softenNetLogs(removed); } catch (e) {}
+      return removed;
+    });
+  };
+  wrapped.__xiaochuCloneWrap = true;
+  return _forceArrayMethod(proto, 'splice', wrapped);
+}
+function _wrapNetLogSplice() {
+  var realms = _realms();
+  var ok = false;
+  for (var i = 0; i < realms.length; i++) {
+    if (_wrapSpliceOn(realms[i].Array.prototype)) ok = true;
+  }
+  return ok;
+}
+function _isDevtoolsCloneNoise(err) {
+  try { return !!_cs().isDevtoolsCloneNoise(err); } catch (e) { return false; }
+}
+function _isIdeClone(err) {
+  return _isDevtoolsCloneNoise(err);
+}
+function _wrapIdeTimer(name) {
+  var g = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : null);
+  if (!g || typeof g[name] !== 'function' || g[name].__xiaochuCloneWrap) return false;
+  var orig = g[name];
+  var wrapped = function (fn) {
+    if (typeof fn !== 'function') return orig.apply(this, arguments);
+    var args = Array.prototype.slice.call(arguments);
+    var userFn = fn;
+    args[0] = function () {
+      try {
+        return userFn.apply(this, arguments);
+      } catch (err) {
+        if (!_isIdeClone(err)) throw err;
+      }
+    };
+    return orig.apply(this, args);
+  };
+  wrapped.__xiaochuCloneWrap = true;
+  try {
+    g[name] = wrapped;
+    return g[name] === wrapped;
+  } catch (e) {
+    return false;
+  }
+}
+function _installWechatDevtoolsNetGuard() {
+  if (!_inWechatDevtools()) return;
+  var patched = 0;
+  try { if (_wrapNetLogPush()) patched++; } catch (ePush) {}
+  try { if (_wrapNetLogSplice()) patched++; } catch (eSplice) {}
+  try { if (_wrapIdeTimer('setTimeout')) patched++; } catch (eTimer) {}
+  var seen = [];
+  function addMessager(m) {
+    if (!m || typeof m.send !== 'function' || m.send.__xiaochuCloneWrap) return;
+    for (var i = 0; i < seen.length; i++) if (seen[i] === m) return;
+    seen.push(m);
+    var orig = m.send;
+    var wrapped = function () {
+      var args = Array.prototype.slice.call(arguments);
+      // EMessagerCMD.NETWORK_MESSAGE === "56"
+      if (String(args[1]) === '56') args[2] = _softenClone(args[2]);
+      try {
+        return orig.apply(this, args);
+      } catch (err) {
+        if (String(args[1]) !== '56' || !_isCloneErr(err)) throw err;
+      }
+    };
+    wrapped.__xiaochuCloneWrap = true;
+    var assigned = false;
+    try {
+      m.send = wrapped;
+      assigned = m.send === wrapped;
+    } catch (e) {}
+    if (!assigned) {
+      try {
+        Object.defineProperty(m, 'send', { configurable: true, writable: true, value: wrapped });
+        assigned = m.send === wrapped;
+      } catch (e2) {}
+    }
+    if (assigned) patched++;
+  }
+  function scan(g) {
+    if (!g) return;
+    try { addMessager(g.__messager__); } catch (e) {}
+    try { addMessager(g.__global && g.__global.__messager__); } catch (e2) {}
+    try { addMessager(g.__global__ && g.__global__.__messager__); } catch (e3) {}
+  }
+  scan(typeof window !== 'undefined' ? window : null);
+  scan(typeof globalThis !== 'undefined' ? globalThis : null);
+  scan(typeof GameGlobal !== 'undefined' ? GameGlobal : null);
+  try { scan(window.parent); } catch (e4) {}
+  try {
+    if (typeof MessagePort !== 'undefined') _wrapNetPostMessage(MessagePort.prototype);
+    if (typeof Window !== 'undefined') _wrapNetPostMessage(Window.prototype);
+    if (typeof Worker !== 'undefined') _wrapNetPostMessage(Worker.prototype);
+  } catch (e5) {}
+  if (patched && typeof GameGlobal !== 'undefined' && !GameGlobal.__netGuardLogged) {
+    GameGlobal.__netGuardLogged = true;
+    _diag('devtools-net-guard');
+  }
+}
+try { _installWechatDevtoolsNetGuard(); } catch (eGuard) {}
+try { setTimeout(_installWechatDevtoolsNetGuard, 0); } catch (eGuard2) {}
+try { setTimeout(_installWechatDevtoolsNetGuard, 1000); } catch (eGuard3) {}
+
 try { require('./share-bootstrap.js'); } catch (e) {
   console.error('[game.js] share-bootstrap 失败:', e);
 }
 
-// 抖音平台必接能力：侧边栏复访 + 添加到桌面（须在 bundle 加载前注册/探测）
+// 抖音平台必接能力：侧边栏复访 + 添加到桌面（须在 bundle 加载前注册/探测）。
+// 微信没有这两项，不要对 wx 调 checkScene / addShortcut。
 (function () {
+  if (!_runtime || _runtime.detectMinigamePlatform() !== 'douyin') return;
   var P = _runtime.getNativePlatformApi();
   if (typeof GameGlobal !== 'undefined') {
     GameGlobal.__launchInfo = {};

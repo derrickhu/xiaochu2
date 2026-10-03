@@ -15,7 +15,6 @@ import { formatCountdown } from '@/game/staminaService';
 import { ECONOMY } from '@/balance/economy';
 import { watchAd } from '@/game/adGate';
 import { UI_IMAGES } from '@/config/Assets';
-import { ensureAssets } from '@/config/Subpackages';
 import {
   COLORS, FONT_SIZE,
   makeActionButton, makeCloseButton, makePanel, makeText,
@@ -55,19 +54,6 @@ export class StaminaPanel extends PIXI.Container {
     this._refresh();
     this.alpha = 0;
     TweenManager.to({ target: this, props: { alpha: 1 }, duration: 0.2, ease: Ease.easeOutQuad });
-    void this._hydrateAssets();
-  }
-
-  private async _hydrateAssets(): Promise<void> {
-    await ensureAssets([
-      UI_IMAGES.iconStamina,
-      UI_IMAGES.modalTitlePlaque,
-      UI_IMAGES.btnPlateSuccess,
-      UI_IMAGES.btnPlateCream,
-      UI_IMAGES.progressFrame,
-    ]).catch((e) => console.warn('[Stamina] 资源预热失败', e));
-    if (!this._isOpen) return;
-    this._refresh();
   }
 
   close(): void {
@@ -133,21 +119,35 @@ export class StaminaPanel extends PIXI.Container {
     // ── 仙桃图标 + 当前/上限 ──
     const heroY = -PANEL_H / 2 + 118;
     const iconSize = 72;
-    const iconTex = TextureCache.get(UI_IMAGES.iconStamina);
-    if (iconTex) {
-      const icon = new PIXI.Sprite(iconTex);
-      icon.anchor.set(0.5);
-      const sc = iconSize / Math.max(iconTex.width, iconTex.height);
-      icon.scale.set(sc);
-      icon.position.set(-88, heroY);
-      this._body.addChild(icon);
+    const icon = new PIXI.Sprite(PIXI.Texture.EMPTY);
+    icon.anchor.set(0.5);
+    icon.position.set(-88, heroY);
+    this._body.addChild(icon);
+    const ph = new PIXI.Graphics();
+    ph.beginFill(0xffb07a, 0.9);
+    ph.drawCircle(0, 0, iconSize / 2);
+    ph.endFill();
+    ph.position.set(-88, heroY);
+    this._body.addChild(ph);
+    const iconPath = UI_IMAGES.iconStamina;
+    const applyIcon = (tex: PIXI.Texture): void => {
+      if (icon.destroyed || !tex.width) return;
+      icon.texture = tex;
+      icon.scale.set(iconSize / Math.max(tex.width, tex.height));
+      ph.visible = false;
+    };
+    const iconTex = TextureCache.get(iconPath);
+    if (iconTex?.width) {
+      applyIcon(iconTex);
     } else {
-      const ph = new PIXI.Graphics();
-      ph.beginFill(0xffb07a, 0.9);
-      ph.drawCircle(0, 0, iconSize / 2);
-      ph.endFill();
-      ph.position.set(-88, heroY);
-      this._body.addChild(ph);
+      const unsub = TextureCache.onTextureLoaded((loaded) => {
+        if (loaded !== iconPath) return;
+        unsub();
+        const tex = TextureCache.get(iconPath);
+        if (tex) applyIcon(tex);
+      });
+      icon.once('destroyed', unsub);
+      void TextureCache.load(iconPath).catch(() => null);
     }
 
     const stock = makeText(`${cur}`, {

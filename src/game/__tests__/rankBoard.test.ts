@@ -35,17 +35,26 @@ describe('通天塔总榜条目', () => {
     expect(view.list.some((p) => p?.isSelf)).toBe(true);
   });
 
-  it('没爬过不上本地自己这一行；只有自己且已破层则上台第 1', () => {
+  it('没爬过不上领奖台；只有自己且已破层则上台第 1', () => {
     expect(localSelfEntry(0)).toBeNull();
     const placeholder = localSelfEntry(0, true);
-    expect(buildRankPresentation({ items: [], self: placeholder }).podium[1]).toMatchObject({
-      isSelf: true, floor: 0, rank: 1,
-    });
+    const empty = buildRankPresentation({ items: [], self: placeholder });
+    expect(empty.podium).toEqual([null, null, null]);
+    expect(empty.list.filter(Boolean)).toEqual([]);
     const self = localSelfEntry(1);
     expect(self?.floor).toBe(1);
     const view = buildRankPresentation({ items: self ? [self] : [], self, listSlots: 4 });
     expect(view.podium[1]).toMatchObject({ isSelf: true, floor: 1, rank: 1 });
     expect(view.list.filter(Boolean)).toEqual([]);
+  });
+
+  it('0 层的自己不挤进别人的榜', () => {
+    const items = [{ rank: 1, name: '甲', floor: 3, isSelf: false }];
+    const self = { rank: 0, name: '我', floor: 0, isSelf: true };
+    const view = buildRankPresentation({ items, self });
+    expect(view.podium[1]).toMatchObject({ name: '甲', rank: 1 });
+    expect(view.podium.some((row) => row?.isSelf)).toBe(false);
+    expect(view.list.some((row) => row?.isSelf)).toBe(false);
   });
 
   it('有别人在榜、自己不知名次时进列表末格', () => {

@@ -347,6 +347,50 @@ function buildGridCell(
   return item;
 }
 
+/** 自由编队横卡：卷轴底图到了再换上，缺图时先用稀有度色板。 */
+function mountFreeRowChrome(
+  item: PIXI.Container,
+  pet: PetDef,
+  cardW: number,
+  cardH: number,
+  scrollTex: PIXI.Texture | null,
+): void {
+  const paintArt = (tex: PIXI.Texture): void => {
+    const scrollBg = new PIXI.Sprite(tex);
+    scrollBg.anchor.set(0.5);
+    scrollBg.scale.set(cardW / CARD_TEX_W, cardH / CARD_TEX_H);
+    item.addChildAt(scrollBg, 0);
+    item.addChildAt(makeRarityCardBorder({
+      width: cardW, height: cardH, tier: pet.rarity,
+      radius: RADIUS.card, centered: true, borderWidth: 3,
+    }), 1);
+  };
+
+  if (scrollTex?.width) {
+    paintArt(scrollTex);
+    return;
+  }
+
+  const panel = makePanel({
+    width: cardW, height: cardH, radius: RADIUS.card,
+    bg: COLORS.panelBg, border: getRarity(pet.rarity).color,
+    centered: true,
+  });
+  item.addChild(panel);
+  const path = UI_SCENE_IMAGES.petCardTeamRow;
+  const unsub = TextureCache.onTextureLoaded((loaded) => {
+    if (loaded !== path) return;
+    unsub();
+    if (item.destroyed) return;
+    const tex = TextureCache.get(path);
+    if (!tex?.width) return;
+    panel.visible = false;
+    paintArt(tex);
+  });
+  item.once('destroyed', unsub);
+  void TextureCache.load(path).catch(() => null);
+}
+
 function buildListItem(
   pet: PetDef,
   lv: number,
@@ -383,23 +427,8 @@ function buildListItem(
     const rb = rarityBadge.getLocalBounds();
     rarityBadge.position.set(-cardW / 2 + portraitW - rb.width - 3, -cardH / 2 + 3);
     item.addChild(rarityBadge);
-  } else if (scrollTex) {
-    const sx = cardW / CARD_TEX_W;
-    const sy = cardH / CARD_TEX_H;
-    const scrollBg = new PIXI.Sprite(scrollTex);
-    scrollBg.anchor.set(0.5);
-    scrollBg.scale.set(sx, sy);
-    item.addChild(scrollBg);
-    item.addChild(makeRarityCardBorder({
-      width: cardW, height: cardH, tier: pet.rarity,
-      radius: RADIUS.card, centered: true, borderWidth: 3,
-    }));
   } else {
-    item.addChild(makePanel({
-      width: cardW, height: cardH, radius: RADIUS.card,
-      bg: COLORS.panelBg, border: getRarity(pet.rarity).color,
-      centered: true,
-    }));
+    mountFreeRowChrome(item, pet, cardW, cardH, scrollTex);
   }
 
   const frameLeft = -cardW / 2;

@@ -132,7 +132,7 @@ export function buildHomeLeftRail(
     x: number;
     y: number;
     items?: readonly HomeRailItem[];
-    /** 是否展示分隔线 + 侧边栏/桌面（抖音 / 开发者工具） */
+    /** 是否展示分隔线 + 侧边栏/桌面（仅抖音） */
     showWelfare?: boolean;
   },
 ): PIXI.Container {

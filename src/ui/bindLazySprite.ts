@@ -92,3 +92,40 @@ export function bindLazySprite(
     unsub();
   };
 }
+
+/**
+ * 贴图未就绪时先留 fallback，解码完成后把节点挂上。
+ * 调用方不要再为了等图把整页拆掉重建。
+ */
+export function showWhenTexture(
+  parent: PIXI.Container,
+  path: string,
+  create: (tex: PIXI.Texture) => PIXI.DisplayObject,
+  fallback?: PIXI.DisplayObject,
+  /** 插入层级。底板传 0，避免晚到的图盖住已经画上的内容。 */
+  index?: number,
+): void {
+  const place = (node: PIXI.DisplayObject): void => {
+    if (index === undefined) parent.addChild(node);
+    else parent.addChildAt(node, Math.min(index, parent.children.length));
+  };
+  const apply = (tex: PIXI.Texture): void => {
+    if (parent.destroyed || !tex.width) return;
+    if (fallback && !fallback.destroyed) fallback.visible = false;
+    place(create(tex));
+  };
+  const cached = TextureCache.get(path);
+  if (cached?.width) {
+    apply(cached);
+    return;
+  }
+  if (fallback) place(fallback);
+  const unsub = TextureCache.onTextureLoaded((loaded) => {
+    if (loaded !== path) return;
+    unsub();
+    const tex = TextureCache.get(path);
+    if (tex) apply(tex);
+  });
+  parent.once('destroyed', unsub);
+  void TextureCache.load(path).catch(() => null);
+}

@@ -23,6 +23,7 @@ import { DEFERRED_PRELOAD_IMAGES, MAIN_PRELOAD_IMAGES } from '@/config/Assets';
 import { ensureAudioSubpackage, loadSubpackage, loadSubpackagesForPaths } from '@/config/Subpackages';
 import { warmupCommonSubpackages } from '@/config/SubpackageWarmup';
 import { warmupCdnAssets } from '@/config/CdnWarmup';
+import { CdnAssetService } from '@/core/CdnAssetService';
 import { warmupCustomFonts } from '@/core/FontService';
 import { waitMs } from '@/utils/hostTimeout';
 import { TitleScene } from '@/scenes/TitleScene';
@@ -57,6 +58,17 @@ declare const qg: any;
 declare const qa: any;
 declare const wx: any;
 
+/** 开发者工具 appservice 克隆日志失败，不是游戏异常。堆栈写在 message 里。 */
+function devtoolsCloneNoise(err: unknown): boolean {
+  const text = typeof err === 'string'
+    ? err
+    : String((err as { message?: string; stack?: string } | null)?.message ?? err ?? '')
+      + '\n'
+      + String((err as { stack?: string } | null)?.stack ?? '');
+  return /could not be cloned/i.test(text)
+    && (text.includes('appservice') || text.includes('ide:///') || text.includes('WAGame.js'));
+}
+
 function bootStep(msg: string): void {
   try { GameGlobal.__bootStep = msg; } catch { /* */ }
   try { GameGlobal.__bootDiag?.(msg); } catch { /* */ }
@@ -72,14 +84,17 @@ if (typeof GameGlobal !== 'undefined') {
   const prevError = GameGlobal.onError;
   const prevReject = GameGlobal.onUnhandledRejection;
   GameGlobal.onError = (msg: string) => {
+    if (devtoolsCloneNoise(msg)) return;
     console.error('[GlobalError]', msg);
     try { prevError?.(msg); } catch { /* */ }
     analytics.trackAppError(msg, { source: 'GameGlobal.onError' });
   };
   GameGlobal.onUnhandledRejection = (ev: any) => {
-    console.error('[UnhandledRejection]', ev?.reason || ev);
+    const reason = ev?.reason || ev;
+    if (devtoolsCloneNoise(reason)) return;
+    console.error('[UnhandledRejection]', reason);
     try { prevReject?.(ev); } catch { /* */ }
-    analytics.trackAppError(ev?.reason || ev, { source: 'unhandledRejection' });
+    analytics.trackAppError(reason, { source: 'unhandledRejection' });
   };
 }
 
@@ -289,6 +304,8 @@ async function main(): Promise<void> {
   }
 
   warmupCommonSubpackages();
+  // 先按文件树清掉旧代 CDN 缓存。微信 rmdir 清不掉非空目录，旧缓存会一直占满额度。
+  CdnAssetService.prepareLocalCache();
   // CDN：不 await，manifest + 拥有灵宠/BGM 后台预热，不挡首屏与 BGM 起播
   warmupCdnAssets();
   void warmupDeferredImages();

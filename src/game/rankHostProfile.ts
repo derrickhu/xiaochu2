@@ -26,13 +26,32 @@ export function resolveHomeIdentity(
   };
 }
 
+/** 微信未授权时的占位昵称，不能当成真实资料落盘 */
+const PLACEHOLDER_NICKS = new Set(['微信用户']);
+
+/**
+ * 平台回包里的昵称 / 头像。占位「微信用户」或两边都空则丢掉。
+ * 只有头像没有昵称时仍收下头像，名字留空，展示层再退回萌新。
+ */
+export function acceptHostProfile(name: string, avatarUrl: string): HostProfile | null {
+  const nick = name.trim();
+  const avatar = avatarUrl.trim();
+  if (PLACEHOLDER_NICKS.has(nick)) return null;
+  const nickOk = nick.length > 0;
+  const avatarOk = avatar.length >= 4;
+  if (!nickOk && !avatarOk) return null;
+  return {
+    name: nickOk ? nick : '',
+    avatarUrl: avatarOk ? avatar : '',
+  };
+}
+
 export function parseHostProfile(raw: unknown): HostProfile | null {
   if (!raw || typeof raw !== 'object') return null;
   const rec = raw as Record<string, unknown>;
   const name = String(rec.name ?? rec.nickName ?? '').trim();
   const avatarUrl = String(rec.avatarUrl ?? '').trim();
-  if (!name && !avatarUrl) return null;
-  return { name, avatarUrl };
+  return acceptHostProfile(name, avatarUrl);
 }
 
 export function readCachedHostProfile(): HostProfile | null {
@@ -66,14 +85,18 @@ export function applyHostProfile(
 
 export async function ensureHostProfile(): Promise<HostProfile | null> {
   const cached = readCachedHostProfile();
-  if (!Platform.isDouyin) return cached;
-  const loggedIn = await Platform.ensureLogin();
-  if (!loggedIn) return cached;
+  if (!Platform.isDouyin && !Platform.isWechat) return cached;
+  if (Platform.isDouyin) {
+    const loggedIn = await Platform.ensureLogin();
+    if (!loggedIn) return cached;
+  }
   const live = await Platform.getUserProfile();
   if (!live) return cached;
+  const accepted = acceptHostProfile(live.nickName, live.avatarUrl);
+  if (!accepted) return cached;
   const profile: HostProfile = {
-    name: live.nickName || cached?.name || '',
-    avatarUrl: live.avatarUrl || cached?.avatarUrl || '',
+    name: accepted.name || cached?.name || '',
+    avatarUrl: accepted.avatarUrl || cached?.avatarUrl || '',
   };
   if (!profile.name && !profile.avatarUrl) return cached;
   rememberHostProfile(profile);

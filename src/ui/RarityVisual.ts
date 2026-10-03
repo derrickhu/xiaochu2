@@ -98,7 +98,7 @@ export function makeRarityBadge(opts: RarityBadgeOpts): PIXI.Container {
   }
 
   const def = getRarity(opts.tier);
-  const badgeH = 14 * S;
+  const badgeH = opts.height ?? 14 * S;
   const badgeW = Math.max(36, def.code.length * 10 * S + 6 * S);
 
   const cont = new PIXI.Container();
@@ -112,6 +112,18 @@ export function makeRarityBadge(opts: RarityBadgeOpts): PIXI.Container {
   });
   label.position.set(badgeW / 2, badgeH / 2);
   cont.addChild(label);
+  const path = RARITY_BADGE_IMAGES[opts.tier];
+  const unsub = TextureCache.onTextureLoaded((loaded) => {
+    if (loaded !== path) return;
+    unsub();
+    if (cont.destroyed) return;
+    const next = rarityBadgeTexture(opts.tier);
+    if (!next?.width) return;
+    cont.removeChildren().forEach((c) => c.destroy());
+    const sp = new PIXI.Sprite(next);
+    sp.scale.set(badgeH / next.height);
+    cont.addChild(sp);
+  });
   return cont;
 }
 

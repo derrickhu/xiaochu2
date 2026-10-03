@@ -115,11 +115,13 @@ export function makeActionButton(opts: ActionButtonOpts): ActionButtonHandle {
   btn.addChild(plateHost, title, subtitle);
 
   let enabled = opts.enabled ?? true;
+  const platePath = PLATE_PATH[variant];
+  let plateWatch: (() => void) | null = null;
 
   const paint = (): void => {
     plateHost.removeChildren().forEach((c) => c.destroy());
-    const tex = TextureCache.get(PLATE_PATH[variant]);
-    if (tex) {
+    const tex = TextureCache.get(platePath);
+    if (tex?.width) {
       // 整图拉伸：cream/gold/success 均为胶囊底板，保持椭圆外形一致
       const sp = new PIXI.Sprite(tex);
       sp.anchor.set(0.5);
@@ -130,6 +132,16 @@ export function makeActionButton(opts: ActionButtonOpts): ActionButtonHandle {
     } else {
       const fb = makeFallbackPlate(width, height, variant, !enabled);
       plateHost.addChild(fb);
+      if (!plateWatch && !btn.destroyed) {
+        plateWatch = TextureCache.onTextureLoaded((loaded) => {
+          if (loaded !== platePath) return;
+          plateWatch?.();
+          plateWatch = null;
+          if (!btn.destroyed) paint();
+        });
+        btn.once('destroyed', () => plateWatch?.());
+        void TextureCache.load(platePath).catch(() => null);
+      }
     }
 
     const style = enabled ? TEXT_STYLE[variant] : DISABLED_TEXT;

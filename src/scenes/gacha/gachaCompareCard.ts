@@ -6,7 +6,7 @@
  * 重复：轻量「已拥有 + 碎片条 + 升星进度」（对齐碎片转化原型，无三维格）。
  */
 import * as PIXI from 'pixi.js';
-import { TextureCache } from '@/core/TextureCache';
+import { showWhenTexture } from '@/ui/bindLazySprite';
 import { PET_MAP, PET_ROLE_NAME, type PetDef } from '@/balance/pets';
 import { getRarity } from '@/balance/rarity';
 import { getSkill } from '@/balance/skills';
@@ -173,15 +173,14 @@ function statChip(
 
   const padL = 14;
   const iconSize = 32;
-  const tex = TextureCache.get(iconPath);
-  if (tex?.valid) {
+  showWhenTexture(root, iconPath, (tex) => {
     const icon = new PIXI.Sprite(tex);
     icon.anchor.set(0.5);
     icon.width = iconSize;
     icon.height = iconSize;
     icon.position.set(padL + iconSize / 2, chipH / 2);
-    root.addChild(icon);
-  }
+    return icon;
+  }, undefined, root.children.length);
 
   const textLeft = padL + iconSize + 12;
   const showDelta = theirs !== null;
@@ -331,20 +330,23 @@ export function buildGachaCompareCard(opts: {
   root.position.set(opts.w / 2 - panelW / 2, opts.bottomY - panelH);
 
   // 祥云框九宫格：角饰不随加高被拉扁；只一层贴图
-  const panelTex = TextureCache.get(UI_IMAGES.gachaResultComparePanel);
-  if (panelTex?.valid) {
-    // 640×369 原图角云约 72px；中段拉伸奶油底
-    const slice = 72;
-    const panel = new PIXI.NineSlicePlane(panelTex, slice, slice, slice, slice);
-    panel.width = panelW;
-    panel.height = panelH;
-    root.addChild(panel);
-  } else {
-    root.addChild(makePanel({
+  showWhenTexture(
+    root,
+    UI_IMAGES.gachaResultComparePanel,
+    (tex) => {
+      // 640×369 原图角云约 72px；中段拉伸奶油底
+      const slice = 72;
+      const panel = new PIXI.NineSlicePlane(tex, slice, slice, slice, slice);
+      panel.width = panelW;
+      panel.height = panelH;
+      return panel;
+    },
+    makePanel({
       width: panelW, height: panelH, radius: 22, centered: false,
       bg: PANEL_BG, bgAlpha: 0.98, border: PANEL_BORDER, borderWidth: 3,
-    }));
-  }
+    }),
+    0,
+  );
 
   let y = padTop;
   const titleCy = y + titleRowH / 2;

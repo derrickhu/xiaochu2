@@ -41,14 +41,35 @@ export function makeProgressBar(opts: ProgressBarOpts): ProgressBarHandle {
   const framePath = opts.frame === true
     ? UI_IMAGES.progressFrame
     : (typeof opts.frame === 'string' ? opts.frame : null);
-  const frameTex = framePath ? TextureCache.get(framePath) : null;
   let insetX = 0;
   let insetY = 0;
   let innerW = width;
   let innerH = height;
+  let ratio = opts.ratio;
+  let framed = false;
 
-  if (frameTex) {
-    const frame = new PIXI.Sprite(frameTex);
+  const paintTrack = (): void => {
+    track.clear();
+    const r = innerH / 2;
+    track.beginFill(trackColor);
+    track.drawRoundedRect(insetX, insetY, innerW, innerH, r);
+    track.endFill();
+  };
+
+  const paintFill = (): void => {
+    const t = Math.max(0, Math.min(1, ratio));
+    fill.clear();
+    const r = innerH / 2;
+    const fw = Math.max(innerH, innerW * t);
+    fill.beginFill(t >= 1 ? fillFull : fillColor);
+    fill.drawRoundedRect(insetX, insetY, fw, innerH, r);
+    fill.endFill();
+  };
+
+  const applyFrame = (tex: PIXI.Texture): void => {
+    if (framed || bar.destroyed || !tex.width) return;
+    framed = true;
+    const frame = new PIXI.Sprite(tex);
     frame.width = width;
     frame.height = height;
     bar.addChildAt(frame, 0);
@@ -57,20 +78,30 @@ export function makeProgressBar(opts: ProgressBarOpts): ProgressBarHandle {
     insetY = Math.max(5, height * 0.12);
     innerW = Math.max(8, width - insetX * 2);
     innerH = Math.max(6, height - insetY * 2);
+    paintTrack();
+    paintFill();
+  };
+
+  if (framePath) {
+    const cached = TextureCache.get(framePath);
+    if (cached?.width) {
+      applyFrame(cached);
+    } else {
+      const unsub = TextureCache.onTextureLoaded((loaded) => {
+        if (loaded !== framePath) return;
+        unsub();
+        const tex = TextureCache.get(framePath);
+        if (tex) applyFrame(tex);
+      });
+      bar.once('destroyed', unsub);
+      void TextureCache.load(framePath).catch(() => null);
+    }
   }
 
-  const r = innerH / 2;
-  track.beginFill(trackColor);
-  track.drawRoundedRect(insetX, insetY, innerW, innerH, r);
-  track.endFill();
-
-  bar.setRatio = (ratio: number): void => {
-    const t = Math.max(0, Math.min(1, ratio));
-    fill.clear();
-    const fw = Math.max(innerH, innerW * t);
-    fill.beginFill(t >= 1 ? fillFull : fillColor);
-    fill.drawRoundedRect(insetX, insetY, fw, innerH, r);
-    fill.endFill();
+  paintTrack();
+  bar.setRatio = (next: number): void => {
+    ratio = next;
+    paintFill();
   };
   bar.setRatio(opts.ratio);
   return bar;
