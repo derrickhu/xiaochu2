@@ -295,15 +295,15 @@ class CdnAssetServiceClass {
   }
 
   /**
-   * 开发者工具里不往本地缓存搬，直接吃 HTTPS。
+   * 微信开发者工具里不往本地缓存搬，直接吃 HTTPS。
    *
    * 工具的 downloadFile 内部是 XHR，回包过结构化克隆会抛
    * `An object could not be cloned.`，大图再 copy 进模拟器额度也会立刻写满。
    * createImage / InnerAudio 都认 HTTPS，绕开这次下载就没这回事。
-   * 真机不动：照旧下到 USER_DATA，省流量也省启动。
+   * 微信真机，以及抖音 / Tap / 华为的工具和真机，仍落本地缓存。
    */
   private _skipDownload(): boolean {
-    return Platform.isDevtools;
+    return Platform.isWechat && Platform.isDevtools;
   }
 
   /**

@@ -884,9 +884,10 @@ class PlatformServiceClass {
         return;
       }
 
-      // 开发者工具里也能 new 出广告实例，但 show() 经常既不展示也不回调。
-      // 签到会一直占着「领取中」，关闭钮也被挡死。工具里走桩，真机才拉激励视频。
-      if (this.isDevtools) {
+      // 微信开发者工具里也能 new 出广告实例，但 show() 经常既不展示也不回调。
+      // 签到会一直占着「领取中」，关闭钮也被挡死。只在微信工具里走桩。
+      // 抖音 / Tap / 华为的工具和真机仍走各自的广告接口。
+      if (this.isWechat && this.isDevtools) {
         this.showToast('广告播放中…');
         setTimeout(() => {
           this.hideToast();
@@ -917,16 +918,19 @@ class PlatformServiceClass {
 
       this._adResolve = resolve;
       let displayed = false;
-      // show() 既不 resolve 也不 onError 时，签到会永远关不掉
-      const hang = setTimeout(() => {
-        if (!displayed && this._adResolve === resolve) this._settleAd(false);
-      }, 8000);
+      // 微信 show() 既不 resolve 也不 onError 时，签到会永远关不掉。
+      // 其它平台仍等 onClose，避免广告加载超过 8 秒就被判失败、看完也不发奖。
+      const hang = this.isWechat
+        ? setTimeout(() => {
+          if (!displayed && this._adResolve === resolve) this._settleAd(false);
+        }, 8000)
+        : null;
       const markShown = (): void => {
         displayed = true;
-        clearTimeout(hang);
+        if (hang != null) clearTimeout(hang);
       };
       const fail = (): void => {
-        clearTimeout(hang);
+        if (hang != null) clearTimeout(hang);
         this._settleAd(false);
       };
       try {

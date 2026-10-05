@@ -351,10 +351,14 @@ if (isDevtools) {
   // 的回包会被网络面板 structured clone，抛 An object could not be cloned。
   // 工具里留给宿主 XHR。真机仍用适配器。
   const _skipDevtoolsOverwrite = { XMLHttpRequest: true };
+  // 抖音 / Tap 工具自带浏览器 Event。盖掉之后 instanceof Event 和宿主事件会坏。
+  // 缺了才由下面的 _installDomEvents 补上（微信工具没有 DOM Event）。
+  const _keepHostEvent = { Event: true, MouseEvent: true, PointerEvent: true, TouchEvent: true };
 
   for (const key in _allGlobals) {
     if (key === 'window' || key === 'self') continue;
     if (_skipDevtoolsOverwrite[key]) continue;
+    if (_keepHostEvent[key] && typeof _win[key] === 'function') continue;
     try {
       const desc = Object.getOwnPropertyDescriptor(_win, key);
       if (!desc || desc.configurable) {

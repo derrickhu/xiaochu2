@@ -8,6 +8,9 @@ import { AccessibilityManager } from '@pixi/accessibility';
 import { Platform, getNativePlatformApi } from '@/core/PlatformService';
 import { installTapTextRaster, shouldInstallTapTextRaster } from '@/core/tapTextRaster';
 import { isSyntheticCanvas, uploadCanvasPixels } from '@/core/tapTextureUpload';
+import { installHostResourceDetect } from '@/core/hostResourceDetect';
+
+installHostResourceDetect();
 
 try {
   extensions.remove(AccessibilityManager);
