@@ -336,7 +336,7 @@ class GMManagerClass {
       id: 'ads_reset',
       group: '养成',
       name: '广告次数重置',
-      desc: '清空今日 8 个广告位计数',
+      desc: '清空今日广告位计数',
       execute: () => {
         PlayerData.load();
         PlayerData.resetAdUsage();

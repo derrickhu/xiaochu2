@@ -28,6 +28,8 @@ import {
   enemyImage,
   petAvatarLoadPaths,
   petFrameImage,
+  petBaseAvatarPath,
+  petBaseShowcaseImage,
   petShowcaseImage,
   petShowcaseLoadPaths,
   skillIconImage,
@@ -36,6 +38,8 @@ import {
 import { resolvePetPassiveBundle } from '@/balance/passiveEffects';
 import { loadSubpackagesForPaths } from '@/config/Subpackages';
 import { preloadPetAvatarTextures } from '@/config/petAvatarTexture';
+import { petSkinsOf } from '@/balance/petSkins';
+import { petSkinArt, petSkinArtPaths } from '@/config/petSkinArt';
 import { CdnAssetService } from '@/core/CdnAssetService';
 
 /** 灵宠池系页面共用壳（背景 + 标题匾） */
@@ -124,6 +128,7 @@ export const SHOP_SHELL_IMAGES: readonly string[] = [
   UI_SHOP_IMAGES.tabIconLingyu,
   UI_IMAGES.towerCurrencySeal,
   UI_FX_IMAGES.particleSpark,
+  ...petSkinArtPaths(),
 ];
 
 export const PET_DETAIL_SHELL_IMAGES: readonly string[] = [
@@ -260,7 +265,16 @@ export function petDetailPreloadImages(petId: string, starOverride?: number): re
   const paths = [...PET_DETAIL_SHELL_IMAGES];
   if (pet) {
     const star = starOverride ?? PlayerData.petStar(petId);
-    paths.push(petShowcaseImage(petId, star), skillIconImage(pet.skillId));
+    paths.push(
+      petShowcaseImage(petId, star),
+      petBaseShowcaseImage(petId, star),
+      petBaseAvatarPath(petId, star),
+      skillIconImage(pet.skillId),
+    );
+    for (const skin of petSkinsOf(petId)) {
+      const art = petSkinArt(skin.id);
+      if (art) paths.push(art.portrait, art.body);
+    }
     const lines = resolvePetPassiveBundle(pet.role, pet.rarity, star, { includeStarInDisplay: true }).displayLines;
     for (const line of lines) {
       if (line.iconKey) paths.push(passiveIconImage(line.iconKey));

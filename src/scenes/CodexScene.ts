@@ -32,7 +32,7 @@ import { Platform } from '@/core/PlatformService';
 import { SfxManager } from '@/core/SfxManager';
 import { RADIUS } from '@/ui/theme';
 import type { PetDetailEnterData } from './PetDetailScene';
-import { buildCodexCardBack, buildLockedCodexCard, buildOwnedCodexCard } from './codexCards';
+import { buildCodexCardBack, buildLockedCodexCard, buildOwnedCodexCard, refreshCodexAvatar } from './codexCards';
 import { visibleRowRange } from '@/ui/scrollMotion';
 import { sortPetsByGrowthOrder } from './codexSort';
 import { SceneEnterSeq } from '@/utils/sceneEnterSeq';
@@ -49,6 +49,8 @@ interface CodexSlot {
   pet: PetDef;
   row: number;
   filled: boolean;
+  /** 这张卡画头像时穿的皮肤；空字符串是原貌 */
+  look: string;
 }
 
 interface CodexWindow {
@@ -236,6 +238,8 @@ export class CodexScene implements Scene {
         this._content.y = this._parkContentY;
         this._syncWindow(this._content.y, 6);
       }
+      // 换皮肤不进指纹：整页重建要重画上百张卡。只改视口里已经画出来、外观变了的那几张头像。
+      this._refreshChangedLooks();
       return;
     }
     // 升级/升星/碎片有变：重建一趟（仍跳过 hydrate 二次重建）
@@ -558,7 +562,7 @@ export class CodexScene implements Scene {
         blockTap: () => this._scroll.moved,
       });
       content.addChild(item);
-      slots.push({ item, pet, row, filled: false });
+      slots.push({ item, pet, row, filled: false, look: '' });
     });
     this._slots = slots;
 
@@ -683,6 +687,19 @@ export class CodexScene implements Scene {
     }
     slot.item.interactiveChildren = false;
     slot.filled = true;
+    slot.look = PlayerData.petSkinEquipped(slot.pet.id) ?? '';
+  }
+
+  /** 从详情回来：外观变了的已绘制卡换头像，没画到的等滑进视口时按新外观画 */
+  private _refreshChangedLooks(): void {
+    for (const slot of this._slots) {
+      if (!slot.filled || slot.item.destroyed) continue;
+      const look = PlayerData.petSkinEquipped(slot.pet.id) ?? '';
+      if (look === slot.look) continue;
+      const star = PlayerData.isOwned(slot.pet.id) ? PlayerData.petStar(slot.pet.id) : 1;
+      refreshCodexAvatar(slot.item, slot.pet.id, star);
+      slot.look = look;
+    }
   }
 
   private _shellSlot(slot: CodexSlot): void {

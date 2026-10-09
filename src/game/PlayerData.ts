@@ -18,6 +18,15 @@ import { ECONOMY } from '@/balance/economy';
 import { dailyQuestsOf } from '@/balance/dailyQuest';
 import { recruitPrice, starUpShardCost } from '@/formulas/economyOutput';
 import { petExpToNext } from '@/formulas/growth';
+import { syncEquippedPetSkins } from '@/game/equippedPetSkin';
+import {
+  buyPetSkin as buyPetSkinOnSave,
+  equipPetSkin as equipPetSkinOnSave,
+  noteSkinAdWatch as noteSkinAdWatchOnSave,
+  unequipPetSkin as unequipPetSkinOnSave,
+  type SkinAdResult,
+  type SkinBuyResult,
+} from '@/game/petSkinSave';
 import {
   initialData,
   LEGACY_SAVE_KEY,
@@ -77,11 +86,13 @@ class PlayerDataClass {
       const parsed = PersistService.readJSON<unknown>(SAVE_KEY);
       if (parsed) {
         this._data = parseSaveData(parsed);
+        this._syncSkins();
         return;
       }
       const legacyParsed = PersistService.readJSON<unknown>(LEGACY_SAVE_KEY);
       if (legacyParsed) {
         this._data = migrateLegacySave(legacyParsed);
+        this._syncSkins();
         this._save();
         return;
       }
@@ -89,6 +100,7 @@ class PlayerDataClass {
         const devLegacy = PersistService.readJSON<unknown>(legacyKey);
         if (devLegacy) {
           this._data = parseSaveData(devLegacy);
+          this._syncSkins();
           this._save();
           return;
         }
@@ -101,6 +113,7 @@ class PlayerDataClass {
       console.warn('[PlayerData] 存档解析失败，使用初始数据', e);
       this._data = initialData();
     }
+    this._syncSkins();
   }
 
   /** 云端下行覆盖本地缓存后，重新灌入运行态 */
@@ -351,6 +364,62 @@ class PlayerDataClass {
   addLingyu(amount: number): void {
     if (!addLingyuToSave(this._data, amount)) return;
     this._save();
+  }
+
+  ownsPetSkin(skinId: string): boolean {
+    this.load();
+    return this._data.ownedSkins.includes(skinId);
+  }
+
+  petSkinEquipped(petId: string): string | null {
+    this.load();
+    return this._data.equippedSkins[petId] ?? null;
+  }
+
+  /** 买外观并穿上。失败原因交给商店 toast，这里不扣费。 */
+  buyPetSkin(skinId: string): SkinBuyResult {
+    this.load();
+    const result = buyPetSkinOnSave(this._data, skinId);
+    if (result !== 'ok') return result;
+    this._syncSkins();
+    this._save();
+    return result;
+  }
+
+  /** 这套外观已经看完的广告次数（没看过是 0） */
+  skinAdWatched(skinId: string): number {
+    this.load();
+    return this._data.skinAdWatched[skinId] ?? 0;
+  }
+
+  /** 记一次看完的外观广告。凑够次数才入账，中间进度会存档。 */
+  noteSkinAdWatch(skinId: string): SkinAdResult {
+    this.load();
+    const result = noteSkinAdWatchOnSave(this._data, skinId);
+    if (result !== 'owned' && result !== 'progress') return result;
+    if (result === 'owned') this._syncSkins();
+    this._save();
+    return result;
+  }
+
+  equipPetSkin(skinId: string): boolean {
+    this.load();
+    if (!equipPetSkinOnSave(this._data, skinId)) return false;
+    this._syncSkins();
+    this._save();
+    return true;
+  }
+
+  unequipPetSkin(petId: string): boolean {
+    this.load();
+    if (!unequipPetSkinOnSave(this._data, petId)) return false;
+    this._syncSkins();
+    this._save();
+    return true;
+  }
+
+  private _syncSkins(): void {
+    syncEquippedPetSkins(this._data.equippedSkins);
   }
 
   /** 单抽：扣灵玉，结算保底/重复转碎片。灵玉不足返回 null。element 限定五行召唤池 */
@@ -800,7 +869,7 @@ class PlayerDataClass {
     return true;
   }
 
-  // ═══════════ 广告位日限（8 个位共用一份计数，播放链路见 game/adGate.ts） ═══════════
+  // ═══════════ 广告位日限（各广告位共用一份计数，播放链路见 game/adGate.ts） ═══════════
 
   /** 某广告位今日剩余可看次数 */
   adUsesLeft(id: AdPlacementId): number {

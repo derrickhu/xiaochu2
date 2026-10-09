@@ -24,6 +24,19 @@ import {
   makeElementOrb,
 } from '@/ui';
 
+const AVATAR_NAME = 'codexAvatar';
+const avatarUnbind = new WeakMap<PIXI.Sprite, () => void>();
+
+function mountAvatar(avatar: PIXI.Sprite, petId: string, star: number, size: number): void {
+  avatarUnbind.get(avatar)?.();
+  const unbind = bindPetAvatarSprite(avatar, petId, star, (tex) => {
+    avatar.texture = tex;
+    avatar.width = size;
+    avatar.height = size;
+  });
+  avatarUnbind.set(avatar, unbind);
+}
+
 function addCodexAvatar(
   item: PIXI.Container,
   petId: string,
@@ -34,17 +47,26 @@ function addCodexAvatar(
   opts?: { tint?: number; alpha?: number },
 ): void {
   const avatar = new PIXI.Sprite(PIXI.Texture.EMPTY);
+  avatar.name = AVATAR_NAME;
   avatar.width = avatarSize;
   avatar.height = avatarSize;
   avatar.position.set(avatarLeft, avatarTop);
   if (opts?.tint != null) avatar.tint = opts.tint;
   if (opts?.alpha != null) avatar.alpha = opts.alpha;
   item.addChild(avatar);
-  bindPetAvatarSprite(avatar, petId, star, (tex) => {
-    avatar.texture = tex;
-    avatar.width = avatarSize;
-    avatar.height = avatarSize;
+  mountAvatar(avatar, petId, star, avatarSize);
+  avatar.once('destroyed', () => {
+    avatarUnbind.get(avatar)?.();
+    avatarUnbind.delete(avatar);
   });
+}
+
+/** 只换这一张卡的头像。列表从详情回来时用，避免把整页卡拆掉重建。 */
+export function refreshCodexAvatar(item: PIXI.Container, petId: string, star: number): void {
+  const avatar = item.getChildByName(AVATAR_NAME);
+  if (!(avatar instanceof PIXI.Sprite) || avatar.destroyed) return;
+  const size = avatar.width;
+  mountAvatar(avatar, petId, star, size);
 }
 
 export interface CodexRecruitInfo {

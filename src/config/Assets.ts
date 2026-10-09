@@ -10,6 +10,8 @@ import {
   creatureUsesCrSubpackage,
   migrateCreatureId,
 } from '@/balance/creatureIdMigration';
+import { equippedSkinId } from '@/game/equippedPetSkin';
+import { petSkinArt } from '@/config/petSkinArt';
 import { SUBPACKAGE_ROOT } from '@/config/Subpackages';
 
 const IMG = 'images';
@@ -80,11 +82,19 @@ export function petImageAwakened(petId: string): string {
  * 存档旧 ID 经 migrateCreatureId 映射；磁盘/CDN 已统一为 pet_XXX，不再请求 pet_metal_* / cr_* 旧文件名。
  */
 export function petAvatarLoadPaths(petId: string, star = 1): readonly string[] {
-  return [petAvatarPath(petId, star)];
+  const art = equippedSkinArt(petId);
+  return [art?.portrait ?? petAvatarPath(petId, star)];
+}
+
+/** 不看皮肤：★3 以下初始头像，★3 起觉醒头像。详情里「原貌」用这张。 */
+export function petBaseAvatarPath(petId: string, star = 1): string {
+  return star >= PET_AWAKEN_STAR ? petImageAwakened(petId) : petImage(petId);
 }
 
 export function petAvatarPath(petId: string, star = 1): string {
-  return star >= PET_AWAKEN_STAR ? petImageAwakened(petId) : petImage(petId);
+  const art = equippedSkinArt(petId);
+  if (art) return art.portrait;
+  return petBaseAvatarPath(petId, star);
 }
 
 export function creaturePetAvatar(creatureId: string, star = 1): string {
@@ -99,17 +109,31 @@ export function creatureMonsterImage(creatureId: string, tier: 'tier1' | 'tier2'
     : `${root}/${id}.png`;
 }
 
-/** 详情秀场全身立绘：★3+ 用高级怪面，否则初级怪面 */
-export function petShowcaseImage(petId: string, star = 1): string {
+/** 不看皮肤的全身立绘：★3 起用觉醒怪面。 */
+export function petBaseShowcaseImage(petId: string, star = 1): string {
   return creatureMonsterImage(petId, star >= PET_AWAKEN_STAR ? 'tier2' : 'tier1');
 }
 
-/** 秀场加载候选：觉醒图缺失时回退初级（真机 CDN 常见） */
+/** 详情秀场全身立绘：穿了皮肤用皮肤全身，否则 ★3+ 用高级怪面 */
+export function petShowcaseImage(petId: string, star = 1): string {
+  const art = equippedSkinArt(petId);
+  if (art) return art.body;
+  return petBaseShowcaseImage(petId, star);
+}
+
+/** 秀场加载候选：皮肤只有一张；觉醒图缺失时回退初级 */
 export function petShowcaseLoadPaths(petId: string, star = 1): readonly string[] {
+  const art = equippedSkinArt(petId);
+  if (art) return [art.body];
   const primary = petShowcaseImage(petId, star);
   if (star < PET_AWAKEN_STAR) return [primary];
   const fallback = creatureMonsterImage(petId, 'tier1');
   return primary === fallback ? [primary] : [primary, fallback];
+}
+
+function equippedSkinArt(petId: string): { portrait: string; body: string } | null {
+  const skinId = equippedSkinId(petId);
+  return skinId ? petSkinArt(skinId) : null;
 }
 
 /** 章节路径地图 UI（主包） */

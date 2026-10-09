@@ -10,6 +10,7 @@ import { baseStageIdOf, isEliteStageId } from '@/balance/eliteMode';
 import { migrateCreatureId } from '@/balance/creatureIdMigration';
 import { getStarProfile } from '@/balance/growth';
 import { ECONOMY } from '@/balance/economy';
+import { SKIN_AD_COST, petSkinById } from '@/balance/petSkins';
 import { emptyStaminaState, type StaminaState } from './staminaService';
 import { sanitizeTutorial } from './tutorialFlags';
 import { featureNoticeSeed } from '@/balance/featureGates';
@@ -21,7 +22,7 @@ import {
 } from '@/config/CloudConfig';
 
 export { SAVE_KEY, LEGACY_SAVE_KEY } from '@/config/CloudConfig';
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 10;
 
 /** 单只灵宠的养成进度 */
 export interface OwnedPet {
@@ -158,6 +159,12 @@ export interface SaveData {
    * 空 = 只记了章（切章浏览）；已通关则回主页时落到下一关。
    */
   homeStageId: string;
+  /** 已购买的外观 id，v9 起 */
+  ownedSkins: string[];
+  /** 灵宠 id → 正在穿的外观 id。卸下后按星级回到原脸 / 觉醒脸 */
+  equippedSkins: Record<string, string>;
+  /** 外观广告进度：皮肤 id → 已看完次数。凑够后入账并清掉。v10 起 */
+  skinAdWatched: Record<string, number>;
 }
 
 /** 招募结果 */
@@ -241,6 +248,9 @@ export function initialData(): SaveData {
     tutorial: {},
     homeChapter: 0,
     homeStageId: '',
+    ownedSkins: [],
+    equippedSkins: {},
+    skinAdWatched: {},
   };
 }
 
@@ -249,6 +259,8 @@ export function initialData(): SaveData {
  * v6 起补齐 daily/checkin/tower（老档直接吃缺省空态，等价于「今天还没开始玩」），
  * v7 起补齐 gachaSinceUr / universalShards / stamina（缺失即从 0 与满瓶起算）。
  * v8 起补齐 tutorial：老档缺字段时按「有通关记录 = 老玩家」整体标完成，只有真新号才吃引导。
+ * v9 起补齐 ownedSkins / equippedSkins，老档缺字段视为没有买过外观。
+ * v10 起补齐 skinAdWatched，老档缺字段视为还没看过外观广告。
  */
 export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown }): SaveData {
   const migrated = migratePetIdsInPartialSave(parsed);
@@ -310,7 +322,48 @@ export function parseSaveData(parsed: Partial<SaveData> & { discovered?: unknown
       ? Math.max(0, Math.floor(migrated.homeChapter))
       : 0,
     homeStageId: typeof migrated.homeStageId === 'string' ? migrated.homeStageId : '',
+    ...sanitizePetSkins(migrated.ownedSkins, migrated.equippedSkins, migrated.skinAdWatched, owned),
   };
+}
+
+function sanitizePetSkins(
+  ownedRaw: unknown,
+  equippedRaw: unknown,
+  adRaw: unknown,
+  ownedPets: Record<string, OwnedPet>,
+): { ownedSkins: string[]; equippedSkins: Record<string, string>; skinAdWatched: Record<string, number> } {
+  const ownedSkins = Array.isArray(ownedRaw)
+    ? ownedRaw.filter((id): id is string => typeof id === 'string' && !!petSkinById(id))
+    : [];
+  const ownedSet = new Set(ownedSkins);
+  const equippedSkins: Record<string, string> = {};
+  if (equippedRaw && typeof equippedRaw === 'object') {
+    for (const [petId, skinId] of Object.entries(equippedRaw as Record<string, unknown>)) {
+      if (typeof skinId !== 'string' || !ownedSet.has(skinId)) continue;
+      const skin = petSkinById(skinId);
+      if (!skin || skin.petId !== petId || !ownedPets[petId]) continue;
+      equippedSkins[petId] = skinId;
+    }
+  }
+  const skinAdWatched: Record<string, number> = {};
+  if (adRaw && typeof adRaw === 'object') {
+    for (const [skinId, raw] of Object.entries(adRaw as Record<string, unknown>)) {
+      const skin = petSkinById(skinId);
+      if (!skin || ownedSet.has(skinId) || !ownedPets[skin.petId]) continue;
+      if (typeof raw !== 'number' || !Number.isFinite(raw)) continue;
+      const count = Math.floor(raw);
+      if (count <= 0) continue;
+      // 次数已经凑够却没入账（写入中断）：读档时补发，避免卡在 2/2
+      if (count >= SKIN_AD_COST) {
+        ownedSkins.push(skinId);
+        ownedSet.add(skinId);
+        equippedSkins[skin.petId] = skinId;
+        continue;
+      }
+      skinAdWatched[skinId] = count;
+    }
+  }
+  return { ownedSkins, equippedSkins, skinAdWatched };
 }
 
 /** 老档无体力字段 → 按满瓶开局（未上线，不需要向下兼容惩罚） */

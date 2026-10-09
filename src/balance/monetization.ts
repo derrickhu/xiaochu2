@@ -23,7 +23,8 @@ export type AdPlacementId =
   | 'checkin_double'
   | 'quest_double'
   | 'realm_extra_run'
-  | 'free_gacha_pull';
+  | 'free_gacha_pull'
+  | 'skin_unlock';
 
 export interface AdPlacementDef {
   id: AdPlacementId;
@@ -47,6 +48,8 @@ export const AD_PLACEMENTS: Readonly<Record<AdPlacementId, AdPlacementDef>> = {
   quest_double: { id: 'quest_double', name: '日常奖励翻倍', dailyLimit: 3 },
   realm_extra_run: { id: 'realm_extra_run', name: '秘境额外次数', dailyLimit: 2 },
   free_gacha_pull: { id: 'free_gacha_pull', name: '免费单抽', dailyLimit: 1 },
+  // 进度按每套皮肤累计 2 次，不占今日次数；看完由外观存档入账
+  skin_unlock: { id: 'skin_unlock', name: '外观兑换', dailyLimit: 2, gatedElsewhere: true },
 };
 
 export const AD_PLACEMENT_IDS = Object.keys(AD_PLACEMENTS) as AdPlacementId[];

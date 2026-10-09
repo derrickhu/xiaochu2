@@ -1,6 +1,7 @@
 /**
  * 灵宠详情场景：对齐 pet_detail_lihui_showcase_v1
- * 顶栏名匾 → 左竖框全身立绘 + 右矮说明板 → 左右滑切宠 → 中部可滚属性/技能 → 底栏「升星 | 升级」
+ * 顶栏名匾 → 左竖框全身立绘 + 右矮说明板 → 左右滑切宠 → 中部可滚外观/属性/技能 → 底栏「升星 | 升级」
+ * 有外观的灵宠在大立绘下出切换条。轻点立绘看全屏，全屏可分享；没买的外观格点开后可兑换。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -13,6 +14,14 @@ import { Platform } from '@/core/PlatformService';
 import { SfxManager } from '@/core/SfxManager';
 import { UI, ELEMENT_NAME, ORB_COLOR } from '@/balance/ui';
 import { PET_MAP, type PetDef, INITIAL_PET_LEVEL, INITIAL_PET_STAR } from '@/balance/pets';
+import { petSkinsOf, petSkinById, SKIN_AD_COST, skinAdLabel, type PetSkinDef } from '@/balance/petSkins';
+import { petSkinArt } from '@/config/petSkinArt';
+import { SHARE_IMAGES, buildShareQuery } from '@/config/ShareConfig';
+import {
+  SKIN_UI, SkinPreviewOverlay, makeLimitedTag, makeMoonStage, makeSkinPayButton,
+} from '@/scenes/shop/skinShowcase';
+import { analytics } from '@/analytics';
+import { watchAd } from '@/game/adGate';
 import { getStarProfile, MAX_PET_STAR } from '@/balance/growth';
 import { getPetRole, getStatUi, type StatKey } from '@/balance/petRoles';
 import { getRarity } from '@/balance/rarity';
@@ -20,7 +29,8 @@ import { petAtk, petHp, petRcv } from '@/formulas/growth';
 import { resolvePetAbilities, diffAbilityUnlocks, type PetProgress } from '@/game/petAbilities';
 import { EventBus } from '@/core/EventBus';
 import {
-  ENEMY_PORTRAIT_FRAME, BACKGROUND_IMAGES, UI_FX_IMAGES, petShowcaseLoadPaths,
+  BACKGROUND_IMAGES, UI_FX_IMAGES, UI_IMAGES, petShowcaseLoadPaths,
+  petBaseAvatarPath,
 } from '@/config/Assets';
 import { PlayerData } from '@/game/PlayerData';
 import { reportQuest } from '@/game/dailyQuestTracker';
@@ -86,6 +96,12 @@ export class PetDetailScene implements Scene {
   private _statRows: Partial<Record<StatKey, StatRow>> = {};
   private _avatarCenter = new PIXI.Point();
   private _unbindShowcase: (() => void) | null = null;
+  /** 穿皮肤时立绘后的月夜舞台；邻页预览也会进来，切页后整组重置 */
+  private _lookTicks: ((dt: number) => void)[] = [];
+  private _skinPreview: SkinPreviewOverlay | null = null;
+  private _skinAdBusy = false;
+  /** 大立绘在设计坐标里的点击区；多只灵宠时由横滑的「没拖动」识别点击，避免占掉滑动 */
+  private _heroTap: PIXI.Rectangle | null = null;
   private _statPotential: Record<StatKey, number> = { atk: 1, hp: 1, rcv: 1 };
   private readonly _enterSeq = new SceneEnterSeq();
 
@@ -195,6 +211,9 @@ export class PetDetailScene implements Scene {
   }
 
   onExit(): void {
+    this._lookTicks = [];
+    this._heroTap = null;
+    this._closeSkinPreview();
     this._enterSeq.cancel();
     this._unbindShowcase?.();
     this._unbindShowcase = null;
@@ -216,11 +235,17 @@ export class PetDetailScene implements Scene {
 
   update(dt: number): void {
     this._fx?.update(dt);
+    if (this._skinPreview) {
+      this._skinPreview.tick(dt);
+      return;
+    }
+    for (const tick of this._lookTicks) tick(dt);
   }
 
   private _build(): void {
     const w = Game.logicWidth;
     const h = Game.logicHeight;
+    this._lookTicks = [];
     this._incomingGen++;
     this._detachPageSwipe();
     this._scroll.detach();
@@ -237,6 +262,7 @@ export class PetDetailScene implements Scene {
     this._statRows = {};
     this._avatar = null;
     this._starRow = null;
+    this._heroTap = null;
 
     // 背景固定；可滑内容放进轨道上的页面
     this._content.addChild(makeCoverBackground(BACKGROUND_IMAGES.petPool, w, h));
@@ -289,18 +315,7 @@ export class PetDetailScene implements Scene {
 
     const marginX = 28;
     const heroTop = Game.safeTop + 16;
-    const heroGap = 14;
-    // 竖框立绘加高；说明区单独较矮，不跟拉高
-    const halfAvail = Math.floor((w - marginX * 2 - heroGap) / 2);
-    const portraitW = Math.min(250, Math.floor(halfAvail * 0.96));
-    let portraitH = Math.floor(portraitW * (4 / 3));
-    const maxPortraitH = Math.floor(h * 0.52);
-    if (portraitH > maxPortraitH) {
-      portraitH = maxPortraitH;
-    }
-    const heroBottom = this._buildHeroRow(
-      petId, pet, lv, star, marginX, heroTop, portraitW, portraitH, heroGap, w,
-    );
+    const heroBottom = this._buildHeroRow(petId, pet, lv, star, marginX, heroTop, w, h);
 
     const dockH = this._preview ? 0 : 168;
     if (live) {
@@ -469,6 +484,10 @@ export class PetDetailScene implements Scene {
   }
 
   /** 左竖框全身立绘 + 右矮说明板；下阵贴说明区右下；支持左右滑切宠 */
+  /**
+   * 满宽立绘舞台（信息条压在底部）→ 页码点 → 外观切换条（有皮肤才出）。
+   * 返回最底部 y。
+   */
   private _buildHeroRow(
     petId: string,
     pet: PetDef,
@@ -476,133 +495,34 @@ export class PetDetailScene implements Scene {
     star: number,
     marginX: number,
     top: number,
-    portraitW: number,
-    portraitH: number,
-    heroGap: number,
     w: number,
+    h: number,
   ): number {
-    const rightW = portraitW;
-    const bandW = portraitW + heroGap + rightW;
-    const left = Math.max(marginX, Math.floor((w - bandW) / 2));
-    const rightX = left + portraitW + heroGap;
-    const platePad = 12;
-    const teamBtnH = this._preview ? 0 : 44;
-    const teamBtnW = Math.min(112, Math.max(92, rightW - platePad * 2));
-
-    // 说明区比立绘略矮，上下各缩一点（相对立绘垂直居中）
-    const plateInset = 10;
-    const plateH = Math.max(160, portraitH - plateInset * 2);
-    const plateTop = top + plateInset;
     const band = new PIXI.Container();
     if (this._buildLive) this._heroBand = band;
     this._uiRoot().addChild(band);
 
-    const portraitCX = left + portraitW / 2;
-    const portraitCY = top + portraitH / 2;
-    this._buildShowcase(pet, star, portraitCX, portraitCY, portraitW, portraitH, band);
-
-    const plate = makePanel({
-      width: rightW,
-      height: plateH,
-      radius: 18,
-      centered: false,
-      bg: 0xffffff,
-      bgAlpha: 0.82,
-      border: COLORS.panelBorderSoft,
-      borderWidth: 2,
-    });
-    plate.position.set(rightX, plateTop);
-    band.addChild(plate);
-
-    const contentX = rightX + platePad;
-    const contentW = rightW - platePad * 2;
-    let y = plateTop + platePad + 4;
-
-    const rarity = getRarity(pet.rarity);
-    const role = getPetRole(pet.role);
-    const meta = new PIXI.Container();
-    const parts: { text: string; fill: number }[] = [
-      { text: rarity.code, fill: rarity.color },
-      { text: ' · ', fill: COLORS.textSub },
-      { text: ELEMENT_NAME[pet.element], fill: ORB_COLOR[pet.element] },
-      { text: ' · ', fill: COLORS.textSub },
-      { text: role.name, fill: role.color },
-    ];
-    let mx = 0;
-    for (const p of parts) {
-      const t = makeText(p.text, { size: FONT_SIZE.sm, fill: p.fill, bold: true, anchor: [0, 0] });
-      t.position.set(mx, 0);
-      meta.addChild(t);
-      mx += t.width;
-    }
-    meta.position.set(contentX, y);
-    band.addChild(meta);
-    y += meta.height + 10;
-
-    const maxLv = getStarProfile(star).maxLevel;
-    const lvText = makeText(`Lv.${lv} / ${maxLv}`, {
-      size: FONT_SIZE.md, fill: COLORS.textMain, bold: true, anchor: [0, 0],
-    });
-    lvText.position.set(contentX, y);
-    band.addChild(lvText);
-    y += lvText.height + 8;
-
-    const lvCost = this._preview ? null : PlayerData.levelUpCost(petId);
-    const expRatio = lvCost && lvCost > 0
-      ? Math.min(1, PlayerData.exp / lvCost)
-      : (lv >= maxLv ? 1 : 0);
-    const expBar = makeProgressBar({
-      width: Math.max(90, contentW), height: 16, ratio: expRatio, fill: COLORS.btnSuccessBg,
-    });
-    expBar.position.set(contentX, y);
-    band.addChild(expBar);
-    y += 16 + 10;
-
-    const starSize = Math.min(30, Math.max(26, Math.floor(contentW / 6.5)));
-    const starRow = makeStarRow({
-      star,
-      style: 'sprite',
-      starSize,
-      gap: 4,
-      anchor: 'left',
-    });
-    starRow.position.set(contentX, y + starSize / 2);
-    band.addChild(starRow);
-    if (this._buildLive) this._starRow = starRow;
-
-    if (!this._preview) {
-      const inTeam = PlayerData.isInTeam(petId);
-      const teamBtn = this._makeOutlineTeamButton({
-        label: inTeam ? '下阵' : '上阵',
-        width: teamBtnW,
-        height: teamBtnH,
-        onTap: () => this._onToggleTeam(inTeam),
-      });
-      teamBtn.position.set(
-        rightX + rightW - platePad - teamBtnW / 2,
-        plateTop + plateH - platePad - teamBtnH / 2,
-      );
-      if (!this._buildLive) teamBtn.eventMode = 'none';
-      band.addChild(teamBtn);
-    }
-
-    const portraitBottom = top + portraitH;
+    const stageW = w - marginX * 2;
+    const stageH = Math.round(Math.max(440, Math.min(620, h * 0.38)));
+    const cx = w / 2;
+    const cy = top + stageH / 2;
+    this._buildShowcase(petId, pet, lv, star, cx, cy, stageW, stageH, band);
+    let bottom = top + stageH;
 
     const ids = this._browseIds();
     if (ids.length > 1) {
-      const midY = top + portraitH / 2;
       const prev = this._makeHeroArrow('prev', () => this._switchPet(-1));
-      prev.position.set(marginX + 4, midY);
+      prev.position.set(marginX + 36, cy);
       if (!this._buildLive) prev.eventMode = 'none';
       this._uiRoot().addChild(prev);
       const next = this._makeHeroArrow('next', () => this._switchPet(1));
-      next.position.set(w - marginX - 4, midY);
+      next.position.set(w - marginX - 36, cy);
       if (!this._buildLive) next.eventMode = 'none';
       this._uiRoot().addChild(next);
       if (this._buildLive) this._heroArrows = [prev, next];
 
       const idx = Math.max(0, ids.indexOf(petId));
-      const dotsY = portraitBottom + 16;
+      const dotsY = bottom + 18;
       const dots = new PIXI.Container();
       const gap = 14;
       const n = Math.min(ids.length, 8);
@@ -627,10 +547,180 @@ export class PetDetailScene implements Scene {
       this._uiRoot().addChild(hint);
 
       if (this._buildLive) this._attachPageSwipe();
-      return dotsY + 20;
+      bottom = dotsY + 16;
+    } else {
+      bottom += 8;
     }
 
-    return portraitBottom + 8;
+    if (!this._preview && petSkinsOf(pet.id).length > 0) {
+      bottom = this._buildLookStrip(pet, star, marginX, bottom + 6, stageW, band);
+    }
+    return bottom;
+  }
+
+  /** 外观切换条：原貌 + 各皮肤头像格，点格即换。大图由点击上方立绘进入 */
+  private _buildLookStrip(
+    pet: PetDef,
+    star: number,
+    x: number,
+    top: number,
+    width: number,
+    parent: PIXI.Container,
+  ): number {
+    const stripH = 132;
+    const panel = makePanel({
+      width, height: stripH, radius: 22, centered: false,
+      bg: 0xfff8ec, bgAlpha: 0.97, border: COLORS.panelBorderSoft, borderWidth: 3,
+    });
+    panel.position.set(x, top);
+    parent.addChild(panel);
+
+    const live = this._buildLive;
+    const blockTap = () => this._swipeMoved;
+    const label = makeText('外观', {
+      size: FONT_SIZE.md, fill: COLORS.textTitle, anchor: 0.5, role: 'title',
+    });
+    label.position.set(x + 46, top + stripH / 2);
+    parent.addChild(label);
+
+    const skins = petSkinsOf(pet.id);
+    const equippedId = PlayerData.petSkinEquipped(pet.id);
+    const cell = 84;
+    const gap = 18;
+    const tilesLeft = x + 92;
+    const opts: { skin: PetSkinDef | null; name: string; path: string }[] = [
+      { skin: null, name: '原貌', path: petBaseAvatarPath(pet.id, star) },
+      ...skins.map((skin) => ({ skin, name: skin.name, path: petSkinArt(skin.id)?.portrait ?? '' })),
+    ];
+    opts.forEach((opt, i) => {
+      const owned = !opt.skin || PlayerData.ownsPetSkin(opt.skin.id);
+      const selected = opt.skin ? equippedId === opt.skin.id : !equippedId;
+      const tile = this._makeLookTile(opt.path, cell, selected, owned, opt.skin);
+      const tx = tilesLeft + cell / 2 + i * (cell + gap);
+      tile.position.set(tx, top + 12 + cell / 2);
+      parent.addChild(tile);
+      const name = makeText(selected && opt.skin ? '穿戴中' : opt.name, {
+        size: FONT_SIZE.xxs,
+        fill: selected ? COLORS.accentDeep : COLORS.textSub,
+        bold: selected,
+        anchor: [0.5, 0],
+      });
+      name.position.set(tx, top + 12 + cell + 6);
+      parent.addChild(name);
+      if (!live) {
+        tile.eventMode = 'none';
+        return;
+      }
+      tile.eventMode = 'static';
+      tile.cursor = 'pointer';
+      bindPointerTap(tile, () => {
+        if (!opt.skin) this._onPickLook(pet.id, null);
+        else if (!owned) this._openSkinPreview(opt.skin);
+        else this._onPickLook(pet.id, opt.skin.id);
+      }, { blockTap });
+    });
+    return top + stripH;
+  }
+
+  private _makeLookTile(
+    path: string,
+    size: number,
+    selected: boolean,
+    owned: boolean,
+    skin: PetSkinDef | null,
+  ): PIXI.Container {
+    const root = new PIXI.Container();
+    const radius = 16;
+    const frame = new PIXI.Graphics();
+    if (selected) {
+      frame.beginFill(SKIN_UI.ribbonEdge, 0.45);
+      frame.drawRoundedRect(-size / 2 - 5, -size / 2 - 5, size + 10, size + 10, radius + 4);
+      frame.endFill();
+    }
+    frame.lineStyle(selected ? 4 : 2, selected ? COLORS.accent : COLORS.panelBorderSoft);
+    frame.beginFill(skin ? SKIN_UI.night : 0xfff6e6, 1);
+    frame.drawRoundedRect(-size / 2, -size / 2, size, size, radius);
+    frame.endFill();
+    root.addChild(frame);
+
+    const spr = new PIXI.Sprite(PIXI.Texture.EMPTY);
+    spr.anchor.set(0.5);
+    const box = size - 8;
+    const mask = new PIXI.Graphics();
+    mask.beginFill(0xffffff);
+    mask.drawRoundedRect(-box / 2, -box / 2, box, box, 12);
+    mask.endFill();
+    spr.mask = mask;
+    root.addChild(mask, spr);
+    if (path) {
+      bindLazySprite(spr, {
+        path,
+        ensure: true,
+        onApplied: (tex) => spr.scale.set(Math.max(box / tex.width, box / tex.height)),
+      });
+    }
+
+    if (skin && !owned) {
+      // 未获取：压暗 + 小锁，底部「去获取」轻轻呼吸。价格留到点开后的大图里再选
+      const dim = new PIXI.Graphics();
+      dim.beginFill(SKIN_UI.dim, 0.5);
+      dim.drawRoundedRect(-size / 2, -size / 2, size, size, radius);
+      dim.endFill();
+      root.addChild(dim);
+
+      const lock = new PIXI.Graphics();
+      lock.lineStyle(3, SKIN_UI.moon, 1);
+      lock.arc(0, -4, 7, Math.PI, 0);
+      lock.lineStyle(0);
+      lock.beginFill(SKIN_UI.moon, 1);
+      lock.drawRoundedRect(-10, -4, 20, 15, 4);
+      lock.endFill();
+      lock.beginFill(SKIN_UI.nightLift, 1);
+      lock.drawCircle(0, 3, 2.5);
+      lock.endFill();
+      lock.position.set(0, -22);
+      root.addChild(lock);
+      const state = makeText('未获取', {
+        size: 15, fill: SKIN_UI.moon, bold: true, anchor: 0.5,
+      });
+      state.position.set(0, 2);
+      root.addChild(state);
+
+      const cta = new PIXI.Container();
+      const ctaW = size - 10;
+      const ctaH = 26;
+      const ctaBg = new PIXI.Graphics();
+      ctaBg.lineStyle(2, SKIN_UI.ribbonEdge, 1);
+      ctaBg.beginFill(SKIN_UI.ribbon, 1);
+      ctaBg.drawRoundedRect(-ctaW / 2, -ctaH / 2, ctaW, ctaH, ctaH / 2);
+      ctaBg.endFill();
+      const ctaText = makeText('去获取', {
+        size: 17, fill: 0xffffff, anchor: 0.5, role: 'title',
+      });
+      cta.addChild(ctaBg, ctaText);
+      cta.position.set(0, size / 2 - ctaH / 2 - 5);
+      root.addChild(cta);
+      let t = 0;
+      this._lookTicks.push((dt) => {
+        if (cta.destroyed) return;
+        t += dt;
+        cta.scale.set(1 + Math.sin(t * 3.2) * 0.05);
+      });
+    } else if (skin) {
+      const tag = makeText('限定', {
+        size: 16, fill: 0xffffff, bold: true, anchor: 0.5, role: 'title',
+      });
+      const tagBg = new PIXI.Graphics();
+      tagBg.beginFill(SKIN_UI.ribbon, 1);
+      tagBg.drawRoundedRect(-22, -12, 44, 24, 8);
+      tagBg.endFill();
+      const tagC = new PIXI.Container();
+      tagC.addChild(tagBg, tag);
+      tagC.position.set(size / 2 - 20, -size / 2 + 10);
+      root.addChild(tagC);
+    }
+    root.hitArea = new PIXI.Rectangle(-size / 2, -size / 2, size, size);
+    return root;
   }
 
   /** 整页左右滑切换灵宠；邻宠页跟手从侧边滑入 */
@@ -719,6 +809,11 @@ export class PetDetailScene implements Scene {
         // 真机 tap 经 canvasTapRouter defer 后触发 _commitIncoming，
         // 若此处立刻 snap→clear，会 ++_incomingGen 把切宠掐死（表现为箭头无反应）。
         if (moved) this._snapTrackHome(true);
+        // 手指微抖也算点：落在大立绘上、又没被按钮吃掉，就打开全屏立绘。
+        // 竖滑已经在 move 里退出，这里只看横向位移。
+        if (Math.abs(dx) < 18 && this._heroTap?.contains(this._swipeStartX, this._swipeStartY)) {
+          this._openCurrentLook();
+        }
         return;
       }
       this._commitIncoming(delta);
@@ -818,40 +913,68 @@ export class PetDetailScene implements Scene {
     return btn;
   }
 
-  /** 竖框全身立绘秀场（enemy_portrait 金框 + 初级/觉醒怪面） */
+  /**
+   * 满宽立绘舞台：穿皮肤时月夜舞台，原貌暖色底；底部压半透明信息条（稀有度/等级/经验/星级/上阵）。
+   * 轻点立绘进全屏。多只灵宠时不注册整块点击，交给横滑识别，否则左右滑会被吃掉。
+   */
   private _buildShowcase(
+    petId: string,
     pet: PetDef,
+    lv: number,
     star: number,
     cx: number,
     cy: number,
     frameW: number,
     frameH: number,
-    parent: PIXI.Container = this._content,
+    parent: PIXI.Container,
   ): void {
-    if (this._buildLive) this._avatarCenter.set(cx, cy);
+    if (this._buildLive) this._avatarCenter.set(cx, cy - frameH * 0.08);
     const holder = new PIXI.Container();
     holder.position.set(cx, cy);
 
-    // 立绘裁切窗对齐金框透明洞；背板略大于洞、伸入边框下，铺满不露缝
-    const insetX = Math.floor(frameW * 0.105);
-    const insetY = Math.floor(frameH * 0.08);
-    const iw = frameW - insetX * 2;
-    const ih = frameH - insetY * 2;
-    const plateW = frameW - 2;
-    const plateH = frameH - 2;
-
-    holder.addChild(makePanel({
-      width: plateW, height: plateH, radius: 18, centered: true,
-      bg: 0xf5e8d0, bgAlpha: 1, borderWidth: 0,
-    }));
+    const border = 6;
+    const iw = frameW - border * 2;
+    const ih = frameH - border * 2;
+    const radius = 22;
+    const skinId = this._preview ? null : PlayerData.petSkinEquipped(pet.id);
+    const skin = skinId ? petSkinById(skinId) : null;
+    const skinOn = !!skin;
 
     const art = new PIXI.Container();
+    if (skinOn) {
+      const stage = makeMoonStage(iw, ih, radius - 4);
+      art.addChild(stage.root);
+      this._lookTicks.push(stage.tick);
+    } else {
+      const warm = new PIXI.Graphics();
+      warm.beginFill(0xf5e8d0, 1);
+      warm.drawRect(-iw / 2, -ih / 2, iw, ih);
+      warm.endFill();
+      warm.beginFill(0xfff6e2, 0.9);
+      warm.drawEllipse(0, -ih * 0.06, iw * 0.4, ih * 0.42);
+      warm.endFill();
+      warm.beginFill(0xe8d3ad, 0.6);
+      warm.drawEllipse(0, ih * 0.3, iw * 0.34, ih * 0.06);
+      warm.endFill();
+      art.addChild(warm);
+    }
+    const bandH = 116;
     const spr = new PIXI.Sprite(PIXI.Texture.EMPTY);
     spr.anchor.set(0.5);
     art.addChild(spr);
+    // 底部信息条底色：自下而上加深，压在脚边不挡主体
+    const shade = new PIXI.Graphics();
+    const shadeColor = skinOn ? SKIN_UI.dim : 0x3a2814;
+    const steps = 10;
+    for (let k = 0; k < steps; k++) {
+      shade.beginFill(shadeColor, ((k + 1) / steps) * (skinOn ? 0.62 : 0.5));
+      shade.drawRect(-iw / 2, ih / 2 - bandH + (bandH / steps) * k, iw, bandH / steps + 1);
+      shade.endFill();
+    }
+    art.addChild(shade);
     const mask = new PIXI.Graphics();
     mask.beginFill(0xffffff);
-    mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, 14);
+    mask.drawRoundedRect(-iw / 2, -ih / 2, iw, ih, radius - 4);
     mask.endFill();
     art.addChild(mask);
     art.mask = mask;
@@ -861,52 +984,132 @@ export class PetDetailScene implements Scene {
     const unbinds: Array<() => void> = [];
     const showcasePaths = petShowcaseLoadPaths(pet.id, star);
     const showcaseCached = showcasePaths.some((p) => TextureCache.has(p));
+    const artBoxH = ih - 24;
     unbinds.push(bindLazySprite(spr, {
       path: showcasePaths,
       ensure: true,
       onApplied: (tex) => {
-        // Q 版透明底偏「矮胖」：纯 contain 会上下空一大块像小方块。
-        // 用 cover 铺满窗高，左右略裁由 mask 吃掉（源图本身也常左右贴边）。
-        const s = Math.max(iw / tex.width, ih / tex.height) * 0.98;
-        spr.scale.set(s);
-        spr.y = 0;
-      },
-    }));
-
-    // 金框：有缓存立刻画；否则先描边占位，到货后替换（勿等 hydrate 整页重建）
-    const frameFallback = new PIXI.Graphics();
-    frameFallback.lineStyle(3, 0xc9a063, 1);
-    frameFallback.drawRoundedRect(-frameW / 2, -frameH / 2, frameW, frameH, 18);
-    holder.addChild(frameFallback);
-    const frame = new PIXI.Sprite(PIXI.Texture.EMPTY);
-    frame.anchor.set(0.5);
-    holder.addChild(frame);
-    unbinds.push(bindLazySprite(frame, {
-      path: ENEMY_PORTRAIT_FRAME,
-      ensure: true,
-      onApplied: () => {
-        frame.width = frameW;
-        frame.height = frameH;
-        frameFallback.visible = false;
+        spr.scale.set(Math.min(iw * 0.92 / tex.width, artBoxH / tex.height));
+        spr.y = -bandH * 0.22;
       },
     }));
     this._unbindShowcase = () => {
       for (const u of unbinds) u();
     };
 
-    const orbSize = Math.floor(frameW * 0.22);
+    if (this._buildLive) {
+      this._heroTap = new PIXI.Rectangle(cx - frameW / 2, cy - frameH / 2, frameW, frameH);
+      if (this._browseIds().length <= 1) {
+        const hit = new PIXI.Container();
+        hit.eventMode = 'static';
+        hit.cursor = 'pointer';
+        hit.hitArea = new PIXI.Rectangle(-frameW / 2, -frameH / 2, frameW, frameH);
+        bindPointerTap(hit, () => this._openCurrentLook());
+        holder.addChild(hit);
+      }
+    }
+
+    this._fillHeroInfo(holder, petId, pet, lv, star, iw, ih);
+
+    const frame = new PIXI.Graphics();
+    frame.lineStyle(border, 0xd9b26a, 1);
+    frame.drawRoundedRect(-frameW / 2 + border / 2, -frameH / 2 + border / 2, frameW - border, frameH - border, radius);
+    frame.lineStyle(2, skinOn ? SKIN_UI.silver : 0xfff1cf, 0.85);
+    frame.drawRoundedRect(-iw / 2 + 4, -ih / 2 + 4, iw - 8, ih - 8, radius - 6);
+    holder.addChild(frame);
+
+    const orbSize = 64;
     const orb = makeElementOrb(pet.element, orbSize);
-    orb.position.set(-frameW / 2 + orbSize * 0.62, -frameH / 2 + orbSize * 0.62);
+    orb.position.set(-iw / 2 + orbSize * 0.5 + 12, -ih / 2 + orbSize * 0.5 + 12);
     holder.addChild(orb);
+
+    if (skin) {
+      const tag = makeLimitedTag(`限定 · ${skin.name}`);
+      tag.position.set(iw / 2 - tag.width - 14, -ih / 2 + 16);
+      holder.addChild(tag);
+    }
 
     parent.addChild(holder);
     if (this._buildLive) {
       this._avatar = holder;
-      // 立绘已在缓存：禁止再 fadeIn（否则已有图也会先透明再淡入，像闪一下）
       if (!this._skipAvatarFade && !showcaseCached) {
         fadeIn(holder, { duration: 0.18 });
       }
       this._skipAvatarFade = false;
+    }
+  }
+
+  private _fillHeroInfo(
+    holder: PIXI.Container,
+    petId: string,
+    pet: PetDef,
+    lv: number,
+    star: number,
+    iw: number,
+    ih: number,
+  ): void {
+    const left = -iw / 2 + 24;
+    const right = iw / 2 - 24;
+    const base = ih / 2;
+    const stroke = { strokeColor: 0x1a1208, strokeWidth: 4 };
+
+    const rarity = getRarity(pet.rarity);
+    const role = getPetRole(pet.role);
+    const meta = new PIXI.Container();
+    const parts: { text: string; fill: number }[] = [
+      { text: rarity.code, fill: rarity.color },
+      { text: ' · ', fill: 0xffffff },
+      { text: ELEMENT_NAME[pet.element], fill: ORB_COLOR[pet.element] },
+      { text: ' · ', fill: 0xffffff },
+      { text: role.name, fill: role.color },
+    ];
+    let mx = 0;
+    for (const p of parts) {
+      const t = makeText(p.text, { size: FONT_SIZE.sm, fill: p.fill, bold: true, anchor: [0, 0.5], ...stroke });
+      t.position.set(mx, 0);
+      meta.addChild(t);
+      mx += t.width;
+    }
+    meta.position.set(left, base - 92);
+    holder.addChild(meta);
+
+    const maxLv = getStarProfile(star).maxLevel;
+    const lvText = makeText(`Lv.${lv} / ${maxLv}`, {
+      size: FONT_SIZE.md, fill: 0xffffff, bold: true, anchor: [0, 0.5], ...stroke,
+    });
+    lvText.position.set(left, base - 58);
+    holder.addChild(lvText);
+
+    const lvCost = this._preview ? null : PlayerData.levelUpCost(petId);
+    const expRatio = lvCost && lvCost > 0
+      ? Math.min(1, PlayerData.exp / lvCost)
+      : (lv >= maxLv ? 1 : 0);
+    const expBar = makeProgressBar({
+      width: Math.floor(iw * 0.46), height: 14, ratio: expRatio, fill: COLORS.btnSuccessBg,
+    });
+    expBar.position.set(left, base - 32);
+    holder.addChild(expBar);
+
+    const starSize = 32;
+    const starRow = makeStarRow({ star, style: 'sprite', starSize, gap: 4, anchor: 'left' });
+    const starW = MAX_PET_STAR * starSize + (MAX_PET_STAR - 1) * 4;
+    starRow.position.set(right - starW, base - (this._preview ? 46 : 86));
+    holder.addChild(starRow);
+    if (this._buildLive) this._starRow = starRow;
+
+    if (!this._preview) {
+      const inTeam = PlayerData.isInTeam(petId);
+      const teamW = 112;
+      const teamH = 44;
+      const teamBtn = this._makeOutlineTeamButton({
+        label: inTeam ? '下阵' : '上阵',
+        width: teamW,
+        height: teamH,
+        onTap: () => this._onToggleTeam(inTeam),
+      });
+      teamBtn.position.set(right - teamW / 2, base - 36);
+      if (!this._buildLive) teamBtn.eventMode = 'none';
+      holder.addChild(teamBtn);
     }
   }
 
@@ -935,8 +1138,9 @@ export class PetDetailScene implements Scene {
     panelPlaceholder.position.set(marginX, 0);
     sheet.addChild(panelPlaceholder);
 
+    y += 8;
     // 属性
-    y = this._fillStatSection(sheet, pet, lv, star, marginX + pad, y + 8, sheetW - pad * 2);
+    y = this._fillStatSection(sheet, pet, lv, star, marginX + pad, y, sheetW - pad * 2);
     y += 18;
     // 技能（行高随文案自适应；返回值已含末行底部）
     y = this._fillSkillSection(sheet, pet, lv, star, marginX + pad, y, sheetW - pad * 2);
@@ -994,6 +1198,237 @@ export class PetDetailScene implements Scene {
     t.position.set(x + 28, y + 16);
     parent.addChild(t);
     return y + 44;
+  }
+
+  /** 轻点当前大立绘：穿了皮肤看限定全屏，否则看原貌全屏 */
+  private _openCurrentLook(): void {
+    if (this._skinPreview || this._switching) return;
+    const pet = PET_MAP.get(this._petId);
+    if (!pet) return;
+    const skinId = this._preview ? null : PlayerData.petSkinEquipped(pet.id);
+    const skin = skinId ? petSkinById(skinId) : null;
+    if (skin) this._openSkinPreview(skin);
+    else this._openBasePreview(pet);
+  }
+
+  /** 全屏大图。已拥有只给分享；没买的从外观格点进来，底部仍是兑换 */
+  private _openSkinPreview(skin: PetSkinDef): void {
+    const art = petSkinArt(skin.id);
+    const pet = PET_MAP.get(skin.petId);
+    if (!art || !pet) return;
+    this._closeSkinPreview();
+    this._scroll.detach();
+    const owned = PlayerData.ownsPetSkin(skin.id);
+    const overlay = new SkinPreviewOverlay({
+      skinName: skin.name,
+      petName: pet.name,
+      skinBody: art.body,
+      ownedNote: owned ? '发给好友看看' : `${skin.priceLingyu} 灵玉，或看 ${SKIN_AD_COST} 次广告`,
+      makeAction: () => (owned
+        ? this._makeShareButton(`我的${pet.name}穿上了「${skin.name}」`, `skin_${skin.id}`)
+        : makeSkinPayButton({
+          kind: 'lingyu',
+          text: `${skin.priceLingyu}`,
+          width: 230,
+          height: 72,
+          onTap: () => this._onLookAction(skin),
+        })),
+      makeAlt: owned ? undefined : () => makeSkinPayButton({
+        kind: 'ad',
+        text: skinAdLabel(PlayerData.skinAdWatched(skin.id)),
+        width: 230,
+        height: 72,
+        onTap: () => { void this._onSkinAd(skin); },
+      }),
+      onClose: () => {
+        this._closeSkinPreview();
+        this._build();
+      },
+    });
+    this._skinPreview = overlay;
+    this.container.addChild(overlay);
+    SfxManager.playUiClick();
+    analytics.track('skin_preview', {
+      skin_id: skin.id, pet_id: skin.petId, owned: owned ? 1 : 0, from: 'petDetail',
+    });
+  }
+
+  private _openBasePreview(pet: PetDef): void {
+    const star = this._preview ? INITIAL_PET_STAR : PlayerData.petStar(pet.id);
+    this._closeSkinPreview();
+    this._scroll.detach();
+    const overlay = new SkinPreviewOverlay({
+      skinName: pet.name,
+      petName: pet.name,
+      skinBody: petShowcaseLoadPaths(pet.id, star),
+      subtitle: '原貌',
+      warm: true,
+      ownedNote: '发给好友看看',
+      makeAction: () => this._makeShareButton(`我的灵宠 · ${pet.name}`, `pet_${pet.id}`),
+      onClose: () => {
+        this._closeSkinPreview();
+        this._build();
+      },
+    });
+    this._skinPreview = overlay;
+    this.container.addChild(overlay);
+    SfxManager.playUiClick();
+  }
+
+  /** 必须在点击手势里同步调起，否则微信不认这次分享 */
+  private _makeShareButton(title: string, source: string): PIXI.Container {
+    return makeButton({
+      label: '分享给好友',
+      width: 280,
+      height: 64,
+      variant: 'primary',
+      fontSize: 26,
+      syncGesture: true,
+      onTap: () => {
+        if (!Platform.isMinigame) {
+          Platform.showToast('请在微信或抖音里分享');
+          return;
+        }
+        Platform.shareAppMessage({
+          title,
+          imageUrl: SHARE_IMAGES.default,
+          query: buildShareQuery(source),
+        });
+        analytics.track('pet_share', { pet_id: this._petId, source });
+      },
+    });
+  }
+
+  private _closeSkinPreview(): void {
+    const overlay = this._skinPreview;
+    this._skinPreview = null;
+    if (overlay && !overlay.destroyed) {
+      overlay.parent?.removeChild(overlay);
+      overlay.destroy({ children: true });
+    }
+  }
+
+  /** 看完一次记 1 次；凑够才入账并穿上，进度跨天保留 */
+  private async _onSkinAd(skin: PetSkinDef): Promise<void> {
+    if (this._skinAdBusy || this._preview || skin.petId !== this._petId) return;
+    if (PlayerData.ownsPetSkin(skin.id)) return;
+    if (!PlayerData.isOwned(skin.petId)) {
+      SfxManager.playDenied();
+      Platform.showToast('先获得这只灵宠');
+      return;
+    }
+    this._skinAdBusy = true;
+    const fromPreview = !!this._skinPreview;
+    try {
+      const ok = await watchAd('skin_unlock', { skin_id: skin.id, pet_id: skin.petId, from: 'petDetail' });
+      if (!ok || SceneManager.current?.name !== 'petDetail' || this._petId !== skin.petId) return;
+      const result = PlayerData.noteSkinAdWatch(skin.id);
+      if (result === 'progress') {
+        const done = PlayerData.skinAdWatched(skin.id);
+        Platform.showToast(`已看 ${done}/${SKIN_AD_COST}，再看 ${SKIN_AD_COST - done} 次就获得`, 'success');
+        this._closeSkinPreview();
+        this._build();
+        if (fromPreview) this._openSkinPreview(skin);
+        return;
+      }
+      if (result !== 'owned') {
+        SfxManager.playDenied();
+        Platform.showToast(result === 'need_pet' ? '先获得这只灵宠' : '现在不能兑换');
+        return;
+      }
+      SfxManager.playShopPurchase();
+      analytics.track('skin_buy', {
+        skin_id: skin.id,
+        cost: 0,
+        pay: 'ad',
+        pet_id: skin.petId,
+        from_preview: fromPreview ? 1 : 0,
+        from: 'petDetail',
+      });
+      reportQuest('shopBuy');
+      Platform.showToast(`获得外观 · ${skin.name}，已穿上`, 'success');
+      Platform.vibrateShort('heavy');
+      this._closeSkinPreview();
+      this._skipAvatarFade = true;
+      this._build();
+      this._fx?.flash(SKIN_UI.glow, 0.32, 0.45);
+      for (const color of [SKIN_UI.glow, SKIN_UI.moon, COLORS.accent]) this._burstAtAvatar(color, true);
+    } finally {
+      this._skinAdBusy = false;
+    }
+  }
+
+  private _onLookAction(skin: PetSkinDef): void {
+    if (this._preview || skin.petId !== this._petId) return;
+    if (PlayerData.ownsPetSkin(skin.id)) return;
+    const result = PlayerData.buyPetSkin(skin.id);
+    if (result !== 'ok') {
+      SfxManager.playDenied();
+      Platform.showToast(
+        result === 'poor'
+          ? `灵玉不足，还差 ${Math.max(0, skin.priceLingyu - PlayerData.lingyu)}`
+          : result === 'need_pet' ? '先获得这只灵宠' : '现在不能兑换',
+      );
+      return;
+    }
+    SfxManager.playShopPurchase();
+    analytics.track('skin_buy', {
+      skin_id: skin.id,
+      cost: skin.priceLingyu,
+      pay: 'lingyu',
+      pet_id: skin.petId,
+      from_preview: this._skinPreview ? 1 : 0,
+      from: 'petDetail',
+    });
+    reportQuest('shopBuy');
+    Platform.showToast(`获得外观 · ${skin.name}，已穿上`, 'success');
+    Platform.vibrateShort('heavy');
+    this._closeSkinPreview();
+    this._skipAvatarFade = true;
+    this._build();
+    this._fx?.flash(SKIN_UI.glow, 0.32, 0.45);
+    for (const color of [SKIN_UI.glow, SKIN_UI.moon, COLORS.accent]) this._burstAtAvatar(color, true);
+  }
+
+  private _onPickLook(petId: string, skinId: string | null): void {
+    if (this._preview || petId !== this._petId) return;
+    const current = PlayerData.petSkinEquipped(petId);
+    if (skinId === null) {
+      if (!current) return;
+      if (!PlayerData.unequipPetSkin(petId)) {
+        SfxManager.playDenied();
+        return;
+      }
+      this._finishLookChange(current, petId, false, '已换回原貌');
+      return;
+    }
+    const skin = petSkinsOf(petId).find((item) => item.id === skinId);
+    if (!skin) return;
+    if (!PlayerData.ownsPetSkin(skin.id)) {
+      this._openSkinPreview(skin);
+      return;
+    }
+    if (current === skin.id) return;
+    if (!PlayerData.equipPetSkin(skin.id)) {
+      SfxManager.playDenied();
+      return;
+    }
+    this._finishLookChange(skin.id, petId, true, `已穿上 · ${skin.name}`);
+  }
+
+  private _finishLookChange(skinId: string, petId: string, equipped: boolean, toast: string): void {
+    Platform.vibrateShort('light');
+    SfxManager.playUiClick();
+    analytics.track('skin_equip', {
+      skin_id: skinId,
+      pet_id: petId,
+      equipped: equipped ? 1 : 0,
+    });
+    Platform.showToast(toast, 'success');
+    this._closeSkinPreview();
+    this._skipAvatarFade = true;
+    this._build();
+    if (equipped) this._burstAtAvatar(SKIN_UI.glow, true);
   }
 
   private _fillStatSection(

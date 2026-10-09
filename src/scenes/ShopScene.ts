@@ -1,8 +1,8 @@
 /**
- * 商店场景：灵宠币兑碎片 + 登塔印记兑资源
+ * 商店场景：灵宠币兑碎片 + 登塔印记兑资源 + 灵玉兑外观
  *
  * 对齐 game_assets/.../prototypes/ui/shop_bg_interior_compact_v1.png / shop_sidebar_compact_v1.png：
- * 短 Tab 栈（无通栏长轨）+ 右区双列商品卡；洞府货架氛围底。
+ * 短 Tab 栈（无通栏长轨）+ 右区双列商品卡；外观页用同一块货架底板铺一张通栏皮肤卡。
  */
 import * as PIXI from 'pixi.js';
 import { Game } from '@/core/Game';
@@ -11,20 +11,29 @@ import { Platform } from '@/core/PlatformService';
 import { SfxManager } from '@/core/SfxManager';
 import { TextureCache } from '@/core/TextureCache';
 import { bindPetAvatarSprite } from '@/config/petAvatarTexture';
+import { bindLazySprite } from '@/ui/bindLazySprite';
 import { shopPreloadImages } from '@/config/assetPreload';
 import { ensureAssets } from '@/config/Subpackages';
 import { UI } from '@/balance/ui';
-import { PETS, type PetDef } from '@/balance/pets';
+import { PETS, PET_MAP, type PetDef } from '@/balance/pets';
+import { PET_SKINS, SKIN_AD_COST, skinAdLabel, type PetSkinDef } from '@/balance/petSkins';
+import { petSkinArt } from '@/config/petSkinArt';
 import { ECONOMY } from '@/balance/economy';
 import { formatReward } from '@/balance/rewards';
 import { TOWER_EXCHANGES } from '@/balance/towerLegacy';
+import { watchAd } from '@/game/adGate';
 import { PlayerData } from '@/game/PlayerData';
 import { grantReward } from '@/game/rewardGrant';
 import { reportQuest } from '@/game/dailyQuestTracker';
 import { analytics } from '@/analytics';
 import {
   BACKGROUND_IMAGES, UI_IMAGES, UI_SHOP_IMAGES, UI_FX_IMAGES,
+  petBaseAvatarPath,
 } from '@/config/Assets';
+import {
+  SKIN_UI, SkinPreviewOverlay, fillStageArt, makeAdIcon, makeLimitedTag, makeLookCompare, makeMoonStage,
+  makeSkinPayButton,
+} from '@/scenes/shop/skinShowcase';
 import {
   COLORS, FONT_SIZE,
   makeBackButton, makeCoverBackground, makeText,
@@ -69,11 +78,17 @@ const SHOP_UI = {
   cardSlice: { left: 48, top: 48, right: 48, bottom: 48 },
 } as const;
 
+const SKIN_CARD_H = 420;
+
 export type ShopTabId = 'shard' | 'honor' | 'realm' | 'lingyu';
 
 export interface ShopEnterData {
   tab?: ShopTabId;
   from?: string;
+  /** 从灵宠详情来兑换时，返回按钮回到这只灵宠 */
+  petId?: string;
+  petBackScene?: string;
+  petBackData?: unknown;
 }
 
 interface ShopTabDef {
@@ -87,7 +102,7 @@ const SHOP_TABS: readonly ShopTabDef[] = [
   { id: 'shard', label: '碎片', iconPath: UI_SHOP_IMAGES.tabIconShard, enabled: true },
   { id: 'honor', label: '印记', iconPath: UI_SHOP_IMAGES.tabIconHonor, enabled: true },
   { id: 'realm', label: '秘境', iconPath: UI_SHOP_IMAGES.tabIconRealm, enabled: false },
-  { id: 'lingyu', label: '灵玉', iconPath: UI_SHOP_IMAGES.tabIconLingyu, enabled: false },
+  { id: 'lingyu', label: '外观', iconPath: UI_SHOP_IMAGES.tabIconLingyu, enabled: true },
 ];
 
 interface ShopBuyHandle extends PIXI.Container {
@@ -120,6 +135,19 @@ function shopHeaderLayout(): {
   const hintCenterY = coinCenterY + SHOP_UI.coinBarH / 2 + SHOP_UI.headerHintGap + 11;
   const listTop = hintCenterY + 12 + SHOP_UI.headerListGap;
   return { coinCenterY, hintCenterY, listTop };
+}
+
+function shopHint(tab: ShopTabId): string {
+  if (tab === 'honor') return '◆  登塔印记兑换资源  ◆';
+  if (tab === 'lingyu') return '◆  限定外观 · 点立绘看大图  ◆';
+  return '◆  灵宠币兑换定向碎片  ◆';
+}
+
+function skinBuyToast(result: string, skin: PetSkinDef): string {
+  if (result === 'poor') return `灵玉不足，还差 ${Math.max(0, skin.priceLingyu - PlayerData.lingyu)}`;
+  if (result === 'need_pet') return '先获得这只灵宠';
+  if (result === 'already') return '已经拥有这套外观';
+  return '现在不能购买';
 }
 
 function shopCoinSlice(): { left: number; top: number; right: number; bottom: number } {
@@ -214,18 +242,23 @@ function makeCardBuyButton(
   onTap: () => void,
   blockTap?: () => boolean,
   iconPath: string = UI_IMAGES.iconCoin,
+  label?: string,
 ): ShopBuyHandle {
   const { buyH, buyMinW, buyFont, buyCoinIcon } = SHOP_UI;
   const btn = new PIXI.Container() as ShopBuyHandle;
-  const priceRow = makeIconLabel({
-    iconPath,
-    iconSize: buyCoinIcon,
-    text: `${cost}`,
-    size: buyFont,
-    fill: COLORS.textMain,
-    bold: true,
-    gap: 6,
-  });
+  const priceRow: PIXI.Container = label
+    ? makeText(label, {
+      size: buyFont, fill: COLORS.textMain, bold: true, anchor: 0.5,
+    })
+    : makeIconLabel({
+      iconPath,
+      iconSize: buyCoinIcon,
+      text: `${cost}`,
+      size: buyFont,
+      fill: COLORS.textMain,
+      bold: true,
+      gap: 6,
+    });
   const priceSize = centerPivot(priceRow);
   const buyW = Math.max(buyMinW, Math.ceil(priceSize.w + 28));
 
@@ -236,6 +269,7 @@ function makeCardBuyButton(
   let active = enabled;
   const redraw = (): void => {
     const fill = active ? COLORS.textMain : COLORS.textDisabled;
+    if (priceRow instanceof PIXI.Text) priceRow.style.fill = fill;
     priceRow.children.forEach((ch) => {
       if (ch instanceof PIXI.Text) ch.style.fill = fill;
     });
@@ -253,6 +287,32 @@ function makeCardBuyButton(
   pressFeedback(btn);
   btn.setEnabled(enabled);
   redraw();
+  return btn;
+}
+
+/** 和灵玉价签同一块底板，图标换成小电视，文案是广告进度 */
+function makeCardAdButton(watched: number, onTap: () => void, blockTap?: () => boolean): PIXI.Container {
+  const { buyH, buyMinW, buyFont, buyCoinIcon } = SHOP_UI;
+  const btn = new PIXI.Container();
+  const row = new PIXI.Container();
+  const icon = makeAdIcon(buyCoinIcon, SKIN_UI.ink, SKIN_UI.ribbonEdge);
+  icon.position.set(buyCoinIcon / 2, 0);
+  const done = Math.max(0, Math.min(SKIN_AD_COST, watched));
+  const label = makeText(`广告 ${done}/${SKIN_AD_COST}`, {
+    size: buyFont, fill: COLORS.textMain, bold: true, anchor: [0, 0.5],
+  });
+  label.position.set(buyCoinIcon + 6, 0);
+  row.addChild(icon, label);
+  const size = centerPivot(row);
+  const buyW = Math.max(buyMinW, Math.ceil(size.w + 28));
+  addNineSliceBg(btn, UI_SHOP_IMAGES.buyPanel, buyW, buyH, SHOP_UI.buySlice);
+  btn.addChild(row);
+  bindPointerTap(btn, onTap, { blockTap });
+  btn.eventMode = 'static';
+  btn.cursor = 'pointer';
+  btn.hitArea = new PIXI.Rectangle(-buyW / 2, -buyH / 2, buyW, buyH);
+  btn.interactiveChildren = false;
+  pressFeedback(btn);
   return btn;
 }
 
@@ -288,6 +348,17 @@ export class ShopScene implements Scene {
   private _cards = new Map<string, ShopCardRef>();
   private _tabId: ShopTabId = 'shard';
   private _from: string | null = null;
+  private _skinPreview: SkinPreviewOverlay | null = null;
+  private _skinAdBusy = false;
+  /** 货架上的月夜舞台；只推视口内的那几张 */
+  private _skinStages: { tick: (dt: number) => void; centerY: number }[] = [];
+  private _skinShelfY = 0;
+  private _viewTop = 0;
+  private _viewBottom = 0;
+  private _skinCardCenters = new Map<string, { x: number; y: number }>();
+  private _returnPetId: string | null = null;
+  private _petBackScene = 'codex';
+  private _petBackData: unknown;
   private _infoPopup: ShopInfoPopup | null = null;
 
   onEnter(data?: unknown): void {
@@ -295,8 +366,12 @@ export class ShopScene implements Scene {
     PlayerData.load();
     const enter = data as ShopEnterData | undefined;
     this._from = typeof enter?.from === 'string' ? enter.from : null;
-    if (enter?.tab === 'honor' || enter?.tab === 'shard') this._tabId = enter.tab;
-    else this._tabId = 'shard';
+    this._returnPetId = typeof enter?.petId === 'string' ? enter.petId : null;
+    this._petBackScene = typeof enter?.petBackScene === 'string' ? enter.petBackScene : 'codex';
+    this._petBackData = enter?.petBackData;
+    if (enter?.tab === 'honor' || enter?.tab === 'shard' || enter?.tab === 'lingyu') {
+      this._tabId = enter.tab;
+    } else this._tabId = 'shard';
     this._fx = new SceneFx();
     this._build({ animate: true });
     void Game.warmScenePresent();
@@ -307,6 +382,9 @@ export class ShopScene implements Scene {
   }
 
   onExit(): void {
+    this._skinStages = [];
+    this._skinCardCenters.clear();
+    this._closeSkinPreview();
     this._scroll.detach();
     this._content = null;
     this._listMask = null;
@@ -326,6 +404,18 @@ export class ShopScene implements Scene {
 
   update(dt: number): void {
     this._fx?.update(dt);
+    if (this._skinPreview) {
+      this._skinPreview.tick(dt);
+      return;
+    }
+    const content = this._content;
+    if (!content || this._skinStages.length === 0) return;
+    const half = SKIN_CARD_H / 2;
+    for (const s of this._skinStages) {
+      const cy = content.y + s.centerY;
+      if (cy + half < this._viewTop || cy - half > this._viewBottom) continue;
+      s.tick(dt);
+    }
   }
 
   private _shopPets(): PetDef[] {
@@ -353,6 +443,9 @@ export class ShopScene implements Scene {
     const h = Game.logicHeight;
     this._scroll.detach();
     this._cards.clear();
+    this._skinStages = [];
+    this._skinCardCenters.clear();
+    this._closeSkinPreview();
     this._listMask = null;
     this._content = null;
     // 重建时先摘下浮层，避免被 removeChildren 销毁
@@ -369,7 +462,13 @@ export class ShopScene implements Scene {
     const back = makeBackButton({
       onTap: () => {
         if (this._from === 'tower') SceneManager.switchTo('tower');
-        else SceneManager.switchTo('title', PlayerData.titleEnter());
+        else if (this._from === 'petDetail' && this._returnPetId) {
+          SceneManager.switchTo('petDetail', {
+            petId: this._returnPetId,
+            backScene: this._petBackScene,
+            backData: this._petBackData,
+          });
+        } else SceneManager.switchTo('title', PlayerData.titleEnter());
       },
     });
     back.position.set(56, Game.safeHeaderCenterY);
@@ -381,10 +480,9 @@ export class ShopScene implements Scene {
     this._refreshCoins(header.coinCenterY);
 
     const geo = this._contentGeometry();
-    const hint = makeText(
-      this._tabId === 'honor' ? '◆  登塔印记兑换资源  ◆' : '◆  灵宠币兑换定向碎片  ◆',
-      { size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5 },
-    );
+    const hint = makeText(shopHint(this._tabId), {
+      size: FONT_SIZE.xs, fill: COLORS.textSub, bold: true, anchor: 0.5,
+    });
     hint.position.set(geo.contentLeft + geo.contentW / 2, header.hintCenterY);
     this.container.addChild(hint);
 
@@ -401,6 +499,8 @@ export class ShopScene implements Scene {
       contentH = this._buildShardGrid(content, animTargets, header.listTop);
     } else if (this._tabId === 'honor') {
       contentH = this._buildHonorList(content, animTargets);
+    } else if (this._tabId === 'lingyu') {
+      contentH = this._buildSkinShelf(content, animTargets);
     } else {
       const empty = makeText('该商店即将开放', {
         size: FONT_SIZE.sm, fill: COLORS.textSub, bold: true, anchor: 0.5,
@@ -410,6 +510,8 @@ export class ShopScene implements Scene {
     }
 
     const viewportH = h - header.listTop - 24;
+    this._viewTop = header.listTop;
+    this._viewBottom = header.listTop + viewportH;
     const scrollMin = Math.min(
       header.listTop,
       header.listTop - Math.max(0, contentH + SHOP_UI.listBottomPad - viewportH),
@@ -586,6 +688,340 @@ export class ShopScene implements Scene {
     Platform.showToast(`兑换成功 · ${formatReward(done.reward)}`, 'success');
     reportQuest('shopBuy');
     this._build({ animate: false });
+  }
+
+  /** 外观页：通栏限定卡，左月夜舞台立绘，右对比与价签 */
+  private _buildSkinShelf(content: PIXI.Container, animTargets: PIXI.Container[]): number {
+    const geo = this._contentGeometry();
+    let y = 0;
+    for (const skin of PET_SKINS) {
+      this._skinShelfY = y;
+      const card = this._buildSkinCard(skin, geo.contentW);
+      card.position.set(geo.contentLeft + geo.contentW / 2, y + SKIN_CARD_H / 2);
+      content.addChild(card);
+      animTargets.push(card);
+      this._skinCardCenters.set(skin.id, {
+        x: geo.contentLeft + geo.contentW / 2,
+        y: y + SKIN_CARD_H / 2,
+      });
+      y += SKIN_CARD_H + SHOP_UI.cardGapY;
+    }
+    return y;
+  }
+
+  private _buildSkinCard(skin: PetSkinDef, cardW: number): PIXI.Container {
+    const cardH = SKIN_CARD_H;
+    const card = new PIXI.Container();
+    addNineSliceBg(card, UI_SHOP_IMAGES.cardPanel, cardW, cardH, SHOP_UI.cardSlice)
+      || addScaledSprite(card, UI_SHOP_IMAGES.cardPanel, cardW, cardH);
+
+    const pad = 18;
+    const stageW = 236;
+    const stageH = cardH - pad * 2;
+    const stageX = -cardW / 2 + pad + stageW / 2;
+    const stage = makeMoonStage(stageW, stageH, 22);
+    stage.root.position.set(stageX, 0);
+    card.addChild(stage.root);
+    this._skinStages.push({ tick: stage.tick, centerY: this._skinShelfY + cardH / 2 });
+    card.hitArea = new PIXI.Rectangle(-cardW / 2, -cardH / 2, cardW, cardH);
+    const art = petSkinArt(skin.id);
+    if (art) fillStageArt(stage, art.body, stageW * 0.96, stageH * 0.9, stageH * 0.02);
+
+    const tag = makeLimitedTag();
+    tag.position.set(-cardW / 2 + pad + 10, -cardH / 2 + pad + 10);
+    card.addChild(tag);
+
+    const peek = makeText('点击看大图', {
+      size: FONT_SIZE.xxs, fill: SKIN_UI.moon, bold: true, anchor: 0.5,
+    });
+    const peekW = Math.ceil(peek.width + 28);
+    const peekBg = new PIXI.Graphics();
+    peekBg.beginFill(SKIN_UI.dim, 0.62);
+    peekBg.drawRoundedRect(-peekW / 2, -14, peekW, 28, 14);
+    peekBg.endFill();
+    peekBg.position.set(stageX, stageH / 2 - 22);
+    card.addChild(peekBg);
+    peek.position.set(stageX, stageH / 2 - 22);
+    card.addChild(peek);
+
+    const stageHit = new PIXI.Container();
+    stageHit.hitArea = new PIXI.Rectangle(-stageW / 2, -stageH / 2, stageW, stageH);
+    stageHit.eventMode = 'static';
+    stageHit.cursor = 'pointer';
+    stageHit.position.set(stageX, 0);
+    bindPointerTap(stageHit, () => this._openSkinPreview(skin), { blockTap: () => this._scroll.moved });
+    card.addChild(stageHit);
+
+    const textX = -cardW / 2 + pad + stageW + 22;
+    const colW = cardW / 2 - 22 - textX;
+    const pet = PET_MAP.get(skin.petId);
+    const owned = PlayerData.ownsPetSkin(skin.id);
+    const equipped = PlayerData.petSkinEquipped(skin.petId) === skin.id;
+
+    const name = makeText(skin.name, {
+      size: 34, fill: SKIN_UI.ink, anchor: [0, 0.5], role: 'title',
+    });
+    name.position.set(textX, -cardH / 2 + 46);
+    card.addChild(name);
+
+    const who = new PIXI.Container();
+    who.position.set(textX, -cardH / 2 + 86);
+    card.addChild(who);
+    if (pet) {
+      const orb = makeElementOrb(pet.element, 22);
+      orb.position.set(11, 0);
+      who.addChild(orb);
+    }
+    const whoName = makeText(pet?.name ?? '', {
+      size: SHOP_UI.nameSize, fill: COLORS.textSub, bold: true, anchor: [0, 0.5],
+    });
+    whoName.position.set(pet ? 28 : 0, 0);
+    who.addChild(whoName);
+
+    const tagline = makeText(skin.tagline, {
+      size: SHOP_UI.subSize, fill: COLORS.accentDeep, bold: true, anchor: [0, 0.5],
+    });
+    tagline.position.set(textX, -cardH / 2 + 118);
+    card.addChild(tagline);
+
+    if (art && pet) {
+      const star = PlayerData.petStar(pet.id);
+      const compare = makeLookCompare(petBaseAvatarPath(pet.id, star), art.portrait, 76);
+      compare.position.set(textX + Math.max(0, (colW - compare.width) / 2), -cardH / 2 + 142);
+      card.addChild(compare);
+    }
+
+    const perks = makeText(
+      owned
+        ? (equipped ? '穿戴中 · 到灵宠页可换回原貌' : '已拥有 · 到灵宠页穿上')
+        : `${skin.priceLingyu} 灵玉，或看 ${SKIN_AD_COST} 次广告\n只换外观，不影响战力`,
+      {
+        size: FONT_SIZE.xxs, fill: COLORS.textSub, anchor: [0, 0], wordWrapWidth: colW,
+      },
+    );
+    perks.position.set(textX, cardH / 2 - 130);
+    card.addChild(perks);
+
+    const buy = this._makeSkinPayRow(skin);
+    buy.position.set(textX + colW / 2, cardH / 2 - 44);
+    card.addChild(buy);
+    return card;
+  }
+
+  /** 未拥有：灵玉和广告并排。已拥有：去更换 */
+  private _makeSkinPayRow(skin: PetSkinDef): PIXI.Container {
+    const row = new PIXI.Container();
+    const owned = PlayerData.ownsPetSkin(skin.id);
+    const blockTap = () => this._scroll.moved;
+    if (owned) {
+      row.addChild(makeCardBuyButton(
+        skin.priceLingyu,
+        true,
+        () => this._onSkinAction(skin),
+        blockTap,
+        UI_IMAGES.iconLingyu,
+        '去更换',
+      ));
+      return row;
+    }
+    const lingyu = makeCardBuyButton(
+      skin.priceLingyu,
+      true,
+      () => this._onSkinAction(skin),
+      blockTap,
+      UI_IMAGES.iconLingyu,
+    );
+    const ad = makeCardAdButton(
+      PlayerData.skinAdWatched(skin.id),
+      () => { void this._onSkinAd(skin); },
+      blockTap,
+    );
+    const gap = 12;
+    const lingyuW = lingyu.getLocalBounds().width;
+    const adW = ad.getLocalBounds().width;
+    lingyu.position.set(-(gap + adW) / 2, 0);
+    ad.position.set((gap + lingyuW) / 2, 0);
+    row.addChild(lingyu, ad);
+    row.scale.set(1.12);
+    return row;
+  }
+
+  private _makePreviewPay(skin: PetSkinDef): { action: () => PIXI.Container; alt?: () => PIXI.Container } {
+    const owned = PlayerData.ownsPetSkin(skin.id);
+    if (owned) {
+      return {
+        action: () => makeCardBuyButton(
+          skin.priceLingyu,
+          true,
+          () => this._onSkinAction(skin),
+          undefined,
+          UI_IMAGES.iconLingyu,
+          '去更换',
+        ),
+      };
+    }
+    return {
+      action: () => makeSkinPayButton({
+        kind: 'lingyu',
+        text: `${skin.priceLingyu}`,
+        width: 230,
+        height: 72,
+        onTap: () => this._onSkinAction(skin),
+      }),
+      alt: () => makeSkinPayButton({
+        kind: 'ad',
+        text: skinAdLabel(PlayerData.skinAdWatched(skin.id)),
+        width: 230,
+        height: 72,
+        onTap: () => { void this._onSkinAd(skin); },
+      }),
+    };
+  }
+
+  private _openSkinPreview(skin: PetSkinDef): void {
+    const art = petSkinArt(skin.id);
+    const pet = PET_MAP.get(skin.petId);
+    if (!art || !pet) return;
+    this._closeSkinPreview();
+    this._scroll.detach();
+    const owned = PlayerData.ownsPetSkin(skin.id);
+    const equipped = PlayerData.petSkinEquipped(skin.petId) === skin.id;
+    const pay = this._makePreviewPay(skin);
+    const overlay = new SkinPreviewOverlay({
+      skinName: skin.name,
+      petName: pet.name,
+      skinBody: art.body,
+      ownedNote: owned
+        ? (equipped ? '穿戴中 · 点「去更换」可换回原貌' : '已拥有 · 点「去更换」穿上')
+        : `${skin.priceLingyu} 灵玉，或看 ${SKIN_AD_COST} 次广告`,
+      makeAction: pay.action,
+      makeAlt: pay.alt,
+      onClose: () => {
+        this._closeSkinPreview();
+        this._build({ animate: false });
+      },
+    });
+    this._skinPreview = overlay;
+    this.container.addChild(overlay);
+    SfxManager.playUiClick();
+    analytics.track('skin_preview', { skin_id: skin.id, pet_id: skin.petId, owned: owned ? 1 : 0 });
+  }
+
+  private _closeSkinPreview(): void {
+    const overlay = this._skinPreview;
+    this._skinPreview = null;
+    if (overlay && !overlay.destroyed) {
+      overlay.parent?.removeChild(overlay);
+      overlay.destroy({ children: true });
+    }
+  }
+
+  /** 买到后：月光闪 + 星屑，再把大图以「已拥有」状态弹回来 */
+  private _celebrateSkin(skin: PetSkinDef): void {
+    const content = this._content;
+    const spot = this._skinCardCenters.get(skin.id);
+    const cx = spot?.x ?? Game.logicWidth / 2;
+    const cy = (spot?.y ?? 0) + (content?.y ?? 0);
+    this._fx?.flash(SKIN_UI.glow, 0.32, 0.45);
+    const spark = TextureCache.get(UI_FX_IMAGES.particleSpark) ?? undefined;
+    for (const color of [SKIN_UI.glow, SKIN_UI.moon, COLORS.accent]) {
+      this._fx?.burst({
+        x: cx, y: cy, color,
+        count: 16, speed: 380, life: 0.8, gravity: 180, size: 24, endScale: 0.1,
+        texture: spark,
+        blendMode: PIXI.BLEND_MODES.ADD,
+      });
+    }
+    Platform.vibrateShort('heavy');
+    setTimeout(() => {
+      if (SceneManager.current?.name !== 'shop' || this._tabId !== 'lingyu') return;
+      this._openSkinPreview(skin);
+    }, 520);
+  }
+
+  /** 看完一次广告记 1 次；凑够 SKIN_AD_COST 次才入账，和灵玉购买同一套到手表现 */
+  private async _onSkinAd(skin: PetSkinDef): Promise<void> {
+    if (this._skinAdBusy || PlayerData.ownsPetSkin(skin.id)) return;
+    if (!PlayerData.isOwned(skin.petId)) {
+      SfxManager.playDenied();
+      Platform.showToast('先获得这只灵宠');
+      return;
+    }
+    this._skinAdBusy = true;
+    const fromPreview = !!this._skinPreview;
+    try {
+      const ok = await watchAd('skin_unlock', { skin_id: skin.id, pet_id: skin.petId });
+      if (!ok || SceneManager.current?.name !== 'shop') return;
+      const result = PlayerData.noteSkinAdWatch(skin.id);
+      if (result === 'progress') {
+        const done = PlayerData.skinAdWatched(skin.id);
+        Platform.showToast(`已看 ${done}/${SKIN_AD_COST}，再看 ${SKIN_AD_COST - done} 次就获得`, 'success');
+        this._closeSkinPreview();
+        this._build({ animate: false });
+        if (fromPreview) this._openSkinPreview(skin);
+        return;
+      }
+      if (result !== 'owned') {
+        SfxManager.playDenied();
+        Platform.showToast(result === 'need_pet' ? '先获得这只灵宠' : '现在不能兑换');
+        return;
+      }
+      SfxManager.playShopPurchase();
+      analytics.track('skin_buy', {
+        skin_id: skin.id,
+        cost: 0,
+        pay: 'ad',
+        pet_id: skin.petId,
+        from_preview: fromPreview ? 1 : 0,
+      });
+      Platform.showToast(`获得外观 · ${skin.name}，已穿上`, 'success');
+      reportQuest('shopBuy');
+      this._closeSkinPreview();
+      this._build({ animate: false });
+      this._celebrateSkin(skin);
+    } finally {
+      this._skinAdBusy = false;
+    }
+  }
+
+  private _onSkinAction(skin: PetSkinDef): void {
+    const owned = PlayerData.ownsPetSkin(skin.id);
+    if (!owned) {
+      const result = PlayerData.buyPetSkin(skin.id);
+      if (result !== 'ok') {
+        SfxManager.playDenied();
+        Platform.showToast(skinBuyToast(result, skin));
+        return;
+      }
+      SfxManager.playShopPurchase();
+      analytics.track('skin_buy', {
+        skin_id: skin.id,
+        cost: skin.priceLingyu,
+        pay: 'lingyu',
+        pet_id: skin.petId,
+        from_preview: this._skinPreview ? 1 : 0,
+      });
+      Platform.showToast(`获得外观 · ${skin.name}，已穿上`, 'success');
+      reportQuest('shopBuy');
+      this._closeSkinPreview();
+      this._build({ animate: false });
+      this._celebrateSkin(skin);
+      return;
+    }
+    if (!PlayerData.isOwned(skin.petId)) {
+      SfxManager.playDenied();
+      Platform.showToast('先获得这只灵宠');
+      return;
+    }
+    this._closeSkinPreview();
+    SceneManager.switchTo('petDetail', {
+      petId: skin.petId,
+      backScene: 'shop',
+      backData: {
+        tab: 'lingyu',
+        from: this._from ?? undefined,
+      } satisfies ShopEnterData,
+    });
   }
 
   /** 双列平铺：通用碎片 + 全部灵宠，无分段推荐 */
@@ -848,10 +1284,19 @@ export class ShopScene implements Scene {
     const holder = new PIXI.Container();
 
     const honor = this._tabId === 'honor';
+    const skin = this._tabId === 'lingyu';
     const coins = makeIconLabel({
-      iconPath: honor ? UI_IMAGES.towerCurrencySeal : UI_IMAGES.iconCoin,
+      iconPath: honor
+        ? UI_IMAGES.towerCurrencySeal
+        : skin
+          ? UI_IMAGES.iconLingyu
+          : UI_IMAGES.iconCoin,
       iconSize: coinIconSize,
-      text: honor ? `${PlayerData.towerCoins}` : `${PlayerData.coins}`,
+      text: honor
+        ? `${PlayerData.towerCoins}`
+        : skin
+          ? `${PlayerData.lingyu}`
+          : `${PlayerData.coins}`,
       size: 26,
       fill: COLORS.textMain,
       bold: true,
